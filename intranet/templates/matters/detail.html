@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card p-3">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <h3 class="mb-0">{{ m.matter_no }}</h3>
+          <div class="muted">{{ m.title }}</div>
+          <div class="mt-1"><span class="badge badge-soft">{{ m.status }}</span> · <span class="muted">{{ m.client_name }}</span></div>
+        </div>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Tasks</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_documents', matter_id=m.id) }}">Documents</a>
+        </div>
+      </div>
+      {% if m.description %}
+        <div class="mt-2">{{ (m.description|e).replace("\n","<br>")|safe }}</div>
+      {% endif %}
+    </div>
+
+    <div class="card p-3 mt-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">Tasks</h4>
+        <a class="btn btn-sm btn-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Manage</a>
+      </div>
+      <div class="mt-2">
+        {% if tasks %}
+          {% for t in tasks %}
+            <div class="border-top pt-2 mt-2">
+              <div class="d-flex justify-content-between">
+                <div class="fw-semibold">{{ t.title }}</div>
+                <span class="badge badge-soft">{{ t.status }}</span>
+              </div>
+              <div class="muted small">{% if t.due_date %}Due {{ t.due_date }} · {% endif %}Task #{{ t.id }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="muted">No tasks yet.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card p-3 mt-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">Recent Documents</h4>
+        <a class="btn btn-sm btn-light" href="{{ url_for('matter_documents', matter_id=m.id) }}">Upload/Download</a>
+      </div>
+      <div class="mt-2">
+        {% if docs %}
+          {% for d in docs %}
+            <div class="border-top pt-2 mt-2">
+              <div class="d-flex justify-content-between">
+                <div class="fw-semibold">{{ d.original_filename }}</div>
+                <a href="{{ url_for('doc_download', doc_id=d.id) }}">download</a>
+              </div>
+              <div class="muted small">sha256 {{ d.sha256[:12] }}… · {{ d.uploaded_at.strftime("%Y-%m-%d %H:%M UTC") }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="muted">No documents uploaded.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card p-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">Matter Team</h4>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_team', matter_id=m.id) }}">Edit</a>
+      </div>
+      <div class="mt-2">
+        {% for u, mm in members %}
+          <div class="border-top pt-2 mt-2 d-flex justify-content-between">
+            <div>
+              <div class="fw-semibold">{{ u.full_name }}</div>
+              <div class="muted small">{{ u.email }}</div>
+            </div>
+            <div class="text-end">
+              <div class="badge badge-soft">{{ mm.role_in_matter }}</div>
+              <div class="muted small">{{ u.role }}</div>
+            </div>
+          </div>
+        {% endfor %}
+        {% if not members %}
+          <div class="muted">No team members assigned.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

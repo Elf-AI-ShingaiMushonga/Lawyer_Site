@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <div class="d-flex justify-content-between align-items-center">
+    <h3 class="mb-0">Team — {{ m.matter_no }}</h3>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Back</a>
+  </div>
+
+  <form method="post" class="row g-2 mt-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-6">
+      <label class="muted small">User email</label>
+      <input class="form-control" name="email" list="emails" placeholder="lawyer@firm.local" required>
+      <datalist id="emails">
+        {% for u in users %}
+          <option value="{{ u.email }}">{{ u.full_name }}</option>
+        {% endfor %}
+      </datalist>
+    </div>
+    <div class="col-md-4">
+      <label class="muted small">Role in matter</label>
+      <input class="form-control" name="role_in_matter" placeholder="Responsible / Team / Counsel">
+    </div>
+    <div class="col-md-2 d-grid align-self-end">
+      <button class="btn btn-light">Add</button>
+    </div>
+  </form>
+
+  <div class="mt-3">
+    {% for u, mm in members %}
+      <div class="border-top pt-2 mt-2 d-flex justify-content-between">
+        <div>
+          <div class="fw-semibold">{{ u.full_name }}</div>
+          <div class="muted small">{{ u.email }}</div>
+        </div>
+        <div class="text-end">
+          <div class="badge badge-soft">{{ mm.role_in_matter }}</div>
+          <div class="muted small">{{ u.role }}</div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <div class="d-flex justify-content-between align-items-center">
+    <h3 class="mb-0">Audit Log</h3>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin') }}">Back</a>
+  </div>
+  <div class="muted small mt-2">Captures logins, matter/task/doc actions, and admin changes. In production: ship to centralized logging and retain per policy.</div>
+
+  <div class="mt-3 table-responsive">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Time (UTC)</th><th>Actor</th><th>Action</th><th>Entity</th><th>IP</th></tr></thead>
+      <tbody>
+        {% for l in logs %}
+          <tr>
+            <td class="muted">{{ l.at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+            <td class="muted">{{ l.actor_user_id or "" }}</td>
+            <td class="fw-semibold">{{ l.action }}</td>
+            <td class="muted">{{ (l.entity_type or "") ~ "#" ~ (l.entity_id or "") }}</td>
+            <td class="muted">{{ l.ip or "" }}</td>
+          </tr>
+        {% endfor %}
+        {% if not logs %}
+          <tr><td colspan="5" class="muted">No audit entries.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-4">
+  <h3 class="mb-1">Login</h3>
+  <div class="muted mb-3">Use your firm credentials.</div>
+  <form method="post" class="row g-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-12">
+      <input class="form-control" name="email" placeholder="email" required>
+    </div>
+    <div class="col-12">
+      <input class="form-control" name="password" type="password" placeholder="password" required>
+    </div>
+    <div class="col-12 d-grid">
+      <button class="btn btn-light">Sign in</button>
+    </div>
+  </form>
+  <div class="muted mt-3 small">
+    First setup: run <code>python app.py init-db</code> then create an admin with <code>python app.py create-user ...</code>.
+  </div>
+</div>
+{% endblock %}

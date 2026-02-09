@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <div class="d-flex justify-content-between align-items-center">
+    <h3 class="mb-0">Tasks — {{ m.matter_no }}</h3>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Back</a>
+  </div>
+
+  <form method="post" class="row g-2 mt-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-6">
+      <label class="muted small">Title</label>
+      <input class="form-control" name="title" placeholder="e.g. Draft founding affidavit" required>
+    </div>
+    <div class="col-md-3">
+      <label class="muted small">Due date (optional)</label>
+      <input class="form-control" name="due_date" placeholder="YYYY-MM-DD">
+    </div>
+    <div class="col-md-3">
+      <label class="muted small">Assign to (optional email)</label>
+      <input class="form-control" name="assigned_to" list="emails" placeholder="lawyer@firm.local">
+    </div>
+    <div class="col-12">
+      <label class="muted small">Description</label>
+      <textarea class="form-control" name="description" rows="2" placeholder="Short notes..."></textarea>
+    </div>
+    <div class="col-12 d-grid">
+      <button class="btn btn-light">Add task</button>
+    </div>
+  </form>
+
+  <div class="mt-3 table-responsive">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Task</th><th>Status</th><th>Due</th><th>Assigned</th><th></th></tr></thead>
+      <tbody>
+        {% for t in tasks %}
+          <tr>
+            <td>
+              <div class="fw-semibold">{{ t.title }}</div>
+              {% if t.description %}<div class="muted small">{{ t.description }}</div>{% endif %}
+            </td>
+            <td><span class="badge badge-soft">{{ t.status }}</span></td>
+            <td class="muted">{{ t.due_date or "" }}</td>
+            <td class="muted">
+              {% set u = users_map.get(t.assigned_to) %}
+              {{ u.email if u else "" }}
+            </td>
+            <td class="text-end">
+              <form method="post" action="{{ url_for('task_update', task_id=t.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="Todo">
+                <button class="btn btn-sm btn-outline-light">Todo</button>
+              </form>
+              <form method="post" action="{{ url_for('task_update', task_id=t.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="Doing">
+                <button class="btn btn-sm btn-outline-light">Doing</button>
+              </form>
+              <form method="post" action="{{ url_for('task_update', task_id=t.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="Done">
+                <button class="btn btn-sm btn-light">Done</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        {% if not tasks %}
+          <tr><td colspan="5" class="muted">No tasks yet.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
