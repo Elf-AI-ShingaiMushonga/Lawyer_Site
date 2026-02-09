@@ -29,3 +29,16 @@ jobs:
           FLASK_ENV: production
           FLASK_SECRET_KEY: ci-test-secret
         run: python -c "import app; print('app import ok')"
+
+      - name: Health endpoint smoke test
+        env:
+          FLASK_ENV: production
+          FLASK_SECRET_KEY: ci-test-secret
+        run: |
+          python - <<'PY'
+          import app
+          c = app.app.test_client()
+          r = c.get("/healthz")
+          assert r.status_code in (200, 503)
+          print("healthz ok:", r.status_code)
+          PY

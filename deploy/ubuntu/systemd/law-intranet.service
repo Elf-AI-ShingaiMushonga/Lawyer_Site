@@ -1,0 +1,21 @@
+[Unit]
+Description=Law Firm Intranet (Gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/law_firm_intranet
+EnvironmentFile=/home/ubuntu/law_firm_intranet/.env
+ExecStart=/home/ubuntu/law_firm_intranet/venv/bin/gunicorn \
+  --workers 3 \
+  --bind 127.0.0.1:8000 \
+  --access-logfile - \
+  --error-logfile - \
+  app:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

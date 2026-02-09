@@ -1,0 +1,112 @@
+#cloud-config
+package_update: true
+packages:
+  - python3
+  - python3-venv
+  - python3-pip
+  - git
+  - nginx
+
+write_files:
+  - path: /opt/law-intranet/bootstrap.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      APP_USER="ubuntu"
+      APP_HOME="/home/${APP_USER}"
+      APP_DIR="${APP_HOME}/law_firm_intranet"
+
+      # Replace these placeholders before using this cloud-init file.
+      REPO_URL="https://github.com/your-org/your-repo.git"
+      REPO_REF="main"
+      APP_DOMAIN="intranet.example.com"
+      FLASK_SECRET_KEY="REPLACE_WITH_A_LONG_RANDOM_SECRET"
+      DATABASE_URL="postgresql+psycopg://app_user:app_password@db-host:5432/law_intranet"
+      ADMIN_EMAIL="admin@firm.local"
+      ADMIN_PASSWORD="REPLACE_WITH_STRONG_ADMIN_PASSWORD"
+      ADMIN_NAME="Admin User"
+
+      if [[ "${FLASK_SECRET_KEY}" == "REPLACE_WITH_A_LONG_RANDOM_SECRET" ]]; then
+        echo "FLASK_SECRET_KEY placeholder not set" >&2
+        exit 1
+      fi
+
+      if [[ "${ADMIN_PASSWORD}" == "REPLACE_WITH_STRONG_ADMIN_PASSWORD" ]]; then
+        echo "ADMIN_PASSWORD placeholder not set" >&2
+        exit 1
+      fi
+
+      if [[ ! -d "${APP_DIR}/.git" ]]; then
+        sudo -u "${APP_USER}" git clone "${REPO_URL}" "${APP_DIR}"
+      fi
+
+      cd "${APP_DIR}"
+      sudo -u "${APP_USER}" git fetch --all --prune
+      sudo -u "${APP_USER}" git checkout "${REPO_REF}"
+      sudo -u "${APP_USER}" git pull --ff-only origin "${REPO_REF}"
+
+      sudo -u "${APP_USER}" python3 -m venv "${APP_DIR}/venv"
+      sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install --upgrade pip
+      sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install -r "${APP_DIR}/requirements.txt"
+
+      cat > "${APP_DIR}/.env" <<ENVVARS
+      FLASK_ENV=production
+      FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
+      HOST=127.0.0.1
+      PORT=8000
+      LOG_LEVEL=INFO
+      DATABASE_URL=${DATABASE_URL}
+      DB_POOL_RECYCLE_SECONDS=1800
+      SESSION_TTL_MINUTES=480
+      MAX_UPLOAD_BYTES=52428800
+      UPLOAD_DIR=uploads
+      TRUST_PROXY=true
+      FORCE_SECURE_COOKIE=true
+      ENVVARS
+
+      chown "${APP_USER}:${APP_USER}" "${APP_DIR}/.env"
+      chmod 600 "${APP_DIR}/.env"
+
+      mkdir -p "${APP_DIR}/uploads"
+      chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}/uploads"
+
+      sudo -u "${APP_USER}" \
+        DATABASE_URL="${DATABASE_URL}" \
+        FLASK_SECRET_KEY="${FLASK_SECRET_KEY}" \
+        "${APP_DIR}/venv/bin/python" "${APP_DIR}/app.py" init-db
+
+      # Create admin user on first bootstrap. If it already exists, continue.
+      set +e
+      sudo -u "${APP_USER}" \
+        DATABASE_URL="${DATABASE_URL}" \
+        FLASK_SECRET_KEY="${FLASK_SECRET_KEY}" \
+        "${APP_DIR}/venv/bin/python" "${APP_DIR}/app.py" create-user \
+          --email "${ADMIN_EMAIL}" \
+          --password "${ADMIN_PASSWORD}" \
+          --role admin \
+          --name "${ADMIN_NAME}"
+      CREATE_USER_RC=$?
+      set -e
+      if [[ ${CREATE_USER_RC} -ne 0 ]]; then
+        echo "Admin creation returned non-zero (likely already exists). Continuing."
+      fi
+
+      cp "${APP_DIR}/deploy/ubuntu/systemd/law-intranet.service" /etc/systemd/system/law-intranet.service
+      cp "${APP_DIR}/deploy/ubuntu/nginx/law-intranet.conf" /etc/nginx/sites-available/law-intranet.conf
+      sed -i "s/server_name intranet\\.example\\.com;/server_name ${APP_DOMAIN};/" /etc/nginx/sites-available/law-intranet.conf
+
+      ln -sf /etc/nginx/sites-available/law-intranet.conf /etc/nginx/sites-enabled/law-intranet.conf
+      rm -f /etc/nginx/sites-enabled/default
+
+      systemctl daemon-reload
+      systemctl enable --now law-intranet
+
+      nginx -t
+      systemctl enable --now nginx
+      systemctl reload nginx
+
+runcmd:
+  - [bash, -lc, "/opt/law-intranet/bootstrap.sh > /var/log/law-intranet-bootstrap.log 2>&1"]
