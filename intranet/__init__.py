@@ -100,6 +100,13 @@ def create_app() -> Flask:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     app.logger.setLevel(getattr(logging, log_level, logging.INFO))
+    configured_workers = max(1, env_int("GUNICORN_WORKERS", 1))
+    if is_production and rate_limit_storage_uri == "memory://" and configured_workers > 1:
+        app.logger.warning(
+            "RATE_LIMIT_STORAGE_URI=memory:// with %s workers enables per-process limits. "
+            "Use Redis for consistent rate limiting.",
+            configured_workers,
+        )
     app.config["IS_PRODUCTION"] = is_production
 
     db.init_app(app)

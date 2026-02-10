@@ -69,8 +69,7 @@ def register_matter_routes(app):
                 created_by=current_user.id,
             )
             db.session.add(m)
-            db.session.commit()
-
+            db.session.flush()
             db.session.add(MatterMember(matter_id=m.id, user_id=current_user.id, role_in_matter="Responsible"))
             db.session.commit()
 

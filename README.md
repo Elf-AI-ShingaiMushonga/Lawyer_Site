@@ -61,7 +61,8 @@ Optional but recommended:
 - `TRUST_PROXY=true`
 - `TRUSTED_PROXY_HOPS=1` (set `2` when running behind ALB + Nginx)
 - `FORCE_SECURE_COOKIE=true`
-- `RATE_LIMIT_STORAGE_URI=memory://` (use Redis in production for multi-worker consistency)
+- `RATE_LIMIT_STORAGE_URI=redis://127.0.0.1:6379/0` for multi-worker production
+- `RATE_LIMIT_STORAGE_URI=memory://` only for local dev or single-worker setups
 - `AUTH_LOGIN_RATE_LIMIT=10/minute`
 - `AUTH_REGISTER_RATE_LIMIT=5/hour`
 - `GUNICORN_WORKERS=3`
@@ -120,6 +121,7 @@ Optional but recommended:
   - `cp .env.example .env`
   - Generate secret: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`
   - Edit `.env` with real `FLASK_SECRET_KEY` and `DATABASE_URL`.
+  - If `DATABASE_URL` password contains reserved URL chars (`@:/?#[]`), URL-encode it.
   - Set `TRUSTED_PROXY_HOPS=2` only if request path is `Client -> ALB -> Nginx -> Gunicorn`.
 
 - 4) Initialize DB and bootstrap admin:

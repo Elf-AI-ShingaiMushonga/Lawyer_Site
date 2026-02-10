@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from .extensions import db
+from sqlalchemy.exc import OperationalError
+
 from .templates import page
 
 
@@ -47,3 +49,9 @@ def register_security_handlers(app):
         db.session.rollback()
         app.logger.exception("Unhandled exception: %s", err)
         return page("Server Error", "errors/500.html"), 500
+
+    @app.errorhandler(OperationalError)
+    def database_unavailable(err):
+        db.session.rollback()
+        app.logger.exception("Database operational error: %s", err)
+        return page("Service Unavailable", "errors/503.html"), 503

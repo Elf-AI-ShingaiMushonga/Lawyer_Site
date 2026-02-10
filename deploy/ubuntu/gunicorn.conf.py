@@ -13,7 +13,8 @@ def _env_int(name: str, default: int) -> int:
 
 
 bind = os.getenv("GUNICORN_BIND", "127.0.0.1:8000")
-workers = _env_int("GUNICORN_WORKERS", max(2, multiprocessing.cpu_count() * 2 + 1))
+# Conservative default for small EC2 instances; override via GUNICORN_WORKERS.
+workers = _env_int("GUNICORN_WORKERS", min(4, max(2, multiprocessing.cpu_count())))
 threads = _env_int("GUNICORN_THREADS", 2)
 worker_class = os.getenv("GUNICORN_WORKER_CLASS", "gthread")
 timeout = _env_int("GUNICORN_TIMEOUT", 60)

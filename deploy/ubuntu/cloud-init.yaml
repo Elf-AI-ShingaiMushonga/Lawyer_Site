@@ -25,7 +25,7 @@ write_files:
       REPO_REF="main"
       APP_DOMAIN="elf-ai-demo.co.za www.elf-ai-demo.co.za"
       FLASK_SECRET_KEY="REPLACE_WITH_A_LONG_RANDOM_SECRET"
-      DATABASE_URL="postgresql+psycopg://app_user:app_password@db-host:5432/law_intranet"
+      DATABASE_URL="postgresql+psycopg://app_user:app_password@db-host:5432/law_intranet?sslmode=require"
       TRUSTED_PROXY_HOPS="1"
       ADMIN_EMAIL="admin@firm.local"
       ADMIN_PASSWORD="REPLACE_WITH_STRONG_ADMIN_PASSWORD"
@@ -33,6 +33,8 @@ write_files:
       GUNICORN_WORKERS="3"
       GUNICORN_THREADS="2"
       GUNICORN_TIMEOUT="60"
+      # For multi-worker production, prefer Redis:
+      # RATE_LIMIT_STORAGE_URI="redis://127.0.0.1:6379/0"
       RATE_LIMIT_STORAGE_URI="memory://"
       RATE_LIMIT_STRATEGY="fixed-window"
       AUTH_LOGIN_RATE_LIMIT="10/minute"
@@ -48,7 +50,7 @@ write_files:
         exit 1
       fi
 
-      if [[ "${DATABASE_URL}" == "postgresql+psycopg://app_user:app_password@db-host:5432/law_intranet" ]]; then
+      if [[ "${DATABASE_URL}" == "postgresql+psycopg://app_user:app_password@db-host:5432/law_intranet?sslmode=require" ]]; then
         echo "DATABASE_URL placeholder not set" >&2
         exit 1
       fi
