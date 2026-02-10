@@ -1,12 +1,47 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="row g-3 mb-1">
+  <div class="col-12">
+    <div class="card p-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+          <h3 class="mb-1">Operations Snapshot</h3>
+          <div class="page-intro">A live view of matters, tasks, and firm activity.</div>
+        </div>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-light" href="{{ url_for('matter_create') }}">Open New Matter</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('search') }}">Global Search</a>
+        </div>
+      </div>
+      <div class="metric-grid mt-3">
+        <div class="metric-card">
+          <div class="metric-label">Accessible Matters</div>
+          <div class="metric-value">{{ stats.matter_count }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">My Open Tasks</div>
+          <div class="metric-value">{{ stats.assigned_open_tasks }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Documents</div>
+          <div class="metric-value">{{ stats.document_count }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Announcements</div>
+          <div class="metric-value">{{ stats.announcement_count }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="row g-3">
   <div class="col-lg-7">
     <div class="card p-3">
       <div class="d-flex justify-content-between align-items-center">
         <h4 class="mb-0">Announcements</h4>
         {% if current_user.role == "admin" %}
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_announcements') }}">Post</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_announcements') }}">Post Update</a>
         {% endif %}
       </div>
       <div class="mt-2">
@@ -29,7 +64,7 @@
     <div class="card p-3 mb-3">
       <div class="d-flex justify-content-between align-items-center">
         <h4 class="mb-0">My Tasks</h4>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Go to matters</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Open Matters</a>
       </div>
       <div class="mt-2">
         {% if my_tasks %}
@@ -39,7 +74,7 @@
                 <div class="fw-semibold">{{ t.title }}</div>
                 <span class="badge badge-soft">{{ t.status }}</span>
               </div>
-              <div class="muted small">Matter #{{ t.matter_id }}{% if t.due_date %} · due {{ t.due_date }}{% endif %}</div>
+              <div class="muted small">Matter #{{ t.matter_id }}{% if t.due_date %} - due {{ t.due_date }}{% endif %}</div>
             </div>
           {% endfor %}
         {% else %}
@@ -51,14 +86,14 @@
     <div class="card p-3">
       <div class="d-flex justify-content-between align-items-center">
         <h4 class="mb-0">Recent Matters</h4>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">All</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">View All</a>
       </div>
       <div class="mt-2">
         {% if recent_matters %}
           {% for m in recent_matters %}
             <div class="border-top pt-2 mt-2">
               <div class="d-flex justify-content-between">
-                <a class="fw-semibold text-decoration-none" href="{{ url_for('matter_detail', matter_id=m.id) }}">{{ m.matter_no }} — {{ m.title }}</a>
+                <a class="fw-semibold text-decoration-none" href="{{ url_for('matter_detail', matter_id=m.id) }}">{{ m.matter_no }} - {{ m.title }}</a>
                 <span class="badge badge-soft">{{ m.status }}</span>
               </div>
               <div class="muted small">{{ m.client_name }}</div>

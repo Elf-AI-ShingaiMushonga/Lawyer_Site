@@ -1,19 +1,52 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-4">
-  <h3 class="mb-1">Login</h3>
-  <div class="muted mb-3">Use your firm credentials.</div>
-  <form method="post" class="row g-2">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-12">
-      <input class="form-control" name="email" placeholder="email" required>
+<div class="row g-3 align-items-stretch">
+  <div class="col-lg-5">
+    <div class="card p-4 h-100">
+      <div class="code-like">SECURE CLIENT PORTAL</div>
+      <h2 class="mt-2 mb-2">Welcome back to your legal workspace</h2>
+      <p class="page-intro mb-3">
+        Track active matters, action tasks, and privileged documents from a single firm dashboard.
+      </p>
+      <div class="metric-grid">
+        <div class="metric-card">
+          <div class="metric-label">Availability</div>
+          <div class="metric-value">24/7</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Audit Trail</div>
+          <div class="metric-value">On</div>
+        </div>
+      </div>
+      <div class="card mt-3 p-3">
+        <div class="code-like">DEMO TIP</div>
+        <div class="small muted mt-2">If you seeded demo data, use any of these accounts:</div>
+        <div class="small mt-2">admin@elf-ai-demo.co.za</div>
+        <div class="small">partner@elf-ai-demo.co.za</div>
+        <div class="small">associate@elf-ai-demo.co.za</div>
+      </div>
     </div>
-    <div class="col-12">
-      <input class="form-control" name="password" type="password" placeholder="password" required>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card p-4 h-100">
+      <h3 class="mb-1">Sign In</h3>
+      <div class="page-intro mb-3">Use your firm credentials to continue.</div>
+      <form method="post" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-12">
+          <label class="muted small mb-1">Email</label>
+          <input class="form-control" name="email" type="email" placeholder="name@firm.co.za" required>
+        </div>
+        <div class="col-12">
+          <label class="muted small mb-1">Password</label>
+          <input class="form-control" name="password" type="password" placeholder="Enter your password" required>
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-light">Access Dashboard</button>
+        </div>
+      </form>
     </div>
-    <div class="col-12 d-grid">
-      <button class="btn btn-light">Sign in</button>
-    </div>
-  </form>
+  </div>
 </div>
 {% endblock %}

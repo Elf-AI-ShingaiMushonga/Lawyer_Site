@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from ..config import is_valid_email
 from ..extensions import db, limiter
 from ..helpers import audit, is_admin
-from ..models import Announcement, Matter, MatterMember, Task, User
+from ..models import Announcement, DocumentFile, Matter, MatterMember, Task, User
 from ..templates import page
 
 
@@ -114,14 +114,24 @@ def register_auth_routes(app):
             .all()
         )
 
-        recent_matters_query = Matter.query
+        matter_scope = Matter.query
         if not is_admin():
-            recent_matters_query = (
-                recent_matters_query.join(MatterMember, MatterMember.matter_id == Matter.id).filter(
-                    MatterMember.user_id == current_user.id
-                )
+            matter_scope = (
+                matter_scope.join(MatterMember, MatterMember.matter_id == Matter.id).filter(MatterMember.user_id == current_user.id)
             )
-        recent_matters = recent_matters_query.order_by(Matter.opened_at.desc()).limit(8).all()
+        recent_matters = matter_scope.order_by(Matter.opened_at.desc()).limit(8).all()
+
+        document_scope = DocumentFile.query
+        if not is_admin():
+            visible_matter_ids = db.session.query(MatterMember.matter_id).filter(MatterMember.user_id == current_user.id)
+            document_scope = document_scope.filter(DocumentFile.matter_id.in_(visible_matter_ids))
+
+        stats = {
+            "matter_count": matter_scope.count(),
+            "assigned_open_tasks": Task.query.filter(Task.assigned_to == current_user.id, Task.status != "Done").count(),
+            "document_count": document_scope.count(),
+            "announcement_count": Announcement.query.count(),
+        }
 
         return page(
             "Dashboard",
@@ -129,4 +139,5 @@ def register_auth_routes(app):
             anns=anns,
             my_tasks=my_tasks,
             recent_matters=recent_matters,
+            stats=stats,
         )

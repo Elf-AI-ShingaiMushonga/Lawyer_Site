@@ -26,6 +26,28 @@ python app.py run --debug
 
 Open: http://127.0.0.1:5000
 
+## Demo data seed (recommended for client walkthroughs)
+
+Use the built-in seed command to prepopulate realistic records:
+
+```bash
+# resets existing records and writes demo data
+python app.py seed-demo --reset --password "ClientDemo2026!"
+```
+
+Or run the helper script:
+
+```bash
+./scripts/seed_demo.sh
+```
+
+Seeded demo logins:
+- `admin@elf-ai-demo.co.za`
+- `partner@elf-ai-demo.co.za`
+- `associate@elf-ai-demo.co.za`
+- `paralegal@elf-ai-demo.co.za`
+- `staff@elf-ai-demo.co.za`
+
 ## GitHub upload checklist
 
 - Initialize repository (if needed): `git init`
@@ -40,7 +62,7 @@ Open: http://127.0.0.1:5000
 
 ## Project structure
 
-- `app.py`: entrypoint + CLI (`run`, `init-db`, `create-user`)
+- `app.py`: entrypoint + CLI (`run`, `init-db`, `create-user`, `seed-demo`)
 - `intranet/__init__.py`: Flask app factory and extension wiring
 - `intranet/config.py`: environment parsing and config constants
 - `intranet/models.py`: SQLAlchemy models
@@ -50,6 +72,7 @@ Open: http://127.0.0.1:5000
 - `intranet/security.py`: security headers and error handlers
 - `migrations/`: Alembic migration scripts (managed via Flask-Migrate)
 - `deploy/ubuntu/`: Ubuntu deployment artifacts (cloud-init, systemd service, Nginx config, Gunicorn config)
+- `scripts/seed_demo.sh`: helper wrapper to load demo dataset quickly
 
 ## Required production env vars
 
@@ -127,7 +150,7 @@ Optional but recommended:
 - 4) Initialize DB and bootstrap admin:
   - `source venv/bin/activate`
   - `flask --app app.py db upgrade -d migrations`
-  - `python app.py create-user --email admin@firm.local --password "<strong-password>" --role admin --name "Admin User"`
+  - `python app.py create-user --email shingai.mushonga@elf-ai.co.za --password "<strong-password>" --role admin --name "Admin User"`
 
 - 5) Install systemd service:
   - `sudo cp deploy/ubuntu/systemd/law-intranet.service /etc/systemd/system/law-intranet.service`
