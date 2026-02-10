@@ -16,8 +16,9 @@ write_files:
       set -euo pipefail
 
       APP_USER="ubuntu"
+      APP_REPO_DIR="Lawyer_Site"
       APP_HOME="/home/${APP_USER}"
-      APP_DIR="${APP_HOME}/law_firm_intranet"
+      APP_DIR="${APP_HOME}/${APP_REPO_DIR}"
 
       # Replace these placeholders before using this cloud-init file.
       REPO_URL="https://github.com/your-org/your-repo.git"
@@ -32,6 +33,10 @@ write_files:
       GUNICORN_WORKERS="3"
       GUNICORN_THREADS="2"
       GUNICORN_TIMEOUT="60"
+      RATE_LIMIT_STORAGE_URI="memory://"
+      RATE_LIMIT_STRATEGY="fixed-window"
+      AUTH_LOGIN_RATE_LIMIT="10/minute"
+      AUTH_REGISTER_RATE_LIMIT="5/hour"
 
       if [[ "${REPO_URL}" == "https://github.com/your-org/your-repo.git" ]]; then
         echo "REPO_URL placeholder not set" >&2
@@ -80,6 +85,10 @@ write_files:
       TRUST_PROXY=true
       TRUSTED_PROXY_HOPS=${TRUSTED_PROXY_HOPS}
       FORCE_SECURE_COOKIE=true
+      RATE_LIMIT_STORAGE_URI=${RATE_LIMIT_STORAGE_URI}
+      RATE_LIMIT_STRATEGY=${RATE_LIMIT_STRATEGY}
+      AUTH_LOGIN_RATE_LIMIT=${AUTH_LOGIN_RATE_LIMIT}
+      AUTH_REGISTER_RATE_LIMIT=${AUTH_REGISTER_RATE_LIMIT}
       GUNICORN_WORKERS=${GUNICORN_WORKERS}
       GUNICORN_THREADS=${GUNICORN_THREADS}
       GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT}
@@ -91,10 +100,18 @@ write_files:
       mkdir -p "${APP_DIR}/uploads"
       chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}/uploads"
 
-      sudo -u "${APP_USER}" \
-        DATABASE_URL="${DATABASE_URL}" \
-        FLASK_SECRET_KEY="${FLASK_SECRET_KEY}" \
-        "${APP_DIR}/venv/bin/python" "${APP_DIR}/app.py" init-db
+      if [[ -d "${APP_DIR}/migrations" ]]; then
+        sudo -u "${APP_USER}" \
+          DATABASE_URL="${DATABASE_URL}" \
+          FLASK_SECRET_KEY="${FLASK_SECRET_KEY}" \
+          FLASK_ENV=production \
+          "${APP_DIR}/venv/bin/flask" --app "${APP_DIR}/app.py" db upgrade -d "${APP_DIR}/migrations"
+      else
+        sudo -u "${APP_USER}" \
+          DATABASE_URL="${DATABASE_URL}" \
+          FLASK_SECRET_KEY="${FLASK_SECRET_KEY}" \
+          "${APP_DIR}/venv/bin/python" "${APP_DIR}/app.py" init-db
+      fi
 
       # Create admin user on first bootstrap. If it already exists, continue.
       set +e
@@ -112,12 +129,23 @@ write_files:
         echo "Admin creation returned non-zero (likely already exists). Continuing."
       fi
 
-      cp "${APP_DIR}/deploy/ubuntu/systemd/law-intranet.service" /etc/systemd/system/law-intranet.service
-      cp "${APP_DIR}/deploy/ubuntu/nginx/law-intranet.conf" /etc/nginx/sites-available/law-intranet.conf
-      sed -i "s/server_name elf-ai-demo\\.co\\.za www\\.elf-ai-demo\\.co\\.za;/server_name ${APP_DOMAIN};/" /etc/nginx/sites-available/law-intranet.conf
+      cp "${APP_DIR}/deploy/ubuntu/systemd/law-intranet.service" /tmp/law-intranet.service
+      sed -i "s#^User=ubuntu#User=${APP_USER}#" /tmp/law-intranet.service
+      sed -i "s#^Group=ubuntu#Group=${APP_USER}#" /tmp/law-intranet.service
+      sed -i "s#/home/ubuntu/Lawyer_Site#${APP_DIR}#g" /tmp/law-intranet.service
+      cp /tmp/law-intranet.service /etc/systemd/system/law-intranet.service
 
-      ln -sf /etc/nginx/sites-available/law-intranet.conf /etc/nginx/sites-enabled/law-intranet.conf
-      rm -f /etc/nginx/sites-enabled/default
+      if [[ -d /etc/nginx/sites-available ]]; then
+        cp "${APP_DIR}/deploy/ubuntu/nginx/law-intranet.conf" /etc/nginx/sites-available/law-intranet.conf
+        sed -i "s/server_name elf-ai-demo\\.co\\.za www\\.elf-ai-demo\\.co\\.za;/server_name ${APP_DOMAIN};/" /etc/nginx/sites-available/law-intranet.conf
+        ln -sf /etc/nginx/sites-available/law-intranet.conf /etc/nginx/sites-enabled/law-intranet.conf
+        rm -f /etc/nginx/sites-enabled/default
+      else
+        mkdir -p /etc/nginx/conf.d
+        cp "${APP_DIR}/deploy/ubuntu/nginx/law-intranet.conf" /etc/nginx/conf.d/law-intranet.conf
+        sed -i "s/server_name elf-ai-demo\\.co\\.za www\\.elf-ai-demo\\.co\\.za;/server_name ${APP_DOMAIN};/" /etc/nginx/conf.d/law-intranet.conf
+        rm -f /etc/nginx/conf.d/default.conf
+      fi
 
       systemctl daemon-reload
       systemctl enable --now law-intranet

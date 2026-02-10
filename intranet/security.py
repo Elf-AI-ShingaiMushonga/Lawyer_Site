@@ -37,6 +37,11 @@ def register_security_handlers(app):
         max_mb = int(app.config["MAX_CONTENT_LENGTH"] / (1024 * 1024))
         return page("File Too Large", "errors/413.html", max_mb=max_mb), 413
 
+    @app.errorhandler(429)
+    def too_many_requests(err):
+        message = getattr(err, "description", "Too many requests. Please wait and try again.")
+        return page("Too Many Requests", "errors/429.html", message=message), 429
+
     @app.errorhandler(500)
     def internal_error(err):
         db.session.rollback()

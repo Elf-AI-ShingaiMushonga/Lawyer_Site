@@ -7,11 +7,11 @@ Wants=network-online.target
 Type=simple
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/law_firm_intranet
-EnvironmentFile=/home/ubuntu/law_firm_intranet/.env
+WorkingDirectory=/home/ubuntu/Lawyer_Site
+EnvironmentFile=/home/ubuntu/Lawyer_Site/.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/ubuntu/law_firm_intranet/venv/bin/gunicorn \
-  -c /home/ubuntu/law_firm_intranet/deploy/ubuntu/gunicorn.conf.py \
+ExecStart=/home/ubuntu/Lawyer_Site/venv/bin/gunicorn \
+  -c /home/ubuntu/Lawyer_Site/deploy/ubuntu/gunicorn.conf.py \
   app:app
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always

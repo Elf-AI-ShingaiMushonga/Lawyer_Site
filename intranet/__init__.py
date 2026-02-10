@@ -10,7 +10,14 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import BASE_DIR, PRODUCTION_ENV_VALUES, UPLOAD_DIR, env_bool, env_int
 from .csrf import register_csrf_protection
-from .extensions import db, login_manager
+from .extensions import (
+    HAS_FLASK_LIMITER,
+    HAS_FLASK_MIGRATE,
+    db,
+    limiter,
+    login_manager,
+    migrate,
+)
 from .models import User
 from .routes import register_routes
 from .security import register_security_handlers
@@ -31,11 +38,19 @@ def create_app() -> Flask:
     is_production = app_env in PRODUCTION_ENV_VALUES
     secret_key = os.environ.get("FLASK_SECRET_KEY")
     database_uri = os.environ.get("DATABASE_URL")
+    rate_limit_storage_uri = os.environ.get("RATE_LIMIT_STORAGE_URI", "memory://")
+    rate_limit_strategy = os.environ.get("RATE_LIMIT_STRATEGY", "fixed-window")
+    auth_login_rate_limit = os.environ.get("AUTH_LOGIN_RATE_LIMIT", "10/minute")
+    auth_register_rate_limit = os.environ.get("AUTH_REGISTER_RATE_LIMIT", "5/hour")
 
     if is_production and not secret_key:
         raise RuntimeError("FLASK_SECRET_KEY must be set in production.")
     if is_production and not database_uri:
         raise RuntimeError("DATABASE_URL must be set in production.")
+    if is_production and not HAS_FLASK_MIGRATE:
+        raise RuntimeError("Flask-Migrate dependency is required in production.")
+    if is_production and not HAS_FLASK_LIMITER:
+        raise RuntimeError("Flask-Limiter dependency is required in production.")
     if not secret_key:
         secret_key = secrets.token_urlsafe(32)
     if not database_uri:
@@ -65,6 +80,11 @@ def create_app() -> Flask:
         REMEMBER_COOKIE_SECURE=secure_cookie,
         PERMANENT_SESSION_LIFETIME=dt.timedelta(minutes=session_ttl_minutes),
         PREFERRED_URL_SCHEME="https" if secure_cookie else "http",
+        RATELIMIT_STORAGE_URI=rate_limit_storage_uri,
+        RATELIMIT_STRATEGY=rate_limit_strategy,
+        RATELIMIT_HEADERS_ENABLED=True,
+        AUTH_LOGIN_RATE_LIMIT=auth_login_rate_limit,
+        AUTH_REGISTER_RATE_LIMIT=auth_register_rate_limit,
     )
 
     if not database_uri.startswith("sqlite"):
@@ -83,6 +103,8 @@ def create_app() -> Flask:
     app.config["IS_PRODUCTION"] = is_production
 
     db.init_app(app)
+    migrate.init_app(app, db, directory=os.path.join(BASE_DIR, "migrations"))
+    limiter.init_app(app)
 
     login_manager.init_app(app)
     login_manager.login_view = "login"

@@ -24,6 +24,13 @@ jobs:
       - name: Compile sources
         run: python -m compileall app.py intranet
 
+      - name: Migration upgrade smoke test
+        env:
+          FLASK_ENV: production
+          FLASK_SECRET_KEY: ci-test-secret
+          DATABASE_URL: sqlite:///ci.db
+        run: flask --app app.py db upgrade -d migrations
+
       - name: Import app (production mode)
         env:
           FLASK_ENV: production

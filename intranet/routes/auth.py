@@ -7,7 +7,7 @@ from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy.exc import IntegrityError
 
 from ..config import is_valid_email
-from ..extensions import db
+from ..extensions import db, limiter
 from ..helpers import audit, is_admin
 from ..models import Announcement, Matter, MatterMember, Task, User
 from ..templates import page
@@ -27,6 +27,7 @@ def register_auth_routes(app):
         return redirect(url_for("register"))
 
     @app.route("/register", methods=["GET", "POST"])
+    @limiter.limit(lambda: app.config.get("AUTH_REGISTER_RATE_LIMIT", "5/hour"), methods=["POST"])
     def register():
         if current_user.is_authenticated:
             return redirect(url_for("dashboard"))
@@ -68,6 +69,7 @@ def register_auth_routes(app):
         return page("Register", "auth/register.html")
 
     @app.route("/login", methods=["GET", "POST"])
+    @limiter.limit(lambda: app.config.get("AUTH_LOGIN_RATE_LIMIT", "10/minute"), methods=["POST"])
     def login():
         if current_user.is_authenticated:
             return redirect(url_for("dashboard"))
