@@ -41,7 +41,7 @@ def upgrade() -> None:
     op.add_column("document_file", sa.Column("owner_name", sa.String(length=255), nullable=True))
     op.add_column(
         "document_file",
-        sa.Column("is_privileged", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_privileged", sa.Boolean(), nullable=False, server_default=sa.text("false")),
     )
 
     op.create_table(
@@ -52,7 +52,7 @@ def upgrade() -> None:
         sa.Column("event_type", sa.String(length=40), nullable=False),
         sa.Column("title", sa.String(length=180), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("is_milestone", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_milestone", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_by", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.ForeignKeyConstraint(["created_by"], ["user.id"]),
