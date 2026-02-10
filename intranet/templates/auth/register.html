@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-4">
+  <h3 class="mb-1">Set Up Administrator Account</h3>
+  <div class="muted mb-3">No users exist yet. Create the first admin account to continue.</div>
+  <form method="post" class="row g-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-12">
+      <input class="form-control" name="full_name" placeholder="full name" required>
+    </div>
+    <div class="col-12">
+      <input class="form-control" name="email" type="email" placeholder="email" required>
+    </div>
+    <div class="col-12">
+      <input class="form-control" name="password" type="password" placeholder="password (min 12 chars)" required>
+    </div>
+    <div class="col-12">
+      <input class="form-control" name="confirm_password" type="password" placeholder="confirm password" required>
+    </div>
+    <div class="col-12 d-grid">
+      <button class="btn btn-light">Create Administrator</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

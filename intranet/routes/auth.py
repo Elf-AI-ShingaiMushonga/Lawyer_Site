@@ -4,6 +4,7 @@ import datetime as dt
 
 from flask import redirect, flash, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
+from sqlalchemy.exc import IntegrityError
 
 from ..config import is_valid_email
 from ..extensions import db
@@ -12,17 +13,66 @@ from ..models import Announcement, Matter, MatterMember, Task, User
 from ..templates import page
 
 
+def has_any_users() -> bool:
+    return db.session.query(User.id).first() is not None
+
+
 def register_auth_routes(app):
     @app.get("/")
     def index():
         if current_user.is_authenticated:
             return redirect(url_for("dashboard"))
-        return redirect(url_for("login"))
+        if has_any_users():
+            return redirect(url_for("login"))
+        return redirect(url_for("register"))
+
+    @app.route("/register", methods=["GET", "POST"])
+    def register():
+        if current_user.is_authenticated:
+            return redirect(url_for("dashboard"))
+        if has_any_users():
+            return redirect(url_for("login"))
+
+        if request.method == "POST":
+            full_name = (request.form.get("full_name") or "").strip() or "Admin User"
+            email = (request.form.get("email") or "").strip().lower()
+            password = request.form.get("password") or ""
+            confirm_password = request.form.get("confirm_password") or ""
+
+            if not is_valid_email(email):
+                flash("Enter a valid email address.", "warning")
+                return redirect(url_for("register"))
+            if len(password) < 12:
+                flash("Password must be at least 12 characters.", "warning")
+                return redirect(url_for("register"))
+            if password != confirm_password:
+                flash("Passwords do not match.", "warning")
+                return redirect(url_for("register"))
+
+            user = User(email=email, full_name=full_name, role="admin", password_hash="x")
+            user.set_password(password)
+            user.last_login_at = dt.datetime.utcnow()
+            db.session.add(user)
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                flash("An account already exists. Please sign in.", "warning")
+                return redirect(url_for("login"))
+
+            login_user(user)
+            audit("bootstrap_admin_create", "User", user.id, {"email": email})
+            flash("Administrator account created.", "info")
+            return redirect(url_for("dashboard"))
+
+        return page("Register", "auth/register.html")
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if current_user.is_authenticated:
             return redirect(url_for("dashboard"))
+        if not has_any_users():
+            return redirect(url_for("register"))
 
         if request.method == "POST":
             email = (request.form.get("email") or "").strip().lower()
