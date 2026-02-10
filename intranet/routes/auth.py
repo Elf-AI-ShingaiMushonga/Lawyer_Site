@@ -7,7 +7,7 @@ from flask_login import current_user, login_required, login_user, logout_user
 
 from ..config import is_valid_email
 from ..extensions import db
-from ..helpers import audit
+from ..helpers import audit, is_admin
 from ..models import Announcement, Matter, MatterMember, Task, User
 from ..templates import page
 
@@ -62,14 +62,14 @@ def register_auth_routes(app):
             .all()
         )
 
-        recent_matters = (
-            db.session.query(Matter)
-            .join(MatterMember, MatterMember.matter_id == Matter.id)
-            .filter((MatterMember.user_id == current_user.id) | (current_user.role == "admin"))
-            .order_by(Matter.opened_at.desc())
-            .limit(8)
-            .all()
-        )
+        recent_matters_query = Matter.query
+        if not is_admin():
+            recent_matters_query = (
+                recent_matters_query.join(MatterMember, MatterMember.matter_id == Matter.id).filter(
+                    MatterMember.user_id == current_user.id
+                )
+            )
+        recent_matters = recent_matters_query.order_by(Matter.opened_at.desc()).limit(8).all()
 
         return page(
             "Dashboard",

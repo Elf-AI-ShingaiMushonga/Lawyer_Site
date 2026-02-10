@@ -22,15 +22,29 @@ write_files:
       # Replace these placeholders before using this cloud-init file.
       REPO_URL="https://github.com/your-org/your-repo.git"
       REPO_REF="main"
-      APP_DOMAIN="elf-ai-demo.co.za"
+      APP_DOMAIN="elf-ai-demo.co.za www.elf-ai-demo.co.za"
       FLASK_SECRET_KEY="REPLACE_WITH_A_LONG_RANDOM_SECRET"
       DATABASE_URL="postgresql+psycopg://app_user:app_password@db-host:5432/law_intranet"
+      TRUSTED_PROXY_HOPS="1"
       ADMIN_EMAIL="admin@firm.local"
       ADMIN_PASSWORD="REPLACE_WITH_STRONG_ADMIN_PASSWORD"
       ADMIN_NAME="Admin User"
+      GUNICORN_WORKERS="3"
+      GUNICORN_THREADS="2"
+      GUNICORN_TIMEOUT="60"
+
+      if [[ "${REPO_URL}" == "https://github.com/your-org/your-repo.git" ]]; then
+        echo "REPO_URL placeholder not set" >&2
+        exit 1
+      fi
 
       if [[ "${FLASK_SECRET_KEY}" == "REPLACE_WITH_A_LONG_RANDOM_SECRET" ]]; then
         echo "FLASK_SECRET_KEY placeholder not set" >&2
+        exit 1
+      fi
+
+      if [[ "${DATABASE_URL}" == "postgresql+psycopg://app_user:app_password@db-host:5432/law_intranet" ]]; then
+        echo "DATABASE_URL placeholder not set" >&2
         exit 1
       fi
 
@@ -64,7 +78,11 @@ write_files:
       MAX_UPLOAD_BYTES=52428800
       UPLOAD_DIR=uploads
       TRUST_PROXY=true
+      TRUSTED_PROXY_HOPS=${TRUSTED_PROXY_HOPS}
       FORCE_SECURE_COOKIE=true
+      GUNICORN_WORKERS=${GUNICORN_WORKERS}
+      GUNICORN_THREADS=${GUNICORN_THREADS}
+      GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT}
       ENVVARS
 
       chown "${APP_USER}:${APP_USER}" "${APP_DIR}/.env"
@@ -96,7 +114,7 @@ write_files:
 
       cp "${APP_DIR}/deploy/ubuntu/systemd/law-intranet.service" /etc/systemd/system/law-intranet.service
       cp "${APP_DIR}/deploy/ubuntu/nginx/law-intranet.conf" /etc/nginx/sites-available/law-intranet.conf
-      sed -i "s/server_name elf-ai-demo\\.co\\.za;/server_name ${APP_DOMAIN};/" /etc/nginx/sites-available/law-intranet.conf
+      sed -i "s/server_name elf-ai-demo\\.co\\.za www\\.elf-ai-demo\\.co\\.za;/server_name ${APP_DOMAIN};/" /etc/nginx/sites-available/law-intranet.conf
 
       ln -sf /etc/nginx/sites-available/law-intranet.conf /etc/nginx/sites-enabled/law-intranet.conf
       rm -f /etc/nginx/sites-enabled/default

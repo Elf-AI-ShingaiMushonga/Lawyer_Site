@@ -30,19 +30,24 @@ def create_app() -> Flask:
     app_env = os.environ.get("FLASK_ENV", "development").strip().lower()
     is_production = app_env in PRODUCTION_ENV_VALUES
     secret_key = os.environ.get("FLASK_SECRET_KEY")
+    database_uri = os.environ.get("DATABASE_URL")
 
     if is_production and not secret_key:
         raise RuntimeError("FLASK_SECRET_KEY must be set in production.")
+    if is_production and not database_uri:
+        raise RuntimeError("DATABASE_URL must be set in production.")
     if not secret_key:
         secret_key = secrets.token_urlsafe(32)
+    if not database_uri:
+        database_uri = f"sqlite:///{os.path.join(BASE_DIR, 'intranet.db')}"
 
-    database_uri = os.environ.get("DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'intranet.db')}")
     upload_dir = os.environ.get("UPLOAD_DIR", UPLOAD_DIR)
     os.makedirs(upload_dir, exist_ok=True)
     max_upload_bytes = env_int("MAX_UPLOAD_BYTES", 50 * 1024 * 1024)
     session_ttl_minutes = env_int("SESSION_TTL_MINUTES", 8 * 60)
     trust_proxy = env_bool("TRUST_PROXY", False)
     force_secure_cookie = env_bool("FORCE_SECURE_COOKIE", False)
+    trusted_proxy_hops = max(1, env_int("TRUSTED_PROXY_HOPS", 1))
     secure_cookie = is_production or force_secure_cookie
 
     app.config.update(
@@ -66,7 +71,8 @@ def create_app() -> Flask:
         app.config["SQLALCHEMY_ENGINE_OPTIONS"]["pool_recycle"] = env_int("DB_POOL_RECYCLE_SECONDS", 1800)
 
     if trust_proxy:
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+        # Trust the configured number of proxy hops for client IP and proto handling.
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=trusted_proxy_hops, x_proto=1, x_host=1)
 
     log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
     logging.basicConfig(

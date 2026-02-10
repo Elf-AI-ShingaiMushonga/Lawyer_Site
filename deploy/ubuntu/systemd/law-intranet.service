@@ -1,6 +1,7 @@
 [Unit]
 Description=Law Firm Intranet (Gunicorn)
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -8,14 +9,18 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/home/ubuntu/law_firm_intranet
 EnvironmentFile=/home/ubuntu/law_firm_intranet/.env
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/ubuntu/law_firm_intranet/venv/bin/gunicorn \
-  --workers 3 \
-  --bind 127.0.0.1:8000 \
-  --access-logfile - \
-  --error-logfile - \
+  -c /home/ubuntu/law_firm_intranet/deploy/ubuntu/gunicorn.conf.py \
   app:app
+ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+LimitNOFILE=4096
 
 [Install]
 WantedBy=multi-user.target

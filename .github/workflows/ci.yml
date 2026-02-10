@@ -28,12 +28,14 @@ jobs:
         env:
           FLASK_ENV: production
           FLASK_SECRET_KEY: ci-test-secret
+          DATABASE_URL: sqlite:///:memory:
         run: python -c "import app; print('app import ok')"
 
       - name: Health endpoint smoke test
         env:
           FLASK_ENV: production
           FLASK_SECRET_KEY: ci-test-secret
+          DATABASE_URL: sqlite:///:memory:
         run: |
           python - <<'PY'
           import app

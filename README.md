@@ -48,7 +48,21 @@ Open: http://127.0.0.1:5000
 - `intranet/routes/`: route modules split by domain (`auth`, `matters`, `content`, `admin`, `ops`)
 - `intranet/templates/`: Jinja templates split by domain (`auth`, `matters`, `content`, `admin`, `errors`)
 - `intranet/security.py`: security headers and error handlers
-- `deploy/ubuntu/`: Ubuntu deployment artifacts (cloud-init, systemd service, Nginx config)
+- `deploy/ubuntu/`: Ubuntu deployment artifacts (cloud-init, systemd service, Nginx config, Gunicorn config)
+
+## Required production env vars
+
+- `FLASK_ENV=production`
+- `FLASK_SECRET_KEY=<long-random-secret>`
+- `DATABASE_URL=postgresql+psycopg://...`
+
+Optional but recommended:
+- `TRUST_PROXY=true`
+- `TRUSTED_PROXY_HOPS=1` (set `2` when running behind ALB + Nginx)
+- `FORCE_SECURE_COOKIE=true`
+- `GUNICORN_WORKERS=3`
+- `GUNICORN_THREADS=2`
+- `GUNICORN_TIMEOUT=60`
 
 ## Ubuntu production deployment
 
@@ -62,9 +76,10 @@ Open: http://127.0.0.1:5000
   - Use `deploy/ubuntu/cloud-init.yaml` as EC2 user data.
   - Replace placeholders in that file first:
     - `REPO_URL`
-    - `APP_DOMAIN` (defaults to `elf-ai-demo.co.za`)
+    - `APP_DOMAIN` (defaults to `elf-ai-demo.co.za www.elf-ai-demo.co.za`)
     - `FLASK_SECRET_KEY`
     - `DATABASE_URL`
+    - `TRUSTED_PROXY_HOPS` (`2` if ALB is in front of Nginx)
     - `ADMIN_PASSWORD`
   - Launch instance, then check bootstrap logs:
     - `sudo tail -n 200 /var/log/law-intranet-bootstrap.log`
@@ -87,7 +102,9 @@ Open: http://127.0.0.1:5000
 
 - 3) Configure environment:
   - `cp .env.example .env`
+  - Generate secret: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`
   - Edit `.env` with real `FLASK_SECRET_KEY` and `DATABASE_URL`.
+  - Set `TRUSTED_PROXY_HOPS=2` only if request path is `Client -> ALB -> Nginx -> Gunicorn`.
 
 - 4) Initialize DB and bootstrap admin:
   - `source venv/bin/activate`
@@ -96,13 +113,14 @@ Open: http://127.0.0.1:5000
 
 - 5) Install systemd service:
   - `sudo cp deploy/ubuntu/systemd/law-intranet.service /etc/systemd/system/law-intranet.service`
+  - Gunicorn tuning comes from `deploy/ubuntu/gunicorn.conf.py` and env vars in `.env`.
   - `sudo systemctl daemon-reload`
   - `sudo systemctl enable --now law-intranet`
   - `sudo systemctl status law-intranet`
 
 - 6) Install Nginx config:
   - `sudo cp deploy/ubuntu/nginx/law-intranet.conf /etc/nginx/sites-available/law-intranet.conf`
-  - `server_name` is preconfigured for `elf-ai-demo.co.za` (edit if your domain differs).
+  - `server_name` is preconfigured for `elf-ai-demo.co.za` and `www.elf-ai-demo.co.za`.
   - `sudo ln -sf /etc/nginx/sites-available/law-intranet.conf /etc/nginx/sites-enabled/law-intranet.conf`
   - `sudo rm -f /etc/nginx/sites-enabled/default`
   - `sudo nginx -t`
