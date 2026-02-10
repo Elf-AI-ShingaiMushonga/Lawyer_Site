@@ -14,6 +14,9 @@
           <a class="btn btn-sm btn-outline-light" href="{{ story_links.search }}">Show global search</a>
         </div>
       </div>
+      <div class="why-note mt-3">
+        Why this matters: this script keeps demos outcome-focused and consistent across presenters.
+      </div>
       <div class="metric-grid mt-3">
         <div class="metric-card">
           <div class="metric-label">Accessible Matters</div>
@@ -38,6 +41,18 @@
 
 <div class="row g-3 mt-1">
   <div class="col-lg-8">
+    <div class="card p-3 mb-3">
+      <h4 class="mb-1">{{ role_story.title }}</h4>
+      <div class="muted small">Role-specific talking points for your current account: {{ current_user.role }}</div>
+      <div class="list-stack mt-2">
+        {% for point in role_story.focus %}
+          <div class="list-item">
+            <div class="list-meta">{{ point }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
     <div class="card p-3">
       <h4 class="mb-2">Narrative sequence</h4>
       <div class="story-step">
@@ -94,6 +109,16 @@
   <div class="col-lg-4">
     <div class="card p-3">
       <h4 class="mb-2">Demo checkpoints</h4>
+      {% if story_pack_matters %}
+        <div class="muted small mb-2">Story pack matters</div>
+        {% for story_matter in story_pack_matters %}
+          <div class="activity-item">
+            <div class="fw-semibold">{{ story_matter.matter_no }} - {{ story_matter.title }}</div>
+            <div class="muted small">{{ story_matter.client_name }} • {{ story_matter.status }}</div>
+            {% if story_matter.outcome_summary %}<div class="muted small mt-1">{{ story_matter.outcome_summary }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      {% endif %}
       {% if flagship_matter %}
         <div class="muted small mb-2">Focus matter</div>
         <div class="fw-semibold">{{ flagship_matter.matter_no }} - {{ flagship_matter.title }}</div>

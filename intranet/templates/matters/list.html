@@ -20,6 +20,10 @@
     <a class="btn btn-light" href="{{ url_for('matter_create') }}">Create Matter</a>
   </div>
 
+  <div class="why-note mt-3">
+    Why this matters: this list gives leadership immediate insight into risk posture, budget state, and workload spread.
+  </div>
+
   <form class="row g-2 mt-3" method="get">
     <div class="col-md-10">
       <input class="form-control" name="q" placeholder="Search matter number, title, or client..." value="{{ q }}">
@@ -62,6 +66,8 @@
                 <div class="list-meta mt-1">
                   <span>{{ m.client_name }}</span>
                   <span>Opened {{ m.opened_at.strftime("%Y-%m-%d") }}</span>
+                  <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }}</span>
+                  <span>{{ m.budget_status }}</span>
                 </div>
               </div>
               <div class="list-actions">

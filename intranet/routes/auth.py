@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 
 from flask import flash, redirect, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from ..config import is_valid_email
@@ -131,6 +132,7 @@ def register_auth_routes(app):
     @login_required
     def dashboard():
         anns = Announcement.query.order_by(Announcement.created_at.desc()).limit(5).all()
+        today = dt.date.today()
 
         my_tasks = (
             Task.query.filter(Task.assigned_to == current_user.id)
@@ -140,7 +142,9 @@ def register_auth_routes(app):
         )
 
         matter_scope = Matter.query
+        visible_matter_ids = db.session.query(Matter.id)
         if not is_admin():
+            visible_matter_ids = db.session.query(MatterMember.matter_id).filter(MatterMember.user_id == current_user.id)
             matter_scope = (
                 matter_scope.join(MatterMember, MatterMember.matter_id == Matter.id).filter(MatterMember.user_id == current_user.id)
             )
@@ -148,14 +152,62 @@ def register_auth_routes(app):
 
         document_scope = DocumentFile.query
         if not is_admin():
-            visible_matter_ids = db.session.query(MatterMember.matter_id).filter(MatterMember.user_id == current_user.id)
             document_scope = document_scope.filter(DocumentFile.matter_id.in_(visible_matter_ids))
+
+        risk_matter_scope = Matter.query
+        if not is_admin():
+            risk_matter_scope = risk_matter_scope.filter(Matter.id.in_(visible_matter_ids))
+        risk_matter_scope = risk_matter_scope.filter(Matter.status != "Closed")
+
+        overdue_task_scope = Task.query.filter(Task.status != "Done", Task.due_date.isnot(None), Task.due_date < today)
+        due_week_scope = Task.query.filter(
+            Task.status != "Done",
+            Task.due_date.isnot(None),
+            Task.due_date >= today,
+            Task.due_date <= (today + dt.timedelta(days=7)),
+        )
+        urgent_unassigned_scope = Task.query.filter(
+            Task.status != "Done",
+            Task.assigned_to.is_(None),
+            Task.due_date.isnot(None),
+            Task.due_date <= (today + dt.timedelta(days=3)),
+        )
+        if not is_admin():
+            overdue_task_scope = overdue_task_scope.filter(Task.matter_id.in_(visible_matter_ids))
+            due_week_scope = due_week_scope.filter(Task.matter_id.in_(visible_matter_ids))
+            urgent_unassigned_scope = urgent_unassigned_scope.filter(Task.matter_id.in_(visible_matter_ids))
+
+        overdue_counts = {
+            matter_id: count
+            for matter_id, count in (
+                overdue_task_scope.with_entities(Task.matter_id, func.count(Task.id))
+                .group_by(Task.matter_id)
+                .all()
+            )
+        }
+
+        at_risk_matters = []
+        for matter in risk_matter_scope.order_by(Matter.last_updated_at.desc(), Matter.opened_at.desc()).limit(40).all():
+            overdue_for_matter = overdue_counts.get(matter.id, 0)
+            if matter.risk_level in {"High", "Critical"} or overdue_for_matter > 0:
+                at_risk_matters.append(
+                    {
+                        "matter": matter,
+                        "overdue_tasks": overdue_for_matter,
+                        "risk_driver": "Overdue tasks" if overdue_for_matter else f"{matter.risk_level} risk",
+                    }
+                )
+            if len(at_risk_matters) >= 8:
+                break
 
         stats = {
             "matter_count": matter_scope.count(),
             "assigned_open_tasks": Task.query.filter(Task.assigned_to == current_user.id, Task.status != "Done").count(),
             "document_count": document_scope.count(),
             "announcement_count": Announcement.query.count(),
+            "overdue_tasks": overdue_task_scope.count(),
+            "due_this_week": due_week_scope.count(),
+            "urgent_unassigned": urgent_unassigned_scope.count(),
         }
 
         return page(
@@ -165,6 +217,7 @@ def register_auth_routes(app):
             my_tasks=my_tasks,
             recent_matters=recent_matters,
             stats=stats,
+            at_risk_matters=at_risk_matters,
         )
 
     @app.get("/story")
@@ -218,6 +271,63 @@ def register_auth_routes(app):
             "audit": url_for("admin_audit") if is_admin() else url_for("kb"),
         }
 
+        story_pack_nos = ["2026-LIT-0142", "2026-CORP-0033", "2026-EMP-0071"]
+        story_pack_rows = (
+            matter_scope.filter(Matter.matter_no.in_(story_pack_nos))
+            .order_by(Matter.opened_at.desc())
+            .limit(3)
+            .all()
+        )
+        if not story_pack_rows:
+            story_pack_rows = matter_scope.order_by(Matter.opened_at.desc()).limit(3).all()
+
+        role_guides = {
+            "admin": {
+                "title": "Governance-first narrative",
+                "focus": [
+                    "Platform-wide control posture and auditability",
+                    "Operational KPIs and adoption metrics",
+                    "Incident/change handling and oversight",
+                ],
+            },
+            "partner": {
+                "title": "Partner narrative",
+                "focus": [
+                    "Portfolio-level risk posture and business impact",
+                    "Client readiness across flagship matters",
+                    "Governance confidence before board/client reviews",
+                ],
+            },
+            "associate": {
+                "title": "Associate narrative",
+                "focus": [
+                    "Execution detail across tasks, evidence, and deadlines",
+                    "Matter-level accountability and delivery velocity",
+                    "Knowledge reuse and reduced drafting cycle time",
+                ],
+            },
+            "paralegal": {
+                "title": "Delivery-efficiency narrative",
+                "focus": [
+                    "Document readiness and filing timelines",
+                    "Evidence integrity and retrieval speed",
+                    "Daily execution workflow consistency",
+                ],
+            },
+            "staff": {
+                "title": "Operations-consistency narrative",
+                "focus": [
+                    "Intake quality and communication consistency",
+                    "Cross-team visibility of priorities",
+                    "Governed process handoffs",
+                ],
+            },
+        }
+        role_key = current_user.role
+        if current_user.role == "lawyer":
+            role_key = "partner" if current_user.email.startswith("partner@") else "associate"
+        role_story = role_guides.get(role_key, role_guides["associate"])
+
         return page(
             "Client Story",
             "auth/story.html",
@@ -226,4 +336,6 @@ def register_auth_routes(app):
             flagship_metrics=flagship_metrics,
             story_links=story_links,
             is_admin_user=is_admin(),
+            role_story=role_story,
+            story_pack_matters=story_pack_rows,
         )

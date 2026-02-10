@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">Security Posture</h3>
+      <div class="page-intro mt-1">Current control baseline and production hardening roadmap.</div>
+    </div>
+    <div class="list-actions">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_policy') }}">Policy</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_incidents') }}">Incidents</a>
+    </div>
+  </div>
+
+  <div class="why-note mt-3">
+    Why this matters: clients buy confidence, not only features. This page frames your control posture in plain language.
+  </div>
+
+  <div class="result-grid mt-3">
+    {% for name, detail in security_controls %}
+      <div class="result-panel">
+        <div class="result-head">
+          <h5>{{ name }}</h5>
+        </div>
+        <div class="muted small">{{ detail }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="card mt-3 p-3">
+    <div class="toolbar-row">
+      <h4 class="mb-0">Recommended Next Hardening Steps</h4>
+      <div class="code-like">as of {{ now_utc.strftime("%Y-%m-%d %H:%M UTC") }}</div>
+    </div>
+    <div class="list-stack mt-2">
+      {% for item in hardening_backlog %}
+        <div class="list-item">
+          <div class="list-meta">{{ item }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

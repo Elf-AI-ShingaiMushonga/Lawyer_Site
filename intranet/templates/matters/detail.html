@@ -1,78 +1,241 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="row g-3">
-  <div class="col-lg-7">
+  <div class="col-lg-8">
     <div class="card p-3">
-      <div class="d-flex justify-content-between align-items-start">
+      <div class="toolbar-row">
         <div>
           <h3 class="mb-0">{{ m.matter_no }}</h3>
           <div class="muted">{{ m.title }}</div>
-          <div class="mt-1"><span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span> - <span class="muted">{{ m.client_name }}</span></div>
+          <div class="list-meta mt-1">
+            <span>{{ m.client_name }}</span>
+            <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
+            <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }} risk</span>
+            <span>{{ m.budget_status }}</span>
+          </div>
         </div>
-        <div class="d-flex gap-2">
+        <div class="list-actions">
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Tasks</a>
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_documents', matter_id=m.id) }}">Documents</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_team', matter_id=m.id) }}">Team</a>
         </div>
       </div>
-      {% if m.description %}
-        <div class="mt-2">{{ (m.description|e).replace("\n","<br>")|safe }}</div>
-      {% endif %}
+
+      <div class="why-note mt-3">
+        Why this matters: this executive summary gives partners and clients a single source of truth for risk, progress, and expected outcome.
+      </div>
+
+      <form method="post" action="{{ url_for('matter_summary_update', matter_id=m.id) }}" class="row g-2 mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-4">
+          <label class="muted small">Status</label>
+          <select class="form-select" name="status">
+            {% for status in matter_statuses %}
+              <option value="{{ status }}" {% if status == m.status %}selected{% endif %}>{{ status }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="muted small">Risk Level</label>
+          <select class="form-select" name="risk_level">
+            {% for risk in risk_levels %}
+              <option value="{{ risk }}" {% if risk == m.risk_level %}selected{% endif %}>{{ risk }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="muted small">Budget Status</label>
+          <select class="form-select" name="budget_status">
+            {% for budget in budget_statuses %}
+              <option value="{{ budget }}" {% if budget == m.budget_status %}selected{% endif %}>{{ budget }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="muted small">Matter Objective</label>
+          <textarea class="form-control" name="objective" rows="2" placeholder="What outcome are we driving?">{{ m.objective or "" }}</textarea>
+        </div>
+        <div class="col-12">
+          <label class="muted small">Latest Update</label>
+          <textarea class="form-control" name="last_update_note" rows="2" placeholder="Latest stakeholder-ready update">{{ m.last_update_note or "" }}</textarea>
+        </div>
+        <div class="col-12">
+          <label class="muted small">Outcome / Business Impact</label>
+          <textarea class="form-control" name="outcome_summary" rows="2" placeholder="Value delivered or expected value">{{ m.outcome_summary or "" }}</textarea>
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-light">Save Executive Summary</button>
+        </div>
+      </form>
+
+      <div class="list-meta mt-2">
+        <span>Opened {{ m.opened_at.strftime("%Y-%m-%d") }}</span>
+        <span>Last updated {{ m.last_updated_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>
+        {% if m.closed_at %}<span>Closed {{ m.closed_at.strftime("%Y-%m-%d") }}</span>{% endif %}
+      </div>
+
+      <div class="kpi-strip mt-3">
+        <div class="kpi-pill">
+          <div class="label">Overdue tasks</div>
+          <div class="value">{{ overdue_tasks|length }}</div>
+        </div>
+        <div class="kpi-pill">
+          <div class="label">Due this week</div>
+          <div class="value">{{ due_soon_tasks|length }}</div>
+        </div>
+        <div class="kpi-pill">
+          <div class="label">Total tasks</div>
+          <div class="value">{{ tasks|length }}</div>
+        </div>
+        <div class="kpi-pill">
+          <div class="label">Documents</div>
+          <div class="value">{{ docs|length }}</div>
+        </div>
+      </div>
     </div>
 
     <div class="card p-3 mt-3">
-      <div class="d-flex justify-content-between align-items-center">
-        <h4 class="mb-0">Tasks</h4>
-        <a class="btn btn-sm btn-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Manage</a>
+      <div class="toolbar-row">
+        <div>
+          <h4 class="mb-0">Timeline</h4>
+          <div class="muted small mt-1">Key dates, filings, hearings, milestones, and next actions.</div>
+        </div>
       </div>
-      <div class="mt-2">
-        {% if tasks %}
-          {% for t in tasks %}
-            <div class="border-top pt-2 mt-2">
-              <div class="d-flex justify-content-between">
-                <div class="fw-semibold">{{ t.title }}</div>
-                <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
-              </div>
-              <div class="muted small">{% if t.due_date %}Due {{ t.due_date }} - {% endif %}Task #{{ t.id }}</div>
-            </div>
-          {% endfor %}
-        {% else %}
-          <div class="muted">No tasks yet.</div>
-        {% endif %}
-      </div>
-    </div>
 
-    <div class="card p-3 mt-3">
-      <div class="d-flex justify-content-between align-items-center">
-        <h4 class="mb-0">Recent Documents</h4>
-        <a class="btn btn-sm btn-light" href="{{ url_for('matter_documents', matter_id=m.id) }}">Upload/Download</a>
-      </div>
-      <div class="mt-2">
-        {% if docs %}
-          {% for d in docs %}
-            <div class="border-top pt-2 mt-2">
-              <div class="d-flex justify-content-between">
-                <div class="fw-semibold">{{ d.original_filename }}</div>
-                <a href="{{ url_for('doc_download', doc_id=d.id) }}">download</a>
+      <form method="post" action="{{ url_for('matter_timeline_add', matter_id=m.id) }}" class="row g-2 mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-4">
+          <label class="muted small">Date</label>
+          <input class="form-control" type="date" name="event_date" value="{{ today }}">
+        </div>
+        <div class="col-md-4">
+          <label class="muted small">Type</label>
+          <select class="form-select" name="event_type">
+            {% for event_type in timeline_event_types %}
+              <option value="{{ event_type }}">{{ event_type }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="muted small">Milestone</label>
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="is_milestone" name="is_milestone" value="1">
+            <label class="form-check-label muted small" for="is_milestone">Mark as milestone</label>
+          </div>
+        </div>
+        <div class="col-12">
+          <label class="muted small">Title</label>
+          <input class="form-control" name="title" placeholder="e.g. Hearing confirmed" required>
+        </div>
+        <div class="col-12">
+          <label class="muted small">Description</label>
+          <textarea class="form-control" name="description" rows="2" placeholder="What happened, and what comes next?"></textarea>
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-outline-light">Add Timeline Event</button>
+        </div>
+      </form>
+
+      <div class="timeline-list mt-3">
+        {% if timeline %}
+          {% for e in timeline %}
+            <div class="timeline-item">
+              <div class="list-row">
+                <div>
+                  <div class="list-title">{{ e.title }}</div>
+                  <div class="list-meta mt-1">
+                    <span class="timeline-date">{{ e.event_date }}</span>
+                    <span>{{ e.event_type }}</span>
+                    {% if e.is_milestone %}<span class="tag-chip">Milestone</span>{% endif %}
+                  </div>
+                  {% if e.description %}
+                    <div class="muted small mt-1">{{ e.description }}</div>
+                  {% endif %}
+                </div>
               </div>
-              <div class="muted small">sha256 {{ d.sha256[:12] }}... - {{ d.uploaded_at.strftime("%Y-%m-%d %H:%M UTC") }}</div>
             </div>
           {% endfor %}
         {% else %}
-          <div class="muted">No documents uploaded.</div>
+          <div class="empty-state">No timeline events yet.</div>
         {% endif %}
       </div>
     </div>
   </div>
 
-  <div class="col-lg-5">
+  <div class="col-lg-4">
     <div class="card p-3">
-      <div class="d-flex justify-content-between align-items-center">
+      <h4 class="mb-1">Matter Activity Feed</h4>
+      <div class="muted small">Human-readable actions for quick stakeholder updates.</div>
+      {% if activity_items %}
+        {% for activity, actor in activity_items %}
+          <div class="activity-item">
+            <div class="d-flex justify-content-between">
+              <div class="fw-semibold">{{ activity.action }}</div>
+              <div class="muted small">{{ activity.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+            </div>
+            <div class="muted small">{{ actor.full_name if actor else "System" }}{% if activity.details %} • {{ activity.details }}{% endif %}</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="muted small mt-2">No activity yet.</div>
+      {% endif %}
+    </div>
+
+    <div class="card p-3 mt-3">
+      <div class="toolbar-row">
+        <h4 class="mb-0">Tasks</h4>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Manage</a>
+      </div>
+      <div class="mt-2">
+        {% if tasks %}
+          {% for t in tasks[:8] %}
+            <div class="activity-item">
+              <div class="d-flex justify-content-between">
+                <div class="fw-semibold">{{ t.title }}</div>
+                <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
+              </div>
+              <div class="muted small">{% if t.due_date %}Due {{ t.due_date }}{% else %}No due date{% endif %} • Task #{{ t.id }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="muted small">No tasks yet.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card p-3 mt-3">
+      <div class="toolbar-row">
+        <h4 class="mb-0">Documents</h4>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_documents', matter_id=m.id) }}">Open</a>
+      </div>
+      <div class="mt-2">
+        {% if docs %}
+          {% for d in docs[:8] %}
+            <div class="activity-item">
+              <div class="d-flex justify-content-between">
+                <div class="fw-semibold">{{ d.original_filename }}</div>
+                <a href="{{ url_for('doc_download', doc_id=d.id) }}">download</a>
+              </div>
+              <div class="muted small">
+                {{ d.category or "General" }} • {{ d.lifecycle_stage }}{% if d.doc_version %} • {{ d.doc_version }}{% endif %}
+                {% if d.is_privileged %} • Privileged{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="muted small">No documents uploaded.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card p-3 mt-3">
+      <div class="toolbar-row">
         <h4 class="mb-0">Matter Team</h4>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_team', matter_id=m.id) }}">Edit</a>
       </div>
       <div class="mt-2">
         {% for u, mm in members %}
-          <div class="border-top pt-2 mt-2 d-flex justify-content-between">
+          <div class="activity-item d-flex justify-content-between">
             <div>
               <div class="fw-semibold">{{ u.full_name }}</div>
               <div class="muted small">{{ u.email }}</div>
@@ -84,7 +247,7 @@
           </div>
         {% endfor %}
         {% if not members %}
-          <div class="muted">No team members assigned.</div>
+          <div class="muted small">No team members assigned.</div>
         {% endif %}
       </div>
     </div>

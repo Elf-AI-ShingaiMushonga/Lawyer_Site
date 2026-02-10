@@ -1,14 +1,24 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card p-3">
-  <h3>New Matter</h3>
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">New Matter</h3>
+      <div class="page-intro mt-1">Capture an executive-ready matter profile from day one.</div>
+    </div>
+  </div>
+
+  <div class="why-note mt-3">
+    Why this matters: structured intake gives leadership immediate visibility into risk, budget, and delivery confidence.
+  </div>
+
   <form method="post" class="row g-2">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-md-4">
+    <div class="col-md-3">
       <label class="muted small">Matter Number</label>
       <input class="form-control" name="matter_no" placeholder="e.g. 2026-AC-0142" required>
     </div>
-    <div class="col-md-8">
+    <div class="col-md-9">
       <label class="muted small">Title</label>
       <input class="form-control" name="title" placeholder="e.g. Smith v. Jones - Motion" required>
     </div>
@@ -24,9 +34,33 @@
         <option>Closed</option>
       </select>
     </div>
+    <div class="col-md-6">
+      <label class="muted small">Risk Level</label>
+      <select class="form-select" name="risk_level">
+        {% for risk in risk_levels %}
+          <option value="{{ risk }}">{{ risk }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label class="muted small">Budget Status</label>
+      <select class="form-select" name="budget_status">
+        {% for budget in budget_statuses %}
+          <option value="{{ budget }}">{{ budget }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12">
+      <label class="muted small">Objective</label>
+      <textarea class="form-control" name="objective" rows="2" placeholder="What business/legal outcome should this matter deliver?"></textarea>
+    </div>
     <div class="col-12">
       <label class="muted small">Description</label>
       <textarea class="form-control" name="description" rows="4" placeholder="Short internal note..."></textarea>
+    </div>
+    <div class="col-12">
+      <label class="muted small">Latest Update Note</label>
+      <textarea class="form-control" name="last_update_note" rows="2" placeholder="Current context for stakeholders"></textarea>
     </div>
     <div class="col-12 d-grid">
       <button class="btn btn-light">Create</button>

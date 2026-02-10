@@ -7,6 +7,9 @@
       <div class="page-intro mt-1">Query matters, tasks, documents, knowledge, and contacts in one view.</div>
     </div>
   </div>
+  <div class="why-note mt-3">
+    Why this matters: retrieval speed directly influences legal turnaround time and client confidence.
+  </div>
   <form class="row g-2 mt-3" method="get">
     <div class="col-md-10">
       <input class="form-control" name="q" placeholder="Search across matters, tasks, documents, knowledge..." value="{{ q }}">
@@ -54,7 +57,9 @@
                 <div class="list-meta mt-1">
                   <span>{{ m.client_name }}</span>
                   <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
+                  <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }}</span>
                 </div>
+                {% if m.last_update_note %}<div class="muted small mt-1">{{ m.last_update_note }}</div>{% endif %}
               </div>
             {% endfor %}
           </div>
@@ -98,6 +103,9 @@
                 <div class="list-meta mt-1">
                   <span>Matter #{{ d.matter_id }}</span>
                   <span>sha256 {{ d.sha256[:12] }}...</span>
+                  <span>{{ d.category or "General" }}</span>
+                  <span>{{ d.lifecycle_stage }}</span>
+                  {% if d.is_privileged %}<span class="tag-chip">Privileged</span>{% endif %}
                 </div>
               </div>
             {% endfor %}

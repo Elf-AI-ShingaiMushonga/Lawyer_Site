@@ -123,9 +123,21 @@ def register_content_routes(app):
                 )
                 task_base = task_base.filter(Task.matter_id.in_(allowed_matter_ids))
                 doc_base = doc_base.filter(DocumentFile.matter_id.in_(allowed_matter_ids))
-            matters = m_base.filter((Matter.matter_no.ilike(like)) | (Matter.title.ilike(like)) | (Matter.client_name.ilike(like))).limit(25).all()
+            matters = m_base.filter(
+                (Matter.matter_no.ilike(like))
+                | (Matter.title.ilike(like))
+                | (Matter.client_name.ilike(like))
+                | (Matter.objective.ilike(like))
+                | (Matter.last_update_note.ilike(like))
+                | (Matter.outcome_summary.ilike(like))
+            ).limit(25).all()
             tasks = task_base.filter(Task.title.ilike(like) | Task.description.ilike(like)).limit(25).all()
-            docs = doc_base.filter(DocumentFile.original_filename.ilike(like)).limit(25).all()
+            docs = doc_base.filter(
+                (DocumentFile.original_filename.ilike(like))
+                | (DocumentFile.category.ilike(like))
+                | (DocumentFile.owner_name.ilike(like))
+                | (DocumentFile.doc_version.ilike(like))
+            ).limit(25).all()
             articles = KnowledgeBase.query.filter(KnowledgeBase.title.ilike(like) | KnowledgeBase.body.ilike(like)).limit(25).all()
             contacts = Contact.query.filter(Contact.name.ilike(like) | Contact.organization.ilike(like) | Contact.email.ilike(like)).limit(25).all()
 

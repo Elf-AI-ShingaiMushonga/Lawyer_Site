@@ -553,6 +553,77 @@
       }
     }
 
+    .why-note {
+      border-left: 3px solid rgba(136, 216, 255, 0.78);
+      padding: 7px 10px;
+      border-radius: 8px;
+      background: rgba(35, 85, 128, 0.28);
+      color: #cde9ff;
+      font-size: 13px;
+    }
+
+    .timeline-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .timeline-item {
+      border: 1px solid rgba(142, 205, 255, 0.24);
+      border-radius: 12px;
+      padding: 11px 12px;
+      background: rgba(9, 33, 55, 0.56);
+    }
+
+    .timeline-date {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #9ec0e2;
+    }
+
+    .risk-chip {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 11px;
+      line-height: 1;
+      border: 1px solid transparent;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 700;
+    }
+
+    .risk-low {
+      border-color: rgba(111, 230, 184, 0.45);
+      background: rgba(43, 163, 114, 0.24);
+      color: #cffff0;
+    }
+
+    .risk-medium {
+      border-color: rgba(255, 210, 122, 0.45);
+      background: rgba(171, 122, 18, 0.28);
+      color: #ffe9bf;
+    }
+
+    .risk-high,
+    .risk-critical {
+      border-color: rgba(255, 147, 128, 0.5);
+      background: rgba(160, 52, 36, 0.32);
+      color: #ffdcd3;
+    }
+
+    .activity-item {
+      border-top: 1px solid rgba(145, 193, 248, 0.18);
+      padding-top: 9px;
+      margin-top: 9px;
+    }
+
+    .policy-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+
     .footer-note {
       text-align: center;
       margin: 22px 0 8px;
@@ -578,6 +649,7 @@
   {% set endpoint = request.endpoint or "" %}
   {% set matter_endpoints = ["matters", "matter_create", "matter_detail", "matter_team", "matter_tasks", "matter_documents"] %}
   {% set admin_endpoints = ["admin", "admin_users", "admin_announcements", "admin_audit"] %}
+  {% set trust_endpoints = ["trust_policy", "trust_security", "trust_incidents"] %}
   {% set next_path = request.full_path if request.query_string else request.path %}
   <nav class="navbar px-3 py-2 mb-3 d-flex justify-content-between">
     <div class="d-flex align-items-center gap-3">
@@ -599,6 +671,7 @@
         <a class="nav-pill {{ 'is-active' if endpoint == 'contacts' else '' }}" href="{{ url_for('contacts') }}">Contacts</a>
         <a class="nav-pill {{ 'is-active' if endpoint in ['kb', 'kb_view'] else '' }}" href="{{ url_for('kb') }}">Knowledge</a>
         <a class="nav-pill {{ 'is-active' if endpoint == 'search' else '' }}" href="{{ url_for('search') }}">Search</a>
+        <a class="nav-pill {{ 'is-active' if endpoint in trust_endpoints else '' }}" href="{{ url_for('trust_policy') }}">Trust</a>
         <a class="nav-pill {{ 'is-active' if endpoint == 'client_story' else '' }}" href="{{ url_for('client_story') }}">Story</a>
         <form method="post" action="{{ url_for('toggle_story_mode') }}" class="d-inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

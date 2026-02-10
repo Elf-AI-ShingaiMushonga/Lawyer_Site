@@ -10,10 +10,44 @@
       <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Back</a>
     </div>
 
+    <div class="why-note mt-3">
+      Why this matters: metadata and privilege tagging make retrieval faster and governance safer.
+    </div>
+
     <form method="post" enctype="multipart/form-data" class="row g-2 mt-2">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="col-12">
         <input class="form-control" type="file" name="file" required>
+      </div>
+      <div class="col-md-6">
+        <label class="muted small">Category</label>
+        <select class="form-select" name="category">
+          {% for category in doc_categories %}
+            <option>{{ category }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="muted small">Lifecycle Stage</label>
+        <select class="form-select" name="lifecycle_stage">
+          {% for stage in doc_stages %}
+            <option>{{ stage }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="muted small">Version</label>
+        <input class="form-control" name="doc_version" placeholder="e.g. v1.0">
+      </div>
+      <div class="col-md-6">
+        <label class="muted small">Owner</label>
+        <input class="form-control" name="owner_name" placeholder="Document owner">
+      </div>
+      <div class="col-12">
+        <div class="form-check mt-1">
+          <input class="form-check-input" type="checkbox" id="is_privileged" name="is_privileged" value="1">
+          <label class="form-check-label muted small" for="is_privileged">Privileged / confidential document</label>
+        </div>
       </div>
       <div class="col-12">
         <div class="muted small mb-1">Allowed extensions</div>
@@ -58,6 +92,11 @@
                     <span>Uploaded {{ d.uploaded_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>
                     <span>sha256 {{ d.sha256[:12] }}...</span>
                     {% if d.content_type %}<span>{{ d.content_type }}</span>{% endif %}
+                    <span>{{ d.category or "General" }}</span>
+                    <span>{{ d.lifecycle_stage }}</span>
+                    {% if d.doc_version %}<span>{{ d.doc_version }}</span>{% endif %}
+                    {% if d.owner_name %}<span>Owner {{ d.owner_name }}</span>{% endif %}
+                    {% if d.is_privileged %}<span class="tag-chip">Privileged</span>{% endif %}
                   </div>
                 </div>
                 <div class="list-actions">

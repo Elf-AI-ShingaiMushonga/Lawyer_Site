@@ -4,11 +4,15 @@ This is a functional intranet website for a law firm:
 - User authentication + roles (admin/lawyer/staff/paralegal)
 - Admin user provisioning from the web UI (`/admin/users`)
 - Matters with team membership
+- Matter executive summaries (objective, risk, budget, outcome, latest update)
+- Matter timelines (filings, hearings, milestones, client updates)
+- Human-readable matter activity feed
 - Tasks per matter (Todo/Doing/Done)
-- Document upload/download per matter with SHA-256 integrity hash
+- Document upload/download with metadata (category, version, stage, owner, privilege) and SHA-256 integrity hash
 - Contacts directory
 - Knowledge base (internal articles)
 - Search across core objects
+- Trust center pages (data policy, security posture, incident/change register)
 - Audit log (admin view)
 
 ## Quick start (local)
@@ -49,6 +53,12 @@ Seeded demo logins:
 - `paralegal@elf-ai-demo.co.za`
 - `staff@elf-ai-demo.co.za`
 
+Seeded demo content now includes:
+- Three story-pack matters with business impact summaries
+- Timeline events and activity-feed entries
+- Governance incident/change records
+- Rich sample files (`.pdf`, `.docx`, `.txt`)
+
 ## Client story mode
 
 After signing in, click `Story Mode Off` in the top navigation to enable guided demo mode.
@@ -56,6 +66,7 @@ After signing in, click `Story Mode Off` in the top navigation to enable guided 
 - `Story Mode On` adds a contextual walkthrough banner across pages.
 - Use the `Story` nav tab for a full step-by-step playbook (`/story`).
 - Disable it anytime with the same navbar toggle.
+- On the login page, `Start Live Demo` signs in, enables story mode, and opens `/story` in one click.
 
 ## GitHub upload checklist
 
@@ -77,7 +88,7 @@ After signing in, click `Story Mode Off` in the top navigation to enable guided 
 - `intranet/models.py`: SQLAlchemy models
 - `intranet/helpers.py`: shared business helpers (audit, access checks, file hash helpers)
 - `intranet/routes/`: route modules split by domain (`auth`, `matters`, `content`, `admin`, `ops`)
-- `intranet/templates/`: Jinja templates split by domain (`auth`, `matters`, `content`, `admin`, `errors`)
+- `intranet/templates/`: Jinja templates split by domain (`auth`, `matters`, `content`, `admin`, `trust`, `errors`)
 - `intranet/security.py`: security headers and error handlers
 - `migrations/`: Alembic migration scripts (managed via Flask-Migrate)
 - `deploy/ubuntu/`: Ubuntu deployment artifacts (cloud-init, systemd service, Nginx config, Gunicorn config)

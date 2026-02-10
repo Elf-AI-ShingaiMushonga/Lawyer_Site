@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="split-layout">
+  <div class="card p-3">
+    <div class="toolbar-row">
+      <div>
+        <h3 class="section-title">Incident and Change Register</h3>
+        <div class="page-intro mt-1">Governance records for operational incidents, changes, and control events.</div>
+      </div>
+    </div>
+
+    <div class="why-note mt-3">
+      Why this matters: enterprise clients expect visibility into operational discipline, not just uptime.
+    </div>
+
+    <div class="kpi-strip mt-3">
+      <div class="kpi-pill">
+        <div class="label">Open records</div>
+        <div class="value">{{ open_count }}</div>
+      </div>
+      <div class="kpi-pill">
+        <div class="label">Closed records</div>
+        <div class="value">{{ closed_count }}</div>
+      </div>
+      <div class="kpi-pill">
+        <div class="label">View filter</div>
+        <div class="value">{{ status_filter }}</div>
+      </div>
+    </div>
+
+    {% if admin_mode %}
+      <div class="card mt-3 p-3">
+        <h4 class="mb-2">Create Record</h4>
+        <form method="post" class="row g-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="create">
+          <div class="col-12">
+            <label class="muted small">Title</label>
+            <input class="form-control" name="title" required>
+          </div>
+          <div class="col-md-6">
+            <label class="muted small">Type</label>
+            <select class="form-select" name="incident_type">
+              {% for item in incident_types %}
+                <option>{{ item }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="muted small">Severity</label>
+            <select class="form-select" name="severity">
+              {% for item in incident_severities %}
+                <option>{{ item }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="muted small">Summary</label>
+            <textarea class="form-control" name="summary" rows="3" required></textarea>
+          </div>
+          <div class="col-12">
+            <label class="muted small">Impact</label>
+            <textarea class="form-control" name="impact" rows="2"></textarea>
+          </div>
+          <div class="col-12 d-grid">
+            <button class="btn btn-light">Create record</button>
+          </div>
+        </form>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card p-3">
+    <div class="toolbar-row">
+      <div>
+        <h3 class="section-title">Governance Feed</h3>
+      </div>
+      <div class="list-actions">
+        <a class="btn btn-sm btn-outline-light {{ 'is-active' if status_filter == 'all' else '' }}" href="{{ url_for('trust_incidents', status='all') }}">All</a>
+        <a class="btn btn-sm btn-outline-light {{ 'is-active' if status_filter == 'open' else '' }}" href="{{ url_for('trust_incidents', status='open') }}">Open</a>
+        <a class="btn btn-sm btn-outline-light {{ 'is-active' if status_filter == 'closed' else '' }}" href="{{ url_for('trust_incidents', status='closed') }}">Closed</a>
+      </div>
+    </div>
+
+    <div class="mt-3">
+      {% if incidents %}
+        <div class="list-stack">
+          {% for i in incidents %}
+            <div class="list-item">
+              <div class="list-row">
+                <div>
+                  <div class="list-title">{{ i.title }}</div>
+                  <div class="list-meta mt-1">
+                    <span>{{ i.incident_type }}</span>
+                    <span class="risk-chip risk-{{ i.severity|lower }}">{{ i.severity }}</span>
+                    <span>{{ i.status }}</span>
+                    <span>Opened {{ i.opened_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>
+                    {% if i.closed_at %}<span>Closed {{ i.closed_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>{% endif %}
+                  </div>
+                  <div class="muted small mt-1">{{ i.summary }}</div>
+                  {% if i.impact %}<div class="muted small mt-1">Impact: {{ i.impact }}</div>{% endif %}
+                  {% if i.resolution %}<div class="muted small mt-1">Resolution: {{ i.resolution }}</div>{% endif %}
+                </div>
+                {% if admin_mode and i.status != "Closed" %}
+                  <div class="list-actions">
+                    <form method="post">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="action" value="close">
+                      <input type="hidden" name="incident_id" value="{{ i.id }}">
+                      <input class="form-control form-control-sm mb-1" name="resolution" placeholder="Resolution summary" required>
+                      <button class="btn btn-sm btn-outline-light">Close</button>
+                    </form>
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">No incident/change records in this filter.</div>
+      {% endif %}
+    </div>
+
+    <div class="card mt-3 p-3">
+      <h4 class="mb-2">Recent Change Activity</h4>
+      {% if recent_changes %}
+        {% for l in recent_changes %}
+          <div class="activity-item">
+            <div class="d-flex justify-content-between">
+              <div class="fw-semibold">{{ l.action }}</div>
+              <div class="muted small">{{ l.at.strftime("%Y-%m-%d %H:%M UTC") }}</div>
+            </div>
+            <div class="muted small">{{ l.entity_type or "System" }}{% if l.entity_id %} #{{ l.entity_id }}{% endif %} • actor {{ l.actor_user_id or "n/a" }}</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="muted small">No recent changes captured yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

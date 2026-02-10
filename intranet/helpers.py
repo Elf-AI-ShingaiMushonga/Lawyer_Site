@@ -9,7 +9,7 @@ from flask_login import current_user
 
 from .config import ALLOWED_DOC_EXT
 from .extensions import db
-from .models import AuditLog, MatterMember
+from .models import AuditLog, MatterActivity, MatterMember
 
 
 def is_admin() -> bool:
@@ -45,6 +45,21 @@ def audit(action: str, entity_type: str | None = None, entity_id: int | None = N
         db.session.commit()
     except Exception:
         # Never break user flow for audit failure
+        db.session.rollback()
+
+
+def matter_activity(matter_id: int, action: str, details: str | None = None):
+    try:
+        entry = MatterActivity(
+            matter_id=matter_id,
+            actor_user_id=current_user.id if current_user.is_authenticated else None,
+            action=action,
+            details=details,
+        )
+        db.session.add(entry)
+        db.session.commit()
+    except Exception:
+        # Never break user flow for activity feed failure
         db.session.rollback()
 
 

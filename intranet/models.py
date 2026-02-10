@@ -55,8 +55,14 @@ class Matter(db.Model):
     client_name = db.Column(db.String(255), nullable=False)
     status = db.Column(db.String(40), nullable=False, default="Open")
     description = db.Column(db.Text, nullable=True)
+    objective = db.Column(db.Text, nullable=True)
+    risk_level = db.Column(db.String(40), nullable=False, default="Medium")
+    budget_status = db.Column(db.String(60), nullable=False, default="On Track")
+    outcome_summary = db.Column(db.Text, nullable=True)
+    last_update_note = db.Column(db.Text, nullable=True)
     opened_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     closed_at = db.Column(db.DateTime, nullable=True)
+    last_updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
 
 
@@ -80,6 +86,27 @@ class Task(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
 
 
+class MatterTimelineEvent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    event_date = db.Column(db.Date, nullable=False)
+    event_type = db.Column(db.String(40), nullable=False, default="Milestone")
+    title = db.Column(db.String(180), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    is_milestone = db.Column(db.Boolean, nullable=False, default=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class MatterActivity(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    actor_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    action = db.Column(db.String(120), nullable=False)
+    details = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
 class DocumentFile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
@@ -87,6 +114,11 @@ class DocumentFile(db.Model):
     stored_filename = db.Column(db.String(255), nullable=False)
     sha256 = db.Column(db.String(64), nullable=False)
     content_type = db.Column(db.String(120), nullable=True)
+    category = db.Column(db.String(80), nullable=True)
+    doc_version = db.Column(db.String(40), nullable=True)
+    lifecycle_stage = db.Column(db.String(40), nullable=False, default="Draft")
+    owner_name = db.Column(db.String(255), nullable=True)
+    is_privileged = db.Column(db.Boolean, nullable=False, default=False)
     uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
 
@@ -110,3 +142,18 @@ class KnowledgeBase(db.Model):
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class GovernanceIncident(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(180), nullable=False)
+    incident_type = db.Column(db.String(60), nullable=False, default="Incident")
+    severity = db.Column(db.String(40), nullable=False, default="Medium")
+    status = db.Column(db.String(40), nullable=False, default="Open")
+    summary = db.Column(db.Text, nullable=False)
+    impact = db.Column(db.Text, nullable=True)
+    resolution = db.Column(db.Text, nullable=True)
+    opened_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    closed_at = db.Column(db.DateTime, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)

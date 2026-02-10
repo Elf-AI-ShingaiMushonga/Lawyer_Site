@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">Data Retention and Access Policy</h3>
+      <div class="page-intro mt-1">How client data is stored, retained, and controlled across the platform.</div>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_security') }}">Security Posture</a>
+  </div>
+
+  <div class="why-note mt-3">
+    Why this matters: procurement, risk, and compliance stakeholders need a clear record lifecycle and access model before approval.
+  </div>
+
+  <div class="policy-grid mt-3">
+    {% for item in retention_controls %}
+      <div class="metric-card">
+        <div class="metric-label">{{ item.record }}</div>
+        <div class="fw-semibold mt-1">{{ item.retention }}</div>
+        <div class="muted small mt-1">{{ item.control }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="card mt-3 p-3">
+    <h4 class="mb-2">Access Control Baseline</h4>
+    <div class="list-stack">
+      {% for control in access_controls %}
+        <div class="list-item">
+          <div class="list-meta">{{ control }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
