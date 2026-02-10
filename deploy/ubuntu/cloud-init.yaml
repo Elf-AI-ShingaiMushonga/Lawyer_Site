@@ -22,7 +22,7 @@ write_files:
       # Replace these placeholders before using this cloud-init file.
       REPO_URL="https://github.com/your-org/your-repo.git"
       REPO_REF="main"
-      APP_DOMAIN="intranet.example.com"
+      APP_DOMAIN="elf-ai-demo.co.za"
       FLASK_SECRET_KEY="REPLACE_WITH_A_LONG_RANDOM_SECRET"
       DATABASE_URL="postgresql+psycopg://app_user:app_password@db-host:5432/law_intranet"
       ADMIN_EMAIL="admin@firm.local"
@@ -96,7 +96,7 @@ write_files:
 
       cp "${APP_DIR}/deploy/ubuntu/systemd/law-intranet.service" /etc/systemd/system/law-intranet.service
       cp "${APP_DIR}/deploy/ubuntu/nginx/law-intranet.conf" /etc/nginx/sites-available/law-intranet.conf
-      sed -i "s/server_name intranet\\.example\\.com;/server_name ${APP_DOMAIN};/" /etc/nginx/sites-available/law-intranet.conf
+      sed -i "s/server_name elf-ai-demo\\.co\\.za;/server_name ${APP_DOMAIN};/" /etc/nginx/sites-available/law-intranet.conf
 
       ln -sf /etc/nginx/sites-available/law-intranet.conf /etc/nginx/sites-enabled/law-intranet.conf
       rm -f /etc/nginx/sites-enabled/default

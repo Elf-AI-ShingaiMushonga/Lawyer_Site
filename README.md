@@ -62,7 +62,7 @@ Open: http://127.0.0.1:5000
   - Use `deploy/ubuntu/cloud-init.yaml` as EC2 user data.
   - Replace placeholders in that file first:
     - `REPO_URL`
-    - `APP_DOMAIN`
+    - `APP_DOMAIN` (defaults to `elf-ai-demo.co.za`)
     - `FLASK_SECRET_KEY`
     - `DATABASE_URL`
     - `ADMIN_PASSWORD`
@@ -102,7 +102,7 @@ Open: http://127.0.0.1:5000
 
 - 6) Install Nginx config:
   - `sudo cp deploy/ubuntu/nginx/law-intranet.conf /etc/nginx/sites-available/law-intranet.conf`
-  - Edit `server_name` in `/etc/nginx/sites-available/law-intranet.conf`.
+  - `server_name` is preconfigured for `elf-ai-demo.co.za` (edit if your domain differs).
   - `sudo ln -sf /etc/nginx/sites-available/law-intranet.conf /etc/nginx/sites-enabled/law-intranet.conf`
   - `sudo rm -f /etc/nginx/sites-enabled/default`
   - `sudo nginx -t`
