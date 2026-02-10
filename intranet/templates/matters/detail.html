@@ -7,7 +7,7 @@
         <div>
           <h3 class="mb-0">{{ m.matter_no }}</h3>
           <div class="muted">{{ m.title }}</div>
-          <div class="mt-1"><span class="badge badge-soft">{{ m.status }}</span> · <span class="muted">{{ m.client_name }}</span></div>
+          <div class="mt-1"><span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span> - <span class="muted">{{ m.client_name }}</span></div>
         </div>
         <div class="d-flex gap-2">
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Tasks</a>
@@ -30,9 +30,9 @@
             <div class="border-top pt-2 mt-2">
               <div class="d-flex justify-content-between">
                 <div class="fw-semibold">{{ t.title }}</div>
-                <span class="badge badge-soft">{{ t.status }}</span>
+                <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
               </div>
-              <div class="muted small">{% if t.due_date %}Due {{ t.due_date }} · {% endif %}Task #{{ t.id }}</div>
+              <div class="muted small">{% if t.due_date %}Due {{ t.due_date }} - {% endif %}Task #{{ t.id }}</div>
             </div>
           {% endfor %}
         {% else %}
@@ -54,7 +54,7 @@
                 <div class="fw-semibold">{{ d.original_filename }}</div>
                 <a href="{{ url_for('doc_download', doc_id=d.id) }}">download</a>
               </div>
-              <div class="muted small">sha256 {{ d.sha256[:12] }}… · {{ d.uploaded_at.strftime("%Y-%m-%d %H:%M UTC") }}</div>
+              <div class="muted small">sha256 {{ d.sha256[:12] }}... - {{ d.uploaded_at.strftime("%Y-%m-%d %H:%M UTC") }}</div>
             </div>
           {% endfor %}
         {% else %}

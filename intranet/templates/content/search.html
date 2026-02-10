@@ -1,8 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card p-3">
-  <h3>Search</h3>
-  <form class="row g-2 mt-1" method="get">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">Global Search</h3>
+      <div class="page-intro mt-1">Query matters, tasks, documents, knowledge, and contacts in one view.</div>
+    </div>
+  </div>
+  <form class="row g-2 mt-3" method="get">
     <div class="col-md-10">
       <input class="form-control" name="q" placeholder="Search across matters, tasks, documents, knowledge..." value="{{ q }}">
     </div>
@@ -12,60 +17,141 @@
   </form>
 
   {% if q %}
-    <div class="mt-3">
-      <h5>Matters</h5>
-      {% for m in matters %}
-        <div class="border-top pt-2 mt-2">
-          <a href="{{ url_for('matter_detail', matter_id=m.id) }}">{{ m.matter_no }} — {{ m.title }}</a>
-          <div class="muted small">{{ m.client_name }}</div>
-        </div>
-      {% endfor %}
-      {% if not matters %}<div class="muted">None.</div>{% endif %}
+    <div class="kpi-strip mt-3">
+      <div class="kpi-pill">
+        <div class="label">Matters</div>
+        <div class="value">{{ matters|length }}</div>
+      </div>
+      <div class="kpi-pill">
+        <div class="label">Tasks</div>
+        <div class="value">{{ tasks|length }}</div>
+      </div>
+      <div class="kpi-pill">
+        <div class="label">Documents</div>
+        <div class="value">{{ docs|length }}</div>
+      </div>
+      <div class="kpi-pill">
+        <div class="label">Knowledge</div>
+        <div class="value">{{ articles|length }}</div>
+      </div>
+      <div class="kpi-pill">
+        <div class="label">Contacts</div>
+        <div class="value">{{ contacts|length }}</div>
+      </div>
     </div>
 
-    <div class="mt-3">
-      <h5>Tasks</h5>
-      {% for t in tasks %}
-        <div class="border-top pt-2 mt-2">
-          <div class="fw-semibold">{{ t.title }}</div>
-          <div class="muted small">Matter #{{ t.matter_id }} · {{ t.status }}</div>
+    <div class="result-grid mt-3">
+      <div class="result-panel">
+        <div class="result-head">
+          <h5>Matters</h5>
+          <span class="result-count">{{ matters|length }}</span>
         </div>
-      {% endfor %}
-      {% if not tasks %}<div class="muted">None.</div>{% endif %}
-    </div>
+        {% if matters %}
+          <div class="list-stack">
+            {% for m in matters %}
+              <div class="list-item">
+                <a class="list-title" href="{{ url_for('matter_detail', matter_id=m.id) }}">{{ m.matter_no }} - {{ m.title }}</a>
+                <div class="list-meta mt-1">
+                  <span>{{ m.client_name }}</span>
+                  <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">No matching matters.</div>
+        {% endif %}
+      </div>
 
-    <div class="mt-3">
-      <h5>Documents</h5>
-      {% for d in docs %}
-        <div class="border-top pt-2 mt-2">
-          <div class="fw-semibold">{{ d.original_filename }}</div>
-          <div class="muted small">Matter #{{ d.matter_id }} · sha256 {{ d.sha256[:12] }}…</div>
+      <div class="result-panel">
+        <div class="result-head">
+          <h5>Tasks</h5>
+          <span class="result-count">{{ tasks|length }}</span>
         </div>
-      {% endfor %}
-      {% if not docs %}<div class="muted">None.</div>{% endif %}
-    </div>
+        {% if tasks %}
+          <div class="list-stack">
+            {% for t in tasks %}
+              <div class="list-item">
+                <div class="list-title">{{ t.title }}</div>
+                <div class="list-meta mt-1">
+                  <span>Matter #{{ t.matter_id }}</span>
+                  <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">No matching tasks.</div>
+        {% endif %}
+      </div>
 
-    <div class="mt-3">
-      <h5>Knowledge</h5>
-      {% for a in articles %}
-        <div class="border-top pt-2 mt-2">
-          <a href="{{ url_for('kb_view', kb_id=a.id) }}">{{ a.title }}</a>
-          <div class="muted small">{{ a.tags or "" }}</div>
+      <div class="result-panel">
+        <div class="result-head">
+          <h5>Documents</h5>
+          <span class="result-count">{{ docs|length }}</span>
         </div>
-      {% endfor %}
-      {% if not articles %}<div class="muted">None.</div>{% endif %}
-    </div>
+        {% if docs %}
+          <div class="list-stack">
+            {% for d in docs %}
+              <div class="list-item">
+                <div class="list-title">{{ d.original_filename }}</div>
+                <div class="list-meta mt-1">
+                  <span>Matter #{{ d.matter_id }}</span>
+                  <span>sha256 {{ d.sha256[:12] }}...</span>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">No matching documents.</div>
+        {% endif %}
+      </div>
 
-    <div class="mt-3">
-      <h5>Contacts</h5>
-      {% for c in contacts %}
-        <div class="border-top pt-2 mt-2">
-          <div class="fw-semibold">{{ c.name }}</div>
-          <div class="muted small">{{ c.organization or "" }} · {{ c.email or "" }}</div>
+      <div class="result-panel">
+        <div class="result-head">
+          <h5>Knowledge</h5>
+          <span class="result-count">{{ articles|length }}</span>
         </div>
-      {% endfor %}
-      {% if not contacts %}<div class="muted">None.</div>{% endif %}
+        {% if articles %}
+          <div class="list-stack">
+            {% for a in articles %}
+              <div class="list-item">
+                <a class="list-title" href="{{ url_for('kb_view', kb_id=a.id) }}">{{ a.title }}</a>
+                <div class="list-meta mt-1">
+                  <span>{{ a.tags or "No tags" }}</span>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">No matching knowledge articles.</div>
+        {% endif %}
+      </div>
+
+      <div class="result-panel">
+        <div class="result-head">
+          <h5>Contacts</h5>
+          <span class="result-count">{{ contacts|length }}</span>
+        </div>
+        {% if contacts %}
+          <div class="list-stack">
+            {% for c in contacts %}
+              <div class="list-item">
+                <div class="list-title">{{ c.name }}</div>
+                <div class="list-meta mt-1">
+                  <span>{{ c.organization or "No organization" }}</span>
+                  {% if c.email %}<span>{{ c.email }}</span>{% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">No matching contacts.</div>
+        {% endif %}
+      </div>
     </div>
+  {% else %}
+    <div class="empty-state mt-3">Enter a search term to explore records across the platform.</div>
   {% endif %}
 </div>
 {% endblock %}

@@ -1,20 +1,32 @@
 from __future__ import annotations
 
 import datetime as dt
+from urllib.parse import urlsplit
 
-from flask import redirect, flash, request, url_for
+from flask import flash, redirect, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy.exc import IntegrityError
 
 from ..config import is_valid_email
 from ..extensions import db, limiter
-from ..helpers import audit, is_admin
-from ..models import Announcement, DocumentFile, Matter, MatterMember, Task, User
+from ..helpers import audit, can_access_matter, is_admin
+from ..models import Announcement, AuditLog, Contact, DocumentFile, KnowledgeBase, Matter, MatterMember, Task, User
 from ..templates import page
 
 
 def has_any_users() -> bool:
     return db.session.query(User.id).first() is not None
+
+
+def _safe_next_path(next_path: str | None, fallback: str) -> str:
+    if not next_path:
+        return fallback
+    parsed = urlsplit(next_path)
+    if parsed.scheme or parsed.netloc:
+        return fallback
+    if not parsed.path.startswith("/"):
+        return fallback
+    return next_path
 
 
 def register_auth_routes(app):
@@ -79,6 +91,7 @@ def register_auth_routes(app):
         if request.method == "POST":
             email = (request.form.get("email") or "").strip().lower()
             password = request.form.get("password") or ""
+            start_live_demo = (request.form.get("start_live_demo") or "").strip().lower() in {"1", "true", "yes", "on"}
             if not is_valid_email(email):
                 flash("Invalid credentials.", "warning")
                 return redirect(url_for("login"))
@@ -90,6 +103,9 @@ def register_auth_routes(app):
             user.last_login_at = dt.datetime.utcnow()
             db.session.commit()
             audit("login")
+            if start_live_demo:
+                session["client_story_mode"] = True
+                return redirect(url_for("client_story"))
             return redirect(url_for("dashboard"))
 
         return page("Login", "auth/login.html")
@@ -101,6 +117,15 @@ def register_auth_routes(app):
         logout_user()
         flash("Logged out.", "info")
         return redirect(url_for("login"))
+
+    @app.post("/story-mode")
+    @login_required
+    def toggle_story_mode():
+        enabled = (request.form.get("enabled") or "").strip().lower() in {"1", "true", "yes", "on"}
+        session["client_story_mode"] = enabled
+        flash("Client story mode enabled." if enabled else "Client story mode disabled.", "info")
+        next_path = _safe_next_path(request.form.get("next"), url_for("dashboard"))
+        return redirect(next_path)
 
     @app.get("/dashboard")
     @login_required
@@ -140,4 +165,65 @@ def register_auth_routes(app):
             my_tasks=my_tasks,
             recent_matters=recent_matters,
             stats=stats,
+        )
+
+    @app.get("/story")
+    @login_required
+    def client_story():
+        matter_scope = Matter.query
+        if not is_admin():
+            matter_scope = matter_scope.join(MatterMember, MatterMember.matter_id == Matter.id).filter(
+                MatterMember.user_id == current_user.id
+            )
+
+        flagship_matter = matter_scope.filter(Matter.matter_no == "2026-LIT-0142").first()
+        if flagship_matter and not can_access_matter(flagship_matter.id):
+            flagship_matter = None
+        if not flagship_matter:
+            flagship_matter = matter_scope.order_by(Matter.opened_at.desc()).first()
+
+        open_task_scope = Task.query.filter(Task.status != "Done")
+        document_scope = DocumentFile.query
+        if not is_admin():
+            visible_matter_ids = db.session.query(MatterMember.matter_id).filter(MatterMember.user_id == current_user.id)
+            open_task_scope = open_task_scope.filter(Task.matter_id.in_(visible_matter_ids))
+            document_scope = document_scope.filter(DocumentFile.matter_id.in_(visible_matter_ids))
+
+        story_stats = {
+            "matter_count": matter_scope.count(),
+            "open_task_count": open_task_scope.count(),
+            "document_count": document_scope.count(),
+            "contact_count": Contact.query.count(),
+            "knowledge_count": KnowledgeBase.query.count(),
+            "announcement_count": Announcement.query.count(),
+            "audit_count": AuditLog.query.count() if is_admin() else None,
+        }
+
+        flagship_metrics = {
+            "task_count": Task.query.filter(Task.matter_id == flagship_matter.id).count() if flagship_matter else 0,
+            "document_count": DocumentFile.query.filter(DocumentFile.matter_id == flagship_matter.id).count()
+            if flagship_matter
+            else 0,
+            "team_count": MatterMember.query.filter(MatterMember.matter_id == flagship_matter.id).count() if flagship_matter else 0,
+        }
+
+        story_links = {
+            "dashboard": url_for("dashboard"),
+            "matters": url_for("matters", q=(flagship_matter.matter_no if flagship_matter else "")),
+            "matter_detail": url_for("matter_detail", matter_id=flagship_matter.id) if flagship_matter else url_for("matters"),
+            "tasks": url_for("matter_tasks", matter_id=flagship_matter.id) if flagship_matter else url_for("matters"),
+            "documents": url_for("matter_documents", matter_id=flagship_matter.id) if flagship_matter else url_for("matters"),
+            "knowledge": url_for("kb"),
+            "search": url_for("search", q="POPIA"),
+            "audit": url_for("admin_audit") if is_admin() else url_for("kb"),
+        }
+
+        return page(
+            "Client Story",
+            "auth/story.html",
+            story_stats=story_stats,
+            flagship_matter=flagship_matter,
+            flagship_metrics=flagship_metrics,
+            story_links=story_links,
+            is_admin_user=is_admin(),
         )

@@ -1,74 +1,126 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3">
-  <div class="d-flex justify-content-between align-items-center">
-    <h3 class="mb-0">Tasks — {{ m.matter_no }}</h3>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Back</a>
+{% set counts = namespace(todo=0, doing=0, done=0) %}
+{% for t in tasks %}
+  {% if t.status == "Todo" %}
+    {% set counts.todo = counts.todo + 1 %}
+  {% elif t.status == "Doing" %}
+    {% set counts.doing = counts.doing + 1 %}
+  {% elif t.status == "Done" %}
+    {% set counts.done = counts.done + 1 %}
+  {% endif %}
+{% endfor %}
+
+<div class="split-layout">
+  <div class="card p-3">
+    <div class="toolbar-row">
+      <div>
+        <h3 class="section-title">Add Task</h3>
+        <div class="page-intro mt-1">Matter {{ m.matter_no }} - {{ m.title }}</div>
+      </div>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Back</a>
+    </div>
+
+    <form method="post" class="row g-2 mt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-12">
+        <label class="muted small">Title</label>
+        <input class="form-control" name="title" placeholder="e.g. Draft founding affidavit" required>
+      </div>
+      <div class="col-md-6">
+        <label class="muted small">Due date (optional)</label>
+        <input class="form-control" name="due_date" type="date">
+      </div>
+      <div class="col-md-6">
+        <label class="muted small">Assign to (optional email)</label>
+        <input class="form-control" name="assigned_to" list="emails" placeholder="lawyer@firm.local">
+        <datalist id="emails">
+          {% for u in users %}
+            <option value="{{ u.email }}">{{ u.full_name }}</option>
+          {% endfor %}
+        </datalist>
+      </div>
+      <div class="col-12">
+        <label class="muted small">Description</label>
+        <textarea class="form-control" name="description" rows="4" placeholder="Short notes..."></textarea>
+      </div>
+      <div class="col-12 d-grid">
+        <button class="btn btn-light">Add task</button>
+      </div>
+    </form>
   </div>
 
-  <form method="post" class="row g-2 mt-2">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-md-6">
-      <label class="muted small">Title</label>
-      <input class="form-control" name="title" placeholder="e.g. Draft founding affidavit" required>
+  <div class="card p-3">
+    <div class="toolbar-row">
+      <div>
+        <h3 class="section-title">Task Tracker</h3>
+        <div class="page-intro mt-1">Move work from backlog to completion with status controls.</div>
+      </div>
     </div>
-    <div class="col-md-3">
-      <label class="muted small">Due date (optional)</label>
-      <input class="form-control" name="due_date" placeholder="YYYY-MM-DD">
-    </div>
-    <div class="col-md-3">
-      <label class="muted small">Assign to (optional email)</label>
-      <input class="form-control" name="assigned_to" list="emails" placeholder="lawyer@firm.local">
-    </div>
-    <div class="col-12">
-      <label class="muted small">Description</label>
-      <textarea class="form-control" name="description" rows="2" placeholder="Short notes..."></textarea>
-    </div>
-    <div class="col-12 d-grid">
-      <button class="btn btn-light">Add task</button>
-    </div>
-  </form>
 
-  <div class="mt-3 table-responsive">
-    <table class="table table-sm align-middle">
-      <thead><tr><th>Task</th><th>Status</th><th>Due</th><th>Assigned</th><th></th></tr></thead>
-      <tbody>
-        {% for t in tasks %}
-          <tr>
-            <td>
-              <div class="fw-semibold">{{ t.title }}</div>
-              {% if t.description %}<div class="muted small">{{ t.description }}</div>{% endif %}
-            </td>
-            <td><span class="badge badge-soft">{{ t.status }}</span></td>
-            <td class="muted">{{ t.due_date or "" }}</td>
-            <td class="muted">
-              {% set u = users_map.get(t.assigned_to) %}
-              {{ u.email if u else "" }}
-            </td>
-            <td class="text-end">
-              <form method="post" action="{{ url_for('task_update', task_id=t.id) }}" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="status" value="Todo">
-                <button class="btn btn-sm btn-outline-light">Todo</button>
-              </form>
-              <form method="post" action="{{ url_for('task_update', task_id=t.id) }}" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="status" value="Doing">
-                <button class="btn btn-sm btn-outline-light">Doing</button>
-              </form>
-              <form method="post" action="{{ url_for('task_update', task_id=t.id) }}" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="status" value="Done">
-                <button class="btn btn-sm btn-light">Done</button>
-              </form>
-            </td>
-          </tr>
-        {% endfor %}
-        {% if not tasks %}
-          <tr><td colspan="5" class="muted">No tasks yet.</td></tr>
-        {% endif %}
-      </tbody>
-    </table>
+    <div class="kpi-strip mt-3">
+      <div class="kpi-pill">
+        <div class="label">Total tasks</div>
+        <div class="value">{{ tasks|length }}</div>
+      </div>
+      <div class="kpi-pill">
+        <div class="label">Todo</div>
+        <div class="value">{{ counts.todo }}</div>
+      </div>
+      <div class="kpi-pill">
+        <div class="label">Doing</div>
+        <div class="value">{{ counts.doing }}</div>
+      </div>
+      <div class="kpi-pill">
+        <div class="label">Done</div>
+        <div class="value">{{ counts.done }}</div>
+      </div>
+    </div>
+
+    <div class="mt-3">
+      {% if tasks %}
+        <div class="list-stack">
+          {% for t in tasks %}
+            {% set assigned_user = users_map.get(t.assigned_to) %}
+            <div class="list-item">
+              <div class="list-row">
+                <div>
+                  <div class="list-title">{{ t.title }}</div>
+                  <div class="list-meta mt-1">
+                    <span>Task #{{ t.id }}</span>
+                    <span>{{ "Due " ~ t.due_date if t.due_date else "No due date" }}</span>
+                    <span>{{ "Assigned " ~ assigned_user.email if assigned_user else "Unassigned" }}</span>
+                  </div>
+                  {% if t.description %}
+                    <div class="muted small mt-1">{{ t.description }}</div>
+                  {% endif %}
+                </div>
+                <div class="list-actions">
+                  <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
+                  <form method="post" action="{{ url_for('task_update', task_id=t.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="status" value="Todo">
+                    <button class="btn btn-sm {{ 'btn-light' if t.status == 'Todo' else 'btn-outline-light' }}">Todo</button>
+                  </form>
+                  <form method="post" action="{{ url_for('task_update', task_id=t.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="status" value="Doing">
+                    <button class="btn btn-sm {{ 'btn-light' if t.status == 'Doing' else 'btn-outline-light' }}">Doing</button>
+                  </form>
+                  <form method="post" action="{{ url_for('task_update', task_id=t.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="status" value="Done">
+                    <button class="btn btn-sm {{ 'btn-light' if t.status == 'Done' else 'btn-outline-light' }}">Done</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">No tasks yet. Add your first task to get this matter moving.</div>
+      {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}

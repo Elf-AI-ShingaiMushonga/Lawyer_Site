@@ -2,6 +2,7 @@
 
 This is a functional intranet website for a law firm:
 - User authentication + roles (admin/lawyer/staff/paralegal)
+- Admin user provisioning from the web UI (`/admin/users`)
 - Matters with team membership
 - Tasks per matter (Todo/Doing/Done)
 - Document upload/download per matter with SHA-256 integrity hash
@@ -47,6 +48,14 @@ Seeded demo logins:
 - `associate@elf-ai-demo.co.za`
 - `paralegal@elf-ai-demo.co.za`
 - `staff@elf-ai-demo.co.za`
+
+## Client story mode
+
+After signing in, click `Story Mode Off` in the top navigation to enable guided demo mode.
+
+- `Story Mode On` adds a contextual walkthrough banner across pages.
+- Use the `Story` nav tab for a full step-by-step playbook (`/story`).
+- Disable it anytime with the same navbar toggle.
 
 ## GitHub upload checklist
 

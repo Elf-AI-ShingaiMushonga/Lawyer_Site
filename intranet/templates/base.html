@@ -301,6 +301,258 @@
       color: #9ec0e4;
     }
 
+    .status-badge {
+      border: 1px solid transparent;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .status-open,
+    .status-todo {
+      border-color: rgba(111, 230, 184, 0.45);
+      background: rgba(43, 163, 114, 0.24);
+      color: #cffff0;
+    }
+
+    .status-on-hold,
+    .status-doing {
+      border-color: rgba(255, 210, 122, 0.45);
+      background: rgba(171, 122, 18, 0.28);
+      color: #ffe9bf;
+    }
+
+    .status-closed,
+    .status-done {
+      border-color: rgba(165, 187, 215, 0.45);
+      background: rgba(90, 112, 141, 0.26);
+      color: #dbe8f8;
+    }
+
+    .status-admin {
+      border-color: rgba(255, 183, 107, 0.6);
+      background: rgba(160, 95, 16, 0.3);
+      color: #ffe5c2;
+    }
+
+    .status-lawyer {
+      border-color: rgba(104, 192, 255, 0.58);
+      background: rgba(45, 109, 170, 0.32);
+      color: #ddf1ff;
+    }
+
+    .status-paralegal {
+      border-color: rgba(111, 230, 184, 0.58);
+      background: rgba(33, 121, 90, 0.3);
+      color: #d7ffef;
+    }
+
+    .status-staff {
+      border-color: rgba(178, 197, 225, 0.56);
+      background: rgba(78, 102, 136, 0.3);
+      color: #e4edf9;
+    }
+
+    .story-inline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .story-chip {
+      border: 1px solid rgba(145, 209, 255, 0.34);
+      border-radius: 999px;
+      padding: 6px 11px;
+      font-size: 12px;
+      color: #d9ecff;
+      background: rgba(33, 75, 112, 0.42);
+      text-decoration: none;
+    }
+
+    .story-chip:hover {
+      color: #ffffff;
+      border-color: rgba(169, 223, 255, 0.82);
+      background: rgba(45, 101, 146, 0.5);
+    }
+
+    .story-step {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      border-top: 1px solid rgba(145, 193, 248, 0.18);
+      padding-top: 10px;
+      margin-top: 10px;
+    }
+
+    .story-step-title {
+      font-weight: 700;
+    }
+
+    .toolbar-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.1;
+      letter-spacing: 0.01em;
+    }
+
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+    }
+
+    .kpi-pill {
+      border: 1px solid rgba(140, 205, 255, 0.28);
+      border-radius: 13px;
+      padding: 10px 12px;
+      background: rgba(8, 32, 53, 0.62);
+    }
+
+    .kpi-pill .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #98b2ce;
+    }
+
+    .kpi-pill .value {
+      margin-top: 2px;
+      font-size: 21px;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .list-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .list-item {
+      border: 1px solid rgba(141, 196, 249, 0.22);
+      border-radius: 12px;
+      padding: 11px 12px;
+      background: rgba(10, 35, 59, 0.55);
+      transition: border-color .15s ease, transform .15s ease, background .15s ease;
+    }
+
+    .list-item:hover {
+      border-color: rgba(141, 218, 255, 0.56);
+      background: rgba(15, 44, 73, 0.74);
+      transform: translateY(-1px);
+    }
+
+    .list-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .list-title {
+      font-weight: 700;
+      color: #eef7ff;
+      text-decoration: none;
+    }
+
+    .list-title:hover {
+      color: #ffffff;
+    }
+
+    .list-meta {
+      font-size: 12px;
+      color: #9eb6cf;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      align-items: center;
+    }
+
+    .list-actions {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+
+    .tag-chip {
+      display: inline-block;
+      border-radius: 999px;
+      border: 1px solid rgba(140, 205, 255, 0.4);
+      background: rgba(63, 132, 195, 0.22);
+      color: #dff2ff;
+      font-size: 11px;
+      line-height: 1;
+      padding: 5px 9px;
+      margin: 3px 5px 0 0;
+    }
+
+    .empty-state {
+      border: 1px dashed rgba(144, 195, 243, 0.35);
+      border-radius: 14px;
+      padding: 18px;
+      text-align: center;
+      color: #9cb5d1;
+      background: rgba(9, 28, 48, 0.4);
+    }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+
+    .result-panel {
+      border: 1px solid rgba(140, 205, 255, 0.23);
+      border-radius: 13px;
+      background: rgba(9, 34, 56, 0.56);
+      padding: 12px;
+    }
+
+    .result-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .result-head h5 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .result-count {
+      border-radius: 999px;
+      border: 1px solid rgba(140, 205, 255, 0.36);
+      background: rgba(55, 125, 183, 0.25);
+      color: #dff2ff;
+      font-size: 11px;
+      line-height: 1;
+      padding: 5px 8px;
+    }
+
+    .split-layout {
+      display: grid;
+      grid-template-columns: minmax(300px, 0.95fr) minmax(0, 1.25fr);
+      gap: 12px;
+    }
+
+    @media (max-width: 992px) {
+      .split-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
     .footer-note {
       text-align: center;
       margin: 22px 0 8px;
@@ -326,6 +578,7 @@
   {% set endpoint = request.endpoint or "" %}
   {% set matter_endpoints = ["matters", "matter_create", "matter_detail", "matter_team", "matter_tasks", "matter_documents"] %}
   {% set admin_endpoints = ["admin", "admin_users", "admin_announcements", "admin_audit"] %}
+  {% set next_path = request.full_path if request.query_string else request.path %}
   <nav class="navbar px-3 py-2 mb-3 d-flex justify-content-between">
     <div class="d-flex align-items-center gap-3">
       <a class="brand" href="{{ url_for('dashboard') }}">
@@ -346,6 +599,15 @@
         <a class="nav-pill {{ 'is-active' if endpoint == 'contacts' else '' }}" href="{{ url_for('contacts') }}">Contacts</a>
         <a class="nav-pill {{ 'is-active' if endpoint in ['kb', 'kb_view'] else '' }}" href="{{ url_for('kb') }}">Knowledge</a>
         <a class="nav-pill {{ 'is-active' if endpoint == 'search' else '' }}" href="{{ url_for('search') }}">Search</a>
+        <a class="nav-pill {{ 'is-active' if endpoint == 'client_story' else '' }}" href="{{ url_for('client_story') }}">Story</a>
+        <form method="post" action="{{ url_for('toggle_story_mode') }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="enabled" value="{{ '0' if story_mode_enabled else '1' }}">
+          <input type="hidden" name="next" value="{{ next_path }}">
+          <button class="nav-pill {{ 'is-active' if story_mode_enabled else '' }}" type="submit">
+            {{ "Story Mode On" if story_mode_enabled else "Story Mode Off" }}
+          </button>
+        </form>
         {% if current_user.role == "admin" %}
           <a class="nav-pill {{ 'is-active' if endpoint in admin_endpoints else '' }}" href="{{ url_for('admin') }}">Admin</a>
         {% endif %}
@@ -358,6 +620,26 @@
       {% endif %}
     </div>
   </nav>
+
+  {% if current_user.is_authenticated and story_mode_enabled %}
+    <div class="card p-3 mb-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <div class="code-like">CLIENT STORY MODE ENABLED</div>
+          <div class="muted small">Use the guided sequence to present value quickly and consistently.</div>
+        </div>
+        <a class="btn btn-sm btn-light" href="{{ url_for('client_story') }}">Open story playbook</a>
+      </div>
+      <div class="story-inline">
+        <a class="story-chip" href="{{ url_for('dashboard') }}">1. Snapshot</a>
+        <a class="story-chip" href="{{ url_for('matters', q='2026-LIT-0142') }}">2. Flagship matter</a>
+        <a class="story-chip" href="{{ url_for('search', q='POPIA') }}">3. Knowledge + search</a>
+        {% if current_user.role == "admin" %}
+          <a class="story-chip" href="{{ url_for('admin_audit') }}">4. Audit governance</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}

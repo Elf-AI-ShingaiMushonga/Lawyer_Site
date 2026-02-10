@@ -5,7 +5,7 @@ import logging
 import os
 import secrets
 
-from flask import Flask
+from flask import Flask, session
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import BASE_DIR, PRODUCTION_ENV_VALUES, UPLOAD_DIR, env_bool, env_int
@@ -108,6 +108,10 @@ def create_app() -> Flask:
             configured_workers,
         )
     app.config["IS_PRODUCTION"] = is_production
+
+    @app.context_processor
+    def inject_ui_state():
+        return {"story_mode_enabled": bool(session.get("client_story_mode", False))}
 
     db.init_app(app)
     migrate.init_app(app, db, directory=os.path.join(BASE_DIR, "migrations"))

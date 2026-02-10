@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-12">
+    <div class="card p-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+          <div class="code-like">CLIENT STORY MODE</div>
+          <h3 class="mt-1 mb-1">Guided demonstration flow</h3>
+          <div class="page-intro">Walk the client through a coherent operational narrative in under 7 minutes.</div>
+        </div>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-light" href="{{ story_links.dashboard }}">Start from dashboard</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ story_links.search }}">Show global search</a>
+        </div>
+      </div>
+      <div class="metric-grid mt-3">
+        <div class="metric-card">
+          <div class="metric-label">Accessible Matters</div>
+          <div class="metric-value">{{ story_stats.matter_count }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Open Tasks</div>
+          <div class="metric-value">{{ story_stats.open_task_count }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Documents</div>
+          <div class="metric-value">{{ story_stats.document_count }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Knowledge Articles</div>
+          <div class="metric-value">{{ story_stats.knowledge_count }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-lg-8">
+    <div class="card p-3">
+      <h4 class="mb-2">Narrative sequence</h4>
+      <div class="story-step">
+        <div>
+          <div class="story-step-title">1. Executive snapshot</div>
+          <div class="muted small">Open the dashboard and frame current workload, activity, and priorities.</div>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{{ story_links.dashboard }}">Open</a>
+      </div>
+      <div class="story-step">
+        <div>
+          <div class="story-step-title">2. Flagship matter context</div>
+          <div class="muted small">Show how teams are organized around a client matter and where status is tracked.</div>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{{ story_links.matter_detail }}">Open</a>
+      </div>
+      <div class="story-step">
+        <div>
+          <div class="story-step-title">3. Task execution and accountability</div>
+          <div class="muted small">Demonstrate assignments, due dates, and progression from Todo to Done.</div>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{{ story_links.tasks }}">Open</a>
+      </div>
+      <div class="story-step">
+        <div>
+          <div class="story-step-title">4. Document integrity and retrieval</div>
+          <div class="muted small">Show uploaded evidence, integrity hashes, and controlled download access.</div>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{{ story_links.documents }}">Open</a>
+      </div>
+      <div class="story-step">
+        <div>
+          <div class="story-step-title">5. Knowledge and discoverability</div>
+          <div class="muted small">Show internal know-how capture and firm-wide search across entities.</div>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{{ story_links.knowledge }}">Open</a>
+      </div>
+      <div class="story-step">
+        <div>
+          <div class="story-step-title">6. Governance and traceability</div>
+          <div class="muted small">
+            {% if is_admin_user %}
+              Finish with audit history to reinforce governance and accountability.
+            {% else %}
+              Finish with knowledge/search to reinforce operational consistency for non-admin roles.
+            {% endif %}
+          </div>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{{ story_links.audit }}">Open</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card p-3">
+      <h4 class="mb-2">Demo checkpoints</h4>
+      {% if flagship_matter %}
+        <div class="muted small mb-2">Focus matter</div>
+        <div class="fw-semibold">{{ flagship_matter.matter_no }} - {{ flagship_matter.title }}</div>
+        <div class="muted small mb-3">{{ flagship_matter.client_name }}</div>
+      {% endif %}
+      <div class="metric-card mb-2">
+        <div class="metric-label">Matter Team Members</div>
+        <div class="metric-value">{{ flagship_metrics.team_count }}</div>
+      </div>
+      <div class="metric-card mb-2">
+        <div class="metric-label">Matter Tasks</div>
+        <div class="metric-value">{{ flagship_metrics.task_count }}</div>
+      </div>
+      <div class="metric-card mb-2">
+        <div class="metric-label">Matter Documents</div>
+        <div class="metric-value">{{ flagship_metrics.document_count }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Announcements</div>
+        <div class="metric-value">{{ story_stats.announcement_count }}</div>
+      </div>
+      {% if story_stats.audit_count is not none %}
+        <div class="metric-card mt-2">
+          <div class="metric-label">Audit Entries</div>
+          <div class="metric-value">{{ story_stats.audit_count }}</div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

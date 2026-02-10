@@ -2,9 +2,9 @@
 {% block content %}
 <div class="card p-3">
   <h3>Admin</h3>
-  <div class="muted">User & content management.</div>
+  <div class="muted">User provisioning, content publishing, and audit oversight.</div>
   <div class="mt-3 d-flex gap-2">
-    <a class="btn btn-light" href="{{ url_for('admin_users') }}">Users</a>
+    <a class="btn btn-light" href="{{ url_for('admin_users') }}">Add Users</a>
     <a class="btn btn-outline-light" href="{{ url_for('admin_announcements') }}">Announcements</a>
     <a class="btn btn-outline-light" href="{{ url_for('admin_audit') }}">Audit log</a>
   </div>
