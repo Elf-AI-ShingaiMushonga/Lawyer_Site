@@ -36,6 +36,10 @@ Open: http://127.0.0.1:5000
 Use the built-in seed command to prepopulate realistic records:
 
 ```bash
+# make sure you seed the same DB your app uses (especially on Ubuntu/systemd)
+set -a; source .env; set +a
+flask --app app.py db upgrade -d migrations
+
 # resets existing records and writes demo data
 python app.py seed-demo --reset --password "ClientDemo2026!"
 ```
@@ -58,6 +62,15 @@ Seeded demo content now includes:
 - Timeline events and activity-feed entries
 - Governance incident/change records
 - Rich sample files (`.pdf`, `.docx`, `.txt`)
+
+Common seed error:
+- `sqlite3.OperationalError: table matter has no column named objective`
+- Cause: schema is older than current models, or `DATABASE_URL` was not loaded so command used default local SQLite.
+- Fix:
+  - `set -a; source .env; set +a`
+  - `flask --app app.py db upgrade -d migrations`
+  - re-run `python app.py seed-demo --reset --password "ClientDemo2026!"`
+  - if you intentionally use SQLite and want a clean reset: `rm -f intranet.db && flask --app app.py db upgrade -d migrations`
 
 ## Client story mode
 

@@ -8,6 +8,8 @@ import zipfile
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+import sqlalchemy as sa
+
 from .config import VALID_ROLES, is_valid_email
 from .extensions import db
 from .models import (
@@ -24,6 +26,58 @@ from .models import (
     Task,
     User,
 )
+
+
+def _detect_schema_gaps():
+    inspector = sa.inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+    required = {
+        "matter": {"objective", "risk_level", "budget_status", "outcome_summary", "last_update_note", "last_updated_at"},
+        "document_file": {"category", "doc_version", "lifecycle_stage", "owner_name", "is_privileged"},
+        "matter_timeline_event": {"id", "matter_id", "event_date", "event_type", "title", "created_by"},
+        "matter_activity": {"id", "matter_id", "action", "created_at"},
+        "governance_incident": {"id", "title", "incident_type", "severity", "status", "summary", "created_by"},
+    }
+    missing_tables = []
+    missing_columns = []
+    for table_name, required_columns in required.items():
+        if table_name not in table_names:
+            missing_tables.append(table_name)
+            continue
+        existing_columns = {column["name"] for column in inspector.get_columns(table_name)}
+        for column_name in sorted(required_columns):
+            if column_name not in existing_columns:
+                missing_columns.append(f"{table_name}.{column_name}")
+    return missing_tables, missing_columns
+
+
+def _schema_not_ready_error(app, missing_tables: list[str], missing_columns: list[str]) -> str:
+    current_db = app.config.get("SQLALCHEMY_DATABASE_URI", "(unknown)")
+    lines = [
+        "Database schema is not ready for demo seeding.",
+        f"Current database: {current_db}",
+    ]
+    if missing_tables:
+        lines.append(f"Missing tables: {', '.join(missing_tables)}")
+    if missing_columns:
+        lines.append(f"Missing columns: {', '.join(missing_columns)}")
+    lines.extend(
+        [
+            "",
+            "Fix:",
+            "  1) Ensure your env vars are loaded so DATABASE_URL points to the intended database:",
+            "     set -a; source .env; set +a",
+            "  2) Apply migrations:",
+            "     flask --app app.py db upgrade -d migrations",
+            "  3) Re-run seed:",
+            "     python app.py seed-demo --reset --password \"ClientDemo2026!\"",
+            "",
+            "If you intentionally use local SQLite and can reset it safely:",
+            "  rm -f intranet.db",
+            "  flask --app app.py db upgrade -d migrations",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def init_db(app):
@@ -170,6 +224,9 @@ def seed_demo_data(app, password: str, reset: bool = False):
     with app.app_context():
         # Keep local/demo workflows frictionless even before migrations are run.
         db.create_all()
+        missing_tables, missing_columns = _detect_schema_gaps()
+        if missing_tables or missing_columns:
+            raise SystemExit(_schema_not_ready_error(app, missing_tables, missing_columns))
         if reset:
             _reset_demo_dataset(app)
         elif User.query.first():
