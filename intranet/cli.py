@@ -222,6 +222,21 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 "This environment is preloaded with realistic matters and tasks for presentation purposes.",
                 now - dt.timedelta(days=5),
             ),
+            (
+                "Document Classification Reminder",
+                "Tag each upload with category and lifecycle stage to improve retrieval speed and governance reporting.",
+                now - dt.timedelta(days=7),
+            ),
+            (
+                "Partner Risk Roundtable",
+                "Flag all matters with High/Critical risk levels before tomorrow's partner review.",
+                now - dt.timedelta(days=9),
+            ),
+            (
+                "Ops Maintenance Window",
+                "Minor maintenance planned Saturday 22:00-23:00 UTC for indexing optimization.",
+                now - dt.timedelta(days=11),
+            ),
         ]
         for title, body, created_at in announcements:
             db.session.add(Announcement(title=title, body=body, created_by=admin_id, created_at=created_at))
@@ -280,6 +295,32 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 "Outcome delivered: estate distributed and compliance filings completed without dispute.",
                 now - dt.timedelta(days=65),
             ),
+            (
+                "2026-COM-0055",
+                "Ntuli Logistics Contract Dispute",
+                "Ntuli Logistics",
+                "Open",
+                "Commercial disagreement on SLA penalties and delayed warehousing service credits.",
+                "Resolve contract dispute with commercially workable revised SLA and claims closure.",
+                "Medium",
+                "Watch",
+                "Counterparty legal response received, mediation prep underway.",
+                "Expected outcome: revised SLA with capped liability and reduced litigation exposure.",
+                now - dt.timedelta(days=16),
+            ),
+            (
+                "2026-REG-0021",
+                "Blue Dune Licensing Compliance",
+                "Blue Dune Energy",
+                "On Hold",
+                "Regulatory licensing variance requires supplementary filings and authority feedback.",
+                "Complete corrective filings and obtain regulator confirmation to resume operations.",
+                "High",
+                "Needs Review",
+                "Awaiting regulator response on supplementary compliance package.",
+                "Expected outcome: licensing continuity with reduced enforcement risk.",
+                now - dt.timedelta(days=12),
+            ),
         ]
         for (
             matter_no,
@@ -326,6 +367,12 @@ def seed_demo_data(app, password: str, reset: bool = False):
             ("2026-CORP-0033", associate_id, "Due Diligence"),
             ("2026-CORP-0033", staff_id, "Coordination"),
             ("2025-PROB-0119", partner_id, "Supervising Partner"),
+            ("2026-COM-0055", partner_id, "Lead Counsel"),
+            ("2026-COM-0055", associate_id, "Associate"),
+            ("2026-COM-0055", staff_id, "Operations Liaison"),
+            ("2026-REG-0021", partner_id, "Regulatory Lead"),
+            ("2026-REG-0021", paralegal_id, "Filing Support"),
+            ("2026-REG-0021", staff_id, "Client Coordination"),
         ]
         for matter_no, user_id, role_in_matter in memberships:
             db.session.add(
@@ -347,6 +394,12 @@ def seed_demo_data(app, password: str, reset: bool = False):
             ("2026-CORP-0033", "Draft risk matrix", "Summarize key diligence findings for board update.", "Doing", 1, associate_id),
             ("2026-CORP-0033", "Supplier concentration note", "Escalate supplier concentration mitigation paths.", "Todo", -1, None),
             ("2025-PROB-0119", "Archive signed letters", "Final archive and closure checklist.", "Done", -20, paralegal_id),
+            ("2026-COM-0055", "Mediation prep binder", "Assemble mediation chronology and contract amendments.", "Doing", 3, paralegal_id),
+            ("2026-COM-0055", "Without-prejudice offer draft", "Draft structured offer and fallback options.", "Todo", 1, associate_id),
+            ("2026-COM-0055", "Client operations workshop", "Align legal and operations positions pre-mediation.", "Todo", 4, staff_id),
+            ("2026-REG-0021", "Supplementary filing checklist", "Confirm all mandatory annexures are complete.", "Doing", 2, paralegal_id),
+            ("2026-REG-0021", "Regulator response tracker", "Track open regulator clarifications and owners.", "Todo", 5, staff_id),
+            ("2026-REG-0021", "Risk committee briefing", "Prepare executive memo for licensing risk exposure.", "Todo", -3, partner_id),
         ]
         for matter_no, title, description, status, due_in_days, assigned_to in task_specs:
             db.session.add(
@@ -367,6 +420,8 @@ def seed_demo_data(app, password: str, reset: bool = False):
             ("Ethan Ross", "Mkhize Engineering", "ethan.ross@mkhizeeng.co.za", "+27 11 555 0122", "External counsel opposite side."),
             ("Nomsa Mabuza", "CCMA Johannesburg", "nomsa.mabuza@ccma.org.za", "+27 11 555 0188", "Case manager for labour matter."),
             ("Harriet de Vos", "Silverstream Capital", "harriet.devos@silverstream.vc", "+27 21 555 0159", "Deal lead for acquisition workstream."),
+            ("Bongani Ndlovu", "Ntuli Logistics", "bongani.ndlovu@ntulilogistics.co.za", "+27 31 555 0112", "Operations director for contract dispute matter."),
+            ("Emma James", "Blue Dune Energy", "emma.james@bluedune.energy", "+27 11 555 0199", "Primary regulatory liaison for licensing matter."),
         ]
         for name, organization, email, phone, notes in contacts:
             db.session.add(
@@ -397,6 +452,16 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 "corporate, due-diligence, m&a",
                 "Escalate immediately when you spot:\n- unresolved tax disputes\n- sanctions exposure\n- missing beneficial ownership documents",
             ),
+            (
+                "Regulatory Filing QA Checklist",
+                "regulatory, compliance, filing",
+                "Before submitting regulatory filings:\n- Validate signature authority\n- Verify annexure numbering\n- Confirm statutory response deadlines",
+            ),
+            (
+                "Commercial Mediation Playbook",
+                "commercial, mediation, strategy",
+                "Mediation readiness structure:\n- Align settlement range\n- Define non-negotiables\n- Prepare concession sequencing and approval path",
+            ),
         ]
         for title, tags, body in kb_specs:
             db.session.add(
@@ -417,6 +482,10 @@ def seed_demo_data(app, password: str, reset: bool = False):
             ("2026-CORP-0033", now.date() - dt.timedelta(days=8), "Internal Review", "Risk committee review", "Escalated tax exposure for partner decision.", True, partner_id),
             ("2026-CORP-0033", now.date() + dt.timedelta(days=2), "Delivery", "Board red-flag memo due", "Submit investment committee-ready report.", True, associate_id),
             ("2026-EMP-0071", now.date() - dt.timedelta(days=10), "Client Update", "Employer witness interviews completed", "Prepared chronology and contradiction matrix.", False, paralegal_id),
+            ("2026-COM-0055", now.date() - dt.timedelta(days=12), "Milestone", "Mediation clause invoked", "Parties agreed to attempt mediation before litigation.", True, partner_id),
+            ("2026-COM-0055", now.date() + dt.timedelta(days=3), "Hearing", "Mediation session", "Lead counsel to present revised settlement framework.", True, associate_id),
+            ("2026-REG-0021", now.date() - dt.timedelta(days=9), "Filing", "Supplementary compliance filing submitted", "Additional regulator package lodged with annexures.", False, paralegal_id),
+            ("2026-REG-0021", now.date() + dt.timedelta(days=6), "Client Update", "Regulatory status checkpoint", "Client executive update on response timeline and options.", False, staff_id),
         ]
         for matter_no, event_date, event_type, title, description, is_milestone, created_by in timeline_specs:
             db.session.add(
@@ -438,6 +507,10 @@ def seed_demo_data(app, password: str, reset: bool = False):
             ("2026-CORP-0033", associate_id, "Task status changed: Draft risk matrix", "Now Doing"),
             ("2026-CORP-0033", partner_id, "Timeline event added: Board red-flag memo due", "Delivery"),
             ("2026-EMP-0071", associate_id, "Team member added", "Sipho Khumalo (Case Support)"),
+            ("2026-COM-0055", partner_id, "Executive summary updated", "Mediation strategy and budget watch status set."),
+            ("2026-COM-0055", staff_id, "Task created: Client operations workshop", "Cross-team alignment scheduled."),
+            ("2026-REG-0021", paralegal_id, "Timeline event added: Supplementary compliance filing submitted", "Filing"),
+            ("2026-REG-0021", partner_id, "Risk escalation", "Licensing response delay flagged for leadership."),
         ]
         for matter_no, actor_user_id, action, details in activity_specs:
             db.session.add(
@@ -498,6 +571,51 @@ def seed_demo_data(app, password: str, reset: bool = False):
                     "Focus points:",
                     "- procedural fairness chronology",
                     "- evidentiary gaps in warning record",
+                ],
+            },
+            {
+                "matter_no": "2026-COM-0055",
+                "original_filename": "ntuli-mediation-brief.pdf",
+                "kind": "pdf",
+                "category": "Advisory",
+                "version": "v1.4",
+                "lifecycle_stage": "For Review",
+                "owner_name": "Daniel Naidoo",
+                "is_privileged": True,
+                "lines": [
+                    "Ntuli Logistics Contract Dispute",
+                    "Mediation Brief",
+                    "Proposed concession path and fallback plan.",
+                ],
+            },
+            {
+                "matter_no": "2026-REG-0021",
+                "original_filename": "blue-dune-filing-checklist.docx",
+                "kind": "docx",
+                "category": "Court Filing",
+                "version": "v1.1",
+                "lifecycle_stage": "Final",
+                "owner_name": "Sipho Khumalo",
+                "is_privileged": False,
+                "lines": [
+                    "Blue Dune Licensing Compliance",
+                    "Supplementary filing quality checklist.",
+                    "All annexures verified and signed.",
+                ],
+            },
+            {
+                "matter_no": "2026-CORP-0033",
+                "original_filename": "board-risk-brief.txt",
+                "kind": "txt",
+                "category": "Advisory",
+                "version": "v1.0",
+                "lifecycle_stage": "Draft",
+                "owner_name": "Nandi Maseko",
+                "is_privileged": True,
+                "lines": [
+                    "Board risk briefing draft",
+                    "Summary of critical diligence findings and mitigations.",
+                    "Pending partner approval.",
                 ],
             },
         ]
@@ -568,6 +686,26 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 "Change approved and verified in audit review.",
                 now - dt.timedelta(days=5),
             ),
+            (
+                "Authentication throttling false positives",
+                "Incident",
+                "Medium",
+                "Closed",
+                "A burst of legitimate logins triggered temporary throttling for two user cohorts.",
+                "Short login delays for staff cohort during peak window.",
+                "Adjusted rate-limit bucket thresholds and added allowlist for internal network range.",
+                now - dt.timedelta(days=1),
+            ),
+            (
+                "Matter export workflow enhancement",
+                "Change",
+                "Low",
+                "Open",
+                "Planned enhancement to export packet generation with metadata headers.",
+                "No service impact expected; read-only maintenance window required.",
+                None,
+                None,
+            ),
         ]
         for title, incident_type, severity, status, summary, impact, resolution, closed_at in incident_specs:
             db.session.add(
@@ -586,27 +724,41 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 )
             )
 
-        db.session.add(
-            AuditLog(
-                at=now - dt.timedelta(minutes=30),
-                actor_user_id=admin_id,
-                action="demo_seed",
-                entity_type="System",
-                entity_id=None,
-                ip="127.0.0.1",
-                user_agent="seed-script",
-                details_json=json.dumps({"seeded": True, "version": 2}),
+        audit_seed_entries = [
+            ("demo_seed", "System", None, admin_id, {"seeded": True, "version": 3}),
+            ("login", "User", admin_id, admin_id, {"channel": "web"}),
+            ("matter_summary_update", "Matter", matter_map["2026-LIT-0142"].id, partner_id, {"risk_level": "High"}),
+            ("document_upload", "DocumentFile", None, paralegal_id, {"filename": "acme-hearing-pack.pdf"}),
+            ("incident_create", "GovernanceIncident", None, admin_id, {"type": "Change"}),
+        ]
+        for i, (action, entity_type, entity_id, actor_user_id, details) in enumerate(audit_seed_entries):
+            db.session.add(
+                AuditLog(
+                    at=now - dt.timedelta(minutes=30 - (i * 3)),
+                    actor_user_id=actor_user_id,
+                    action=action,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    ip="127.0.0.1",
+                    user_agent="seed-script",
+                    details_json=json.dumps(details),
+                )
             )
-        )
 
         db.session.commit()
         return {
             "users": len(user_specs),
+            "announcements": len(announcements),
             "matters": len(matter_specs),
+            "matter_memberships": len(memberships),
             "tasks": len(task_specs),
             "documents": len(doc_specs),
             "contacts": len(contacts),
             "knowledge_articles": len(kb_specs),
+            "timeline_events": len(timeline_specs),
+            "matter_activity": len(activity_specs),
+            "incidents": len(incident_specs),
+            "audit_logs": len(audit_seed_entries),
             "password": password,
         }
 

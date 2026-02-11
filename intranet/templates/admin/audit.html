@@ -1,30 +1,78 @@
 {% extends "base.html" %}
 {% block content %}
+{% set metrics = namespace(login=0, admin=0, matter=0) %}
+{% for l in logs %}
+  {% if l.action == "login" %}
+    {% set metrics.login = metrics.login + 1 %}
+  {% endif %}
+  {% if l.action.startswith("user_") or l.action.startswith("announcement_") or l.action.startswith("incident_") %}
+    {% set metrics.admin = metrics.admin + 1 %}
+  {% endif %}
+  {% if l.entity_type in ["Matter", "Task", "DocumentFile", "MatterTimelineEvent"] %}
+    {% set metrics.matter = metrics.matter + 1 %}
+  {% endif %}
+{% endfor %}
+
 <div class="card p-3">
-  <div class="d-flex justify-content-between align-items-center">
-    <h3 class="mb-0">Audit Log</h3>
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">Audit Log</h3>
+      <div class="page-intro mt-1">Captures authentication, matter operations, document access, and admin activity.</div>
+    </div>
     <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin') }}">Back</a>
   </div>
-  <div class="muted small mt-2">Captures logins, matter/task/doc actions, and admin changes. In production: ship to centralized logging and retain per policy.</div>
 
-  <div class="mt-3 table-responsive">
-    <table class="table table-sm align-middle">
-      <thead><tr><th>Time (UTC)</th><th>Actor</th><th>Action</th><th>Entity</th><th>IP</th></tr></thead>
-      <tbody>
+  <div class="why-note mt-3">
+    Why this matters: this evidence trail demonstrates accountability and governance readiness for client and compliance review.
+  </div>
+
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Total entries</div>
+      <div class="value">{{ logs|length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Logins</div>
+      <div class="value">{{ metrics.login }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Matter/doc actions</div>
+      <div class="value">{{ metrics.matter }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Admin changes</div>
+      <div class="value">{{ metrics.admin }}</div>
+    </div>
+  </div>
+
+  <div class="mt-3">
+    {% if logs %}
+      <div class="list-stack">
         {% for l in logs %}
-          <tr>
-            <td class="muted">{{ l.at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
-            <td class="muted">{{ l.actor_user_id or "" }}</td>
-            <td class="fw-semibold">{{ l.action }}</td>
-            <td class="muted">{{ (l.entity_type or "") ~ "#" ~ (l.entity_id or "") }}</td>
-            <td class="muted">{{ l.ip or "" }}</td>
-          </tr>
+          <div class="list-item">
+            <div class="list-row">
+              <div>
+                <div class="list-title">{{ l.action }}</div>
+                <div class="list-meta mt-1">
+                  <span>{{ l.at.strftime("%Y-%m-%d %H:%M:%S UTC") }}</span>
+                  <span>Actor {{ l.actor_user_id or "system" }}</span>
+                  <span>{{ l.entity_type or "System" }}{% if l.entity_id %} #{{ l.entity_id }}{% endif %}</span>
+                  <span>{{ l.ip or "n/a" }}</span>
+                </div>
+                {% if l.details_json and l.details_json != "{}" %}
+                  <details class="mt-1">
+                    <summary class="muted small">Show details</summary>
+                    <div class="code-like audit-json">{{ l.details_json }}</div>
+                  </details>
+                {% endif %}
+              </div>
+            </div>
+          </div>
         {% endfor %}
-        {% if not logs %}
-          <tr><td colspan="5" class="muted">No audit entries.</td></tr>
-        {% endif %}
-      </tbody>
-    </table>
+      </div>
+    {% else %}
+      <div class="empty-state">No audit entries yet.</div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

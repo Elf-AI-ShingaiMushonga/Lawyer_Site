@@ -375,6 +375,14 @@
       background: rgba(45, 101, 146, 0.5);
     }
 
+    .story-chip-next {
+      border-color: rgba(141, 230, 190, 0.9);
+      background: rgba(41, 132, 95, 0.5);
+      color: #e7fff4;
+      box-shadow: 0 0 0 2px rgba(100, 216, 168, 0.2);
+      animation: story-pulse 1.5s ease-in-out infinite;
+    }
+
     .story-step {
       display: flex;
       justify-content: space-between;
@@ -387,6 +395,13 @@
 
     .story-step-title {
       font-weight: 700;
+    }
+
+    .story-step-next {
+      border-top-color: rgba(143, 224, 179, 0.56);
+      background: rgba(31, 93, 67, 0.2);
+      border-radius: 10px;
+      padding: 10px;
     }
 
     .toolbar-row {
@@ -624,6 +639,33 @@
       gap: 10px;
     }
 
+    .next-step-callout {
+      border: 1px solid rgba(143, 224, 179, 0.48);
+      border-radius: 12px;
+      background: rgba(32, 100, 70, 0.24);
+      padding: 10px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .next-step-btn {
+      box-shadow: 0 0 0 2px rgba(124, 221, 179, 0.3);
+      animation: story-pulse 1.5s ease-in-out infinite;
+    }
+
+    .audit-json {
+      margin-top: 6px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      padding: 8px;
+      border-radius: 9px;
+      border: 1px solid rgba(141, 196, 249, 0.24);
+      background: rgba(9, 28, 48, 0.45);
+    }
+
     .footer-note {
       text-align: center;
       margin: 22px 0 8px;
@@ -635,6 +677,12 @@
     @keyframes fade-up {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes story-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(118, 221, 174, 0.34); }
+      70% { box-shadow: 0 0 0 8px rgba(118, 221, 174, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(118, 221, 174, 0); }
     }
 
     @media (max-width: 992px) {
@@ -651,6 +699,32 @@
   {% set admin_endpoints = ["admin", "admin_users", "admin_announcements", "admin_audit"] %}
   {% set trust_endpoints = ["trust_policy", "trust_security", "trust_incidents"] %}
   {% set next_path = request.full_path if request.query_string else request.path %}
+  {% set next_story_url = url_for('dashboard') %}
+  {% set next_story_label = "1. Executive snapshot" %}
+  {% if endpoint == "dashboard" %}
+    {% set next_story_url = url_for('matters', q='2026-LIT-0142') %}
+    {% set next_story_label = "2. Open flagship matter" %}
+  {% elif endpoint in ["matter_detail", "matter_team"] and request.view_args and request.view_args.get("matter_id") %}
+    {% set next_story_url = url_for('matter_tasks', matter_id=request.view_args.get("matter_id")) %}
+    {% set next_story_label = "3. Show task accountability" %}
+  {% elif endpoint == "matter_tasks" and request.view_args and request.view_args.get("matter_id") %}
+    {% set next_story_url = url_for('matter_documents', matter_id=request.view_args.get("matter_id")) %}
+    {% set next_story_label = "4. Show document integrity" %}
+  {% elif endpoint in ["matter_documents", "matters", "matter_create"] %}
+    {% set next_story_url = url_for('search', q='POPIA') %}
+    {% set next_story_label = "5. Show knowledge + search" %}
+  {% elif endpoint in ["search", "kb", "kb_view"] %}
+    {% if current_user.is_authenticated and current_user.role == "admin" %}
+      {% set next_story_url = url_for('admin_audit') %}
+      {% set next_story_label = "6. Finish with audit trail" %}
+    {% else %}
+      {% set next_story_url = url_for('trust_security') %}
+      {% set next_story_label = "6. Finish with trust posture" %}
+    {% endif %}
+  {% elif endpoint in ["admin_audit", "trust_policy", "trust_security", "trust_incidents"] %}
+    {% set next_story_url = url_for('client_story') %}
+    {% set next_story_label = "Replay story checklist" %}
+  {% endif %}
   <nav class="navbar px-3 py-2 mb-3 d-flex justify-content-between">
     <div class="d-flex align-items-center gap-3">
       <a class="brand" href="{{ url_for('dashboard') }}">
@@ -703,12 +777,20 @@
         </div>
         <a class="btn btn-sm btn-light" href="{{ url_for('client_story') }}">Open story playbook</a>
       </div>
+      <div class="next-step-callout mt-2">
+        <div class="small">Next recommended click: <span class="fw-semibold">{{ next_story_label }}</span></div>
+        <a class="btn btn-sm btn-light next-step-btn" href="{{ next_story_url }}">Go to next step</a>
+      </div>
       <div class="story-inline">
-        <a class="story-chip" href="{{ url_for('dashboard') }}">1. Snapshot</a>
-        <a class="story-chip" href="{{ url_for('matters', q='2026-LIT-0142') }}">2. Flagship matter</a>
-        <a class="story-chip" href="{{ url_for('search', q='POPIA') }}">3. Knowledge + search</a>
+        {% set chip_dashboard = url_for('dashboard') %}
+        {% set chip_flagship = url_for('matters', q='2026-LIT-0142') %}
+        {% set chip_search = url_for('search', q='POPIA') %}
+        {% set chip_audit = url_for('admin_audit') if current_user.role == "admin" else '' %}
+        <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_dashboard else '' }}" href="{{ chip_dashboard }}">1. Snapshot</a>
+        <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_flagship else '' }}" href="{{ chip_flagship }}">2. Flagship matter</a>
+        <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_search else '' }}" href="{{ chip_search }}">3. Knowledge + search</a>
         {% if current_user.role == "admin" %}
-          <a class="story-chip" href="{{ url_for('admin_audit') }}">4. Audit governance</a>
+          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_audit else '' }}" href="{{ chip_audit }}">4. Audit governance</a>
         {% endif %}
       </div>
     </div>
