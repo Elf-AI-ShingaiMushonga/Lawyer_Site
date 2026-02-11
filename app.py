@@ -8,11 +8,37 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
 
 from intranet import create_app
 from intranet.cli import create_user, init_db, run_server, seed_demo_data
 from intranet.config import env_int
 
+
+def _load_dotenv_if_present() -> None:
+    env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        os.environ[key] = value
+
+
+_load_dotenv_if_present()
 app = create_app()
 
 
