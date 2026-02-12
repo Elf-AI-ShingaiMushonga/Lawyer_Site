@@ -98,7 +98,10 @@ class MatterMember(db.Model):
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     role_in_matter = db.Column(db.String(80), nullable=False, default="Team")
-    __table_args__ = (db.UniqueConstraint("matter_id", "user_id", name="uq_matter_user"),)
+    __table_args__ = (
+        db.UniqueConstraint("matter_id", "user_id", name="uq_matter_user"),
+        db.Index("ix_matter_member_user_matter", "user_id", "matter_id"),
+    )
 
 
 class Task(db.Model):
@@ -121,6 +124,10 @@ class Task(db.Model):
     approved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
     locked_at = db.Column(db.DateTime, nullable=True)
+    __table_args__ = (
+        db.Index("ix_task_assigned_status_due", "assigned_to", "status", "due_date"),
+        db.Index("ix_task_matter_status_due", "matter_id", "status", "due_date"),
+    )
 
 
 class MatterTimelineEvent(db.Model):
@@ -294,7 +301,10 @@ class EthicalWallRule(db.Model):
     is_deny = db.Column(db.Boolean, nullable=False, default=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
-    __table_args__ = (db.UniqueConstraint("wall_id", "user_id", name="uq_ethical_wall_user_rule"),)
+    __table_args__ = (
+        db.UniqueConstraint("wall_id", "user_id", name="uq_ethical_wall_user_rule"),
+        db.Index("ix_ethical_wall_rule_user_state", "user_id", "is_active", "is_deny", "wall_id"),
+    )
 
 
 class EthicalWallMatter(db.Model):
@@ -302,7 +312,10 @@ class EthicalWallMatter(db.Model):
     wall_id = db.Column(db.Integer, db.ForeignKey("ethical_wall.id"), nullable=False, index=True)
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
-    __table_args__ = (db.UniqueConstraint("wall_id", "matter_id", name="uq_ethical_wall_matter"),)
+    __table_args__ = (
+        db.UniqueConstraint("wall_id", "matter_id", name="uq_ethical_wall_matter"),
+        db.Index("ix_ethical_wall_matter_matter_wall", "matter_id", "wall_id"),
+    )
 
 
 class LegalHold(db.Model):
@@ -597,6 +610,15 @@ class DocumentRecord(db.Model):
     legal_hold = db.Column(db.Boolean, nullable=False, default=False)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (
+        db.Index(
+            "ix_document_record_matter_type_conf_created",
+            "matter_id",
+            "document_type",
+            "confidentiality",
+            "created_at",
+        ),
+    )
 
 
 class DocumentVersion(db.Model):
@@ -736,6 +758,10 @@ class TimeEntry(db.Model):
     locked_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (
+        db.Index("ix_time_entry_user_start_at", "user_id", "start_at"),
+        db.Index("ix_time_entry_matter_start_at", "matter_id", "start_at"),
+    )
 
     matter = db.relationship("Matter", foreign_keys=[matter_id])
 
@@ -800,6 +826,7 @@ class Invoice(db.Model):
     pdf_path = db.Column(db.String(255), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (db.Index("ix_invoice_matter_created_at", "matter_id", "created_at"),)
 
 
 class InvoiceLine(db.Model):
@@ -853,6 +880,7 @@ class PaymentAllocation(db.Model):
     reference = db.Column(db.String(120), nullable=True)
     allocated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    __table_args__ = (db.Index("ix_payment_allocation_invoice_allocated", "invoice_id", "allocated_at"),)
 
 
 # ---------------------------------------------------------------------------
@@ -925,6 +953,8 @@ class TrustLedgerEntry(db.Model):
             "entry_type IN ('deposit', 'disbursement', 'transfer', 'reversal')",
             name="ck_trust_ledger_entry_type",
         ),
+        db.Index("ix_trust_ledger_entry_reversal_of_entry_id", "reversal_of_entry_id"),
+        db.Index("ix_trust_ledger_entry_account_created", "trust_account_id", "created_at"),
     )
 
 
@@ -1061,7 +1091,10 @@ class PortalMatterAccess(db.Model):
     granted_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     granted_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     revoked_at = db.Column(db.DateTime, nullable=True)
-    __table_args__ = (db.UniqueConstraint("portal_user_id", "matter_id", name="uq_portal_user_matter_access"),)
+    __table_args__ = (
+        db.UniqueConstraint("portal_user_id", "matter_id", name="uq_portal_user_matter_access"),
+        db.Index("ix_portal_matter_access_user_revoked_matter", "portal_user_id", "revoked_at", "matter_id"),
+    )
 
 
 class PortalMessageThread(db.Model):
@@ -1097,6 +1130,10 @@ class PortalInvoiceView(db.Model):
     portal_user_id = db.Column(db.Integer, db.ForeignKey("portal_user.id"), nullable=False, index=True)
     invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id"), nullable=False, index=True)
     last_viewed_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("portal_user_id", "invoice_id", name="uq_portal_invoice_view_user_invoice"),
+        db.Index("ix_portal_invoice_view_user_viewed", "portal_user_id", "last_viewed_at"),
+    )
 
 
 class PortalPaymentReceipt(db.Model):
@@ -1135,6 +1172,9 @@ class AnalyticsMetricSnapshot(db.Model):
     value_num = db.Column(db.Float, nullable=True)
     value_text = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (
+        db.Index("ix_analytics_metric_snapshot_scope_key", "as_of_date", "scope_type", "scope_id", "metric_key"),
+    )
 
 
 class WorkloadForecast(db.Model):
@@ -1176,6 +1216,9 @@ class JobQueue(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     started_at = db.Column(db.DateTime, nullable=True)
     finished_at = db.Column(db.DateTime, nullable=True)
+    __table_args__ = (
+        db.Index("ix_job_queue_claim", "status", "run_after", "lease_until", "created_at"),
+    )
 
 
 class JobHistory(db.Model):
@@ -1194,6 +1237,7 @@ class ScheduledJob(db.Model):
     next_run_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     last_run_at = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    __table_args__ = (db.Index("ix_scheduled_job_active_next_run", "is_active", "next_run_at"),)
 
 
 class BackupRun(db.Model):

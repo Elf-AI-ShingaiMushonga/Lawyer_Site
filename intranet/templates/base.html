@@ -826,13 +826,148 @@
     }
 
     @media (max-width: 576px) {
+      body::before {
+        opacity: 0.35;
+      }
+
       .shell {
         margin: 16px auto;
         padding: 0 10px 20px;
       }
 
+      .navbar {
+        top: 6px;
+        border-radius: 14px;
+      }
+
+      .nav-head {
+        gap: 8px;
+      }
+
+      .brand {
+        gap: 9px;
+      }
+
+      .brand-mark {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        font-size: 12px;
+      }
+
+      .brand-title {
+        font-size: 15px;
+      }
+
+      .brand-sub {
+        display: none;
+      }
+
+      .nav-auth {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .nav-auth .btn,
+      .nav-auth .nav-pill {
+        flex: 1 1 auto;
+        text-align: center;
+      }
+
+      .nav-pill {
+        font-size: 12px;
+        padding: 6px 10px;
+      }
+
+      .nav-actions {
+        margin-top: 8px;
+        padding-top: 8px;
+        gap: 6px;
+      }
+
+      .nav-actions .nav-pill {
+        font-size: 12px;
+        padding: 6px 10px;
+      }
+
+      .main-content {
+        gap: 10px;
+      }
+
+      .card {
+        border-radius: 12px;
+        box-shadow: 0 6px 16px rgba(123, 42, 42, 0.08);
+      }
+
       .section-title {
         font-size: 24px;
+      }
+
+      .page-intro {
+        font-size: 13px;
+      }
+
+      .form-label {
+        font-size: 11px;
+      }
+
+      .form-section {
+        padding: 10px;
+      }
+
+      .toolbar-row {
+        align-items: stretch;
+      }
+
+      .toolbar-row .btn {
+        width: 100%;
+      }
+
+      .list-row {
+        align-items: flex-start;
+      }
+
+      .list-actions,
+      .table-actions {
+        width: 100%;
+      }
+
+      .list-actions .btn,
+      .table-actions .btn {
+        flex: 1 1 auto;
+      }
+
+      .table-actions form {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        width: 100%;
+      }
+
+      .table-responsive {
+        border-radius: 10px;
+      }
+
+      .table thead th {
+        font-size: 11px;
+      }
+
+      .table td,
+      .table th {
+        padding-top: 0.6rem;
+        padding-bottom: 0.6rem;
+      }
+
+      .metric-value {
+        font-size: 24px;
+      }
+
+      .kpi-pill .value {
+        font-size: 19px;
+      }
+
+      .footer-note {
+        margin-top: 16px;
       }
     }
 

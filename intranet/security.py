@@ -45,7 +45,11 @@ def register_security_handlers(app):
             return None
 
         ttl = int(app.config.get("SESSION_TTL_MINUTES", 8 * 60))
-        ok, reason = validate_user_session(ttl_minutes=ttl)
+        touch_interval = int(app.config.get("SESSION_TOUCH_INTERVAL_SECONDS", 60))
+        ok, reason = validate_user_session(
+            ttl_minutes=ttl,
+            touch_interval_seconds=touch_interval,
+        )
         if ok:
             return None
 

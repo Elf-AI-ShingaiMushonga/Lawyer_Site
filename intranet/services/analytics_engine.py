@@ -61,17 +61,18 @@ class AnalyticsEngine:
 
         if persist:
             scope_type = "firm" if matter_scope_ids is None else "restricted"
+            metric_keys = list(metrics.keys())
+            existing_rows = (
+                AnalyticsMetricSnapshot.query.filter(
+                    AnalyticsMetricSnapshot.as_of_date == as_of_date,
+                    AnalyticsMetricSnapshot.scope_type == scope_type,
+                    AnalyticsMetricSnapshot.scope_id.is_(None),
+                    AnalyticsMetricSnapshot.metric_key.in_(metric_keys),
+                ).all()
+            )
+            existing_by_key = {row.metric_key: row for row in existing_rows}
             for key, value in metrics.items():
-                existing = (
-                    AnalyticsMetricSnapshot.query.filter_by(
-                        as_of_date=as_of_date,
-                        metric_key=key,
-                        scope_type=scope_type,
-                        scope_id=None,
-                    )
-                    .order_by(AnalyticsMetricSnapshot.id.desc())
-                    .first()
-                )
+                existing = existing_by_key.get(key)
                 if existing is None:
                     existing = AnalyticsMetricSnapshot(
                         as_of_date=as_of_date,
@@ -80,6 +81,7 @@ class AnalyticsEngine:
                         scope_id=None,
                     )
                     db.session.add(existing)
+                    existing_by_key[key] = existing
                 existing.value_num = value
             db.session.commit()
 

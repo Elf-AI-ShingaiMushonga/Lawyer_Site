@@ -42,7 +42,7 @@ def register_analytics_routes(app):
         snapshot = AnalyticsEngine.compute_snapshot(
             dt.date.today(),
             matter_scope_ids=_analytics_scope_ids(),
-            persist=is_admin(),
+            persist=False,
         )
         return page("Utilization", "analytics/utilization.html", snapshot=snapshot)
 
@@ -53,7 +53,7 @@ def register_analytics_routes(app):
         snapshot = AnalyticsEngine.compute_snapshot(
             dt.date.today(),
             matter_scope_ids=_analytics_scope_ids(),
-            persist=is_admin(),
+            persist=False,
         )
         return page("Realization", "analytics/realization.html", snapshot=snapshot)
 
@@ -64,7 +64,7 @@ def register_analytics_routes(app):
         snapshot = AnalyticsEngine.compute_snapshot(
             dt.date.today(),
             matter_scope_ids=_analytics_scope_ids(),
-            persist=is_admin(),
+            persist=False,
         )
         return page("Effective Hourly Rate", "analytics/ehr.html", snapshot=snapshot)
 
@@ -73,24 +73,43 @@ def register_analytics_routes(app):
     def analytics_workload():
         _analytics_allowed()
         scope_ids = _analytics_scope_ids()
-        users = [current_user] if not is_admin() else User.query.order_by(User.full_name.asc()).all()
-        rows = []
-        for user in users:
-            task_query = Task.query.filter(Task.assigned_to == user.id, Task.status != "Done")
-            time_query = db.session.query(func.coalesce(func.sum(TimeEntry.rounded_hours), 0.0)).filter(
-                TimeEntry.user_id == user.id,
+        users = [current_user] if not is_admin() else User.query.order_by(User.full_name.asc()).limit(500).all()
+        user_ids = [u.id for u in users]
+        open_tasks_by_user: dict[int, int] = {}
+        hours_7d_by_user: dict[int, float] = {}
+
+        if user_ids:
+            task_query = db.session.query(Task.assigned_to, func.count(Task.id)).filter(
+                Task.assigned_to.in_(user_ids),
+                Task.status != "Done",
+            )
+            hours_query = db.session.query(TimeEntry.user_id, func.coalesce(func.sum(TimeEntry.rounded_hours), 0.0)).filter(
+                TimeEntry.user_id.in_(user_ids),
                 TimeEntry.start_at >= dt.datetime.utcnow() - dt.timedelta(days=7),
             )
             if scope_ids is not None:
-                if not scope_ids:
-                    open_tasks = 0
-                    hours_7d = 0.0
+                if scope_ids:
+                    task_query = task_query.filter(Task.matter_id.in_(scope_ids))
+                    hours_query = hours_query.filter(TimeEntry.matter_id.in_(scope_ids))
                 else:
-                    open_tasks = task_query.filter(Task.matter_id.in_(scope_ids)).count()
-                    hours_7d = float(time_query.filter(TimeEntry.matter_id.in_(scope_ids)).scalar() or 0.0)
-            else:
-                open_tasks = task_query.count()
-                hours_7d = float(time_query.scalar() or 0.0)
+                    task_query = task_query.filter(Task.id == -1)
+                    hours_query = hours_query.filter(TimeEntry.id == -1)
+
+            open_tasks_by_user = {
+                int(user_id): int(count)
+                for user_id, count in task_query.group_by(Task.assigned_to).all()
+                if user_id is not None
+            }
+            hours_7d_by_user = {
+                int(user_id): float(hours or 0.0)
+                for user_id, hours in hours_query.group_by(TimeEntry.user_id).all()
+                if user_id is not None
+            }
+
+        rows = []
+        for user in users:
+            open_tasks = open_tasks_by_user.get(user.id, 0)
+            hours_7d = hours_7d_by_user.get(user.id, 0.0)
             rows.append({"user": user, "open_tasks": open_tasks, "hours_7d": round(hours_7d, 2)})
         return page("Workload", "analytics/workload.html", rows=rows)
 
@@ -106,21 +125,33 @@ def register_analytics_routes(app):
             else:
                 matters_query = matters_query.filter(Matter.id.in_(scope_ids))
         matters = matters_query.order_by(Matter.opened_at.desc()).limit(200).all()
+        matter_ids = [m.id for m in matters]
+        billed_by_matter: dict[int, float] = {}
+        collected_by_matter: dict[int, float] = {}
+        if matter_ids:
+            billed_by_matter = {
+                int(matter_id): float(amount or 0.0)
+                for matter_id, amount in (
+                    db.session.query(Invoice.matter_id, func.coalesce(func.sum(Invoice.total), 0.0))
+                    .filter(Invoice.matter_id.in_(matter_ids))
+                    .group_by(Invoice.matter_id)
+                    .all()
+                )
+            }
+            collected_by_matter = {
+                int(matter_id): float(amount or 0.0)
+                for matter_id, amount in (
+                    db.session.query(Invoice.matter_id, func.coalesce(func.sum(PaymentAllocation.amount), 0.0))
+                    .join(PaymentAllocation, PaymentAllocation.invoice_id == Invoice.id)
+                    .filter(Invoice.matter_id.in_(matter_ids))
+                    .group_by(Invoice.matter_id)
+                    .all()
+                )
+            }
         rows = []
         for matter in matters:
-            billed = float(
-                db.session.query(func.coalesce(func.sum(Invoice.total), 0.0))
-                .filter(Invoice.matter_id == matter.id)
-                .scalar()
-                or 0.0
-            )
-            collected = float(
-                db.session.query(func.coalesce(func.sum(PaymentAllocation.amount), 0.0))
-                .join(Invoice, Invoice.id == PaymentAllocation.invoice_id)
-                .filter(Invoice.matter_id == matter.id)
-                .scalar()
-                or 0.0
-            )
+            billed = billed_by_matter.get(matter.id, 0.0)
+            collected = collected_by_matter.get(matter.id, 0.0)
             rows.append(
                 {
                     "matter": matter,

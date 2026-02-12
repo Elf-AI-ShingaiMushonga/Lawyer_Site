@@ -1095,6 +1095,72 @@ def test_document_upload_triggers_notification(app_ctx):
     )
 
 
+def test_document_version_upload_rejects_invalid_state(app_ctx):
+    app = app_ctx
+    user = _seed_user("document-invalid-state@example.com")
+    matter = _seed_matter(user, "2026-DOC-INVALID-STATE-1", "Document Invalid State Matter", "State Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.flush()
+    doc = DocumentRecord(
+        matter_id=matter.id,
+        title="Invalid State Upload",
+        document_type="General",
+        confidentiality="Internal",
+        created_by=user.id,
+    )
+    db.session.add(doc)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.post(
+        f"/documents/{doc.id}/versions",
+        data={
+            "csrf_token": "test-csrf",
+            "state": "this-state-should-not-be-accepted",
+            "notes": "state should fail validation",
+            "file": (io.BytesIO(b"invalid state content"), "invalid-state.txt"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert DocumentVersion.query.filter_by(document_id=doc.id).count() == 0
+
+
+def test_document_version_upload_rejects_invalid_filename(app_ctx):
+    app = app_ctx
+    user = _seed_user("document-invalid-name@example.com")
+    matter = _seed_matter(user, "2026-DOC-INVALID-NAME-1", "Document Invalid Filename Matter", "Filename Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.flush()
+    doc = DocumentRecord(
+        matter_id=matter.id,
+        title="Invalid Filename Upload",
+        document_type="General",
+        confidentiality="Internal",
+        created_by=user.id,
+    )
+    db.session.add(doc)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.post(
+        f"/documents/{doc.id}/versions",
+        data={
+            "csrf_token": "test-csrf",
+            "state": "draft",
+            "notes": "filename should fail validation",
+            "file": (io.BytesIO(b"invalid filename content"), "../../../"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert DocumentVersion.query.filter_by(document_id=doc.id).count() == 0
+
+
 def test_matter_close_with_active_legal_hold_blocks_archival(app_ctx):
     app = app_ctx
     admin = _seed_user("legal-hold-close@example.com", role="admin", mfa_enabled=True)

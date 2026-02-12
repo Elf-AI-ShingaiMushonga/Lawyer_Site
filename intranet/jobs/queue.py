@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 
-from sqlalchemy import and_, or_
+from sqlalchemy import or_, select
 
 from ..extensions import db
 
@@ -28,16 +28,21 @@ def lease_job(worker_id: str, lease_seconds: int = 60):
     from ..models import JobQueue
 
     now = dt.datetime.utcnow()
-    candidate = (
-        JobQueue.query.filter(
+    stmt = (
+        select(JobQueue)
+        .where(
             JobQueue.status.in_(["queued", "failed"]),
             or_(JobQueue.run_after.is_(None), JobQueue.run_after <= now),
             or_(JobQueue.lease_until.is_(None), JobQueue.lease_until < now),
             JobQueue.attempts < JobQueue.max_attempts,
         )
         .order_by(JobQueue.created_at.asc())
-        .first()
+        .limit(1)
     )
+    bind = db.session.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        stmt = stmt.with_for_update(skip_locked=True)
+    candidate = db.session.execute(stmt).scalars().first()
     if candidate is None:
         return None
 

@@ -148,6 +148,7 @@ Optional but recommended:
 - `AUTH_LOGIN_RATE_LIMIT=10/minute`
 - `AUTH_REGISTER_RATE_LIMIT=5/hour`
 - `ENABLE_SCHEMA_COMPAT_SYNC=false` (recommended in production; run migrations explicitly)
+- `SESSION_TOUCH_INTERVAL_SECONDS=60`
 - `DB_POOL_SIZE=5`
 - `DB_MAX_OVERFLOW=10`
 - `DB_POOL_TIMEOUT_SECONDS=30`
@@ -209,9 +210,11 @@ Optional but recommended:
 
 - 3) Configure environment:
   - `cp .env.example .env`
-  - Generate secret: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`
-  - Edit `.env` with real `FLASK_SECRET_KEY` and `DATABASE_URL`.
+  - Generate app secret: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`
+  - Generate backup key: `python3 -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`
+  - Edit `.env` with real `FLASK_SECRET_KEY`, `DATABASE_URL`, and `BACKUP_ENCRYPTION_KEY`.
   - If `DATABASE_URL` password contains reserved URL chars (`@:/?#[]`), URL-encode it.
+  - Keep `RATE_LIMIT_STORAGE_URI=redis://127.0.0.1:6379/0` when running multiple Gunicorn workers.
   - Set `TRUSTED_PROXY_HOPS=2` only if request path is `Client -> ALB -> Nginx -> Gunicorn`.
 
 - 4) Initialize DB and bootstrap admin:
@@ -247,6 +250,7 @@ Optional but recommended:
     - `sudo cp deploy/ubuntu/nginx/law-intranet.conf /etc/nginx/conf.d/law-intranet.conf`
     - `sudo rm -f /etc/nginx/conf.d/default.conf`
   - `server_name` is preconfigured for `elf-ai-demo.co.za` and `www.elf-ai-demo.co.za`.
+  - Update `server_name` in whichever file you installed (`/etc/nginx/sites-available/law-intranet.conf` or `/etc/nginx/conf.d/law-intranet.conf`).
   - `sudo nginx -t`
   - `sudo systemctl enable --now nginx`
   - `sudo systemctl reload nginx`

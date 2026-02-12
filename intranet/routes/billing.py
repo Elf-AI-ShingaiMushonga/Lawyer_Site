@@ -371,15 +371,35 @@ def register_billing_routes(app):
             else:
                 invoice_query = invoice_query.filter(Invoice.id == -1)
         invoices = invoice_query.order_by(Invoice.created_at.asc()).all()
+        invoice_ids = [inv.id for inv in invoices]
+
+        paid_by_invoice: dict[int, float] = {}
+        snapshots_by_invoice: dict[int, ARSnapshot] = {}
+        if invoice_ids:
+            cutoff = dt.datetime.combine(as_of, dt.time.max)
+            paid_by_invoice = {
+                int(invoice_id): float(amount or 0.0)
+                for invoice_id, amount in (
+                    db.session.query(PaymentAllocation.invoice_id, func.coalesce(func.sum(PaymentAllocation.amount), 0.0))
+                    .filter(
+                        PaymentAllocation.invoice_id.in_(invoice_ids),
+                        PaymentAllocation.allocated_at <= cutoff,
+                    )
+                    .group_by(PaymentAllocation.invoice_id)
+                    .all()
+                )
+            }
+            snapshots_by_invoice = {
+                int(row.invoice_id): row
+                for row in ARSnapshot.query.filter(
+                    ARSnapshot.as_of_date == as_of,
+                    ARSnapshot.invoice_id.in_(invoice_ids),
+                ).all()
+            }
 
         rows = []
         for inv in invoices:
-            paid = float(
-                db.session.query(func.coalesce(func.sum(PaymentAllocation.amount), 0.0))
-                .filter(PaymentAllocation.invoice_id == inv.id, PaymentAllocation.allocated_at <= dt.datetime.combine(as_of, dt.time.max))
-                .scalar()
-                or 0.0
-            )
+            paid = paid_by_invoice.get(inv.id, 0.0)
             outstanding = round(max(0.0, float(inv.total or 0.0) - paid), 2)
             if outstanding <= 0:
                 continue
@@ -394,10 +414,11 @@ def register_billing_routes(app):
             else:
                 bucket = "90+"
 
-            snapshot = ARSnapshot.query.filter_by(as_of_date=as_of, invoice_id=inv.id).first()
+            snapshot = snapshots_by_invoice.get(inv.id)
             if snapshot is None:
                 snapshot = ARSnapshot(as_of_date=as_of, invoice_id=inv.id)
                 db.session.add(snapshot)
+                snapshots_by_invoice[inv.id] = snapshot
             snapshot.outstanding_amount = outstanding
             snapshot.aging_bucket = bucket
             if snapshot.collection_notes is None:

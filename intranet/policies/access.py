@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sqlalchemy import and_
+
 from flask import abort
 from flask_login import current_user
 
@@ -22,28 +24,27 @@ def visible_matter_ids() -> list[int]:
         return [row[0] for row in db.session.query(Matter.id).order_by(Matter.id.asc()).all()]
 
     EthicalWallMatter, EthicalWallRule, _, MatterMember, _ = _models()
-    member_ids = [
-        row[0]
-        for row in db.session.query(MatterMember.matter_id)
-        .filter(MatterMember.user_id == current_user.id)
-        .all()
-    ]
-    if not member_ids:
-        return []
-
-    denied_ids = {
-        row[0]
-        for row in db.session.query(EthicalWallMatter.matter_id)
-        .join(EthicalWallRule, EthicalWallRule.wall_id == EthicalWallMatter.wall_id)
-        .filter(
-            EthicalWallRule.user_id == current_user.id,
-            EthicalWallRule.is_deny.is_(True),
-            EthicalWallRule.is_active.is_(True),
-            EthicalWallMatter.matter_id.in_(member_ids),
+    rows = (
+        db.session.query(MatterMember.matter_id)
+        .outerjoin(EthicalWallMatter, EthicalWallMatter.matter_id == MatterMember.matter_id)
+        .outerjoin(
+            EthicalWallRule,
+            and_(
+                EthicalWallRule.wall_id == EthicalWallMatter.wall_id,
+                EthicalWallRule.user_id == current_user.id,
+                EthicalWallRule.is_deny.is_(True),
+                EthicalWallRule.is_active.is_(True),
+            ),
         )
+        .filter(
+            MatterMember.user_id == current_user.id,
+            EthicalWallRule.id.is_(None),
+        )
+        .distinct()
+        .order_by(MatterMember.matter_id.asc())
         .all()
-    }
-    return sorted(matter_id for matter_id in set(member_ids) if matter_id not in denied_ids)
+    )
+    return [int(row[0]) for row in rows]
 
 
 def _ethical_wall_hit(matter_id: int) -> bool:

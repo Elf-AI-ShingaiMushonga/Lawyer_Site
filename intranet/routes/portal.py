@@ -71,13 +71,17 @@ def portal_login_required(view):
 
 def _portal_accessible_matter_ids(portal_user_id: int, *, min_level: str = "summary_only") -> list[int]:
     required_rank = _visibility_rank(min_level)
-    return [
-        matter_id
-        for matter_id, level in db.session.query(PortalMatterAccess.matter_id, PortalMatterAccess.visibility_level)
-        .filter(PortalMatterAccess.portal_user_id == portal_user_id, PortalMatterAccess.revoked_at.is_(None))
+    allowed_levels = [level for level, rank in VISIBILITY_LEVEL_RANK.items() if rank >= required_rank]
+    rows = (
+        db.session.query(PortalMatterAccess.matter_id)
+        .filter(
+            PortalMatterAccess.portal_user_id == portal_user_id,
+            PortalMatterAccess.revoked_at.is_(None),
+            PortalMatterAccess.visibility_level.in_(allowed_levels),
+        )
         .all()
-        if _visibility_rank(level) >= required_rank
-    ]
+    )
+    return [int(row[0]) for row in rows]
 
 
 def _portal_matter_access(portal_user_id: int, matter_id: int) -> PortalMatterAccess | None:
@@ -298,15 +302,32 @@ def register_portal_routes(app):
         assert portal_user is not None
         ids = _portal_accessible_matter_ids(portal_user.id, min_level="full_curated")
         invoices = Invoice.query.filter(Invoice.matter_id.in_(ids)).order_by(Invoice.created_at.desc()).all() if ids else []
-        matter_map = {m.id: m for m in Matter.query.filter(Matter.id.in_({inv.matter_id for inv in invoices})).all()} if invoices else {}
+        matter_ids = {inv.matter_id for inv in invoices}
+        matter_map = {m.id: m for m in Matter.query.filter(Matter.id.in_(matter_ids)).all()} if matter_ids else {}
 
-        for inv in invoices:
-            viewed = PortalInvoiceView.query.filter_by(portal_user_id=portal_user.id, invoice_id=inv.id).first()
-            if viewed is None:
-                db.session.add(PortalInvoiceView(portal_user_id=portal_user.id, invoice_id=inv.id, last_viewed_at=dt.datetime.utcnow()))
-            else:
-                viewed.last_viewed_at = dt.datetime.utcnow()
-        db.session.commit()
+        invoice_ids = [inv.id for inv in invoices]
+        if invoice_ids:
+            now = dt.datetime.utcnow()
+            existing_rows = (
+                PortalInvoiceView.query.filter(
+                    PortalInvoiceView.portal_user_id == portal_user.id,
+                    PortalInvoiceView.invoice_id.in_(invoice_ids),
+                ).all()
+            )
+            existing_by_invoice_id = {row.invoice_id: row for row in existing_rows}
+            for invoice_id in invoice_ids:
+                row = existing_by_invoice_id.get(invoice_id)
+                if row is None:
+                    db.session.add(
+                        PortalInvoiceView(
+                            portal_user_id=portal_user.id,
+                            invoice_id=invoice_id,
+                            last_viewed_at=now,
+                        )
+                    )
+                else:
+                    row.last_viewed_at = now
+            db.session.commit()
 
         return page("Portal Invoices", "portal/invoices.html", portal_user=portal_user, invoices=invoices, matter_map=matter_map)
 

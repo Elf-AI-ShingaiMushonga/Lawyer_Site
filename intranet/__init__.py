@@ -73,6 +73,7 @@ def create_app() -> Flask:
     os.makedirs(upload_dir, exist_ok=True)
     max_upload_bytes = env_int("MAX_UPLOAD_BYTES", 50 * 1024 * 1024)
     session_ttl_minutes = env_int("SESSION_TTL_MINUTES", 8 * 60)
+    session_touch_interval_seconds = env_int("SESSION_TOUCH_INTERVAL_SECONDS", 60)
     trust_proxy = env_bool("TRUST_PROXY", False)
     force_secure_cookie = env_bool("FORCE_SECURE_COOKIE", False)
     data_region = (os.environ.get("DATA_REGION") or "ZA").strip().upper() or "ZA"
@@ -91,6 +92,7 @@ def create_app() -> Flask:
         DATA_REGION=data_region,
         BACKUP_ENCRYPTION_KEY=backup_encryption_key or None,
         SESSION_TTL_MINUTES=session_ttl_minutes,
+        SESSION_TOUCH_INTERVAL_SECONDS=max(1, session_touch_interval_seconds),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=secure_cookie,

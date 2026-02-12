@@ -177,8 +177,23 @@ def touch_user_session() -> None:
         db.session.rollback()
 
 
-def validate_user_session(ttl_minutes: int = 8 * 60) -> tuple[bool, str | None]:
+def validate_user_session(
+    ttl_minutes: int = 8 * 60,
+    touch_interval_seconds: int = 60,
+) -> tuple[bool, str | None]:
     """Validate current authenticated session token row, applying idle-time refresh."""
+    return _validate_user_session(
+        ttl_minutes=ttl_minutes,
+        touch_interval_seconds=touch_interval_seconds,
+    )
+
+
+def _validate_user_session(
+    *,
+    ttl_minutes: int = 8 * 60,
+    touch_interval_seconds: int = 60,
+) -> tuple[bool, str | None]:
+    """Validate current authenticated session row with throttled persistence writes."""
     if not current_user.is_authenticated:
         return True, None
 
@@ -198,9 +213,19 @@ def validate_user_session(ttl_minutes: int = 8 * 60) -> tuple[bool, str | None]:
             return False, "revoked"
         if row.expires_at <= now:
             return False, "expired"
-        row.last_seen_at = now
-        row.expires_at = now + dt.timedelta(minutes=max(1, int(ttl_minutes)))
-        db.session.commit()
+
+        ttl_seconds = max(60, int(ttl_minutes) * 60)
+        touch_seconds = max(1, min(int(touch_interval_seconds or 60), max(1, ttl_seconds // 4)))
+        last_seen_at = row.last_seen_at or now
+        expires_at = row.expires_at or now
+        needs_touch = (
+            (now - last_seen_at).total_seconds() >= touch_seconds
+            or (expires_at - now).total_seconds() <= touch_seconds
+        )
+        if needs_touch:
+            row.last_seen_at = now
+            row.expires_at = now + dt.timedelta(minutes=max(1, int(ttl_minutes)))
+            db.session.commit()
         return True, None
     except Exception:
         db.session.rollback()

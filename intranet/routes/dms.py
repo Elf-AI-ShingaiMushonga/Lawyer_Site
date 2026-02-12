@@ -8,6 +8,8 @@ import uuid
 
 from flask import Response, abort, flash, redirect, request, send_from_directory, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from werkzeug.utils import secure_filename
 
 from ..extensions import db
@@ -29,6 +31,8 @@ from ..policies import visible_matter_ids
 from ..policies.residency import enforce_data_residency
 from ..services.notification_engine import NotificationEngine
 from ..templates import page
+
+DOCUMENT_STATES = {"draft", "reviewed", "final", "filed"}
 
 
 def _latest_version(document_id: int) -> DocumentVersion | None:
@@ -159,13 +163,37 @@ def register_dms_routes(app):
         filter_type = (request.args.get("document_type") or "").strip().lower()
         filter_confidentiality = (request.args.get("confidentiality") or "").strip().lower()
 
-        docs = DocumentRecord.query.filter_by(matter_id=matter_id).order_by(DocumentRecord.created_at.desc()).all()
+        docs_query = DocumentRecord.query.filter(DocumentRecord.matter_id == matter_id)
         if filter_type:
-            docs = [row for row in docs if (row.document_type or "").strip().lower() == filter_type]
+            docs_query = docs_query.filter(func.lower(func.coalesce(DocumentRecord.document_type, "")) == filter_type)
         if filter_confidentiality:
-            docs = [row for row in docs if (row.confidentiality or "").strip().lower() == filter_confidentiality]
+            docs_query = docs_query.filter(
+                func.lower(func.coalesce(DocumentRecord.confidentiality, "")) == filter_confidentiality
+            )
+        docs = docs_query.order_by(DocumentRecord.created_at.desc()).all()
 
-        latest_versions = {d.id: _latest_version(d.id) for d in docs}
+        latest_versions: dict[int, DocumentVersion] = {}
+        if docs:
+            doc_ids = [d.id for d in docs]
+            latest_version_no_subquery = (
+                db.session.query(
+                    DocumentVersion.document_id.label("document_id"),
+                    func.max(DocumentVersion.version_no).label("max_version_no"),
+                )
+                .filter(DocumentVersion.document_id.in_(doc_ids))
+                .group_by(DocumentVersion.document_id)
+                .subquery()
+            )
+            latest_rows = (
+                db.session.query(DocumentVersion)
+                .join(
+                    latest_version_no_subquery,
+                    (DocumentVersion.document_id == latest_version_no_subquery.c.document_id)
+                    & (DocumentVersion.version_no == latest_version_no_subquery.c.max_version_no),
+                )
+                .all()
+            )
+            latest_versions = {row.document_id: row for row in latest_rows}
         search_scores: dict[int, int] = {}
         if q:
             version_ids = [v.id for v in latest_versions.values() if v is not None]
@@ -230,6 +258,11 @@ def register_dms_routes(app):
                 flash("Document is locked by another user.", "warning")
                 return redirect(url_for("document_versions", document_id=document_id))
 
+            state = (request.form.get("state") or "draft").strip().lower() or "draft"
+            if state not in DOCUMENT_STATES:
+                flash("Invalid version state.", "warning")
+                return redirect(url_for("document_versions", document_id=document_id))
+
             f = request.files.get("file")
             if not f or not f.filename:
                 flash("Version file required.", "warning")
@@ -240,54 +273,68 @@ def register_dms_routes(app):
             enforce_data_residency("primary_storage")
 
             safe_name = secure_filename(f.filename)
+            if not safe_name:
+                flash("Invalid filename.", "warning")
+                return redirect(url_for("document_versions", document_id=document_id))
             stored = f"dms_{doc.matter_id}_{uuid.uuid4().hex}_{safe_name}"
             path = os.path.join(app.config["UPLOAD_DIR"], stored)
             f.save(path)
             sha = sha256_file(path)
 
+            # Serialize version number assignment for this document on databases that support row locks.
+            db.session.query(DocumentRecord).filter_by(id=doc.id).with_for_update().first()
             last = _latest_version(document_id)
             next_no = (last.version_no if last else 0) + 1
             prev_hash = last.hash_chain_current if last else None
             chain_hash = _chain_hash(prev_hash, sha)
-
-            legacy_file = DocumentFile(
-                matter_id=doc.matter_id,
-                original_filename=safe_name,
-                stored_filename=stored,
-                sha256=sha,
-                content_type=f.mimetype,
-                category=doc.document_type,
-                doc_version=str(next_no),
-                lifecycle_stage=(request.form.get("state") or "Draft").strip() or "Draft",
-                owner_name=current_user.full_name,
-                is_privileged=bool(doc.privilege_label),
-                uploaded_by=current_user.id,
-            )
-            db.session.add(legacy_file)
-            db.session.flush()
-
-            ver = DocumentVersion(
-                document_id=doc.id,
-                document_file_id=legacy_file.id,
-                version_no=next_no,
-                original_filename=safe_name,
-                stored_filename=stored,
-                sha256=sha,
-                hash_chain_prev=prev_hash,
-                hash_chain_current=chain_hash,
-                state=(request.form.get("state") or "draft").strip().lower() or "draft",
-                notes=(request.form.get("notes") or "").strip() or None,
-                uploaded_by=current_user.id,
-            )
-            db.session.add(ver)
-            db.session.flush()
-            db.session.add(
-                DocumentOCRText(
-                    document_version_id=ver.id,
-                    extracted_text=_extract_ocr_text(path, f.mimetype),
+            try:
+                legacy_file = DocumentFile(
+                    matter_id=doc.matter_id,
+                    original_filename=safe_name,
+                    stored_filename=stored,
+                    sha256=sha,
+                    content_type=f.mimetype,
+                    category=doc.document_type,
+                    doc_version=str(next_no),
+                    lifecycle_stage=state.capitalize(),
+                    owner_name=current_user.full_name,
+                    is_privileged=bool(doc.privilege_label),
+                    uploaded_by=current_user.id,
                 )
-            )
-            db.session.commit()
+                db.session.add(legacy_file)
+                db.session.flush()
+
+                ver = DocumentVersion(
+                    document_id=doc.id,
+                    document_file_id=legacy_file.id,
+                    version_no=next_no,
+                    original_filename=safe_name,
+                    stored_filename=stored,
+                    sha256=sha,
+                    hash_chain_prev=prev_hash,
+                    hash_chain_current=chain_hash,
+                    state=state,
+                    notes=(request.form.get("notes") or "").strip() or None,
+                    uploaded_by=current_user.id,
+                )
+                db.session.add(ver)
+                db.session.flush()
+                db.session.add(
+                    DocumentOCRText(
+                        document_version_id=ver.id,
+                        extracted_text=_extract_ocr_text(path, f.mimetype),
+                    )
+                )
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                if os.path.isfile(path):
+                    try:
+                        os.remove(path)
+                    except OSError:
+                        pass
+                flash("Another version was uploaded at the same time. Please retry.", "warning")
+                return redirect(url_for("document_versions", document_id=document_id))
             NotificationEngine.enqueue("document_uploaded", current_user.id, f"document_version:{ver.id}")
             audit("dms_version_add", "DocumentVersion", ver.id, {"document_id": doc.id, "version_no": next_no})
             flash("Version uploaded.", "info")
@@ -355,7 +402,7 @@ def register_dms_routes(app):
             abort(403)
 
         state = (request.form.get("state") or "draft").strip().lower()
-        if state not in {"draft", "reviewed", "final", "filed"}:
+        if state not in DOCUMENT_STATES:
             flash("Invalid state.", "warning")
             return redirect(url_for("document_versions", document_id=document_id))
 
