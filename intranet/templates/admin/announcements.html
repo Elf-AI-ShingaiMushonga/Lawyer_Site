@@ -1,34 +1,46 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card p-3">
-  <div class="d-flex justify-content-between align-items-center">
-    <h3 class="mb-0">Announcements</h3>
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">Announcements</h3>
+      <div class="page-intro mt-1">Publish internal updates to all users from one place.</div>
+    </div>
     <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin') }}">Back</a>
   </div>
 
-  <form method="post" class="row g-2 mt-2">
+  <form method="post" class="mt-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-12">
-      <label class="muted small">Title</label>
-      <input class="form-control" name="title" required>
+    <div class="form-section">
+      <label class="form-label" for="announcement-title">Title</label>
+      <input class="form-control" id="announcement-title" name="title" required>
     </div>
-    <div class="col-12">
-      <label class="muted small">Body</label>
-      <textarea class="form-control" name="body" rows="4" required></textarea>
+    <div class="form-section mt-2">
+      <label class="form-label" for="announcement-body">Body</label>
+      <textarea class="form-control" id="announcement-body" name="body" rows="4" required></textarea>
+      <div class="form-help">Use short, action-oriented updates. Include effective dates where needed.</div>
     </div>
-    <div class="col-12 d-grid">
-      <button class="btn btn-light">Post</button>
+    <div class="d-grid mt-2">
+      <button class="btn btn-light">Post Announcement</button>
     </div>
   </form>
 
   <div class="mt-3">
-    {% for a in anns %}
-      <div class="border-top pt-2 mt-2">
-        <div class="fw-semibold">{{ a.title }}</div>
-        <div class="muted small">{{ a.created_at.strftime("%Y-%m-%d %H:%M UTC") }}</div>
-        <div class="mt-1">{{ (a.body|e).replace("\n","<br>")|safe }}</div>
+    {% if anns %}
+      <div class="list-stack">
+        {% for a in anns %}
+          <div class="list-item">
+            <div class="list-title">{{ a.title }}</div>
+            <div class="list-meta mt-1">
+              <span>{{ a.created_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>
+            </div>
+            <div class="mt-2">{{ (a.body|e).replace("\n","<br>")|safe }}</div>
+          </div>
+        {% endfor %}
       </div>
-    {% endfor %}
+    {% else %}
+      <div class="empty-state">No announcements have been posted yet.</div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

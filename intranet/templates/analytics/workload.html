@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <h3 class="section-title">Workload</h3>
+  <div class="page-intro mt-1">Open task count and recent effort by team member.</div>
+
+  <div class="table-responsive mt-3">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Open Tasks</th>
+          <th>Hours (7d)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td>{{ r.user.full_name }} ({{ r.user.role }})</td>
+            <td>{{ r.open_tasks }}</td>
+            <td>{{ r.hours_7d }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="muted">No workload data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

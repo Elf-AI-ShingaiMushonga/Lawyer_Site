@@ -28,25 +28,33 @@
     <form method="post" class="row g-2 mt-2">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="col-12">
-        <label class="muted small">Title</label>
+        <label class="form-label">Task Title</label>
         <input class="form-control" name="title" placeholder="e.g. Draft founding affidavit" required>
+        <div class="form-help">Use a clear action statement so assignees understand expected output.</div>
       </div>
       <div class="col-md-6">
-        <label class="muted small">Due date (optional)</label>
+        <label class="form-label">Due Date (Optional)</label>
         <input class="form-control" name="due_date" type="date">
       </div>
       <div class="col-md-6">
-        <label class="muted small">Assign to (optional email)</label>
+        <label class="form-label">Assign To (Optional Email)</label>
         <input class="form-control" name="assigned_to" list="emails" placeholder="lawyer@firm.local">
         <datalist id="emails">
           {% for u in users %}
             <option value="{{ u.email }}">{{ u.full_name }}</option>
           {% endfor %}
         </datalist>
+        <div class="form-help">Start typing to pick a known team member email.</div>
       </div>
       <div class="col-12">
-        <label class="muted small">Description</label>
+        <label class="form-label">Description</label>
         <textarea class="form-control" name="description" rows="4" placeholder="Short notes..."></textarea>
+      </div>
+      <div class="col-12">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="requires_two_person_review" name="requires_two_person_review" value="1">
+          <label class="form-check-label muted small" for="requires_two_person_review">Require two-person approval</label>
+        </div>
       </div>
       <div class="col-12 d-grid">
         <button class="btn btn-light">Add task</button>
@@ -93,7 +101,8 @@
                   <div class="list-meta mt-1">
                     <span>Task #{{ t.id }}</span>
                     <span>{{ "Due " ~ t.due_date if t.due_date else "No due date" }}</span>
-                    <span>{{ "Assigned " ~ assigned_user.email if assigned_user else "Unassigned" }}</span>
+                    <span>{{ "Assigned " ~ assigned_user.full_name ~ " (" ~ assigned_user.email ~ ")" if assigned_user else "Unassigned" }}</span>
+                    {% if t.requires_two_person_review %}<span>Two-person review</span>{% endif %}
                   </div>
                   {% if t.description %}
                     <div class="muted small mt-1">{{ t.description }}</div>
@@ -101,20 +110,15 @@
                 </div>
                 <div class="list-actions">
                   <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
-                  <form method="post" action="{{ url_for('task_update', task_id=t.id) }}">
+                  <form method="post" action="{{ url_for('task_update', task_id=t.id) }}" class="d-flex gap-1 align-items-center">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="status" value="Todo">
-                    <button class="btn btn-sm {{ 'btn-light' if t.status == 'Todo' else 'btn-outline-light' }}">Todo</button>
-                  </form>
-                  <form method="post" action="{{ url_for('task_update', task_id=t.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="status" value="Doing">
-                    <button class="btn btn-sm {{ 'btn-light' if t.status == 'Doing' else 'btn-outline-light' }}">Doing</button>
-                  </form>
-                  <form method="post" action="{{ url_for('task_update', task_id=t.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="status" value="Done">
-                    <button class="btn btn-sm {{ 'btn-light' if t.status == 'Done' else 'btn-outline-light' }}">Done</button>
+                    <label class="visually-hidden" for="status-{{ t.id }}">Status</label>
+                    <select class="form-select form-select-sm" id="status-{{ t.id }}" name="status">
+                      <option value="Todo" {% if t.status == "Todo" %}selected{% endif %}>Todo</option>
+                      <option value="Doing" {% if t.status == "Doing" %}selected{% endif %}>Doing</option>
+                      <option value="Done" {% if t.status == "Done" %}selected{% endif %}>Done</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-light">Update</button>
                   </form>
                 </div>
               </div>

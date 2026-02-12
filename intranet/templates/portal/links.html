@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">Time-Limited Links</h3>
+      <div class="page-intro mt-1">Create secure, expiring links for matter summaries or specific document versions.</div>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
+  </div>
+
+  {% if last_link_url %}
+    <div class="alert alert-info mt-3">New link: <code>{{ last_link_url }}</code></div>
+  {% endif %}
+
+  <form method="post" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-section">
+      <div class="row g-2">
+        <div class="col-md-3">
+          <label class="form-label" for="portal-link-matter">Matter</label>
+          <select class="form-select" id="portal-link-matter" name="matter_id" required>
+            {% for m in matters %}
+              <option value="{{ m.id }}">{{ m.matter_no }} - {{ m.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="portal-link-document">Document Version (Optional)</label>
+          <select class="form-select" id="portal-link-document" name="document_version_id">
+            <option value="">Matter summary link</option>
+            {% for pair in versions %}
+              {% set v = pair[0] %}
+              {% set d = pair[1] %}
+              <option value="{{ v.id }}">Doc {{ d.id }} • v{{ v.version_no }} • {{ v.original_filename }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="portal-link-expiry">Expires In (Minutes)</label>
+          <input class="form-control" id="portal-link-expiry" type="number" name="expires_minutes" min="1" max="10080" value="60">
+        </div>
+        <div class="col-md-2 d-grid">
+          <button class="btn btn-light">Create Link</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h4 class="mb-1">Recent Links</h4>
+  <div class="table-responsive mt-2">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Matter</th>
+          <th>Document Version</th>
+          <th>Expires</th>
+          <th>Used</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tokens %}
+          {% set matter_label = 'Matter #' ~ (t.matter_id or '-') %}
+          {% if matter_map and t.matter_id and matter_map.get(t.matter_id) %}
+            {% set matter_label = matter_map[t.matter_id].matter_no ~ ' - ' ~ matter_map[t.matter_id].title %}
+          {% endif %}
+          {% set version_label = t.document_version_id or '-' %}
+          {% if version_map and t.document_version_id and version_map.get(t.document_version_id) %}
+            {% set version_pair = version_map[t.document_version_id] %}
+            {% set version_label = 'Doc ' ~ version_pair[1].id ~ ' • v' ~ version_pair[0].version_no ~ ' • ' ~ version_pair[0].original_filename %}
+          {% endif %}
+          <tr>
+            <td>{{ t.id }}</td>
+            <td>{{ matter_label }}</td>
+            <td>{{ version_label }}</td>
+            <td>{{ t.expires_at }}</td>
+            <td>{{ t.used_at or '-' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="muted">No links yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

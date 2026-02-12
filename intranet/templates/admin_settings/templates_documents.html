@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Document Template</h3>
+  <form method="post" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-section">
+      <div class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label" for="doc-template-name">Template Name</label>
+          <input class="form-control" id="doc-template-name" name="name" placeholder="Template name" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="doc-template-type">Type</label>
+          <input class="form-control" id="doc-template-type" name="template_type" placeholder="Type" value="general">
+        </div>
+        <div class="col-md-4">
+          <div class="form-check mt-4">
+            <input class="form-check-input" type="checkbox" name="requires_signature" value="1" id="requires_signature">
+            <label class="form-check-label" for="requires_signature">Requires signature</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="form-section mt-2">
+      <label class="form-label" for="doc-template-body">Template Body</label>
+      <textarea class="form-control" id="doc-template-body" name="body" rows="6" placeholder="Template body" required></textarea>
+    </div>
+    <div class="d-grid mt-2"><button class="btn btn-light">Save</button></div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h3 class="mb-1">Document Templates</h3>
+  <div class="table-responsive mt-2">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Signature</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in templates %}
+          <tr>
+            <td>{{ t.name }}</td>
+            <td>{{ t.template_type }}</td>
+            <td>{{ "Yes" if t.requires_signature else "No" }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="muted">No templates.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

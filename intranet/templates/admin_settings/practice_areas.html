@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Add Practice Area</h3>
+  <form method="post" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-section">
+      <div class="row g-2">
+        <div class="col-md-10">
+          <label class="form-label" for="practice-area-name">Practice Area</label>
+          <input class="form-control" id="practice-area-name" name="name" placeholder="Practice area" required>
+        </div>
+        <div class="col-md-2 d-grid">
+          <button class="btn btn-light">Add</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h3 class="mb-1">Practice Areas</h3>
+  <div class="table-responsive mt-2">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Active</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in areas %}
+          <tr>
+            <td>{{ a.name }}</td>
+            <td>{{ "Yes" if a.is_active else "No" }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="2" class="muted">No practice areas.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

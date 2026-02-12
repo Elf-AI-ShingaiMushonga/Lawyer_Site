@@ -17,19 +17,27 @@
       <h3 class="section-title">Matter Directory</h3>
       <div class="page-intro mt-1">Track each client engagement from intake to closure.</div>
     </div>
-    <a class="btn btn-light" href="{{ url_for('matter_create') }}">Create Matter</a>
+    <div class="d-flex gap-2">
+      <a class="btn btn-light" href="{{ url_for('matter_create') }}">Create Matter</a>
+      <a class="btn btn-outline-light" href="{{ url_for('matters_intake') }}">Intake Wizard</a>
+    </div>
   </div>
 
   <div class="why-note mt-3">
     Why this matters: this list gives leadership immediate insight into risk posture, budget state, and workload spread.
   </div>
 
-  <form class="row g-2 mt-3" method="get">
-    <div class="col-md-10">
-      <input class="form-control" name="q" placeholder="Search matter number, title, or client..." value="{{ q }}">
+  <form class="row g-2 mt-3 align-items-end" method="get">
+    <div class="col-lg-8">
+      <label class="form-label" for="matter-search">Find Matter</label>
+      <input class="form-control" id="matter-search" name="q" placeholder="Search matter number, title, or client..." value="{{ q }}">
+      <div class="form-help">Use partial client names, matter numbers, or keywords.</div>
     </div>
-    <div class="col-md-2 d-grid">
+    <div class="col-sm-6 col-lg-2 d-grid">
       <button class="btn btn-outline-light">Search</button>
+    </div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <a class="btn btn-outline-light" href="{{ url_for('matters') }}">Clear</a>
     </div>
   </form>
 
@@ -54,7 +62,7 @@
 
   <div class="mt-3">
     {% if q %}
-      <div class="mb-2 muted small">Search filter: "{{ q }}"</div>
+      <div class="mb-2 muted small">Showing filtered results for "{{ q }}".</div>
     {% endif %}
     {% if ms %}
       <div class="list-stack">

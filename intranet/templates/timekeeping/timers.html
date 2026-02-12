@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card p-3 mb-3"><h3>Start Timer</h3><form method="post" action="{{ url_for('time_timer_start') }}" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-6"><input class="form-control" name="matter_id" type="number" placeholder="Matter ID"></div><div class="col-md-6"><input class="form-control" name="task_id" type="number" placeholder="Task ID"></div><div class="col-12"><input class="form-control" name="label" placeholder="Label"></div><div class="col-12 d-grid"><button class="btn btn-light">Start</button></div></form></div>
+    <div class="card p-3"><h4>Switch Timer</h4><form method="post" action="{{ url_for('time_timer_switch') }}" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-6"><input class="form-control" name="matter_id" type="number" placeholder="Matter ID"></div><div class="col-md-6"><input class="form-control" name="task_id" type="number" placeholder="Task ID"></div><div class="col-12"><input class="form-control" name="label" placeholder="Label"></div><div class="col-12 d-grid"><button class="btn btn-outline-light">Switch</button></div></form></div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card p-3"><h3>Your Timers</h3><table class="table"><thead><tr><th>ID</th><th>Matter</th><th>Task</th><th>Status</th><th>Elapsed (s)</th><th></th></tr></thead><tbody>{% for t in timers %}<tr><td>{{ t.id }}</td><td>{{ t.matter_id or '-' }}</td><td>{{ t.task_id or '-' }}</td><td>{{ t.status }}</td><td>{{ t.elapsed_seconds }}</td><td>{% if t.status == 'running' %}<form method="post" action="{{ url_for('time_timer_pause') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="timer_id" value="{{ t.id }}"><button class="btn btn-sm btn-outline-light">Pause</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="6" class="muted">No timers.</td></tr>{% endfor %}</tbody></table></div>
+  </div>
+</div>
+{% endblock %}

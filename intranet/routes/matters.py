@@ -20,6 +20,7 @@ from ..helpers import (
     sha256_file,
 )
 from ..models import DocumentFile, Matter, MatterActivity, MatterMember, MatterTimelineEvent, Task, User
+from ..policies import enforce_data_residency, visible_matter_ids
 from ..templates import page
 
 RISK_LEVELS = {"Low", "Medium", "High", "Critical"}
@@ -36,10 +37,11 @@ def register_matter_routes(app):
         q = normalize_query(request.args.get("q", ""))
         base = Matter.query
         if not is_admin():
-            base = (
-                base.join(MatterMember, MatterMember.matter_id == Matter.id)
-                .filter(MatterMember.user_id == current_user.id)
-            )
+            ids = visible_matter_ids()
+            if not ids:
+                base = base.filter(Matter.id == -1)
+            else:
+                base = base.filter(Matter.id.in_(ids))
         if q:
             like = f"%{q}%"
             base = base.filter((Matter.matter_no.ilike(like)) | (Matter.title.ilike(like)) | (Matter.client_name.ilike(like)))
@@ -359,6 +361,12 @@ def register_matter_routes(app):
                     flash("Assigned-to user not found.", "warning")
                     return redirect(url_for("matter_tasks", matter_id=matter_id))
                 assigned_to = u.id
+            requires_two_person_review = (request.form.get("requires_two_person_review") or "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
 
             t = Task(
                 matter_id=matter_id,
@@ -367,6 +375,7 @@ def register_matter_routes(app):
                 due_date=due_date,
                 assigned_to=assigned_to,
                 created_by=current_user.id,
+                requires_two_person_review=requires_two_person_review,
             )
             db.session.add(t)
             db.session.commit()
@@ -418,6 +427,7 @@ def register_matter_routes(app):
             if not allowed_doc(f.filename):
                 flash("File type not allowed.", "warning")
                 return redirect(url_for("matter_documents", matter_id=matter_id))
+            enforce_data_residency("primary_storage")
 
             safe = secure_filename(f.filename)
             if not safe:
@@ -499,6 +509,7 @@ def register_matter_routes(app):
             abort(404)
         if not can_access_matter(d.matter_id):
             abort(403)
+        enforce_data_residency("exports")
         file_path = os.path.join(app.config["UPLOAD_DIR"], d.stored_filename)
         if not os.path.isfile(file_path):
             abort(404)

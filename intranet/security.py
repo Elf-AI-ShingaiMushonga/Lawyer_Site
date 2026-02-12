@@ -1,12 +1,65 @@
 from __future__ import annotations
 
+from flask import flash, redirect, request, session, url_for
+from flask_login import current_user, logout_user
+
 from .extensions import db
 from sqlalchemy.exc import OperationalError
 
+from .helpers import audit, validate_user_session
 from .templates import page
+
+MFA_REQUIRED_ROLES = {"admin", "lawyer", "paralegal", "staff"}
+MFA_ENROLLMENT_ALLOWLIST = {
+    "auth_mfa_setup",
+    "auth_mfa_backup_codes",
+    "auth_mfa_verify",
+    "auth_sessions",
+    "auth_session_revoke",
+    "logout",
+    "static",
+}
 
 
 def register_security_handlers(app):
+    @app.before_request
+    def enforce_mfa_enrollment():
+        if not current_user.is_authenticated:
+            return None
+        if getattr(current_user, "role", "") not in MFA_REQUIRED_ROLES:
+            return None
+        if bool(getattr(current_user, "mfa_enabled", False)):
+            return None
+        endpoint = request.endpoint or ""
+        if endpoint in MFA_ENROLLMENT_ALLOWLIST:
+            return None
+        flash("MFA enrollment is required before accessing other modules.", "warning")
+        return redirect(url_for("auth_mfa_setup"))
+
+    @app.before_request
+    def enforce_active_session():
+        if not current_user.is_authenticated:
+            return None
+        endpoint = request.endpoint or ""
+        if endpoint in {"logout", "static"}:
+            return None
+
+        ttl = int(app.config.get("SESSION_TTL_MINUTES", 8 * 60))
+        ok, reason = validate_user_session(ttl_minutes=ttl)
+        if ok:
+            return None
+
+        if reason in {"revoked", "expired"}:
+            audit("session_invalidated", "User", current_user.id, {"reason": reason})
+        session.pop("_session_token", None)
+        session.pop("mfa_verified_at", None)
+        logout_user()
+        if reason == "revoked":
+            flash("Your session was revoked. Please sign in again.", "warning")
+        else:
+            flash("Your session expired due to inactivity. Please sign in again.", "warning")
+        return redirect(url_for("login"))
+
     @app.after_request
     def set_security_headers(response):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")

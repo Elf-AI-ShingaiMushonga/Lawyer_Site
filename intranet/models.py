@@ -8,6 +8,11 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .extensions import db
 
 
+# ---------------------------------------------------------------------------
+# Core and Existing Models
+# ---------------------------------------------------------------------------
+
+
 class AuditLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
@@ -29,6 +34,14 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     last_login_at = db.Column(db.DateTime, nullable=True)
+
+    # Security hardening
+    mfa_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    mfa_secret = db.Column(db.String(64), nullable=True)
+    failed_login_attempts = db.Column(db.Integer, nullable=False, default=0)
+    locked_until = db.Column(db.DateTime, nullable=True)
+    last_failed_login_at = db.Column(db.DateTime, nullable=True)
+    password_changed_at = db.Column(db.DateTime, nullable=True)
 
     def set_password(self, pw: str) -> None:
         self.password_hash = generate_password_hash(pw)
@@ -65,6 +78,20 @@ class Matter(db.Model):
     last_updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
 
+    # Expanded matter metadata
+    court_name = db.Column(db.String(255), nullable=True)
+    judge_name = db.Column(db.String(255), nullable=True)
+    jurisdiction = db.Column(db.String(80), nullable=True)
+    stage = db.Column(db.String(80), nullable=True)
+    practice_area = db.Column(db.String(120), nullable=True)
+    case_type = db.Column(db.String(120), nullable=True)
+    risk_taxonomy = db.Column(db.String(120), nullable=True)
+    archival_status = db.Column(db.String(40), nullable=True, default="active")
+    archival_due_at = db.Column(db.DateTime, nullable=True)
+    closing_checklist_json = db.Column(db.Text, nullable=True)
+    originating_partner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    supervising_partner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
 
 class MatterMember(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -84,6 +111,16 @@ class Task(db.Model):
     assigned_to = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+    # Workflow expansion
+    priority = db.Column(db.String(20), nullable=False, default="Medium")
+    sla_hours = db.Column(db.Integer, nullable=True)
+    approval_state = db.Column(db.String(20), nullable=False, default="draft")
+    requires_two_person_review = db.Column(db.Boolean, nullable=False, default=False)
+    recurrence_rule = db.Column(db.String(120), nullable=True)
+    approved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    locked_at = db.Column(db.DateTime, nullable=True)
 
 
 class MatterTimelineEvent(db.Model):
@@ -157,3 +194,1032 @@ class GovernanceIncident(db.Model):
     closed_at = db.Column(db.DateTime, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Identity, Sessions, and SSO-like Federation
+# ---------------------------------------------------------------------------
+
+
+class UserSession(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    session_token_hash = db.Column(db.String(128), nullable=False, unique=True)
+    ip = db.Column(db.String(64), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    last_seen_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+
+
+class TrustedDevice(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    device_name = db.Column(db.String(255), nullable=False)
+    fingerprint_hash = db.Column(db.String(128), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    last_seen_at = db.Column(db.DateTime, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+
+class UserMFABackupCode(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    code_hash = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    used_at = db.Column(db.DateTime, nullable=True)
+
+
+class SSOApplication(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    client_id = db.Column(db.String(80), nullable=False, unique=True, index=True)
+    client_secret_hash = db.Column(db.String(255), nullable=False)
+    redirect_uri = db.Column(db.String(500), nullable=False)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class SSOAuthorizationCode(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    app_id = db.Column(db.Integer, db.ForeignKey("sso_application.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    code_hash = db.Column(db.String(128), nullable=False, unique=True)
+    scope = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    consumed_at = db.Column(db.DateTime, nullable=True)
+
+
+class SSOToken(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    app_id = db.Column(db.Integer, db.ForeignKey("sso_application.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    access_token_hash = db.Column(db.String(128), nullable=False, unique=True)
+    refresh_token_hash = db.Column(db.String(128), nullable=True)
+    scope = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Authorization, Ethical Walls, Governance Controls
+# ---------------------------------------------------------------------------
+
+
+class PermissionGrant(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    role = db.Column(db.String(40), nullable=False, index=True)
+    resource = db.Column(db.String(80), nullable=False, index=True)
+    action = db.Column(db.String(40), nullable=False, index=True)
+    is_allowed = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class EthicalWall(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(180), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class EthicalWallRule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    wall_id = db.Column(db.Integer, db.ForeignKey("ethical_wall.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    is_deny = db.Column(db.Boolean, nullable=False, default=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("wall_id", "user_id", name="uq_ethical_wall_user_rule"),)
+
+
+class EthicalWallMatter(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    wall_id = db.Column(db.Integer, db.ForeignKey("ethical_wall.id"), nullable=False, index=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("wall_id", "matter_id", name="uq_ethical_wall_matter"),)
+
+
+class LegalHold(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    reason = db.Column(db.Text, nullable=False)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    released_at = db.Column(db.DateTime, nullable=True)
+
+
+class RetentionPolicy(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(180), nullable=False)
+    matter_type = db.Column(db.String(120), nullable=True)
+    jurisdiction = db.Column(db.String(80), nullable=True)
+    retain_days = db.Column(db.Integer, nullable=False)
+    archive_after_days = db.Column(db.Integer, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class DataResidencyPolicy(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(180), nullable=False)
+    data_class = db.Column(db.String(80), nullable=False)
+    region_code = db.Column(db.String(40), nullable=False)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class SuspiciousActivityAlert(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    alert_type = db.Column(db.String(80), nullable=False)
+    severity = db.Column(db.String(40), nullable=False, default="medium")
+    status = db.Column(db.String(40), nullable=False, default="open")
+    details_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    event_type = db.Column(db.String(80), nullable=False)
+    actor_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    subject_ref = db.Column(db.String(255), nullable=False)
+    channel = db.Column(db.String(40), nullable=False, default="in_app")
+    status = db.Column(db.String(40), nullable=False, default="queued")
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    delivered_at = db.Column(db.DateTime, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Admin Configuration and Templates
+# ---------------------------------------------------------------------------
+
+
+class FirmSetting(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    setting_key = db.Column(db.String(120), nullable=False, unique=True)
+    setting_value_json = db.Column(db.Text, nullable=False, default="{}")
+    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+
+class Office(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True)
+    jurisdiction = db.Column(db.String(80), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class PracticeArea(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class TimekeeperRole(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), nullable=False, unique=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+
+class MatterTemplate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True)
+    practice_area = db.Column(db.String(120), nullable=True)
+    default_stage = db.Column(db.String(80), nullable=True)
+    default_risk_level = db.Column(db.String(40), nullable=True)
+    checklist_json = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class TaskTemplate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True)
+    matter_type = db.Column(db.String(120), nullable=True)
+    priority = db.Column(db.String(20), nullable=False, default="Medium")
+    sla_hours = db.Column(db.Integer, nullable=True)
+    recurrence_rule = db.Column(db.String(120), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class TaskTemplateItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    task_template_id = db.Column(db.Integer, db.ForeignKey("task_template.id"), nullable=False, index=True)
+    title = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    position = db.Column(db.Integer, nullable=False, default=1)
+
+
+class DocumentTemplate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True)
+    template_type = db.Column(db.String(80), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    requires_signature = db.Column(db.Boolean, nullable=False, default=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Matter Parties, Notes, and Stage Tracking
+# ---------------------------------------------------------------------------
+
+
+class Entity(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False, index=True)
+    entity_type = db.Column(db.String(40), nullable=False, default="organization")
+    email = db.Column(db.String(255), nullable=True)
+    phone = db.Column(db.String(80), nullable=True)
+    metadata_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class EntityRelationship(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    src_entity_id = db.Column(db.Integer, db.ForeignKey("entity.id"), nullable=False, index=True)
+    dst_entity_id = db.Column(db.Integer, db.ForeignKey("entity.id"), nullable=False, index=True)
+    relationship_type = db.Column(db.String(80), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class MatterParty(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    entity_id = db.Column(db.Integer, db.ForeignKey("entity.id"), nullable=False, index=True)
+    party_role = db.Column(db.String(80), nullable=False)
+    is_primary = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class MatterNote(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    body = db.Column(db.Text, nullable=False)
+    tags = db.Column(db.String(255), nullable=True)
+    privilege_label = db.Column(db.String(80), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class MatterNoteACL(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    note_id = db.Column(db.Integer, db.ForeignKey("matter_note.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    can_read = db.Column(db.Boolean, nullable=False, default=True)
+    can_edit = db.Column(db.Boolean, nullable=False, default=False)
+    __table_args__ = (db.UniqueConstraint("note_id", "user_id", name="uq_note_acl_user"),)
+
+
+class MatterStageHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    from_stage = db.Column(db.String(80), nullable=True)
+    to_stage = db.Column(db.String(80), nullable=False)
+    reason = db.Column(db.Text, nullable=True)
+    changed_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    changed_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class MatterClosingChecklistItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    item_text = db.Column(db.String(255), nullable=False)
+    is_done = db.Column(db.Boolean, nullable=False, default=False)
+    done_at = db.Column(db.DateTime, nullable=True)
+    done_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Docketing and Calendaring
+# ---------------------------------------------------------------------------
+
+
+class HolidayCalendar(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    jurisdiction = db.Column(db.String(80), nullable=True)
+    office_id = db.Column(db.Integer, db.ForeignKey("office.id"), nullable=True)
+    holiday_date = db.Column(db.Date, nullable=False, index=True)
+    label = db.Column(db.String(120), nullable=False)
+
+
+class DeadlineRule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True, index=True)
+    jurisdiction = db.Column(db.String(80), nullable=True)
+    office_id = db.Column(db.Integer, db.ForeignKey("office.id"), nullable=True)
+    trigger_type = db.Column(db.String(80), nullable=False)
+    offset_days = db.Column(db.Integer, nullable=False, default=0)
+    business_day_adjust = db.Column(db.Boolean, nullable=False, default=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class Deadline(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("task.id"), nullable=True, index=True)
+    title = db.Column(db.String(255), nullable=False)
+    due_at = db.Column(db.Date, nullable=False, index=True)
+    is_critical = db.Column(db.Boolean, nullable=False, default=False)
+    source_rule_id = db.Column(db.Integer, db.ForeignKey("deadline_rule.id"), nullable=True)
+    calculation_trace = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(40), nullable=False, default="open")
+    acknowledged_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    acknowledged_at = db.Column(db.DateTime, nullable=True)
+    override_reason = db.Column(db.Text, nullable=True)
+    overridden_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    overridden_at = db.Column(db.DateTime, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Workflow Extensions
+# ---------------------------------------------------------------------------
+
+
+class TaskDependency(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("task.id"), nullable=False, index=True)
+    depends_on_task_id = db.Column(db.Integer, db.ForeignKey("task.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("task_id", "depends_on_task_id", name="uq_task_dependency"),)
+
+
+class TaskChecklistItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("task.id"), nullable=False, index=True)
+    item_text = db.Column(db.String(255), nullable=False)
+    is_done = db.Column(db.Boolean, nullable=False, default=False)
+    position = db.Column(db.Integer, nullable=False, default=1)
+
+
+class TaskApproval(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("task.id"), nullable=False, index=True)
+    requested_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    approver_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    state = db.Column(db.String(20), nullable=False, default="pending")
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    decided_at = db.Column(db.DateTime, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# DMS Normalized Records
+# ---------------------------------------------------------------------------
+
+
+class DocumentRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    title = db.Column(db.String(255), nullable=False)
+    document_type = db.Column(db.String(80), nullable=True)
+    confidentiality = db.Column(db.String(80), nullable=True)
+    privilege_label = db.Column(db.String(80), nullable=True)
+    retention_category = db.Column(db.String(80), nullable=True)
+    legal_hold = db.Column(db.Boolean, nullable=False, default=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class DocumentVersion(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    document_id = db.Column(db.Integer, db.ForeignKey("document_record.id"), nullable=False, index=True)
+    document_file_id = db.Column(db.Integer, db.ForeignKey("document_file.id"), nullable=True, index=True)
+    version_no = db.Column(db.Integer, nullable=False)
+    original_filename = db.Column(db.String(255), nullable=False)
+    stored_filename = db.Column(db.String(255), nullable=False)
+    sha256 = db.Column(db.String(64), nullable=False)
+    hash_chain_prev = db.Column(db.String(64), nullable=True)
+    hash_chain_current = db.Column(db.String(64), nullable=True)
+    state = db.Column(db.String(20), nullable=False, default="draft")
+    notes = db.Column(db.Text, nullable=True)
+    filed_reference = db.Column(db.String(120), nullable=True)
+    is_immutable = db.Column(db.Boolean, nullable=False, default=False)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("document_id", "version_no", name="uq_document_version_no"),)
+
+
+class DocumentLock(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    document_id = db.Column(db.Integer, db.ForeignKey("document_record.id"), nullable=False, index=True)
+    locked_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    lock_reason = db.Column(db.String(255), nullable=True)
+    locked_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    released_at = db.Column(db.DateTime, nullable=True)
+
+
+class DocumentOCRText(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    document_version_id = db.Column(db.Integer, db.ForeignKey("document_version.id"), nullable=False, index=True)
+    extracted_text = db.Column(db.Text, nullable=False)
+    extracted_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class SavedSearch(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    query_json = db.Column(db.Text, nullable=False)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class ProductionSet(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    name = db.Column(db.String(180), nullable=False)
+    confidentiality_designation = db.Column(db.String(80), nullable=True)
+    watermark_text = db.Column(db.String(120), nullable=True)
+    bates_prefix = db.Column(db.String(20), nullable=True)
+    bates_start = db.Column(db.Integer, nullable=True)
+    bates_end = db.Column(db.Integer, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class ProductionItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    production_set_id = db.Column(db.Integer, db.ForeignKey("production_set.id"), nullable=False, index=True)
+    document_version_id = db.Column(db.Integer, db.ForeignKey("document_version.id"), nullable=False, index=True)
+    bates_number = db.Column(db.String(40), nullable=True, index=True)
+
+
+class BatesRange(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    production_set_id = db.Column(db.Integer, db.ForeignKey("production_set.id"), nullable=False, index=True)
+    prefix = db.Column(db.String(20), nullable=False)
+    start_no = db.Column(db.Integer, nullable=False)
+    end_no = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class EmailCapture(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    message_id_hash = db.Column(db.String(128), nullable=False, index=True)
+    dedup_key = db.Column(db.String(128), nullable=True, index=True)
+    subject = db.Column(db.String(255), nullable=True)
+    sender = db.Column(db.String(255), nullable=True)
+    received_at = db.Column(db.DateTime, nullable=True)
+    stored_filename = db.Column(db.String(255), nullable=True)
+    attachment_hash = db.Column(db.String(64), nullable=True)
+    captured_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    captured_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Timekeeping
+# ---------------------------------------------------------------------------
+
+
+class TimeRoundingPolicy(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_name = db.Column(db.String(255), nullable=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True)
+    increment_hours = db.Column(db.Float, nullable=False, default=0.1)
+    min_narrative_length = db.Column(db.Integer, nullable=False, default=20)
+    require_activity_code = db.Column(db.Boolean, nullable=False, default=False)
+    daily_hour_cap = db.Column(db.Float, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+
+class TimeTimer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True, index=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("task.id"), nullable=True, index=True)
+    label = db.Column(db.String(255), nullable=True)
+    started_at = db.Column(db.DateTime, nullable=True)
+    paused_at = db.Column(db.DateTime, nullable=True)
+    elapsed_seconds = db.Column(db.Integer, nullable=False, default=0)
+    status = db.Column(db.String(20), nullable=False, default="paused")
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class TimeEntry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("task.id"), nullable=True, index=True)
+    start_at = db.Column(db.DateTime, nullable=False)
+    end_at = db.Column(db.DateTime, nullable=True)
+    hours = db.Column(db.Float, nullable=False, default=0.0)
+    rounded_hours = db.Column(db.Float, nullable=False, default=0.0)
+    narrative = db.Column(db.Text, nullable=True)
+    task_code = db.Column(db.String(40), nullable=True)
+    activity_code = db.Column(db.String(40), nullable=True)
+    is_billable = db.Column(db.Boolean, nullable=False, default=True)
+    status = db.Column(db.String(20), nullable=False, default="draft")
+    approved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    locked_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+    matter = db.relationship("Matter", foreign_keys=[matter_id])
+
+
+class TimeValidationEvent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    time_entry_id = db.Column(db.Integer, db.ForeignKey("time_entry.id"), nullable=False, index=True)
+    event_type = db.Column(db.String(80), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Billing and Invoicing
+# ---------------------------------------------------------------------------
+
+
+class RateCard(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=True)
+    client_name = db.Column(db.String(255), nullable=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True, index=True)
+    timekeeper_role_id = db.Column(db.Integer, db.ForeignKey("timekeeper_role.id"), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
+    currency = db.Column(db.String(8), nullable=False, default="ZAR")
+    rate_per_hour = db.Column(db.Float, nullable=False, default=0.0)
+    effective_from = db.Column(db.Date, nullable=True)
+    effective_to = db.Column(db.Date, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+
+class FeeArrangement(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    arrangement_type = db.Column(db.String(40), nullable=False, default="hourly")
+    fixed_amount = db.Column(db.Float, nullable=True)
+    cap_amount = db.Column(db.Float, nullable=True)
+    blended_rate = db.Column(db.Float, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+
+class TaxRule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    jurisdiction = db.Column(db.String(80), nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    rate_percent = db.Column(db.Float, nullable=False, default=0.0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+
+class Invoice(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    client_name = db.Column(db.String(255), nullable=False)
+    period_start = db.Column(db.Date, nullable=False)
+    period_end = db.Column(db.Date, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="draft")
+    subtotal = db.Column(db.Float, nullable=False, default=0.0)
+    tax_total = db.Column(db.Float, nullable=False, default=0.0)
+    total = db.Column(db.Float, nullable=False, default=0.0)
+    approved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    pdf_path = db.Column(db.String(255), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class InvoiceLine(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id"), nullable=False, index=True)
+    time_entry_id = db.Column(db.Integer, db.ForeignKey("time_entry.id"), nullable=True, index=True)
+    expense_id = db.Column(db.Integer, db.ForeignKey("expense_entry.id"), nullable=True, index=True)
+    description = db.Column(db.String(255), nullable=False)
+    hours = db.Column(db.Float, nullable=False, default=0.0)
+    rate = db.Column(db.Float, nullable=False, default=0.0)
+    amount = db.Column(db.Float, nullable=False, default=0.0)
+    tax_amount = db.Column(db.Float, nullable=False, default=0.0)
+    task_code = db.Column(db.String(40), nullable=True)
+    activity_code = db.Column(db.String(40), nullable=True)
+
+
+class InvoiceAdjustment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id"), nullable=False, index=True)
+    adjustment_type = db.Column(db.String(40), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class LEDESExport(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id"), nullable=False, index=True)
+    variant = db.Column(db.String(40), nullable=False, default="1998B")
+    file_path = db.Column(db.String(255), nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class ARSnapshot(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    as_of_date = db.Column(db.Date, nullable=False, index=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id"), nullable=False, index=True)
+    outstanding_amount = db.Column(db.Float, nullable=False, default=0.0)
+    aging_bucket = db.Column(db.String(40), nullable=False)
+    collection_notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class PaymentAllocation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id"), nullable=False, index=True)
+    amount = db.Column(db.Float, nullable=False)
+    method = db.Column(db.String(40), nullable=True)
+    reference = db.Column(db.String(120), nullable=True)
+    allocated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Expenses
+# ---------------------------------------------------------------------------
+
+
+class ExpenseEntry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    amount = db.Column(db.Float, nullable=False)
+    currency = db.Column(db.String(8), nullable=False, default="ZAR")
+    category = db.Column(db.String(80), nullable=False, default="General")
+    description = db.Column(db.Text, nullable=True)
+    incurred_on = db.Column(db.Date, nullable=False)
+    is_reimbursable = db.Column(db.Boolean, nullable=False, default=True)
+    status = db.Column(db.String(40), nullable=False, default="draft")
+    approved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    receipt_filename = db.Column(db.String(255), nullable=True)
+    receipt_sha256 = db.Column(db.String(64), nullable=True)
+    receipt_ocr_text = db.Column(db.Text, nullable=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id"), nullable=True, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Trust Accounting
+# ---------------------------------------------------------------------------
+
+
+class TrustAccount(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(180), nullable=False)
+    bank_name = db.Column(db.String(180), nullable=True)
+    account_no_last4 = db.Column(db.String(4), nullable=True)
+    jurisdiction = db.Column(db.String(80), nullable=True)
+    currency = db.Column(db.String(8), nullable=False, default="ZAR")
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class TrustClientLedger(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    trust_account_id = db.Column(db.Integer, db.ForeignKey("trust_account.id"), nullable=False, index=True)
+    client_name = db.Column(db.String(255), nullable=False)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True, index=True)
+    current_balance = db.Column(db.Float, nullable=False, default=0.0)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (db.CheckConstraint("current_balance >= 0", name="ck_trust_client_balance_nonnegative"),)
+
+
+class TrustLedgerEntry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    trust_account_id = db.Column(db.Integer, db.ForeignKey("trust_account.id"), nullable=False, index=True)
+    client_ledger_id = db.Column(db.Integer, db.ForeignKey("trust_client_ledger.id"), nullable=False, index=True)
+    entry_type = db.Column(db.String(40), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    currency = db.Column(db.String(8), nullable=False, default="ZAR")
+    description = db.Column(db.Text, nullable=True)
+    supporting_document_id = db.Column(db.Integer, db.ForeignKey("document_version.id"), nullable=True)
+    reversal_of_entry_id = db.Column(db.Integer, db.ForeignKey("trust_ledger_entry.id"), nullable=True)
+    immutable_ref = db.Column(db.String(120), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (
+        db.CheckConstraint("amount > 0", name="ck_trust_ledger_amount_positive"),
+        db.CheckConstraint(
+            "entry_type IN ('deposit', 'disbursement', 'transfer', 'reversal')",
+            name="ck_trust_ledger_entry_type",
+        ),
+    )
+
+
+class TrustReconciliationRun(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    trust_account_id = db.Column(db.Integer, db.ForeignKey("trust_account.id"), nullable=False, index=True)
+    period_start = db.Column(db.DateTime, nullable=False)
+    period_end = db.Column(db.DateTime, nullable=False)
+    bank_closing_balance = db.Column(db.Float, nullable=False, default=0.0)
+    ledger_closing_balance = db.Column(db.Float, nullable=False, default=0.0)
+    client_subledger_total = db.Column(db.Float, nullable=False, default=0.0)
+    status = db.Column(db.String(40), nullable=False, default="draft")
+    exception_notes = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class TrustThresholdAlert(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_ledger_id = db.Column(db.Integer, db.ForeignKey("trust_client_ledger.id"), nullable=False, index=True)
+    threshold_amount = db.Column(db.Float, nullable=False)
+    current_balance = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(40), nullable=False, default="open")
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+
+class TrustApprovalRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    action_type = db.Column(db.String(40), nullable=False)
+    payload_json = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(40), nullable=False, default="pending")
+    requested_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    approved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    requested_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    executed_at = db.Column(db.DateTime, nullable=True)
+    executed_entry_id = db.Column(db.Integer, db.ForeignKey("trust_ledger_entry.id"), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# CRM and Intake
+# ---------------------------------------------------------------------------
+
+
+class CRMLead(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    full_name = db.Column(db.String(255), nullable=False)
+    organization = db.Column(db.String(255), nullable=True)
+    email = db.Column(db.String(255), nullable=True)
+    phone = db.Column(db.String(80), nullable=True)
+    source = db.Column(db.String(80), nullable=True)
+    stage = db.Column(db.String(40), nullable=False, default="new")
+    notes = db.Column(db.Text, nullable=True)
+    assigned_to = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class CRMFollowUp(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    lead_id = db.Column(db.Integer, db.ForeignKey("crm_lead.id"), nullable=False, index=True)
+    due_at = db.Column(db.DateTime, nullable=False)
+    note = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(40), nullable=False, default="open")
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class IntakeForm(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    lead_id = db.Column(db.Integer, db.ForeignKey("crm_lead.id"), nullable=True, index=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True, index=True)
+    data_json = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class ConflictCheck(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    intake_form_id = db.Column(db.Integer, db.ForeignKey("intake_form.id"), nullable=False, index=True)
+    status = db.Column(db.String(40), nullable=False, default="pending")
+    result_json = db.Column(db.Text, nullable=True)
+    override_required = db.Column(db.Boolean, nullable=False, default=False)
+    overridden_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    override_reason = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class EngagementLetter(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    template_name = db.Column(db.String(120), nullable=True)
+    content = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(40), nullable=False, default="draft")
+    signed_by = db.Column(db.String(255), nullable=True)
+    signed_at = db.Column(db.DateTime, nullable=True)
+    signed_ip = db.Column(db.String(64), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Client Portal
+# ---------------------------------------------------------------------------
+
+
+class PortalUser(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    full_name = db.Column(db.String(255), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    mfa_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    mfa_secret = db.Column(db.String(64), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    last_login_at = db.Column(db.DateTime, nullable=True)
+
+    def set_password(self, pw: str) -> None:
+        self.password_hash = generate_password_hash(pw)
+
+    def check_password(self, pw: str) -> bool:
+        return check_password_hash(self.password_hash, pw)
+
+
+class PortalMatterAccess(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    portal_user_id = db.Column(db.Integer, db.ForeignKey("portal_user.id"), nullable=False, index=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    visibility_level = db.Column(db.String(40), nullable=False, default="summary_only")
+    granted_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    granted_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    __table_args__ = (db.UniqueConstraint("portal_user_id", "matter_id", name="uq_portal_user_matter_access"),)
+
+
+class PortalMessageThread(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    subject = db.Column(db.String(255), nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_by_portal_user_id = db.Column(db.Integer, db.ForeignKey("portal_user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class PortalMessage(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    thread_id = db.Column(db.Integer, db.ForeignKey("portal_message_thread.id"), nullable=False, index=True)
+    body = db.Column(db.Text, nullable=False)
+    from_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    from_portal_user_id = db.Column(db.Integer, db.ForeignKey("portal_user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class PortalUpload(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    portal_user_id = db.Column(db.Integer, db.ForeignKey("portal_user.id"), nullable=False, index=True)
+    filename = db.Column(db.String(255), nullable=False)
+    stored_filename = db.Column(db.String(255), nullable=False)
+    sha256 = db.Column(db.String(64), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class PortalInvoiceView(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    portal_user_id = db.Column(db.Integer, db.ForeignKey("portal_user.id"), nullable=False, index=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id"), nullable=False, index=True)
+    last_viewed_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class PortalPaymentReceipt(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id"), nullable=False, index=True)
+    portal_user_id = db.Column(db.Integer, db.ForeignKey("portal_user.id"), nullable=False, index=True)
+    amount = db.Column(db.Float, nullable=False)
+    currency = db.Column(db.String(8), nullable=False, default="ZAR")
+    status = db.Column(db.String(40), nullable=False, default="recorded")
+    reference = db.Column(db.String(120), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class PortalLinkToken(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    portal_user_id = db.Column(db.Integer, db.ForeignKey("portal_user.id"), nullable=False, index=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True, index=True)
+    document_version_id = db.Column(db.Integer, db.ForeignKey("document_version.id"), nullable=True, index=True)
+    token_hash = db.Column(db.String(128), nullable=False, unique=True)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    used_at = db.Column(db.DateTime, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Analytics and Capacity
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsMetricSnapshot(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    as_of_date = db.Column(db.Date, nullable=False, index=True)
+    metric_key = db.Column(db.String(80), nullable=False, index=True)
+    scope_type = db.Column(db.String(40), nullable=False, default="firm")
+    scope_id = db.Column(db.Integer, nullable=True)
+    value_num = db.Column(db.Float, nullable=True)
+    value_text = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class WorkloadForecast(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    as_of_date = db.Column(db.Date, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    predicted_hours = db.Column(db.Float, nullable=False)
+    confidence = db.Column(db.Float, nullable=True)
+    features_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class BurnoutSignal(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    as_of_date = db.Column(db.Date, nullable=False, index=True)
+    score = db.Column(db.Float, nullable=False)
+    reason = db.Column(db.String(255), nullable=True)
+    status = db.Column(db.String(40), nullable=False, default="open")
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Job Queue and Operations
+# ---------------------------------------------------------------------------
+
+
+class JobQueue(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    job_type = db.Column(db.String(80), nullable=False, index=True)
+    payload_json = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="queued", index=True)
+    worker_id = db.Column(db.String(80), nullable=True)
+    lease_until = db.Column(db.DateTime, nullable=True)
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    max_attempts = db.Column(db.Integer, nullable=False, default=5)
+    last_error = db.Column(db.Text, nullable=True)
+    run_after = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    started_at = db.Column(db.DateTime, nullable=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
+
+
+class JobHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey("job_queue.id"), nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False)
+    message = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+class ScheduledJob(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    job_type = db.Column(db.String(80), nullable=False, index=True)
+    default_payload = db.Column(db.JSON, nullable=True)
+    interval_minutes = db.Column(db.Integer, nullable=False, default=60)
+    next_run_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+
+class BackupRun(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    started_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    finished_at = db.Column(db.DateTime, nullable=True)
+    status = db.Column(db.String(40), nullable=False, default="running")
+    location = db.Column(db.String(255), nullable=True)
+    details_json = db.Column(db.Text, nullable=True)
+    triggered_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+
+class RestoreVerification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    backup_run_id = db.Column(db.Integer, db.ForeignKey("backup_run.id"), nullable=True)
+    verified_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    status = db.Column(db.String(40), nullable=False, default="passed")
+    notes = db.Column(db.Text, nullable=True)
+    verified_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+
+class DRTarget(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True)
+    rpo_minutes_target = db.Column(db.Integer, nullable=False)
+    rto_minutes_target = db.Column(db.Integer, nullable=False)
+    last_actual_rpo_minutes = db.Column(db.Integer, nullable=True)
+    last_actual_rto_minutes = db.Column(db.Integer, nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)

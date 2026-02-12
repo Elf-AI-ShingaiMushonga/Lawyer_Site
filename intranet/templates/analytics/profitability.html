@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <h3 class="section-title">Matter Profitability</h3>
+  <div class="page-intro mt-1">Billed, collected, and realization at matter level.</div>
+
+  <div class="table-responsive mt-3">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Matter</th>
+          <th>Billed</th>
+          <th>Collected</th>
+          <th>Realization</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td>{{ r.matter.matter_no }} - {{ r.matter.title }}</td>
+            <td>{{ r.billed }}</td>
+            <td>{{ r.collected }}</td>
+            <td>{{ (r.realization * 100)|round(2) }}%</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="muted">No data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

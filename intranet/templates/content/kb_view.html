@@ -9,7 +9,7 @@
 
   <div class="mt-3">
     <h5>Content</h5>
-    <div class="card p-3" style="background: rgba(0,0,0,.15);">
+    <div class="form-section">
       {{ (a.body|e).replace("\n","<br>")|safe }}
     </div>
   </div>
@@ -19,15 +19,16 @@
     <form method="post" class="row g-2">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="col-12">
-        <label class="muted small">Title</label>
+        <label class="form-label">Title</label>
         <input class="form-control" name="title" value="{{ a.title }}" required>
       </div>
       <div class="col-12">
-        <label class="muted small">Tags</label>
+        <label class="form-label">Tags</label>
         <input class="form-control" name="tags" value="{{ a.tags or '' }}">
+        <div class="form-help">Use comma-separated tags to improve retrieval quality.</div>
       </div>
       <div class="col-12">
-        <label class="muted small">Body</label>
+        <label class="form-label">Body</label>
         <textarea class="form-control" name="body" rows="10" required>{{ a.body }}</textarea>
       </div>
       <div class="col-12 d-grid">

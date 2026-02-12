@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card p-3 mb-3">
+      <h3>Deposit</h3>
+      <form method="post" action="{{ url_for('trust_deposit') }}" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-12"><input class="form-control" name="trust_account_id" type="number" placeholder="Trust Account ID" required></div>
+        <div class="col-12"><input class="form-control" name="client_ledger_id" type="number" placeholder="Client Ledger ID" required></div>
+        <div class="col-12"><input class="form-control" name="amount" type="number" step="0.01" placeholder="Amount" required></div>
+        <div class="col-12"><input class="form-control" name="description" placeholder="Description"></div>
+        <div class="col-12 d-grid"><button class="btn btn-light">Post Deposit</button></div>
+      </form>
+    </div>
+    <div class="card p-3 mb-3">
+      <h3>Disbursement</h3>
+      <div class="small muted mb-2">Maker-checker threshold: {{ maker_checker_threshold }}</div>
+      <form method="post" action="{{ url_for('trust_disbursement') }}" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-12"><input class="form-control" name="trust_account_id" type="number" placeholder="Trust Account ID" required></div>
+        <div class="col-12"><input class="form-control" name="client_ledger_id" type="number" placeholder="Client Ledger ID" required></div>
+        <div class="col-12"><input class="form-control" name="amount" type="number" step="0.01" placeholder="Amount" required></div>
+        <div class="col-12"><input class="form-control" name="description" placeholder="Description"></div>
+        <div class="col-12 d-grid"><button class="btn btn-light">Post Disbursement</button></div>
+      </form>
+    </div>
+    <div class="card p-3">
+      <h3>Transfer</h3>
+      <div class="small muted mb-2">Maker-checker threshold: {{ maker_checker_threshold }}</div>
+      <form method="post" action="{{ url_for('trust_transfer') }}" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-12"><input class="form-control" name="trust_account_id" type="number" placeholder="Trust Account ID" required></div>
+        <div class="col-12"><input class="form-control" name="source_ledger_id" type="number" placeholder="Source Ledger ID" required></div>
+        <div class="col-12"><input class="form-control" name="target_ledger_id" type="number" placeholder="Target Ledger ID" required></div>
+        <div class="col-12"><input class="form-control" name="amount" type="number" step="0.01" placeholder="Amount" required></div>
+        <div class="col-12 d-grid"><button class="btn btn-light">Transfer</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card p-3 mb-3">
+      <h3>Pending / Approved Trust Requests</h3>
+      <table class="table">
+        <thead><tr><th>ID</th><th>Action</th><th>Status</th><th>Requested By</th><th>Requested At</th><th></th></tr></thead>
+        <tbody>
+          {% for row in approvals %}
+          <tr>
+            <td>{{ row.id }}</td>
+            <td>{{ row.action_type }}</td>
+            <td>{{ row.status }}</td>
+            <td>{{ row.requested_by }}</td>
+            <td>{{ row.requested_at }}</td>
+            <td class="d-flex gap-1">
+              {% if row.status == "pending" %}
+              <form method="post" action="{{ url_for('trust_approval_decision', approval_id=row.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="decision" value="approve">
+                <button class="btn btn-sm btn-outline-light">Approve</button>
+              </form>
+              <form method="post" action="{{ url_for('trust_approval_decision', approval_id=row.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="decision" value="reject">
+                <button class="btn btn-sm btn-outline-light">Reject</button>
+              </form>
+              {% else %}
+              <span class="muted">-</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="muted">No pending approval requests.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card p-3 mb-3">
+      <h3>Trust Accounts</h3>
+      <table class="table">
+        <thead><tr><th>ID</th><th>Name</th><th>Bank</th><th>Currency</th></tr></thead>
+        <tbody>
+          {% for a in accounts %}
+          <tr><td>{{ a.id }}</td><td>{{ a.name }}</td><td>{{ a.bank_name or '-' }}</td><td>{{ a.currency }}</td></tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">No accounts.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card p-3 mb-3">
+      <h3>Client Ledgers</h3>
+      <table class="table">
+        <thead><tr><th>ID</th><th>Account</th><th>Client</th><th>Matter</th><th>Balance</th></tr></thead>
+        <tbody>
+          {% for l in ledgers %}
+          <tr><td>{{ l.id }}</td><td>{{ l.trust_account_id }}</td><td>{{ l.client_name }}</td><td>{{ l.matter_id or '-' }}</td><td>{{ l.current_balance }}</td></tr>
+          {% else %}
+          <tr><td colspan="5" class="muted">No ledgers.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card p-3 mb-3">
+      <h3>Ledger Entries</h3>
+      <table class="table">
+        <thead><tr><th>ID</th><th>Type</th><th>Amount</th><th>Ledger</th><th>Created</th></tr></thead>
+        <tbody>
+          {% for e in entries %}
+          <tr><td>{{ e.id }}</td><td>{{ e.entry_type }}</td><td>{{ e.amount }}</td><td>{{ e.client_ledger_id }}</td><td>{{ e.created_at }}</td></tr>
+          {% else %}
+          <tr><td colspan="5" class="muted">No entries.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card p-3">
+      <h3>Open Alerts</h3>
+      <table class="table">
+        <thead><tr><th>ID</th><th>Ledger</th><th>Threshold</th><th>Balance</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for a in alerts %}
+          <tr><td>{{ a.id }}</td><td>{{ a.client_ledger_id }}</td><td>{{ a.threshold_amount }}</td><td>{{ a.current_balance }}</td><td>{{ a.status }}</td></tr>
+          {% else %}
+          <tr><td colspan="5" class="muted">No alerts.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

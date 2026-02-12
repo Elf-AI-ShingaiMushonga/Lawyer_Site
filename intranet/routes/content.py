@@ -8,7 +8,8 @@ from flask_login import current_user, login_required
 from ..config import is_valid_email
 from ..extensions import db
 from ..helpers import audit, is_admin, normalize_query
-from ..models import Contact, DocumentFile, KnowledgeBase, Matter, MatterMember, Task
+from ..models import Contact, DocumentFile, KnowledgeBase, Matter, Task
+from ..policies import visible_matter_ids
 from ..templates import page
 
 
@@ -113,16 +114,15 @@ def register_content_routes(app):
             task_base = Task.query
             doc_base = DocumentFile.query
             if not is_admin():
-                m_base = (
-                    m_base.join(MatterMember, MatterMember.matter_id == Matter.id)
-                    .filter(MatterMember.user_id == current_user.id)
-                )
-                allowed_matter_ids = (
-                    db.session.query(MatterMember.matter_id)
-                    .filter(MatterMember.user_id == current_user.id)
-                )
-                task_base = task_base.filter(Task.matter_id.in_(allowed_matter_ids))
-                doc_base = doc_base.filter(DocumentFile.matter_id.in_(allowed_matter_ids))
+                matter_ids = visible_matter_ids()
+                if not matter_ids:
+                    m_base = m_base.filter(Matter.id == -1)
+                    task_base = task_base.filter(Task.id == -1)
+                    doc_base = doc_base.filter(DocumentFile.id == -1)
+                else:
+                    m_base = m_base.filter(Matter.id.in_(matter_ids))
+                    task_base = task_base.filter(Task.matter_id.in_(matter_ids))
+                    doc_base = doc_base.filter(DocumentFile.matter_id.in_(matter_ids))
             matters = m_base.filter(
                 (Matter.matter_no.ilike(like))
                 | (Matter.title.ilike(like))

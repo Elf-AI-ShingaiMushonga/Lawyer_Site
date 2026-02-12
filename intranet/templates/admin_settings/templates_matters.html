@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">New Matter Template</h3>
+  <form method="post" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-section">
+      <div class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label" for="matter-template-name">Template Name</label>
+          <input class="form-control" id="matter-template-name" name="name" placeholder="Template name" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="matter-template-area">Practice Area</label>
+          <input class="form-control" id="matter-template-area" name="practice_area" placeholder="Practice area">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="matter-template-stage">Default Stage</label>
+          <input class="form-control" id="matter-template-stage" name="default_stage" placeholder="Default stage">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="matter-template-risk">Default Risk Level</label>
+          <input class="form-control" id="matter-template-risk" name="default_risk_level" placeholder="Risk" value="Medium">
+        </div>
+      </div>
+    </div>
+    <div class="form-section mt-2">
+      <label class="form-label" for="matter-template-checklist">Closing Checklist</label>
+      <textarea class="form-control" id="matter-template-checklist" name="checklist" rows="4" placeholder="One item per line"></textarea>
+    </div>
+    <div class="d-grid mt-2"><button class="btn btn-light">Save Template</button></div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h3 class="mb-1">Matter Templates</h3>
+  <div class="table-responsive mt-2">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Area</th>
+          <th>Stage</th>
+          <th>Risk</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in templates %}
+          <tr>
+            <td>{{ t.name }}</td>
+            <td>{{ t.practice_area or '-' }}</td>
+            <td>{{ t.default_stage or '-' }}</td>
+            <td>{{ t.default_risk_level or '-' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="muted">No templates.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

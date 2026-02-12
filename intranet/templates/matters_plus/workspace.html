@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card p-3 mb-3">
+      <h3>{{ m.matter_no }} Workspace</h3>
+      <div class="muted">{{ m.title }} • {{ m.client_name }}</div>
+      <div class="mt-2">Stage: <strong>{{ m.stage or '-' }}</strong> • Status: <strong>{{ m.status }}</strong></div>
+      <div class="mt-2">Open tasks: {{ stats.open_tasks }} • Deadlines: {{ stats.deadlines }} • Documents: {{ stats.documents }} • Notes: {{ stats.notes }}</div>
+      <form method="post" action="{{ url_for('matter_stage_update', matter_id=m.id) }}" class="row g-2 mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-5"><input class="form-control" name="stage" placeholder="Next stage" required></div>
+        <div class="col-md-5"><input class="form-control" name="reason" placeholder="Reason"></div>
+        <div class="col-md-2 d-grid"><button class="btn btn-outline-light">Update Stage</button></div>
+      </form>
+      <div class="mt-3 d-flex gap-2 flex-wrap">
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_parties', matter_id=m.id) }}">Parties</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_notes', matter_id=m.id) }}">Notes</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_matter', matter_id=m.id) }}">Calendar</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=m.id) }}">DMS</a>
+      </div>
+    </div>
+
+    <div class="card p-3">
+      <h4>Stage History</h4>
+      <table class="table"><thead><tr><th>When</th><th>From</th><th>To</th><th>Reason</th></tr></thead><tbody>{% for s in stage_history %}<tr><td>{{ s.changed_at }}</td><td>{{ s.from_stage or '-' }}</td><td>{{ s.to_stage }}</td><td>{{ s.reason or '-' }}</td></tr>{% else %}<tr><td colspan="4" class="muted">No history.</td></tr>{% endfor %}</tbody></table>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card p-3">
+      <h4>Closing Checklist</h4>
+      <form method="post" action="{{ url_for('matter_close', matter_id=m.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% for item in checklist %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="checklist_done" value="{{ item.id }}" id="item_{{ item.id }}" {% if item.is_done %}checked{% endif %}>
+            <label class="form-check-label" for="item_{{ item.id }}">{{ item.item_text }} {% if item.is_done %}<span class="muted">(done)</span>{% endif %}</label>
+          </div>
+        {% else %}
+          <div class="muted">No checklist items configured.</div>
+        {% endfor %}
+        <button class="btn btn-light mt-3">Close Matter</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

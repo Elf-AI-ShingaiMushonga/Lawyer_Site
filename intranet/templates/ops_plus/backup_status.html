@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3"><h3>Backup Status</h3><form method="post" action="{{ url_for('ops_backup_run') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-light">Run Backup</button></form></div>
+<div class="card p-3"><table class="table"><thead><tr><th>ID</th><th>Started</th><th>Finished</th><th>Status</th><th>Manifest</th></tr></thead><tbody>{% for r in runs %}<tr><td>{{ r.id }}</td><td>{{ r.started_at }}</td><td>{{ r.finished_at or '-' }}</td><td>{{ r.status }}</td><td>{{ r.location or '-' }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No backup runs.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

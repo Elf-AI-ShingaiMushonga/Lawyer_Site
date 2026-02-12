@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card p-3">
+      <h3>Register SSO Application</h3>
+      <form method="post" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-12"><input class="form-control" name="name" placeholder="App Name" required></div>
+        <div class="col-12"><input class="form-control" name="redirect_uri" placeholder="https://app/callback" required></div>
+        <div class="col-12"><input class="form-control" name="client_secret" type="password" placeholder="Client Secret" required></div>
+        <div class="col-12 d-grid"><button class="btn btn-light">Create App</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card p-3">
+      <h3>SSO Applications</h3>
+      <table class="table">
+        <thead><tr><th>Name</th><th>Client ID</th><th>Redirect URI</th><th>Active</th></tr></thead>
+        <tbody>
+          {% for a in apps %}
+          <tr><td>{{ a.name }}</td><td><code>{{ a.client_id }}</code></td><td>{{ a.redirect_uri }}</td><td>{{ a.is_active }}</td></tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">No applications.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

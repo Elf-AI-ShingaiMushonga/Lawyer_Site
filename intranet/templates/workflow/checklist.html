@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3"><h3>Task Checklist - #{{ t.id }} {{ t.title }}</h3><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add"><div class="col-md-9"><input class="form-control" name="item_text" placeholder="Checklist item" required></div><div class="col-md-3 d-grid"><button class="btn btn-light">Add Item</button></div></form></div>
+<div class="card p-3"><h4>Items</h4>{% for i in items %}<div class="activity-item d-flex justify-content-between align-items-center"><div><strong>{{ i.item_text }}</strong> <span class="muted">({{ 'done' if i.is_done else 'open' }})</span></div><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="toggle"><input type="hidden" name="item_id" value="{{ i.id }}"><button class="btn btn-sm btn-outline-light">Toggle</button></form></div>{% else %}<div class="muted">No checklist items.</div>{% endfor %}</div>
+{% endblock %}

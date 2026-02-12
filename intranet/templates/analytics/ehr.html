@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <h3 class="section-title">Effective Hourly Rate</h3>
+  <div class="page-intro mt-1">Collected value per billable hour across the selected scope.</div>
+
+  <div class="metric-grid mt-3">
+    <div class="metric-card">
+      <div class="metric-label">EHR</div>
+      <div class="metric-value">{{ snapshot.effective_hourly_rate }}</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Collected</div>
+      <div class="metric-value">{{ snapshot.metrics.collected }}</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Billable Hours</div>
+      <div class="metric-value">{{ snapshot.metrics.billable_hours }}</div>
+    </div>
+  </div>
+
+  <div class="form-section mt-3">
+    <div class="form-label">Underlying Metrics</div>
+    <pre class="audit-json mt-2">{{ snapshot.metrics }}</pre>
+  </div>
+</div>
+{% endblock %}

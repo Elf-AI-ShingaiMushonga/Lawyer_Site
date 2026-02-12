@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+import datetime as dt
+import json
+
+from sqlalchemy import and_, or_
+
+from ..extensions import db
+
+
+def enqueue_job(job_type: str, payload: dict, *, run_after: dt.datetime | None = None, max_attempts: int = 5) -> int:
+    from ..models import JobQueue
+
+    job = JobQueue(
+        job_type=job_type,
+        payload_json=json.dumps(payload),
+        status="queued",
+        attempts=0,
+        max_attempts=max_attempts,
+        run_after=run_after,
+    )
+    db.session.add(job)
+    db.session.flush()
+    return job.id
+
+
+def lease_job(worker_id: str, lease_seconds: int = 60):
+    from ..models import JobQueue
+
+    now = dt.datetime.utcnow()
+    candidate = (
+        JobQueue.query.filter(
+            JobQueue.status.in_(["queued", "failed"]),
+            or_(JobQueue.run_after.is_(None), JobQueue.run_after <= now),
+            or_(JobQueue.lease_until.is_(None), JobQueue.lease_until < now),
+            JobQueue.attempts < JobQueue.max_attempts,
+        )
+        .order_by(JobQueue.created_at.asc())
+        .first()
+    )
+    if candidate is None:
+        return None
+
+    candidate.status = "running"
+    candidate.started_at = now
+    candidate.lease_until = now + dt.timedelta(seconds=lease_seconds)
+    candidate.worker_id = worker_id
+    candidate.attempts = int(candidate.attempts or 0) + 1
+    db.session.commit()
+    return candidate
+
+
+def complete_job(job_id: int, message: str = "ok") -> None:
+    from ..models import JobHistory, JobQueue
+
+    job = db.session.get(JobQueue, job_id)
+    if job is None:
+        return
+    job.status = "succeeded"
+    job.finished_at = dt.datetime.utcnow()
+    job.last_error = None
+    db.session.add(JobHistory(job_id=job.id, status="succeeded", message=message))
+    db.session.commit()
+
+
+def fail_job(job_id: int, error: str) -> None:
+    from ..models import JobHistory, JobQueue
+
+    job = db.session.get(JobQueue, job_id)
+    if job is None:
+        return
+    job.last_error = error[:2000]
+    if int(job.attempts or 0) >= int(job.max_attempts or 0):
+        job.status = "dead_letter"
+    else:
+        job.status = "failed"
+        job.lease_until = None
+    job.finished_at = dt.datetime.utcnow()
+    db.session.add(JobHistory(job_id=job.id, status=job.status, message=job.last_error))
+    db.session.commit()

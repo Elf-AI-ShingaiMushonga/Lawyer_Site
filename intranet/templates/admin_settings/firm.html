@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card p-3">
+      <h3 class="mb-1">Firm Setting</h3>
+      <div class="page-intro">Add or update firm-level configuration values.</div>
+
+      <form method="post" class="mt-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-section">
+          <label class="form-label" for="firm-setting-key">Setting Key</label>
+          <input class="form-control" id="firm-setting-key" name="setting_key" placeholder="setting.key" required>
+        </div>
+        <div class="form-section mt-2">
+          <label class="form-label" for="firm-setting-value">Value</label>
+          <textarea class="form-control" id="firm-setting-value" name="setting_value" rows="3" placeholder="value"></textarea>
+        </div>
+        <div class="d-grid mt-2"><button class="btn btn-light">Save</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card p-3">
+      <h3 class="mb-1">Current Settings</h3>
+      <div class="table-responsive mt-2">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Value JSON</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in settings %}
+              <tr>
+                <td class="fw-semibold">{{ s.setting_key }}</td>
+                <td><code>{{ s.setting_value_json }}</code></td>
+                <td>{{ s.updated_at }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="3" class="muted">No settings.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

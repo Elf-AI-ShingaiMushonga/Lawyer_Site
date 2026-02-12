@@ -8,11 +8,17 @@ from __future__ import annotations
 
 import argparse
 import os
+import socket
+import time
 from pathlib import Path
 
 from intranet import create_app
 from intranet.cli import create_user, init_db, run_server, seed_demo_data
 from intranet.config import env_int
+from intranet.jobs.scheduler import DEFAULT_PERIODIC_JOBS, schedule_due_jobs
+from intranet.jobs.worker import run_worker_once
+from intranet.models import ScheduledJob
+from intranet.extensions import db
 
 
 def _load_dotenv_if_present() -> None:
@@ -63,6 +69,31 @@ def main() -> None:
     seed_cmd.add_argument("--password", default="ClientDemo2026!", help="Password applied to all demo users")
     seed_cmd.add_argument("--reset", action="store_true", help="Delete existing data before seeding")
 
+    worker_cmd = sub.add_parser("worker")
+    worker_cmd.add_argument("--max-jobs", type=int, default=50, help="Maximum jobs processed in this run")
+    worker_cmd.add_argument("--loop", action="store_true", help="Run continuously")
+    worker_cmd.add_argument(
+        "--sleep-seconds",
+        type=int,
+        default=env_int("WORKER_LOOP_SLEEP_SECONDS", 5),
+        help="Idle sleep between polling cycles in loop mode",
+    )
+    worker_cmd.add_argument(
+        "--worker-id",
+        default=f"{socket.gethostname()}-{os.getpid()}",
+        help="Stable worker identifier for queue lease records",
+    )
+
+    scheduler_cmd = sub.add_parser("scheduler")
+    scheduler_cmd.add_argument("--seed-defaults", action="store_true", help="Seed default periodic jobs if missing")
+    scheduler_cmd.add_argument("--loop", action="store_true", help="Run continuously")
+    scheduler_cmd.add_argument(
+        "--sleep-seconds",
+        type=int,
+        default=env_int("SCHEDULER_LOOP_SLEEP_SECONDS", 30),
+        help="Sleep between scheduling cycles in loop mode",
+    )
+
     args = parser.parse_args()
 
     if args.cmd == "init-db":
@@ -95,6 +126,49 @@ def main() -> None:
         print(f"  password={summary['password']}")
     elif args.cmd == "run":
         run_server(app, host=args.host, port=args.port, debug=args.debug)
+    elif args.cmd == "worker":
+        processed = 0
+        with app.app_context():
+            if args.loop:
+                print(f"Worker loop started (worker_id={args.worker_id})")
+                try:
+                    while True:
+                        cycle_processed = 0
+                        for _ in range(max(1, args.max_jobs)):
+                            if not run_worker_once(worker_id=args.worker_id):
+                                break
+                            processed += 1
+                            cycle_processed += 1
+                        if cycle_processed == 0:
+                            time.sleep(max(1, args.sleep_seconds))
+                except KeyboardInterrupt:
+                    print("Worker loop stopped by signal.")
+            else:
+                for _ in range(max(1, args.max_jobs)):
+                    if not run_worker_once(worker_id=args.worker_id):
+                        break
+                    processed += 1
+        print(f"Worker processed jobs={processed}")
+    elif args.cmd == "scheduler":
+        with app.app_context():
+            if args.seed_defaults:
+                for job_type, interval in DEFAULT_PERIODIC_JOBS:
+                    exists = ScheduledJob.query.filter_by(job_type=job_type).first()
+                    if not exists:
+                        db.session.add(ScheduledJob(job_type=job_type, interval_minutes=interval))
+                db.session.commit()
+            if args.loop:
+                print("Scheduler loop started.")
+                queued = 0
+                try:
+                    while True:
+                        queued += schedule_due_jobs()
+                        time.sleep(max(1, args.sleep_seconds))
+                except KeyboardInterrupt:
+                    print("Scheduler loop stopped by signal.")
+            else:
+                queued = schedule_due_jobs()
+        print(f"Scheduler queued jobs={queued}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Legal Holds</h3>
+  <div class="page-intro">Apply or release legal holds for archival and retention governance.</div>
+
+  <form method="post" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="create">
+    <div class="form-section">
+      <div class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label" for="legal-hold-matter">Matter</label>
+          <select class="form-select" id="legal-hold-matter" name="matter_id" required>
+            {% for m in matters %}
+              <option value="{{ m.id }}">{{ m.matter_no }} - {{ m.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="legal-hold-reason">Reason</label>
+          <input class="form-control" id="legal-hold-reason" name="reason" placeholder="Hold reason" required>
+        </div>
+        <div class="col-md-2 d-grid">
+          <button class="btn btn-light">Create Hold</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h4 class="mb-1">Current and Historical Holds</h4>
+  <div class="table-responsive mt-2">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Matter</th>
+          <th>Status</th>
+          <th>Reason</th>
+          <th>Created</th>
+          <th>Released</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in holds %}
+          {% set hold_matter = namespace(label='Matter #' ~ h.matter_id) %}
+          {% for m in matters %}
+            {% if m.id == h.matter_id %}
+              {% set hold_matter.label = m.matter_no ~ ' - ' ~ m.title %}
+            {% endif %}
+          {% endfor %}
+          <tr>
+            <td>{{ h.id }}</td>
+            <td>{{ hold_matter.label }}</td>
+            <td>{{ "active" if h.is_active else "released" }}</td>
+            <td>{{ h.reason }}</td>
+            <td>{{ h.created_at }}</td>
+            <td>{{ h.released_at or "-" }}</td>
+            <td>
+              {% if h.is_active %}
+                <form method="post" class="table-actions">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="action" value="release">
+                  <input type="hidden" name="hold_id" value="{{ h.id }}">
+                  <input class="form-control form-control-sm" name="release_note" placeholder="Release note">
+                  <button class="btn btn-sm btn-outline-light">Release</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="7" class="muted">No legal holds.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

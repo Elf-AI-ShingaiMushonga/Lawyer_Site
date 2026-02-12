@@ -26,42 +26,67 @@ def register_admin_routes(app):
             abort(403)
 
         if request.method == "POST":
-            email = normalize_query(request.form.get("email", "")).lower()
-            full_name = normalize_query(request.form.get("full_name", "")) or "(Unnamed)"
-            role = normalize_query(request.form.get("role", "lawyer")) or "lawyer"
-            password = request.form.get("password") or ""
-            confirm_password = request.form.get("confirm_password") or ""
-            is_active = (request.form.get("is_active") or "").strip().lower() in {"1", "true", "yes", "on"}
-            if not email or not password:
-                flash("Email and password required.", "warning")
-                return redirect(url_for("admin_users"))
-            if not is_valid_email(email):
-                flash("Invalid email format.", "warning")
-                return redirect(url_for("admin_users"))
-            if role not in VALID_ROLES:
-                flash("Invalid role.", "warning")
-                return redirect(url_for("admin_users"))
-            if len(password) < 12:
-                flash("Password must be at least 12 characters.", "warning")
-                return redirect(url_for("admin_users"))
-            if password != confirm_password:
-                flash("Passwords do not match.", "warning")
-                return redirect(url_for("admin_users"))
-            if User.query.filter_by(email=email).first():
-                flash("User already exists.", "warning")
-                return redirect(url_for("admin_users"))
-            u = User(email=email, full_name=full_name, role=role, password_hash="x")
-            u.set_password(password)
-            u.is_active = is_active
-            db.session.add(u)
-            try:
+            action = normalize_query(request.form.get("action", "create")) or "create"
+            if action == "create":
+                email = normalize_query(request.form.get("email", "")).lower()
+                full_name = normalize_query(request.form.get("full_name", "")) or "(Unnamed)"
+                role = normalize_query(request.form.get("role", "lawyer")) or "lawyer"
+                password = request.form.get("password") or ""
+                confirm_password = request.form.get("confirm_password") or ""
+                is_active = (request.form.get("is_active") or "").strip().lower() in {"1", "true", "yes", "on"}
+                if not email or not password:
+                    flash("Email and password required.", "warning")
+                    return redirect(url_for("admin_users"))
+                if not is_valid_email(email):
+                    flash("Invalid email format.", "warning")
+                    return redirect(url_for("admin_users"))
+                if role not in VALID_ROLES:
+                    flash("Invalid role.", "warning")
+                    return redirect(url_for("admin_users"))
+                if len(password) < 12:
+                    flash("Password must be at least 12 characters.", "warning")
+                    return redirect(url_for("admin_users"))
+                if password != confirm_password:
+                    flash("Passwords do not match.", "warning")
+                    return redirect(url_for("admin_users"))
+                if User.query.filter_by(email=email).first():
+                    flash("User already exists.", "warning")
+                    return redirect(url_for("admin_users"))
+                u = User(email=email, full_name=full_name, role=role, password_hash="x")
+                u.set_password(password)
+                u.is_active = is_active
+                db.session.add(u)
+                try:
+                    db.session.commit()
+                except IntegrityError:
+                    db.session.rollback()
+                    flash("User already exists.", "warning")
+                    return redirect(url_for("admin_users"))
+                audit("user_create", "User", u.id, {"email": email, "role": role})
+                flash("User created.", "info")
+            elif action == "set_active":
+                user_id = request.form.get("user_id", type=int)
+                user = db.session.get(User, user_id) if user_id else None
+                if not user:
+                    flash("User not found.", "warning")
+                    return redirect(url_for("admin_users"))
+                user.is_active = (request.form.get("is_active") or "").strip().lower() in {"1", "true", "yes", "on"}
                 db.session.commit()
-            except IntegrityError:
-                db.session.rollback()
-                flash("User already exists.", "warning")
-                return redirect(url_for("admin_users"))
-            audit("user_create", "User", u.id, {"email": email, "role": role})
-            flash("User created.", "info")
+                audit("user_status_update", "User", user.id, {"is_active": user.is_active})
+                flash("User status updated.", "info")
+            elif action == "set_role":
+                user_id = request.form.get("user_id", type=int)
+                role = normalize_query(request.form.get("role", ""))
+                user = db.session.get(User, user_id) if user_id else None
+                if not user or role not in VALID_ROLES:
+                    flash("Invalid user or role.", "warning")
+                    return redirect(url_for("admin_users"))
+                user.role = role
+                db.session.commit()
+                audit("user_role_update", "User", user.id, {"role": role})
+                flash("User role updated.", "info")
+            else:
+                flash("Unsupported admin user action.", "warning")
             return redirect(url_for("admin_users"))
 
         users = User.query.order_by(User.created_at.desc()).limit(500).all()

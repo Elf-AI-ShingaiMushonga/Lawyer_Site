@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <h3>AR Aging</h3>
+  <form method="post" class="row g-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-4"><input class="form-control" type="date" name="as_of_date" value="{{ as_of.isoformat() }}" required></div>
+    <div class="col-md-2 d-grid"><button class="btn btn-light">Refresh</button></div>
+  </form>
+  <div class="mt-3 d-flex flex-wrap gap-2">
+    <span class="badge text-bg-secondary">0-30: {{ totals["0-30"] }}</span>
+    <span class="badge text-bg-secondary">31-60: {{ totals["31-60"] }}</span>
+    <span class="badge text-bg-secondary">61-90: {{ totals["61-90"] }}</span>
+    <span class="badge text-bg-secondary">90+: {{ totals["90+"] }}</span>
+  </div>
+</div>
+<div class="card p-3">
+  <table class="table">
+    <thead><tr><th>Invoice</th><th>Matter</th><th>Age (days)</th><th>Bucket</th><th>Outstanding</th><th>Collection Notes</th></tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td><a href="{{ url_for('billing_invoice_detail', invoice_id=row.invoice.id) }}">#{{ row.invoice.id }}</a></td>
+        <td>{{ row.invoice.matter_id }}</td>
+        <td>{{ row.age_days }}</td>
+        <td>{{ row.bucket }}</td>
+        <td>{{ row.outstanding }}</td>
+        <td>{{ row.collection_notes }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">No outstanding receivables for selected date.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

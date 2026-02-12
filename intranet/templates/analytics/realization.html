@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <h3 class="section-title">Realization</h3>
+  <div class="page-intro mt-1">How much billed value is collected in the current scope.</div>
+
+  <div class="metric-grid mt-3">
+    <div class="metric-card">
+      <div class="metric-label">Realization</div>
+      <div class="metric-value">{{ (snapshot.realization * 100)|round(2) }}%</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Collected</div>
+      <div class="metric-value">{{ snapshot.metrics.collected }}</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Billed</div>
+      <div class="metric-value">{{ snapshot.metrics.billed }}</div>
+    </div>
+  </div>
+
+  <div class="form-section mt-3">
+    <div class="form-label">Underlying Metrics</div>
+    <pre class="audit-json mt-2">{{ snapshot.metrics }}</pre>
+  </div>
+</div>
+{% endblock %}

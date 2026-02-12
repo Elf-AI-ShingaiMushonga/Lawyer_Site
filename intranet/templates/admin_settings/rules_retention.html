@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Retention Policy</h3>
+      <div class="page-intro">Configure archival and retention windows by matter type and jurisdiction.</div>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_rules_legal_holds') }}">Manage Legal Holds</a>
+  </div>
+
+  <form method="post" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-section">
+      <div class="row g-2">
+        <div class="col-md-3">
+          <label class="form-label" for="retention-name">Policy Name</label>
+          <input class="form-control" id="retention-name" name="name" placeholder="Policy name" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="retention-matter-type">Matter Type</label>
+          <input class="form-control" id="retention-matter-type" name="matter_type" placeholder="Matter type">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="retention-jurisdiction">Jurisdiction</label>
+          <input class="form-control" id="retention-jurisdiction" name="jurisdiction" value="ZA">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="retention-days">Retain Days</label>
+          <input class="form-control" id="retention-days" name="retain_days" type="number" placeholder="Retain days" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="retention-archive-days">Archive After Days</label>
+          <input class="form-control" id="retention-archive-days" name="archive_after_days" type="number" placeholder="Archive days">
+        </div>
+      </div>
+    </div>
+    <div class="d-grid mt-2">
+      <button class="btn btn-light">Save</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h3 class="mb-1">Policies</h3>
+  <div class="table-responsive mt-2">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Matter Type</th>
+          <th>Jurisdiction</th>
+          <th>Retain</th>
+          <th>Archive</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in policies %}
+          <tr>
+            <td>{{ p.name }}</td>
+            <td>{{ p.matter_type or '-' }}</td>
+            <td>{{ p.jurisdiction or '-' }}</td>
+            <td>{{ p.retain_days }}</td>
+            <td>{{ p.archive_after_days or '-' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="muted">No policies.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

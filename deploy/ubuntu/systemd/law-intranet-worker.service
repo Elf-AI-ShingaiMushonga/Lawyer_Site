@@ -1,0 +1,23 @@
+[Unit]
+Description=Law Firm Intranet Worker
+After=network-online.target law-intranet.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/Lawyer_Site
+EnvironmentFile=/home/ubuntu/Lawyer_Site/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/ubuntu/Lawyer_Site/venv/bin/python /home/ubuntu/Lawyer_Site/app.py worker --loop --max-jobs 200 --sleep-seconds 3
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

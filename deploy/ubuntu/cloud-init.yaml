@@ -6,6 +6,8 @@ packages:
   - python3-pip
   - git
   - nginx
+  - redis-server
+  - postgresql-client
 
 write_files:
   - path: /opt/law-intranet/bootstrap.sh
@@ -26,6 +28,7 @@ write_files:
       APP_DOMAIN="elf-ai-demo.co.za www.elf-ai-demo.co.za"
       FLASK_SECRET_KEY="REPLACE_WITH_A_LONG_RANDOM_SECRET"
       DATABASE_URL="postgresql+psycopg://app_user:app_password@db-host:5432/law_intranet?sslmode=require"
+      BACKUP_ENCRYPTION_KEY="REPLACE_WITH_32_BYTE_URLSAFE_BASE64_KEY"
       TRUSTED_PROXY_HOPS="1"
       ADMIN_EMAIL="admin@firm.local"
       ADMIN_PASSWORD="REPLACE_WITH_STRONG_ADMIN_PASSWORD"
@@ -33,12 +36,13 @@ write_files:
       GUNICORN_WORKERS="3"
       GUNICORN_THREADS="2"
       GUNICORN_TIMEOUT="60"
-      # For multi-worker production, prefer Redis:
-      # RATE_LIMIT_STORAGE_URI="redis://127.0.0.1:6379/0"
-      RATE_LIMIT_STORAGE_URI="memory://"
+      RATE_LIMIT_STORAGE_URI="redis://127.0.0.1:6379/0"
       RATE_LIMIT_STRATEGY="fixed-window"
       AUTH_LOGIN_RATE_LIMIT="10/minute"
       AUTH_REGISTER_RATE_LIMIT="5/hour"
+      ENABLE_SCHEMA_COMPAT_SYNC="false"
+      WORKER_LOOP_SLEEP_SECONDS="3"
+      SCHEDULER_LOOP_SLEEP_SECONDS="30"
 
       if [[ "${REPO_URL}" == "https://github.com/your-org/your-repo.git" ]]; then
         echo "REPO_URL placeholder not set" >&2
@@ -52,6 +56,11 @@ write_files:
 
       if [[ "${DATABASE_URL}" == "postgresql+psycopg://app_user:app_password@db-host:5432/law_intranet?sslmode=require" ]]; then
         echo "DATABASE_URL placeholder not set" >&2
+        exit 1
+      fi
+
+      if [[ "${BACKUP_ENCRYPTION_KEY}" == "REPLACE_WITH_32_BYTE_URLSAFE_BASE64_KEY" ]]; then
+        echo "BACKUP_ENCRYPTION_KEY placeholder not set" >&2
         exit 1
       fi
 
@@ -80,6 +89,7 @@ write_files:
       PORT=8000
       LOG_LEVEL=INFO
       DATABASE_URL=${DATABASE_URL}
+      BACKUP_ENCRYPTION_KEY=${BACKUP_ENCRYPTION_KEY}
       DB_POOL_RECYCLE_SECONDS=1800
       SESSION_TTL_MINUTES=480
       MAX_UPLOAD_BYTES=52428800
@@ -94,6 +104,9 @@ write_files:
       GUNICORN_WORKERS=${GUNICORN_WORKERS}
       GUNICORN_THREADS=${GUNICORN_THREADS}
       GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT}
+      ENABLE_SCHEMA_COMPAT_SYNC=${ENABLE_SCHEMA_COMPAT_SYNC}
+      WORKER_LOOP_SLEEP_SECONDS=${WORKER_LOOP_SLEEP_SECONDS}
+      SCHEDULER_LOOP_SLEEP_SECONDS=${SCHEDULER_LOOP_SLEEP_SECONDS}
       ENVVARS
 
       chown "${APP_USER}:${APP_USER}" "${APP_DIR}/.env"
@@ -137,6 +150,18 @@ write_files:
       sed -i "s#/home/ubuntu/Lawyer_Site#${APP_DIR}#g" /tmp/law-intranet.service
       cp /tmp/law-intranet.service /etc/systemd/system/law-intranet.service
 
+      cp "${APP_DIR}/deploy/ubuntu/systemd/law-intranet-worker.service" /tmp/law-intranet-worker.service
+      sed -i "s#^User=ubuntu#User=${APP_USER}#" /tmp/law-intranet-worker.service
+      sed -i "s#^Group=ubuntu#Group=${APP_USER}#" /tmp/law-intranet-worker.service
+      sed -i "s#/home/ubuntu/Lawyer_Site#${APP_DIR}#g" /tmp/law-intranet-worker.service
+      cp /tmp/law-intranet-worker.service /etc/systemd/system/law-intranet-worker.service
+
+      cp "${APP_DIR}/deploy/ubuntu/systemd/law-intranet-scheduler.service" /tmp/law-intranet-scheduler.service
+      sed -i "s#^User=ubuntu#User=${APP_USER}#" /tmp/law-intranet-scheduler.service
+      sed -i "s#^Group=ubuntu#Group=${APP_USER}#" /tmp/law-intranet-scheduler.service
+      sed -i "s#/home/ubuntu/Lawyer_Site#${APP_DIR}#g" /tmp/law-intranet-scheduler.service
+      cp /tmp/law-intranet-scheduler.service /etc/systemd/system/law-intranet-scheduler.service
+
       if [[ -d /etc/nginx/sites-available ]]; then
         cp "${APP_DIR}/deploy/ubuntu/nginx/law-intranet.conf" /etc/nginx/sites-available/law-intranet.conf
         sed -i "s/server_name elf-ai-demo\\.co\\.za www\\.elf-ai-demo\\.co\\.za;/server_name ${APP_DOMAIN};/" /etc/nginx/sites-available/law-intranet.conf
@@ -151,6 +176,9 @@ write_files:
 
       systemctl daemon-reload
       systemctl enable --now law-intranet
+      systemctl enable --now redis-server
+      systemctl enable --now law-intranet-worker
+      systemctl enable --now law-intranet-scheduler
 
       nginx -t
       systemctl enable --now nginx

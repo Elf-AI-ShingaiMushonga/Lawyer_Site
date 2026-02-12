@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <h3>Matter Intake</h3>
+  <form method="post" class="row g-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-4"><input class="form-control" name="matter_no" placeholder="Matter Number" required></div>
+    <div class="col-md-8"><input class="form-control" name="title" placeholder="Matter Title" required></div>
+    <div class="col-md-6"><input class="form-control" name="client_name" placeholder="Client Name" required></div>
+    <div class="col-md-3"><input class="form-control" name="jurisdiction" value="ZA"></div>
+    <div class="col-md-3"><input class="form-control" name="stage" value="Intake"></div>
+    <div class="col-md-4"><input class="form-control" name="practice_area" placeholder="Practice Area"></div>
+    <div class="col-md-4"><input class="form-control" name="case_type" placeholder="Case Type"></div>
+    <div class="col-md-4">
+      <select class="form-select" name="template_id">
+        <option value="">No template</option>
+        {% for t in templates %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-12"><textarea class="form-control" name="description" rows="3" placeholder="Description"></textarea></div>
+    <div class="col-12"><textarea class="form-control" name="objective" rows="2" placeholder="Objective"></textarea></div>
+    <div class="col-md-6"><input class="form-control" name="risk_level" value="Medium"></div>
+    <div class="col-md-6"><input class="form-control" name="budget_status" value="On Track"></div>
+    <div class="col-12 d-grid"><button class="btn btn-light">Create Intake</button></div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3"><h3>Team Calendar</h3><table class="table"><thead><tr><th>Due</th><th>Matter</th><th>Title</th><th>Critical</th><th>Status</th></tr></thead><tbody>{% for d in deadlines %}<tr><td>{{ d.due_at }}</td><td>#{{ d.matter_id }}</td><td>{{ d.title }}</td><td>{{ d.is_critical }}</td><td>{{ d.status }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No deadlines.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

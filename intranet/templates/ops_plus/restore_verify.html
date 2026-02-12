@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3"><h3>Restore Verification</h3><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-4"><select class="form-select" name="backup_run_id">{% for r in runs %}<option value="{{ r.id }}">Run #{{ r.id }} ({{ r.status }})</option>{% endfor %}</select></div><div class="col-md-8"><input class="form-control" name="notes" placeholder="Optional verification notes"></div><div class="col-12 d-grid"><button class="btn btn-light">Run Verification</button></div></form></div>
+<div class="card p-3"><table class="table"><thead><tr><th>ID</th><th>Backup Run</th><th>Status</th><th>Verified At</th><th>Notes</th></tr></thead><tbody>{% for v in verifications %}<tr><td>{{ v.id }}</td><td>{{ v.backup_run_id or '-' }}</td><td>{{ v.status }}</td><td>{{ v.verified_at }}</td><td>{{ v.notes or '-' }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No verifications.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

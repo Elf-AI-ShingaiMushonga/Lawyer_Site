@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card p-3">
+      <div class="toolbar-row">
+        <div>
+          <h3 class="mb-0">New DMS Document</h3>
+          <div class="page-intro mt-1">Matter {{ m.matter_no }} - {{ m.title }}</div>
+        </div>
+      </div>
+      <div class="mb-2 d-flex gap-2 flex-wrap mt-2">
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('dms_saved_searches') }}">Saved Searches</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_email_capture', matter_id=m.id) }}">Email Capture</a>
+      </div>
+      <div class="form-help mb-2">Create a document container and upload the initial version in one step.</div>
+      <form method="post" enctype="multipart/form-data" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-12">
+          <label class="form-label" for="dms-title">Document Title</label>
+          <input class="form-control" id="dms-title" name="title" placeholder="Document title" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="dms-type">Type</label>
+          <input class="form-control" id="dms-type" name="document_type" placeholder="Type" value="General">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="dms-confidentiality">Confidentiality</label>
+          <input class="form-control" id="dms-confidentiality" name="confidentiality" placeholder="Confidentiality" value="Internal">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="dms-privilege">Privilege Label</label>
+          <input class="form-control" id="dms-privilege" name="privilege_label" placeholder="Privilege">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="dms-retention">Retention Category</label>
+          <input class="form-control" id="dms-retention" name="retention_category" placeholder="Retention">
+        </div>
+        <div class="col-6">
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" name="legal_hold" value="1" id="legal_hold">
+            <label class="form-check-label" for="legal_hold">Legal hold</label>
+          </div>
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="dms-version-notes">Version Notes</label>
+          <input class="form-control" id="dms-version-notes" name="version_notes" placeholder="Version notes">
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="dms-file">File</label>
+          <input class="form-control" id="dms-file" type="file" name="file" required>
+        </div>
+        <div class="col-12 d-grid"><button class="btn btn-light">Create Document</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card p-3">
+      <h3 class="mb-0">DMS Repository</h3>
+      <form method="get" class="row g-2 mb-2 mt-1 align-items-end">
+        <div class="col-lg-4">
+          <label class="form-label" for="dms-q">Search</label>
+          <input class="form-control" id="dms-q" name="q" value="{{ q or '' }}" placeholder="Search title, OCR, metadata">
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label" for="dms-filter-type">Type</label>
+          <input class="form-control" id="dms-filter-type" name="document_type" value="{{ filter_type or '' }}" placeholder="Type">
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label" for="dms-filter-confidentiality">Confidentiality</label>
+          <input class="form-control" id="dms-filter-confidentiality" name="confidentiality" value="{{ filter_confidentiality or '' }}" placeholder="Confidentiality">
+        </div>
+        <div class="col-sm-6 col-lg-1 d-grid"><button class="btn btn-outline-light">Go</button></div>
+        <div class="col-sm-6 col-lg-1 d-grid"><a class="btn btn-outline-light" href="{{ url_for('matter_dms', matter_id=m.id) }}">Clear</a></div>
+      </form>
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Latest Version</th><th>Score</th><th></th></tr></thead>
+          <tbody>
+            {% for d in docs %}
+            <tr>
+              <td>{{ d.id }}</td>
+              <td>
+                <a class="list-title" href="{{ url_for('document_versions', document_id=d.id) }}">{{ d.title }}</a>
+              </td>
+              <td>{{ d.document_type or '-' }}</td>
+              <td>{% set v = latest_versions.get(d.id) %}{% if v %}v{{ v.version_no }} • {{ v.state }}{% else %}-{% endif %}</td>
+              <td>{% if q %}{{ search_scores.get(d.id, 0) }}{% else %}-{% endif %}</td>
+              <td><a class="btn btn-sm btn-outline-light" href="{{ url_for('document_versions', document_id=d.id) }}">Versions</a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="muted">No DMS records.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

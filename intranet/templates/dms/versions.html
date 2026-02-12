@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card p-3 mb-3">
+      <h3>Add Version - {{ doc.title }}</h3>
+      <form method="post" enctype="multipart/form-data" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-6"><input class="form-control" name="state" value="draft"></div>
+        <div class="col-6"><input class="form-control" name="notes" placeholder="Notes"></div>
+        <div class="col-12"><input class="form-control" type="file" name="file" required></div>
+        <div class="col-12 d-grid"><button class="btn btn-light">Upload Version</button></div>
+      </form>
+    </div>
+    <div class="card p-3">
+      <h4>Locking</h4>
+      <form method="post" action="{{ url_for('document_lock', document_id=doc.id) }}" class="mb-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input class="form-control mb-2" name="reason" placeholder="Lock reason">
+        <button class="btn btn-outline-light">Lock</button>
+      </form>
+      <form method="post" action="{{ url_for('document_unlock', document_id=doc.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-light">Unlock</button>
+      </form>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card p-3 mb-3"><h3>Version History</h3><table class="table"><thead><tr><th>Version</th><th>State</th><th>SHA</th><th>Immutable</th></tr></thead><tbody>{% for v in versions %}<tr><td>v{{ v.version_no }}</td><td>{{ v.state }}</td><td><code>{{ v.sha256[:16] }}...</code></td><td>{{ v.is_immutable }}</td></tr>{% else %}<tr><td colspan="4" class="muted">No versions.</td></tr>{% endfor %}</tbody></table></div>
+    <div class="card p-3"><h4>State Transition</h4><form method="post" action="{{ url_for('document_state', document_id=doc.id) }}" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-4"><select class="form-select" name="state"><option>draft</option><option>reviewed</option><option>final</option><option>filed</option></select></div><div class="col-md-6"><input class="form-control" name="filed_reference" placeholder="Filed reference (optional)"></div><div class="col-md-2 d-grid"><button class="btn btn-light">Update</button></div></form><h5 class="mt-3">Locks</h5><table class="table"><thead><tr><th>User</th><th>Locked At</th><th>Released</th></tr></thead><tbody>{% for l in locks %}<tr><td>{{ l.locked_by }}</td><td>{{ l.locked_at }}</td><td>{{ l.released_at or '-' }}</td></tr>{% else %}<tr><td colspan="3" class="muted">No locks.</td></tr>{% endfor %}</tbody></table></div>
+  </div>
+</div>
+{% endblock %}

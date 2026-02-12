@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <h3>Active Sessions</h3>
+  <table class="table">
+    <thead><tr><th>ID</th><th>Created</th><th>Last Seen</th><th>IP</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr>
+        <td>{{ s.id }}</td>
+        <td>{{ s.created_at }}</td>
+        <td>{{ s.last_seen_at }}</td>
+        <td>{{ s.ip or '-' }}</td>
+        <td>{{ 'revoked' if s.revoked_at else 'active' }}</td>
+        <td>
+          {% if not s.revoked_at %}
+          <form method="post" action="{{ url_for('auth_session_revoke', session_id=s.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-light">Revoke</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">No sessions.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="card p-3 mt-3">
+  <h3>Trusted Devices</h3>
+  <table class="table">
+    <thead><tr><th>ID</th><th>Device</th><th>Created</th><th>Last Seen</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for d in devices %}
+      <tr>
+        <td>{{ d.id }}</td>
+        <td>{{ d.device_name }}</td>
+        <td>{{ d.created_at }}</td>
+        <td>{{ d.last_seen_at or '-' }}</td>
+        <td>{{ 'active' if d.is_active else 'revoked' }}</td>
+        <td>
+          {% if d.is_active %}
+          <form method="post" action="{{ url_for('auth_device_revoke', device_id=d.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-light">Revoke</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">No trusted devices.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

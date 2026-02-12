@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card p-3">
+      <h3>Matter Calendar - {{ m.matter_no }}</h3>
+      <table class="table">
+        <thead><tr><th>Due</th><th>Title</th><th>Status</th><th>Ack</th></tr></thead>
+        <tbody>
+          {% for d in deadlines %}
+          <tr>
+            <td>{{ d.due_at }}</td>
+            <td>{{ d.title }}</td>
+            <td>{{ d.status }}</td>
+            <td>
+              {% if d.status != "acknowledged" %}
+              <form method="post" action="{{ url_for('deadline_ack', deadline_id=d.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-light">Ack</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">No deadlines.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card p-3 mb-3">
+      <h4>Add Deadline</h4>
+      <form method="post" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="create_deadline">
+        <div class="col-12"><input class="form-control" name="title" placeholder="Deadline title" required></div>
+        <div class="col-12"><input class="form-control" name="due_at" type="date" required></div>
+        <div class="col-12"><input class="form-control" name="task_id" type="number" placeholder="Task ID (optional)"></div>
+        <div class="col-12">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="is_critical" value="1" id="is-critical">
+            <label class="form-check-label" for="is-critical">Critical deadline</label>
+          </div>
+        </div>
+        <div class="col-12 d-grid"><button class="btn btn-light">Save Deadline</button></div>
+      </form>
+    </div>
+    <div class="card p-3 mb-3">
+      <h4>Schedule Hearing</h4>
+      <form method="post" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="schedule_hearing">
+        <div class="col-12"><input class="form-control" name="title" placeholder="Hearing title"></div>
+        <div class="col-12"><input class="form-control" name="event_date" type="date" required></div>
+        <div class="col-12"><textarea class="form-control" name="description" rows="2" placeholder="Notes"></textarea></div>
+        <div class="col-12 d-grid"><button class="btn btn-light">Add Hearing</button></div>
+      </form>
+    </div>
+    <div class="card p-3">
+      <h4>Override Deadline</h4>
+      <form method="post" action="{{ url_for('deadline_override', deadline_id=(deadlines[0].id if deadlines else 0)) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-2">
+          <select class="form-select" name="deadline_id" disabled>
+            {% for d in deadlines %}
+            <option>#{{ d.id }} - {{ d.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-2"><input class="form-control" name="due_at" type="date" required></div>
+        <div class="mb-2"><input class="form-control" name="reason" placeholder="Reason" required></div>
+        <button class="btn btn-light">Override first deadline</button>
+      </form>
+      <div class="muted small mt-2">Use list actions for specific IDs.</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

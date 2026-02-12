@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">Client Matters</h3>
+      <div class="page-intro mt-1">Welcome{% if portal_user and portal_user.full_name %}, {{ portal_user.full_name }}{% endif %}. Open a matter to see updates and shared resources.</div>
+    </div>
+    <form method="post" action="{{ url_for('portal_logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-outline-light">Portal Logout</button>
+    </form>
+  </div>
+</div>
+
+<div class="card p-3">
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Matter</th>
+          <th>Client</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in matters %}
+          <tr>
+            <td class="fw-semibold">{{ m.matter_no }} - {{ m.title }}</td>
+            <td>{{ m.client_name }}</td>
+            <td><span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span></td>
+            <td><a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matter_detail', matter_id=m.id) }}">Open</a></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="muted">No accessible matters.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

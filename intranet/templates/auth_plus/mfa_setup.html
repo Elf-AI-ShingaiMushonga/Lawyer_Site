@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <h3>MFA Setup</h3>
+  <p class="muted">Scan this secret in an authenticator app: <code>{{ temp_secret }}</code></p>
+  <p class="muted small">URI: <code>{{ otpauth_uri }}</code></p>
+  <form method="post" class="row g-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-6">
+      <label class="muted small">6-digit code</label>
+      <input class="form-control" name="code" required>
+    </div>
+    <div class="col-md-3 d-grid align-items-end">
+      <button class="btn btn-light">Enable MFA</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

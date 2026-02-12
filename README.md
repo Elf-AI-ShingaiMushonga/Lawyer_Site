@@ -2,13 +2,27 @@
 
 This is a functional intranet website for a law firm:
 - User authentication + roles (admin/lawyer/staff/paralegal)
+- MFA (TOTP + backup codes), session registry, and internal SSO-like auth endpoints
 - Admin user provisioning from the web UI (`/admin/users`)
+- Firm settings and rule administration (`/admin/settings/*`, `/admin/templates/*`, `/admin/rules/*`)
 - Matters with team membership
+- Matter intake/workspace/parties/notes/stage transitions/closing workflows
 - Matter executive summaries (objective, risk, budget, outcome, latest update)
 - Matter timelines (filings, hearings, milestones, client updates)
 - Human-readable matter activity feed
+- Docketing and calendaring (`/calendar/*`, `/deadlines/*`)
 - Tasks per matter (Todo/Doing/Done)
+- Task templates, dependencies, checklists, approvals, recurrence
 - Document upload/download with metadata (category, version, stage, owner, privilege) and SHA-256 integrity hash
+- DMS normalization (containers + versions + locking + productions + Bates)
+- Timekeeping (timers, manual entries, review/lock flow)
+- Billing (rates, invoice generation, approvals, PDF, LEDES)
+- Expenses with receipt handling and approvals
+- Trust accounting (ledgers, deposits, disbursements, transfers, reconciliations)
+- CRM/intake (leads, conflict checks, engagement workflows)
+- Curated client portal (auth, scoped matter views, messages, uploads, invoices, payments)
+- Analytics dashboards (utilization, realization, EHR, workload, profitability, forecast, burnout)
+- Ops controls (backup status/run, restore verification, DR targets)
 - Contacts directory
 - Knowledge base (internal articles)
 - Search across core objects
@@ -27,6 +41,10 @@ flask --app app.py db upgrade -d migrations
 
 python app.py create-user --email admin@firm.local --password "ChangeMeNow!" --role admin --name "Admin User"
 python app.py run --debug
+
+# optional background processing
+python app.py scheduler --seed-defaults
+python app.py worker --max-jobs 100
 ```
 
 Open: http://127.0.0.1:5000
@@ -112,6 +130,13 @@ After signing in, click `Story Mode Off` in the top navigation to enable guided 
 - `FLASK_ENV=production`
 - `FLASK_SECRET_KEY=<long-random-secret>`
 - `DATABASE_URL=postgresql+psycopg://...`
+- `BACKUP_ENCRYPTION_KEY=<32-byte-urlsafe-base64 or 64-char-hex>`
+  - Example generation: `python3 -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`
+
+Production boot guards:
+- App startup fails if `DATABASE_URL` is not PostgreSQL.
+- App startup fails if `BACKUP_ENCRYPTION_KEY` is missing in production.
+- App startup fails when `RATE_LIMIT_STORAGE_URI=memory://` and `GUNICORN_WORKERS>1` unless `ALLOW_IN_MEMORY_RATELIMIT=true`.
 
 Optional but recommended:
 - `TRUST_PROXY=true`
@@ -119,11 +144,18 @@ Optional but recommended:
 - `FORCE_SECURE_COOKIE=true`
 - `RATE_LIMIT_STORAGE_URI=redis://127.0.0.1:6379/0` for multi-worker production
 - `RATE_LIMIT_STORAGE_URI=memory://` only for local dev or single-worker setups
+- `ALLOW_IN_MEMORY_RATELIMIT=false` (keep false in production unless you intentionally bypass)
 - `AUTH_LOGIN_RATE_LIMIT=10/minute`
 - `AUTH_REGISTER_RATE_LIMIT=5/hour`
+- `ENABLE_SCHEMA_COMPAT_SYNC=false` (recommended in production; run migrations explicitly)
+- `DB_POOL_SIZE=5`
+- `DB_MAX_OVERFLOW=10`
+- `DB_POOL_TIMEOUT_SECONDS=30`
 - `GUNICORN_WORKERS=3`
 - `GUNICORN_THREADS=2`
 - `GUNICORN_TIMEOUT=60`
+- `WORKER_LOOP_SLEEP_SECONDS=3`
+- `SCHEDULER_LOOP_SLEEP_SECONDS=30`
 
 ## Database migrations
 
@@ -139,7 +171,7 @@ Optional but recommended:
 - Assumptions:
   - Ubuntu 22.04+ (VM or EC2 Ubuntu AMI)
   - App path: `/home/ubuntu/<app-dir>` (cloud-init default is `/home/ubuntu/Lawyer_Site`)
-  - Gunicorn managed by systemd, Nginx reverse proxy on port 80/443
+  - Gunicorn + worker + scheduler managed by systemd, Nginx reverse proxy on port 80/443
   - Optional ALB health check path: `/healthz`
 
 - One-click bootstrap with cloud-init (recommended for new EC2 instances):
@@ -159,12 +191,14 @@ Optional but recommended:
     - `sudo tail -n 200 /var/log/cloud-init-output.log`
   - Verify services:
     - `sudo systemctl status law-intranet`
+    - `sudo systemctl status law-intranet-worker`
+    - `sudo systemctl status law-intranet-scheduler`
     - `sudo systemctl status nginx`
     - `curl http://127.0.0.1/healthz`
 
 - 1) Install system packages:
   - `sudo apt update -y`
-  - `sudo apt install -y python3 python3-venv python3-pip git nginx`
+  - `sudo apt install -y python3 python3-venv python3-pip git nginx redis-server postgresql-client`
 
 - 2) Clone app and install Python deps:
   - `git clone <your-github-repo-url> /home/ubuntu/Lawyer_Site`
@@ -187,12 +221,21 @@ Optional but recommended:
 
 - 5) Install systemd service:
   - `sudo cp deploy/ubuntu/systemd/law-intranet.service /etc/systemd/system/law-intranet.service`
+  - `sudo cp deploy/ubuntu/systemd/law-intranet-worker.service /etc/systemd/system/law-intranet-worker.service`
+  - `sudo cp deploy/ubuntu/systemd/law-intranet-scheduler.service /etc/systemd/system/law-intranet-scheduler.service`
   - Rewrite service paths for your actual app directory:
     - `sudo sed -i "s#/home/ubuntu/Lawyer_Site#/home/ubuntu/<app-dir>#g" /etc/systemd/system/law-intranet.service`
+    - `sudo sed -i "s#/home/ubuntu/Lawyer_Site#/home/ubuntu/<app-dir>#g" /etc/systemd/system/law-intranet-worker.service`
+    - `sudo sed -i "s#/home/ubuntu/Lawyer_Site#/home/ubuntu/<app-dir>#g" /etc/systemd/system/law-intranet-scheduler.service`
   - Gunicorn tuning comes from `deploy/ubuntu/gunicorn.conf.py` and env vars in `.env`.
   - `sudo systemctl daemon-reload`
+  - `sudo systemctl enable --now redis-server`
   - `sudo systemctl enable --now law-intranet`
+  - `sudo systemctl enable --now law-intranet-worker`
+  - `sudo systemctl enable --now law-intranet-scheduler`
   - `sudo systemctl status law-intranet`
+  - `sudo systemctl status law-intranet-worker`
+  - `sudo systemctl status law-intranet-scheduler`
 
 - 6) Install Nginx config:
   - If your Nginx layout has `sites-available`:
@@ -218,6 +261,8 @@ Optional but recommended:
 
 - 9) Operations:
   - Logs: `sudo journalctl -u law-intranet -f`
+  - Worker logs: `sudo journalctl -u law-intranet-worker -f`
+  - Scheduler logs: `sudo journalctl -u law-intranet-scheduler -f`
   - App health: `curl http://127.0.0.1/healthz`
-  - After each code update: `source venv/bin/activate && pip install -r requirements.txt && flask --app app.py db upgrade -d migrations && sudo systemctl restart law-intranet`
+  - After each code update: `source venv/bin/activate && pip install -r requirements.txt && flask --app app.py db upgrade -d migrations && sudo systemctl restart law-intranet law-intranet-worker law-intranet-scheduler`
   - Keep backups for DB and uploaded files (`uploads/`), or move uploads to S3.

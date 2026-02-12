@@ -35,12 +35,28 @@
       <form method="post" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="col-12">
-          <label class="muted small mb-1">Email</label>
-          <input class="form-control" name="email" type="email" placeholder="name@firm.co.za" required>
+          <label class="form-label">Email</label>
+          <input class="form-control" name="email" type="email" placeholder="name@firm.co.za" autocomplete="username" autofocus required>
         </div>
         <div class="col-12">
-          <label class="muted small mb-1">Password</label>
-          <input class="form-control" name="password" type="password" placeholder="Enter your password" required>
+          <label class="form-label">Password</label>
+          <input class="form-control" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required>
+        </div>
+        <div class="col-12">
+          <div class="form-section">
+            <div class="form-label mb-1">Second Factor (Optional)</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">MFA Code</label>
+                <input class="form-control" name="mfa_code" type="text" inputmode="numeric" placeholder="123456">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Backup Code</label>
+                <input class="form-control" name="backup_code" type="text" placeholder="ABC-123">
+              </div>
+            </div>
+            <div class="form-help">Provide one of these only when your account prompts for MFA.</div>
+          </div>
         </div>
         <div class="col-12 d-grid">
           <button class="btn btn-light">Access Dashboard</button>

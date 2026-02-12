@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+import datetime as dt
+
+from flask_login import login_user, logout_user
+
+from intranet.extensions import db
+from intranet.jobs.worker import _handle_suspicious_activity_scan
+from intranet.models import (
+    AuditLog,
+    EthicalWall,
+    EthicalWallMatter,
+    EthicalWallRule,
+    Matter,
+    MatterMember,
+    SuspiciousActivityAlert,
+    User,
+)
+from intranet.policies import visible_matter_ids
+
+
+def _csrf_token_for_login(client) -> str:
+    client.get("/login")
+    with client.session_transaction() as sess:
+        return sess.get("_csrf_token") or ""
+
+
+def test_visible_matter_ids_excludes_ethical_wall(app_ctx):
+    app = app_ctx
+    user = User(email="wall@example.com", full_name="Wall User", role="lawyer", password_hash="x")
+    user.set_password("TestPassword123!")
+    db.session.add(user)
+    db.session.flush()
+
+    denied_matter = Matter(
+        matter_no="2026-WALL-0001",
+        title="Denied Matter",
+        client_name="Denied Client",
+        status="Open",
+        created_by=user.id,
+        opened_at=dt.datetime.utcnow(),
+        last_updated_at=dt.datetime.utcnow(),
+    )
+    allowed_matter = Matter(
+        matter_no="2026-WALL-0002",
+        title="Allowed Matter",
+        client_name="Allowed Client",
+        status="Open",
+        created_by=user.id,
+        opened_at=dt.datetime.utcnow(),
+        last_updated_at=dt.datetime.utcnow(),
+    )
+    db.session.add_all([denied_matter, allowed_matter])
+    db.session.flush()
+
+    db.session.add(MatterMember(matter_id=denied_matter.id, user_id=user.id, role_in_matter="Team"))
+    db.session.add(MatterMember(matter_id=allowed_matter.id, user_id=user.id, role_in_matter="Team"))
+    db.session.flush()
+
+    wall = EthicalWall(name="Conflict Wall", created_by=user.id, is_active=True)
+    db.session.add(wall)
+    db.session.flush()
+    db.session.add(EthicalWallMatter(wall_id=wall.id, matter_id=denied_matter.id))
+    db.session.add(EthicalWallRule(wall_id=wall.id, user_id=user.id, is_deny=True, is_active=True))
+    db.session.commit()
+
+    with app.test_request_context("/"):
+        login_user(user)
+        ids = visible_matter_ids()
+        logout_user()
+
+    assert ids == [allowed_matter.id]
+
+
+def test_mfa_required_role_redirects_to_setup(app_ctx):
+    app = app_ctx
+    user = User(email="staff@example.com", full_name="Staff User", role="staff", password_hash="x", is_active=True)
+    user.set_password("StrongPassword123!")
+    db.session.add(user)
+    db.session.commit()
+
+    client = app.test_client()
+    token = _csrf_token_for_login(client)
+    resp = client.post(
+        "/login",
+        data={
+            "csrf_token": token,
+            "email": user.email,
+            "password": "StrongPassword123!",
+        },
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 302
+    assert "/auth/mfa/setup" in (resp.headers.get("Location") or "")
+
+
+def test_suspicious_scan_creates_alert_for_repeated_denied_access(seed_user_matter):
+    user = seed_user_matter["user"]
+    now = dt.datetime.utcnow()
+    for _ in range(6):
+        db.session.add(
+            AuditLog(
+                actor_user_id=user.id,
+                action="matter_access_denied",
+                entity_type="Matter",
+                entity_id=seed_user_matter["matter"].id,
+                at=now,
+            )
+        )
+    db.session.commit()
+
+    message = _handle_suspicious_activity_scan({})
+    alerts = SuspiciousActivityAlert.query.filter_by(alert_type="repeated_denied_matter_access", status="open").all()
+
+    assert "created alerts" in message
+    assert alerts

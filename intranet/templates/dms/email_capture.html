@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <h3>Email Capture - {{ m.matter_no }}</h3>
+  <form method="post" enctype="multipart/form-data" class="row g-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-4"><input class="form-control" name="message_id" placeholder="Message-ID" required></div>
+    <div class="col-md-4"><input class="form-control" name="dedup_key" placeholder="Dedup key (optional)"></div>
+    <div class="col-md-4"><input class="form-control" name="received_at" placeholder="YYYY-MM-DDTHH:MM:SS"></div>
+    <div class="col-md-6"><input class="form-control" name="subject" placeholder="Subject"></div>
+    <div class="col-md-6"><input class="form-control" name="sender" placeholder="Sender"></div>
+    <div class="col-12"><input class="form-control" type="file" name="attachment"></div>
+    <div class="col-12 d-grid"><button class="btn btn-light">Capture Email</button></div>
+  </form>
+</div>
+<div class="card p-3">
+  <table class="table">
+    <thead><tr><th>ID</th><th>Subject</th><th>Sender</th><th>Dedup</th><th>Attachment Hash</th><th>Captured At</th><th></th></tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.id }}</td>
+        <td>{{ row.subject or '-' }}</td>
+        <td>{{ row.sender or '-' }}</td>
+        <td>{{ row.dedup_key }}</td>
+        <td>{{ row.attachment_hash or '-' }}</td>
+        <td>{{ row.captured_at }}</td>
+        <td>
+          {% if row.stored_filename %}
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('email_capture_attachment', capture_id=row.id) }}">Attachment</a>
+          {% else %}
+          <span class="muted">-</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">No captured emails.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

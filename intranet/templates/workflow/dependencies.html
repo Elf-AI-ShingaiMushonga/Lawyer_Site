@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3"><h3>Task Dependencies - #{{ t.id }} {{ t.title }}</h3><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-9"><select class="form-select" name="depends_on_task_id" required>{% for o in options %}<option value="{{ o.id }}">#{{ o.id }} {{ o.title }}</option>{% endfor %}</select></div><div class="col-md-3 d-grid"><button class="btn btn-light">Add Dependency</button></div></form></div>
+<div class="card p-3"><h4>Current Dependencies</h4><table class="table"><thead><tr><th>Task</th><th>Depends On</th></tr></thead><tbody>{% for d in deps %}<tr><td>#{{ d.task_id }}</td><td>#{{ d.depends_on_task_id }}</td></tr>{% else %}<tr><td colspan="2" class="muted">No dependencies.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

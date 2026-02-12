@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">Portal Invoices</h3>
+      <div class="page-intro mt-1">View invoice periods, current status, and recorded totals.</div>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
+  </div>
+
+  <div class="table-responsive mt-3">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Matter</th>
+          <th>Period</th>
+          <th>Status</th>
+          <th>Total</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in invoices %}
+          {% set label = 'Matter #' ~ i.matter_id %}
+          {% if matter_map and matter_map.get(i.matter_id) %}
+            {% set label = matter_map[i.matter_id].matter_no ~ ' - ' ~ matter_map[i.matter_id].title %}
+          {% endif %}
+          <tr>
+            <td>{{ i.id }}</td>
+            <td>{{ label }}</td>
+            <td>{{ i.period_start }} to {{ i.period_end }}</td>
+            <td><span class="badge status-badge status-{{ i.status|lower|replace(' ', '-') }}">{{ i.status }}</span></td>
+            <td>{{ i.total }}</td>
+            <td><a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_payments', invoice_id=i.id) }}">Payments</a></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="muted">No invoices.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

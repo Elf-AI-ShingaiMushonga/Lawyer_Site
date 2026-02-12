@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <h3>DMS Saved Searches</h3>
+  <form method="post" class="row g-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-3"><input class="form-control" name="name" placeholder="Search name" required></div>
+    <div class="col-md-5"><input class="form-control" name="query" placeholder="Query text" required></div>
+    <div class="col-md-2">
+      <select class="form-select" name="matter_id">
+        <option value="">All matters</option>
+        {% for m in matters %}
+        <option value="{{ m.id }}">{{ m.matter_no }} - {{ m.title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2 d-grid"><button class="btn btn-light">Save</button></div>
+  </form>
+</div>
+<div class="card p-3">
+  <table class="table">
+    <thead><tr><th>Name</th><th>Matter</th><th>Query</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+      {% for row in searches %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.matter_id or 'All' }}</td>
+        <td>{{ queries.get(row.id, '') }}</td>
+        <td>{{ row.created_at }}</td>
+        <td>
+          {% if row.matter_id and queries.get(row.id, '') %}
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=row.matter_id, q=queries.get(row.id, '')) }}">Open</a>
+          {% else %}
+          <span class="muted">-</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">No saved searches.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

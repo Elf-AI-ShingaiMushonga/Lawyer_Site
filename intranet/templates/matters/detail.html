@@ -15,6 +15,8 @@
           </div>
         </div>
         <div class="list-actions">
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Back to Matters</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Tasks</a>
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_documents', matter_id=m.id) }}">Documents</a>
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_team', matter_id=m.id) }}">Team</a>
@@ -25,45 +27,54 @@
         Why this matters: this executive summary gives partners and clients a single source of truth for risk, progress, and expected outcome.
       </div>
 
-      <form method="post" action="{{ url_for('matter_summary_update', matter_id=m.id) }}" class="row g-2 mt-2">
+      <form method="post" action="{{ url_for('matter_summary_update', matter_id=m.id) }}" class="mt-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="col-md-4">
-          <label class="muted small">Status</label>
-          <select class="form-select" name="status">
-            {% for status in matter_statuses %}
-              <option value="{{ status }}" {% if status == m.status %}selected{% endif %}>{{ status }}</option>
-            {% endfor %}
-          </select>
+        <div class="form-section">
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label">Status</label>
+              <select class="form-select" name="status">
+                {% for status in matter_statuses %}
+                  <option value="{{ status }}" {% if status == m.status %}selected{% endif %}>{{ status }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Risk Level</label>
+              <select class="form-select" name="risk_level">
+                {% for risk in risk_levels %}
+                  <option value="{{ risk }}" {% if risk == m.risk_level %}selected{% endif %}>{{ risk }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Budget Status</label>
+              <select class="form-select" name="budget_status">
+                {% for budget in budget_statuses %}
+                  <option value="{{ budget }}" {% if budget == m.budget_status %}selected{% endif %}>{{ budget }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
         </div>
-        <div class="col-md-4">
-          <label class="muted small">Risk Level</label>
-          <select class="form-select" name="risk_level">
-            {% for risk in risk_levels %}
-              <option value="{{ risk }}" {% if risk == m.risk_level %}selected{% endif %}>{{ risk }}</option>
-            {% endfor %}
-          </select>
+        <div class="form-section mt-2">
+          <div class="form-help mb-2">Keep this concise and stakeholder-ready. These notes are used in client and partner summaries.</div>
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label">Matter Objective</label>
+              <textarea class="form-control" name="objective" rows="2" placeholder="What outcome are we driving?">{{ m.objective or "" }}</textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Latest Update</label>
+              <textarea class="form-control" name="last_update_note" rows="2" placeholder="Latest stakeholder-ready update">{{ m.last_update_note or "" }}</textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Outcome / Business Impact</label>
+              <textarea class="form-control" name="outcome_summary" rows="2" placeholder="Value delivered or expected value">{{ m.outcome_summary or "" }}</textarea>
+            </div>
+          </div>
         </div>
-        <div class="col-md-4">
-          <label class="muted small">Budget Status</label>
-          <select class="form-select" name="budget_status">
-            {% for budget in budget_statuses %}
-              <option value="{{ budget }}" {% if budget == m.budget_status %}selected{% endif %}>{{ budget }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-12">
-          <label class="muted small">Matter Objective</label>
-          <textarea class="form-control" name="objective" rows="2" placeholder="What outcome are we driving?">{{ m.objective or "" }}</textarea>
-        </div>
-        <div class="col-12">
-          <label class="muted small">Latest Update</label>
-          <textarea class="form-control" name="last_update_note" rows="2" placeholder="Latest stakeholder-ready update">{{ m.last_update_note or "" }}</textarea>
-        </div>
-        <div class="col-12">
-          <label class="muted small">Outcome / Business Impact</label>
-          <textarea class="form-control" name="outcome_summary" rows="2" placeholder="Value delivered or expected value">{{ m.outcome_summary or "" }}</textarea>
-        </div>
-        <div class="col-12 d-grid">
+        <div class="d-grid mt-2">
           <button class="btn btn-light">Save Executive Summary</button>
         </div>
       </form>
@@ -105,11 +116,11 @@
       <form method="post" action="{{ url_for('matter_timeline_add', matter_id=m.id) }}" class="row g-2 mt-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="col-md-4">
-          <label class="muted small">Date</label>
+          <label class="form-label">Date</label>
           <input class="form-control" type="date" name="event_date" value="{{ today }}">
         </div>
         <div class="col-md-4">
-          <label class="muted small">Type</label>
+          <label class="form-label">Type</label>
           <select class="form-select" name="event_type">
             {% for event_type in timeline_event_types %}
               <option value="{{ event_type }}">{{ event_type }}</option>
@@ -117,18 +128,18 @@
           </select>
         </div>
         <div class="col-md-4">
-          <label class="muted small">Milestone</label>
+          <label class="form-label">Milestone</label>
           <div class="form-check mt-2">
             <input class="form-check-input" type="checkbox" id="is_milestone" name="is_milestone" value="1">
             <label class="form-check-label muted small" for="is_milestone">Mark as milestone</label>
           </div>
         </div>
         <div class="col-12">
-          <label class="muted small">Title</label>
+          <label class="form-label">Title</label>
           <input class="form-control" name="title" placeholder="e.g. Hearing confirmed" required>
         </div>
         <div class="col-12">
-          <label class="muted small">Description</label>
+          <label class="form-label">Description</label>
           <textarea class="form-control" name="description" rows="2" placeholder="What happened, and what comes next?"></textarea>
         </div>
         <div class="col-12 d-grid">

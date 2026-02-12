@@ -1,68 +1,114 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card p-3">
-  <div class="d-flex justify-content-between align-items-center">
-    <h3 class="mb-0">Add and Manage Users</h3>
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">Add and Manage Users</h3>
+      <div class="page-intro mt-1">Provision accounts, manage roles, and control activation state.</div>
+    </div>
     <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin') }}">Back</a>
   </div>
-  <div class="page-intro mt-2">Admins can provision new accounts with role and access state.</div>
 
-  <form method="post" class="row g-2 mt-2">
+  <form method="post" class="mt-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-md-3">
-      <label class="muted small">Email</label>
-      <input class="form-control" name="email" required>
-    </div>
-    <div class="col-md-3">
-      <label class="muted small">Full name</label>
-      <input class="form-control" name="full_name">
-    </div>
-    <div class="col-md-2">
-      <label class="muted small">Role</label>
-      <select class="form-select" name="role">
-        <option>lawyer</option>
-        <option>paralegal</option>
-        <option>staff</option>
-        <option>admin</option>
-      </select>
-    </div>
-    <div class="col-md-2">
-      <label class="muted small">Temp password</label>
-      <input class="form-control" name="password" type="password" required>
-    </div>
-    <div class="col-md-2">
-      <label class="muted small">Confirm password</label>
-      <input class="form-control" name="confirm_password" type="password" required>
-    </div>
-    <div class="col-12">
-      <div class="form-check mt-1">
-        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1" checked>
-        <label class="form-check-label muted small" for="is_active">Account is active immediately</label>
+    <input type="hidden" name="action" value="create">
+    <div class="form-section">
+      <div class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label" for="admin-user-email">Email</label>
+          <input class="form-control" id="admin-user-email" name="email" type="email" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="admin-user-full-name">Full Name</label>
+          <input class="form-control" id="admin-user-full-name" name="full_name">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="admin-user-role">Role</label>
+          <select class="form-select" id="admin-user-role" name="role">
+            <option>lawyer</option>
+            <option>paralegal</option>
+            <option>staff</option>
+            <option>admin</option>
+          </select>
+        </div>
       </div>
     </div>
-    <div class="col-12 d-grid">
-      <button class="btn btn-light">Create user</button>
+    <div class="form-section mt-2">
+      <div class="row g-2">
+        <div class="col-md-6">
+          <label class="form-label" for="admin-user-password">Temporary Password</label>
+          <input class="form-control" id="admin-user-password" name="password" type="password" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="admin-user-confirm-password">Confirm Password</label>
+          <input class="form-control" id="admin-user-confirm-password" name="confirm_password" type="password" required>
+        </div>
+      </div>
+      <div class="form-help">Passwords must be at least 12 characters.</div>
+    </div>
+    <div class="form-check mt-2">
+      <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1" checked>
+      <label class="form-check-label muted small" for="is_active">Account is active immediately</label>
+    </div>
+    <div class="d-grid mt-2">
+      <button class="btn btn-light">Create User</button>
     </div>
   </form>
 
-  <div class="mt-3 table-responsive">
-    <table class="table table-sm align-middle">
-      <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Active</th><th>Created</th></tr></thead>
-      <tbody>
-        {% for u in users %}
+  <div class="mt-3">
+    <div class="form-help mb-2">Recent users and permission controls.</div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
           <tr>
-            <td class="fw-semibold">{{ u.email }}</td>
-            <td class="muted">{{ u.full_name }}</td>
-            <td><span class="badge status-badge status-{{ u.role|lower|replace(' ', '-') }}">{{ u.role }}</span></td>
-            <td class="muted">{{ "yes" if u.is_active else "no" }}</td>
-            <td class="muted">{{ u.created_at.strftime("%Y-%m-%d") }}</td>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Active</th>
+            <th>Created</th>
+            <th>Actions</th>
           </tr>
-        {% endfor %}
-        {% if not users %}
-          <tr><td colspan="5" class="muted">No users created yet.</td></tr>
-        {% endif %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {% for u in users %}
+            <tr>
+              <td class="fw-semibold">{{ u.email }}</td>
+              <td class="muted">{{ u.full_name }}</td>
+              <td><span class="badge status-badge status-{{ u.role|lower|replace(' ', '-') }}">{{ u.role }}</span></td>
+              <td class="muted">{{ "yes" if u.is_active else "no" }}</td>
+              <td class="muted">{{ u.created_at.strftime("%Y-%m-%d") }}</td>
+              <td>
+                <div class="table-actions">
+                  <form method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="set_active">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <input type="hidden" name="is_active" value="{{ '0' if u.is_active else '1' }}">
+                    <button class="btn btn-sm btn-outline-light">{{ "Deactivate" if u.is_active else "Activate" }}</button>
+                  </form>
+                  <form method="post" class="table-actions">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="set_role">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <label class="visually-hidden" for="role-{{ u.id }}">Role</label>
+                    <select class="form-select form-select-sm" id="role-{{ u.id }}" name="role">
+                      <option value="lawyer" {% if u.role == "lawyer" %}selected{% endif %}>lawyer</option>
+                      <option value="paralegal" {% if u.role == "paralegal" %}selected{% endif %}>paralegal</option>
+                      <option value="staff" {% if u.role == "staff" %}selected{% endif %}>staff</option>
+                      <option value="admin" {% if u.role == "admin" %}selected{% endif %}>admin</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-light">Set Role</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+          {% if not users %}
+            <tr><td colspan="6" class="muted">No users created yet.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 {% endblock %}

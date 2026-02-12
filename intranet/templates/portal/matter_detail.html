@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">{{ matter.matter_no }} - {{ matter.title }}</h3>
+      <div class="page-intro mt-1">Visibility level: <span class="fw-semibold">{{ access.visibility_level }}</span></div>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
+  </div>
+
+  <div class="table-actions mt-2">
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages') }}">Messages</a>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_uploads') }}">Uploads</a>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_invoices') }}">Invoices</a>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_links') }}">Time-Limited Links</a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card p-3 h-100">
+      <h4 class="mb-1">Matter Status</h4>
+      <div class="list-meta mt-1">
+        <span>Stage: {{ matter.stage or "-" }}</span>
+        <span class="risk-chip risk-{{ (matter.risk_level or 'medium')|lower }}">{{ matter.risk_level or "Medium" }}</span>
+      </div>
+      <div class="mt-2">
+        <div class="form-label">Latest Update</div>
+        <div>{{ matter.last_update_note or "-" }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card p-3 h-100">
+      <h4 class="mb-1">Threads</h4>
+      {% if threads %}
+        {% for t in threads %}
+          <div class="activity-item">#{{ t.id }} • {{ t.subject }}</div>
+        {% endfor %}
+      {% else %}
+        <div class="muted">No threads.</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card p-3 h-100">
+      <h4 class="mb-1">Uploads</h4>
+      {% if uploads %}
+        {% for u in uploads %}
+          <div class="activity-item">{{ u.filename }} • {{ u.uploaded_at }}</div>
+        {% endfor %}
+      {% else %}
+        <div class="muted">No uploads.</div>
+      {% endif %}
+
+      <h4 class="mt-3 mb-1">Invoices</h4>
+      {% if invoices %}
+        {% for i in invoices %}
+          <div class="activity-item">#{{ i.id }} • {{ i.total }} • {{ i.status }}</div>
+        {% endfor %}
+      {% else %}
+        <div class="muted">No invoices.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

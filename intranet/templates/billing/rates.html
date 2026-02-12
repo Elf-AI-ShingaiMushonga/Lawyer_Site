@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card p-3 mb-3">
+      <h3>Billing Rates</h3>
+      <form method="post" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="rate">
+        <div class="col-md-6"><input class="form-control" name="name" placeholder="Name"></div>
+        <div class="col-md-6"><input class="form-control" name="client_name" placeholder="Client"></div>
+        <div class="col-md-6"><input class="form-control" name="matter_id" type="number" placeholder="Matter ID"></div>
+        <div class="col-md-6"><input class="form-control" name="user_id" type="number" placeholder="User ID"></div>
+        <div class="col-md-6"><input class="form-control" name="currency" value="ZAR"></div>
+        <div class="col-md-6"><input class="form-control" name="rate_per_hour" type="number" step="0.01" placeholder="Rate" required></div>
+        <div class="col-12 d-grid"><button class="btn btn-light">Save Rate</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card p-3 mb-3">
+      <h3>Fee Arrangement</h3>
+      <form method="post" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="fee_arrangement">
+        <div class="col-md-6"><input class="form-control" name="matter_id" type="number" placeholder="Matter ID" required></div>
+        <div class="col-md-6">
+          <select class="form-select" name="arrangement_type">
+            <option value="hourly">hourly</option>
+            <option value="fixed">fixed</option>
+            <option value="capped">capped</option>
+            <option value="blended">blended</option>
+          </select>
+        </div>
+        <div class="col-md-4"><input class="form-control" name="fixed_amount" type="number" step="0.01" placeholder="Fixed amount"></div>
+        <div class="col-md-4"><input class="form-control" name="cap_amount" type="number" step="0.01" placeholder="Cap amount"></div>
+        <div class="col-md-4"><input class="form-control" name="blended_rate" type="number" step="0.01" placeholder="Blended rate"></div>
+        <div class="col-12"><input class="form-control" name="notes" placeholder="Notes"></div>
+        <div class="col-12 d-grid"><button class="btn btn-light">Save Arrangement</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h3>Rate Cards</h3>
+  <table class="table">
+    <thead><tr><th>ID</th><th>Name</th><th>Client</th><th>Matter</th><th>User</th><th>Rate</th></tr></thead>
+    <tbody>
+      {% for r in rates %}
+      <tr>
+        <td>{{ r.id }}</td>
+        <td>{{ r.name or "-" }}</td>
+        <td>{{ r.client_name or "-" }}</td>
+        <td>{{ r.matter_id or "-" }}</td>
+        <td>{{ r.user_id or "-" }}</td>
+        <td>{{ r.rate_per_hour }} {{ r.currency }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">No rates.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card p-3">
+  <h3>Fee Arrangements</h3>
+  <table class="table">
+    <thead><tr><th>ID</th><th>Matter</th><th>Type</th><th>Fixed</th><th>Cap</th><th>Blended</th><th>Notes</th></tr></thead>
+    <tbody>
+      {% for row in arrangements %}
+      <tr>
+        <td>{{ row.id }}</td>
+        <td>{{ row.matter_id }}</td>
+        <td>{{ row.arrangement_type }}</td>
+        <td>{{ row.fixed_amount or "-" }}</td>
+        <td>{{ row.cap_amount or "-" }}</td>
+        <td>{{ row.blended_rate or "-" }}</td>
+        <td>{{ row.notes or "-" }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">No fee arrangements.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,13 +1,63 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card p-3">
-  <h3>Admin</h3>
-  <div class="muted">User provisioning, content publishing, and audit oversight.</div>
-  <div class="mt-3 d-flex gap-2">
-    <a class="btn btn-light" href="{{ url_for('admin_users') }}">Add Users</a>
-    <a class="btn btn-outline-light" href="{{ url_for('admin_announcements') }}">Announcements</a>
-    <a class="btn btn-outline-light" href="{{ url_for('admin_audit') }}">Audit log</a>
-    <a class="btn btn-outline-light" href="{{ url_for('trust_incidents') }}">Incidents</a>
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">Admin Control Center</h3>
+      <div class="page-intro mt-1">User provisioning, governance, templates, and operational controls.</div>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+  </div>
+
+  <div class="why-note mt-3">
+    Why this matters: central admin controls keep security, consistency, and firm operations aligned.
+  </div>
+
+  <div class="row g-3 mt-1">
+    <div class="col-lg-4">
+      <div class="form-section h-100">
+        <div class="form-label">Identity and Access</div>
+        <div class="table-actions mt-2">
+          <a class="btn btn-sm btn-light" href="{{ url_for('admin_users') }}">Internal Users</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_portal_users') }}">Portal Users</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_sso_apps') }}">SSO Apps</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="form-section h-100">
+        <div class="form-label">Content and Compliance</div>
+        <div class="table-actions mt-2">
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_announcements') }}">Announcements</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_audit') }}">Audit Log</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_incidents') }}">Incidents</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="form-section h-100">
+        <div class="form-label">Operations</div>
+        <div class="table-actions mt-2">
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('ops_backup_status') }}">Ops Controls</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_rules_deadlines') }}">Deadline Rules</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_rules_retention') }}">Retention Rules</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_rules_trust') }}">Trust Rules</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-section mt-3">
+    <div class="form-label">Configuration and Templates</div>
+    <div class="table-actions mt-2">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_firm') }}">Firm Settings</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_offices') }}">Offices</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_practice_areas') }}">Practice Areas</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_rates') }}">Rates</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_matters') }}">Matter Templates</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_tasks') }}">Task Templates</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_documents') }}">Document Templates</a>
+    </div>
   </div>
 </div>
 {% endblock %}

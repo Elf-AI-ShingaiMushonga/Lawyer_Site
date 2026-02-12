@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Task Template</h3>
+  <form method="post" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-section">
+      <div class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label" for="task-template-name">Template Name</label>
+          <input class="form-control" id="task-template-name" name="name" placeholder="Template name" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="task-template-matter-type">Matter Type</label>
+          <input class="form-control" id="task-template-matter-type" name="matter_type" placeholder="Matter type">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="task-template-priority">Priority</label>
+          <input class="form-control" id="task-template-priority" name="priority" value="Medium">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="task-template-sla">SLA Hours</label>
+          <input class="form-control" id="task-template-sla" name="sla_hours" type="number" placeholder="SLA hours">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="task-template-recur">Recurrence Rule</label>
+          <input class="form-control" id="task-template-recur" name="recurrence_rule" placeholder="weekly/monthly">
+        </div>
+      </div>
+    </div>
+    <div class="form-section mt-2">
+      <label class="form-label" for="task-template-items">Checklist / Task Items</label>
+      <textarea class="form-control" id="task-template-items" name="items" rows="4" placeholder="One item per line"></textarea>
+    </div>
+    <div class="d-grid mt-2"><button class="btn btn-light">Save Template</button></div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h3 class="mb-1">Task Templates</h3>
+  <div class="table-responsive mt-2">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Matter Type</th>
+          <th>Priority</th>
+          <th>SLA</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in templates %}
+          <tr>
+            <td>{{ t.name }}</td>
+            <td>{{ t.matter_type or '-' }}</td>
+            <td>{{ t.priority }}</td>
+            <td>{{ t.sla_hours or '-' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="muted">No templates.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h4 class="mt-3 mb-1">Template Items</h4>
+  <div class="table-responsive mt-2">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Template ID</th>
+          <th>Item</th>
+          <th>Position</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in items %}
+          <tr>
+            <td>{{ i.task_template_id }}</td>
+            <td>{{ i.title }}</td>
+            <td>{{ i.position }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="muted">No items.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

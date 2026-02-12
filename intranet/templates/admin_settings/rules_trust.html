@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Trust Account Rule</h3>
+  <form method="post" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="account">
+    <div class="form-section">
+      <div class="row g-2">
+        <div class="col-md-3">
+          <label class="form-label" for="trust-account-name">Account Name</label>
+          <input class="form-control" id="trust-account-name" name="name" placeholder="Account name" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="trust-bank-name">Bank</label>
+          <input class="form-control" id="trust-bank-name" name="bank_name" placeholder="Bank">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="trust-last4">Last 4</label>
+          <input class="form-control" id="trust-last4" name="account_no_last4" placeholder="Last 4">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="trust-jurisdiction">Jurisdiction</label>
+          <input class="form-control" id="trust-jurisdiction" name="jurisdiction" value="ZA">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="trust-currency">Currency</label>
+          <input class="form-control" id="trust-currency" name="currency" value="ZAR">
+        </div>
+      </div>
+    </div>
+    <div class="d-grid mt-2">
+      <button class="btn btn-light">Save</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Trust Accounts</h3>
+  <div class="table-responsive mt-2">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Bank</th>
+          <th>Jurisdiction</th>
+          <th>Currency</th>
+          <th>Active</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in accounts %}
+          <tr>
+            <td>{{ a.name }}</td>
+            <td>{{ a.bank_name or '-' }}</td>
+            <td>{{ a.jurisdiction }}</td>
+            <td>{{ a.currency }}</td>
+            <td>{{ "Yes" if a.is_active else "No" }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="muted">No accounts.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card p-3">
+  <h3 class="mb-1">Open Threshold Alerts</h3>
+  <div class="table-responsive mt-2">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Client Ledger</th>
+          <th>Threshold</th>
+          <th>Balance</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in alerts %}
+          <tr>
+            <td>{{ a.id }}</td>
+            <td>{{ a.client_ledger_id }}</td>
+            <td>{{ a.threshold_amount }}</td>
+            <td>{{ a.current_balance }}</td>
+            <td>{{ a.status }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="muted">No alerts.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

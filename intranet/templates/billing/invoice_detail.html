@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <h3>Invoice #{{ inv.id }}</h3>
+  <div class="muted">Matter {{ inv.matter_id }} • {{ inv.client_name }} • {{ inv.period_start }} to {{ inv.period_end }}</div>
+  <div class="mt-2">Status: <strong>{{ inv.status }}</strong> • Subtotal {{ inv.subtotal }} • Tax {{ inv.tax_total }} • Total {{ inv.total }} • Outstanding {{ outstanding }}</div>
+  <div class="d-flex flex-wrap gap-2 mt-2">
+    <form method="post" action="{{ url_for('billing_invoice_approve', invoice_id=inv.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-light">Approve</button></form>
+    <a class="btn btn-outline-light" href="{{ url_for('billing_invoice_pdf', invoice_id=inv.id) }}">Download PDF</a>
+    <a class="btn btn-outline-light" href="{{ url_for('billing_invoice_ledes', invoice_id=inv.id) }}">Export LEDES</a>
+    <a class="btn btn-outline-light" href="{{ url_for('billing_ar_aging') }}">AR Aging</a>
+  </div>
+</div>
+<div class="card p-3 mb-3"><h4>Lines</h4><table class="table"><thead><tr><th>Description</th><th>Hours</th><th>Rate</th><th>Amount</th><th>Tax</th></tr></thead><tbody>{% for l in lines %}<tr><td>{{ l.description }}</td><td>{{ l.hours }}</td><td>{{ l.rate }}</td><td>{{ l.amount }}</td><td>{{ l.tax_amount }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No lines.</td></tr>{% endfor %}</tbody></table></div>
+<div class="card p-3 mb-3">
+  <h4>Write-down / Write-off</h4>
+  <form method="post" action="{{ url_for('billing_invoice_adjust', invoice_id=inv.id) }}" class="row g-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-3">
+      <select class="form-select" name="adjustment_type" required>
+        <option value="write_down">write_down</option>
+        <option value="write_off">write_off</option>
+      </select>
+    </div>
+    <div class="col-md-3"><input class="form-control" type="number" name="amount" min="0.01" step="0.01" placeholder="Amount" required></div>
+    <div class="col-md-4"><input class="form-control" name="reason" placeholder="Reason" required></div>
+    <div class="col-md-2 d-grid"><button class="btn btn-outline-light">Apply</button></div>
+  </form>
+</div>
+<div class="card p-3 mb-3">
+  <h4>Adjustments</h4>
+  <table class="table">
+    <thead><tr><th>Type</th><th>Amount</th><th>Reason</th><th>At</th></tr></thead>
+    <tbody>
+      {% for a in adjustments %}
+      <tr><td>{{ a.adjustment_type }}</td><td>{{ a.amount }}</td><td>{{ a.reason }}</td><td>{{ a.created_at }}</td></tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">No adjustments.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="card p-3"><h4>Payments</h4><table class="table"><thead><tr><th>Amount</th><th>Method</th><th>Reference</th><th>At</th></tr></thead><tbody>{% for p in payments %}<tr><td>{{ p.amount }}</td><td>{{ p.method }}</td><td>{{ p.reference or '-' }}</td><td>{{ p.allocated_at }}</td></tr>{% else %}<tr><td colspan="4" class="muted">No payments recorded.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

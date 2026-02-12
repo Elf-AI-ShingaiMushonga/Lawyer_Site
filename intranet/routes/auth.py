@@ -10,9 +10,31 @@ from sqlalchemy.exc import IntegrityError
 
 from ..config import is_valid_email
 from ..extensions import db, limiter
-from ..helpers import audit, can_access_matter, is_admin
-from ..models import Announcement, AuditLog, Contact, DocumentFile, KnowledgeBase, Matter, MatterMember, Task, User
+from ..helpers import (
+    audit,
+    can_access_matter,
+    is_admin,
+    register_trusted_device,
+    register_user_session,
+    revoke_current_session,
+)
+from ..mfa import check_backup_code, verify_totp
+from ..models import (
+    Announcement,
+    AuditLog,
+    Contact,
+    DocumentFile,
+    KnowledgeBase,
+    Matter,
+    MatterMember,
+    Task,
+    User,
+    UserMFABackupCode,
+)
+from ..policies import visible_matter_ids
 from ..templates import page
+
+MFA_REQUIRED_ROLES = {"admin", "lawyer", "paralegal", "staff"}
 
 
 def has_any_users() -> bool:
@@ -75,6 +97,7 @@ def register_auth_routes(app):
                 return redirect(url_for("login"))
 
             login_user(user)
+            session.permanent = True
             audit("bootstrap_admin_create", "User", user.id, {"email": email})
             flash("Administrator account created.", "info")
             return redirect(url_for("dashboard"))
@@ -92,17 +115,68 @@ def register_auth_routes(app):
         if request.method == "POST":
             email = (request.form.get("email") or "").strip().lower()
             password = request.form.get("password") or ""
+            mfa_code = (request.form.get("mfa_code") or "").strip()
+            backup_code = (request.form.get("backup_code") or "").strip().upper()
             start_live_demo = (request.form.get("start_live_demo") or "").strip().lower() in {"1", "true", "yes", "on"}
             if not is_valid_email(email):
                 flash("Invalid credentials.", "warning")
                 return redirect(url_for("login"))
             user = User.query.filter_by(email=email).first()
+            now = dt.datetime.utcnow()
+            if user and user.locked_until and user.locked_until > now:
+                flash("Account temporarily locked due to failed sign-in attempts.", "warning")
+                return redirect(url_for("login"))
+
             if not user or not user.is_active or not user.check_password(password):
+                if user:
+                    user.failed_login_attempts = int(user.failed_login_attempts or 0) + 1
+                    user.last_failed_login_at = now
+                    if user.failed_login_attempts >= 5:
+                        user.locked_until = now + dt.timedelta(minutes=15)
+                    db.session.commit()
                 flash("Invalid credentials.", "warning")
                 return redirect(url_for("login"))
+
+            if user.role in MFA_REQUIRED_ROLES and not user.mfa_enabled:
+                login_user(user)
+                session.permanent = True
+                user.last_login_at = dt.datetime.utcnow()
+                user.failed_login_attempts = 0
+                user.locked_until = None
+                db.session.commit()
+                register_user_session(user.id)
+                register_trusted_device(user.id)
+                audit("login_mfa_enrollment_required", "User", user.id)
+                flash("MFA enrollment is required before using the system.", "warning")
+                return redirect(url_for("auth_mfa_setup"))
+
+            if user.mfa_enabled:
+                verified = False
+                if mfa_code and user.mfa_secret and verify_totp(user.mfa_secret, mfa_code):
+                    verified = True
+                elif backup_code:
+                    backups = UserMFABackupCode.query.filter_by(user_id=user.id, used_at=None).all()
+                    for row in backups:
+                        if check_backup_code(row.code_hash, backup_code):
+                            row.used_at = now
+                            verified = True
+                            break
+                if not verified:
+                    flash("MFA code required or invalid.", "warning")
+                    return redirect(url_for("login"))
+
             login_user(user)
+            session.permanent = True
+            if user.mfa_enabled:
+                session["mfa_verified_at"] = dt.datetime.utcnow().isoformat()
+            else:
+                session.pop("mfa_verified_at", None)
             user.last_login_at = dt.datetime.utcnow()
+            user.failed_login_attempts = 0
+            user.locked_until = None
             db.session.commit()
+            register_user_session(user.id)
+            register_trusted_device(user.id)
             audit("login")
             if start_live_demo:
                 session["client_story_mode"] = True
@@ -114,6 +188,9 @@ def register_auth_routes(app):
     @app.post("/logout")
     @login_required
     def logout():
+        revoke_current_session()
+        session.pop("_session_token", None)
+        session.pop("mfa_verified_at", None)
         audit("logout")
         logout_user()
         flash("Logged out.", "info")
@@ -142,21 +219,28 @@ def register_auth_routes(app):
         )
 
         matter_scope = Matter.query
-        visible_matter_ids = db.session.query(Matter.id)
+        scoped_ids: list[int] | None = None
         if not is_admin():
-            visible_matter_ids = db.session.query(MatterMember.matter_id).filter(MatterMember.user_id == current_user.id)
-            matter_scope = (
-                matter_scope.join(MatterMember, MatterMember.matter_id == Matter.id).filter(MatterMember.user_id == current_user.id)
-            )
+            scoped_ids = visible_matter_ids()
+            if scoped_ids:
+                matter_scope = matter_scope.filter(Matter.id.in_(scoped_ids))
+            else:
+                matter_scope = matter_scope.filter(Matter.id == -1)
         recent_matters = matter_scope.order_by(Matter.opened_at.desc()).limit(8).all()
 
         document_scope = DocumentFile.query
         if not is_admin():
-            document_scope = document_scope.filter(DocumentFile.matter_id.in_(visible_matter_ids))
+            if scoped_ids:
+                document_scope = document_scope.filter(DocumentFile.matter_id.in_(scoped_ids))
+            else:
+                document_scope = document_scope.filter(DocumentFile.id == -1)
 
         risk_matter_scope = Matter.query
         if not is_admin():
-            risk_matter_scope = risk_matter_scope.filter(Matter.id.in_(visible_matter_ids))
+            if scoped_ids:
+                risk_matter_scope = risk_matter_scope.filter(Matter.id.in_(scoped_ids))
+            else:
+                risk_matter_scope = risk_matter_scope.filter(Matter.id == -1)
         risk_matter_scope = risk_matter_scope.filter(Matter.status != "Closed")
 
         overdue_task_scope = Task.query.filter(Task.status != "Done", Task.due_date.isnot(None), Task.due_date < today)
@@ -173,9 +257,14 @@ def register_auth_routes(app):
             Task.due_date <= (today + dt.timedelta(days=3)),
         )
         if not is_admin():
-            overdue_task_scope = overdue_task_scope.filter(Task.matter_id.in_(visible_matter_ids))
-            due_week_scope = due_week_scope.filter(Task.matter_id.in_(visible_matter_ids))
-            urgent_unassigned_scope = urgent_unassigned_scope.filter(Task.matter_id.in_(visible_matter_ids))
+            if scoped_ids:
+                overdue_task_scope = overdue_task_scope.filter(Task.matter_id.in_(scoped_ids))
+                due_week_scope = due_week_scope.filter(Task.matter_id.in_(scoped_ids))
+                urgent_unassigned_scope = urgent_unassigned_scope.filter(Task.matter_id.in_(scoped_ids))
+            else:
+                overdue_task_scope = overdue_task_scope.filter(Task.id == -1)
+                due_week_scope = due_week_scope.filter(Task.id == -1)
+                urgent_unassigned_scope = urgent_unassigned_scope.filter(Task.id == -1)
 
         overdue_counts = {
             matter_id: count
@@ -224,10 +313,13 @@ def register_auth_routes(app):
     @login_required
     def client_story():
         matter_scope = Matter.query
+        scoped_ids: list[int] | None = None
         if not is_admin():
-            matter_scope = matter_scope.join(MatterMember, MatterMember.matter_id == Matter.id).filter(
-                MatterMember.user_id == current_user.id
-            )
+            scoped_ids = visible_matter_ids()
+            if scoped_ids:
+                matter_scope = matter_scope.filter(Matter.id.in_(scoped_ids))
+            else:
+                matter_scope = matter_scope.filter(Matter.id == -1)
 
         flagship_matter = matter_scope.filter(Matter.matter_no == "2026-LIT-0142").first()
         if flagship_matter and not can_access_matter(flagship_matter.id):
@@ -238,9 +330,12 @@ def register_auth_routes(app):
         open_task_scope = Task.query.filter(Task.status != "Done")
         document_scope = DocumentFile.query
         if not is_admin():
-            visible_matter_ids = db.session.query(MatterMember.matter_id).filter(MatterMember.user_id == current_user.id)
-            open_task_scope = open_task_scope.filter(Task.matter_id.in_(visible_matter_ids))
-            document_scope = document_scope.filter(DocumentFile.matter_id.in_(visible_matter_ids))
+            if scoped_ids:
+                open_task_scope = open_task_scope.filter(Task.matter_id.in_(scoped_ids))
+                document_scope = document_scope.filter(DocumentFile.matter_id.in_(scoped_ids))
+            else:
+                open_task_scope = open_task_scope.filter(Task.id == -1)
+                document_scope = document_scope.filter(DocumentFile.id == -1)
 
         story_stats = {
             "matter_count": matter_scope.count(),
