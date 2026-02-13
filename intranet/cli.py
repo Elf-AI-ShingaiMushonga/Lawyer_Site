@@ -12,19 +12,107 @@ import sqlalchemy as sa
 
 from .config import VALID_ROLES, is_valid_email
 from .extensions import db
+from .mfa import hash_backup_code
 from .models import (
     Announcement,
+    AnalyticsMetricSnapshot,
+    ARSnapshot,
     AuditLog,
+    BackupRun,
+    BatesRange,
+    BurnoutSignal,
+    CRMFollowUp,
+    CRMLead,
+    ConflictCheck,
     Contact,
+    DRTarget,
+    DataResidencyPolicy,
+    Deadline,
+    DeadlineRule,
     DocumentFile,
+    DocumentLock,
+    DocumentOCRText,
+    DocumentRecord,
+    DocumentTemplate,
+    DocumentVersion,
+    EmailCapture,
+    EngagementLetter,
+    Entity,
+    EntityRelationship,
+    EthicalWall,
+    EthicalWallMatter,
+    EthicalWallRule,
+    ExpenseEntry,
+    FeeArrangement,
+    FirmSetting,
     GovernanceIncident,
+    HolidayCalendar,
+    IntakeForm,
+    Invoice,
+    InvoiceAdjustment,
+    InvoiceLine,
+    JobHistory,
+    JobQueue,
     KnowledgeBase,
+    LEDESExport,
+    LegalHold,
     Matter,
     MatterActivity,
+    MatterClosingChecklistItem,
     MatterMember,
+    MatterNote,
+    MatterNoteACL,
+    MatterParty,
+    MatterStageHistory,
+    MatterTemplate,
     MatterTimelineEvent,
+    Notification,
+    Office,
+    PaymentAllocation,
+    PermissionGrant,
+    PortalInvoiceView,
+    PortalLinkToken,
+    PortalMatterAccess,
+    PortalMessage,
+    PortalMessageThread,
+    PortalPaymentReceipt,
+    PortalUpload,
+    PortalUser,
+    PracticeArea,
+    ProductionItem,
+    ProductionSet,
+    RateCard,
+    RestoreVerification,
+    RetentionPolicy,
+    SSOApplication,
+    SSOAuthorizationCode,
+    SSOToken,
+    SavedSearch,
+    ScheduledJob,
+    SuspiciousActivityAlert,
     Task,
+    TaskApproval,
+    TaskChecklistItem,
+    TaskDependency,
+    TaskTemplate,
+    TaskTemplateItem,
+    TaxRule,
+    TimeEntry,
+    TimeRoundingPolicy,
+    TimeTimer,
+    TimeValidationEvent,
+    TimekeeperRole,
+    TrustAccount,
+    TrustApprovalRequest,
+    TrustClientLedger,
+    TrustLedgerEntry,
+    TrustReconciliationRun,
+    TrustThresholdAlert,
+    TrustedDevice,
     User,
+    UserMFABackupCode,
+    UserSession,
+    WorkloadForecast,
 )
 
 
@@ -236,20 +324,65 @@ def seed_demo_data(app, password: str, reset: bool = False):
 
         users = {}
         user_specs = [
-            ("admin@elf-ai-demo.co.za", "Alicia Mokoena", "admin"),
-            ("partner@elf-ai-demo.co.za", "Daniel Naidoo", "lawyer"),
-            ("associate@elf-ai-demo.co.za", "Nandi Maseko", "lawyer"),
-            ("paralegal@elf-ai-demo.co.za", "Sipho Khumalo", "paralegal"),
-            ("staff@elf-ai-demo.co.za", "Leah Pillay", "staff"),
+            {
+                "email": "admin@elf-ai-demo.co.za",
+                "full_name": "Alicia Mokoena",
+                "role": "admin",
+                "mfa_enabled": True,
+                "mfa_secret": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+                "failed_login_attempts": 0,
+            },
+            {
+                "email": "partner@elf-ai-demo.co.za",
+                "full_name": "Daniel Naidoo",
+                "role": "lawyer",
+                "mfa_enabled": True,
+                "mfa_secret": "KRUGS4ZANFZSAYJAON2XEZLSON2XEZLS",
+                "failed_login_attempts": 0,
+            },
+            {
+                "email": "associate@elf-ai-demo.co.za",
+                "full_name": "Nandi Maseko",
+                "role": "lawyer",
+                "mfa_enabled": False,
+                "mfa_secret": None,
+                "failed_login_attempts": 0,
+            },
+            {
+                "email": "paralegal@elf-ai-demo.co.za",
+                "full_name": "Sipho Khumalo",
+                "role": "paralegal",
+                "mfa_enabled": False,
+                "mfa_secret": None,
+                "failed_login_attempts": 1,
+            },
+            {
+                "email": "staff@elf-ai-demo.co.za",
+                "full_name": "Leah Pillay",
+                "role": "staff",
+                "mfa_enabled": False,
+                "mfa_secret": None,
+                "failed_login_attempts": 0,
+            },
         ]
-        for i, (email, full_name, role) in enumerate(user_specs):
+        for i, spec in enumerate(user_specs):
+            email = spec["email"]
             user = User(
                 email=email,
-                full_name=full_name,
-                role=role,
+                full_name=spec["full_name"],
+                role=spec["role"],
                 password_hash="x",
                 created_at=now - dt.timedelta(days=30 - (i * 2)),
                 last_login_at=now - dt.timedelta(hours=2 + i),
+                mfa_enabled=bool(spec["mfa_enabled"]),
+                mfa_secret=spec["mfa_secret"],
+                failed_login_attempts=int(spec["failed_login_attempts"]),
+                last_failed_login_at=(
+                    now - dt.timedelta(hours=6)
+                    if int(spec["failed_login_attempts"]) > 0
+                    else None
+                ),
+                password_changed_at=now - dt.timedelta(days=15 - i),
             )
             user.set_password(password)
             db.session.add(user)
@@ -414,6 +547,119 @@ def seed_demo_data(app, password: str, reset: bool = False):
         db.session.flush()
 
         matter_map = {m.matter_no: m for m in matters}
+        matter_metadata = {
+            "2026-LIT-0142": {
+                "court_name": "Gauteng Division, Pretoria",
+                "judge_name": "Acting Judge M. Khoza",
+                "jurisdiction": "ZA-GP",
+                "stage": "Discovery",
+                "practice_area": "Commercial Litigation",
+                "case_type": "Contractual Damages",
+                "risk_taxonomy": "Counterparty-Default",
+                "archival_status": "active",
+                "archival_due_at": None,
+                "closing_checklist": [
+                    "Final costs memo",
+                    "Client closeout letter",
+                    "Archive hearing bundle",
+                ],
+            },
+            "2026-EMP-0071": {
+                "court_name": "CCMA Johannesburg",
+                "judge_name": "Commissioner N. Mabuza",
+                "jurisdiction": "ZA-GP",
+                "stage": "Pre-Arbitration",
+                "practice_area": "Employment Law",
+                "case_type": "Unfair Dismissal",
+                "risk_taxonomy": "Labour-Procedure",
+                "archival_status": "active",
+                "archival_due_at": None,
+                "closing_checklist": [
+                    "Arbitration award analysis",
+                    "Client policy update memo",
+                    "Closure approval",
+                ],
+            },
+            "2026-CORP-0033": {
+                "court_name": None,
+                "judge_name": None,
+                "jurisdiction": "ZA-WC",
+                "stage": "Due Diligence",
+                "practice_area": "Corporate and M&A",
+                "case_type": "Acquisition",
+                "risk_taxonomy": "M&A-Regulatory",
+                "archival_status": "active",
+                "archival_due_at": None,
+                "closing_checklist": [
+                    "Board resolution pack",
+                    "Closing conditions tracker",
+                    "Transaction bible export",
+                ],
+            },
+            "2025-PROB-0119": {
+                "court_name": "Master of the High Court, Cape Town",
+                "judge_name": None,
+                "jurisdiction": "ZA-WC",
+                "stage": "Closed",
+                "practice_area": "Estates",
+                "case_type": "Estate Administration",
+                "risk_taxonomy": "Probate-Distribution",
+                "archival_status": "ready_for_archive",
+                "archival_due_at": now + dt.timedelta(days=30),
+                "closing_checklist": [
+                    "Beneficiary confirmations",
+                    "Tax clearance lodged",
+                    "Vault transfer complete",
+                ],
+            },
+            "2026-COM-0055": {
+                "court_name": "KZN High Court (Durban)",
+                "judge_name": "Judge P. Moodley",
+                "jurisdiction": "ZA-KZN",
+                "stage": "Mediation",
+                "practice_area": "Commercial Litigation",
+                "case_type": "Service Agreement Dispute",
+                "risk_taxonomy": "SLA-Penalties",
+                "archival_status": "active",
+                "archival_due_at": None,
+                "closing_checklist": [
+                    "Mediation statement",
+                    "Revised SLA draft",
+                    "Client sign-off",
+                ],
+            },
+            "2026-REG-0021": {
+                "court_name": "NERSA Licensing Panel",
+                "judge_name": "Panel Chair R. Msimang",
+                "jurisdiction": "ZA-GP",
+                "stage": "Regulatory Response",
+                "practice_area": "Regulatory",
+                "case_type": "Licensing Compliance",
+                "risk_taxonomy": "Regulatory-Enforcement",
+                "archival_status": "active",
+                "archival_due_at": None,
+                "closing_checklist": [
+                    "Regulator response packet",
+                    "Operational reactivation memo",
+                    "Compliance monitoring plan",
+                ],
+            },
+        }
+        for matter_no, metadata in matter_metadata.items():
+            row = matter_map[matter_no]
+            row.court_name = metadata["court_name"]
+            row.judge_name = metadata["judge_name"]
+            row.jurisdiction = metadata["jurisdiction"]
+            row.stage = metadata["stage"]
+            row.practice_area = metadata["practice_area"]
+            row.case_type = metadata["case_type"]
+            row.risk_taxonomy = metadata["risk_taxonomy"]
+            row.archival_status = metadata["archival_status"]
+            row.archival_due_at = metadata["archival_due_at"]
+            row.closing_checklist_json = json.dumps(metadata["closing_checklist"])
+            row.originating_partner_id = partner_id
+            row.supervising_partner_id = partner_id
+
         memberships = [
             ("2026-LIT-0142", partner_id, "Lead Counsel"),
             ("2026-LIT-0142", associate_id, "Associate"),
@@ -441,36 +687,226 @@ def seed_demo_data(app, password: str, reset: bool = False):
             )
 
         task_specs = [
-            ("2026-LIT-0142", "Prepare witness bundle", "Compile and index affidavits for the hearing set.", "Doing", 5, paralegal_id),
-            ("2026-LIT-0142", "Draft settlement position", "Prepare opening settlement position and risk notes.", "Todo", 3, associate_id),
-            ("2026-LIT-0142", "Client strategy call", "Run strategy briefing with CFO and operations lead.", "Done", -1, partner_id),
-            ("2026-LIT-0142", "Court filing QC", "Final review before filing package submission.", "Todo", -2, None),
-            ("2026-EMP-0071", "Review disciplinary record", "Cross-check charge sheet and hearing transcript.", "Doing", 4, associate_id),
-            ("2026-EMP-0071", "Prepare prep memo", "Brief counsel on procedural objections and timeline.", "Todo", 6, paralegal_id),
-            ("2026-CORP-0033", "Corporate registry search", "Confirm entity status across SA and Mauritius.", "Todo", 2, staff_id),
-            ("2026-CORP-0033", "Draft risk matrix", "Summarize key diligence findings for board update.", "Doing", 1, associate_id),
-            ("2026-CORP-0033", "Supplier concentration note", "Escalate supplier concentration mitigation paths.", "Todo", -1, None),
-            ("2025-PROB-0119", "Archive signed letters", "Final archive and closure checklist.", "Done", -20, paralegal_id),
-            ("2026-COM-0055", "Mediation prep binder", "Assemble mediation chronology and contract amendments.", "Doing", 3, paralegal_id),
-            ("2026-COM-0055", "Without-prejudice offer draft", "Draft structured offer and fallback options.", "Todo", 1, associate_id),
-            ("2026-COM-0055", "Client operations workshop", "Align legal and operations positions pre-mediation.", "Todo", 4, staff_id),
-            ("2026-REG-0021", "Supplementary filing checklist", "Confirm all mandatory annexures are complete.", "Doing", 2, paralegal_id),
-            ("2026-REG-0021", "Regulator response tracker", "Track open regulator clarifications and owners.", "Todo", 5, staff_id),
-            ("2026-REG-0021", "Risk committee briefing", "Prepare executive memo for licensing risk exposure.", "Todo", -3, partner_id),
+            {
+                "matter_no": "2026-LIT-0142",
+                "title": "Prepare witness bundle",
+                "description": "Compile and index affidavits for the hearing set.",
+                "status": "Doing",
+                "due_in_days": 5,
+                "assigned_to": paralegal_id,
+                "priority": "High",
+                "sla_hours": 36,
+                "approval_state": "pending",
+                "requires_two_person_review": False,
+            },
+            {
+                "matter_no": "2026-LIT-0142",
+                "title": "Draft settlement position",
+                "description": "Prepare opening settlement position and risk notes.",
+                "status": "Todo",
+                "due_in_days": 3,
+                "assigned_to": associate_id,
+                "priority": "High",
+                "sla_hours": 24,
+                "approval_state": "draft",
+                "requires_two_person_review": False,
+            },
+            {
+                "matter_no": "2026-LIT-0142",
+                "title": "Client strategy call",
+                "description": "Run strategy briefing with CFO and operations lead.",
+                "status": "Done",
+                "due_in_days": -1,
+                "assigned_to": partner_id,
+                "priority": "Medium",
+                "sla_hours": 12,
+                "approval_state": "approved",
+                "requires_two_person_review": False,
+            },
+            {
+                "matter_no": "2026-LIT-0142",
+                "title": "Court filing QC",
+                "description": "Final review before filing package submission.",
+                "status": "Todo",
+                "due_in_days": -2,
+                "assigned_to": None,
+                "priority": "Critical",
+                "sla_hours": 6,
+                "approval_state": "pending",
+                "requires_two_person_review": True,
+            },
+            {
+                "matter_no": "2026-EMP-0071",
+                "title": "Review disciplinary record",
+                "description": "Cross-check charge sheet and hearing transcript.",
+                "status": "Doing",
+                "due_in_days": 4,
+                "assigned_to": associate_id,
+                "priority": "High",
+                "sla_hours": 24,
+                "approval_state": "pending",
+                "requires_two_person_review": False,
+            },
+            {
+                "matter_no": "2026-EMP-0071",
+                "title": "Prepare prep memo",
+                "description": "Brief counsel on procedural objections and timeline.",
+                "status": "Todo",
+                "due_in_days": 6,
+                "assigned_to": paralegal_id,
+                "priority": "Medium",
+                "sla_hours": 48,
+                "approval_state": "draft",
+                "requires_two_person_review": False,
+            },
+            {
+                "matter_no": "2026-CORP-0033",
+                "title": "Corporate registry search",
+                "description": "Confirm entity status across SA and Mauritius.",
+                "status": "Todo",
+                "due_in_days": 2,
+                "assigned_to": staff_id,
+                "priority": "High",
+                "sla_hours": 20,
+                "approval_state": "draft",
+                "requires_two_person_review": False,
+            },
+            {
+                "matter_no": "2026-CORP-0033",
+                "title": "Draft risk matrix",
+                "description": "Summarize key diligence findings for board update.",
+                "status": "Doing",
+                "due_in_days": 1,
+                "assigned_to": associate_id,
+                "priority": "Critical",
+                "sla_hours": 18,
+                "approval_state": "pending",
+                "requires_two_person_review": False,
+            },
+            {
+                "matter_no": "2026-CORP-0033",
+                "title": "Supplier concentration note",
+                "description": "Escalate supplier concentration mitigation paths.",
+                "status": "Todo",
+                "due_in_days": -1,
+                "assigned_to": None,
+                "priority": "Critical",
+                "sla_hours": 8,
+                "approval_state": "pending",
+                "requires_two_person_review": True,
+            },
+            {
+                "matter_no": "2025-PROB-0119",
+                "title": "Archive signed letters",
+                "description": "Final archive and closure checklist.",
+                "status": "Done",
+                "due_in_days": -20,
+                "assigned_to": paralegal_id,
+                "priority": "Low",
+                "sla_hours": 12,
+                "approval_state": "approved",
+                "requires_two_person_review": False,
+            },
+            {
+                "matter_no": "2026-COM-0055",
+                "title": "Mediation prep binder",
+                "description": "Assemble mediation chronology and contract amendments.",
+                "status": "Doing",
+                "due_in_days": 3,
+                "assigned_to": paralegal_id,
+                "priority": "High",
+                "sla_hours": 30,
+                "approval_state": "pending",
+                "requires_two_person_review": False,
+            },
+            {
+                "matter_no": "2026-COM-0055",
+                "title": "Without-prejudice offer draft",
+                "description": "Draft structured offer and fallback options.",
+                "status": "Todo",
+                "due_in_days": 1,
+                "assigned_to": associate_id,
+                "priority": "High",
+                "sla_hours": 18,
+                "approval_state": "draft",
+                "requires_two_person_review": False,
+            },
+            {
+                "matter_no": "2026-COM-0055",
+                "title": "Client operations workshop",
+                "description": "Align legal and operations positions pre-mediation.",
+                "status": "Todo",
+                "due_in_days": 4,
+                "assigned_to": staff_id,
+                "priority": "Medium",
+                "sla_hours": 24,
+                "approval_state": "draft",
+                "requires_two_person_review": False,
+            },
+            {
+                "matter_no": "2026-REG-0021",
+                "title": "Supplementary filing checklist",
+                "description": "Confirm all mandatory annexures are complete.",
+                "status": "Doing",
+                "due_in_days": 2,
+                "assigned_to": paralegal_id,
+                "priority": "High",
+                "sla_hours": 16,
+                "approval_state": "pending",
+                "requires_two_person_review": False,
+            },
+            {
+                "matter_no": "2026-REG-0021",
+                "title": "Regulator response tracker",
+                "description": "Track open regulator clarifications and owners.",
+                "status": "Todo",
+                "due_in_days": 5,
+                "assigned_to": staff_id,
+                "priority": "Medium",
+                "sla_hours": 24,
+                "approval_state": "draft",
+                "requires_two_person_review": False,
+                "recurrence_rule": "FREQ=WEEKLY;COUNT=4",
+            },
+            {
+                "matter_no": "2026-REG-0021",
+                "title": "Risk committee briefing",
+                "description": "Prepare executive memo for licensing risk exposure.",
+                "status": "Todo",
+                "due_in_days": -3,
+                "assigned_to": partner_id,
+                "priority": "Critical",
+                "sla_hours": 8,
+                "approval_state": "pending",
+                "requires_two_person_review": True,
+            },
         ]
-        for matter_no, title, description, status, due_in_days, assigned_to in task_specs:
-            db.session.add(
-                Task(
-                    matter_id=matter_map[matter_no].id,
-                    title=title,
-                    description=description,
-                    status=status,
-                    due_date=(now.date() + dt.timedelta(days=due_in_days)) if due_in_days else None,
-                    assigned_to=assigned_to,
-                    created_by=associate_id,
-                    created_at=now - dt.timedelta(days=2),
-                )
+        task_rows: list[Task] = []
+        task_map: dict[tuple[str, str], Task] = {}
+        for spec in task_specs:
+            due_in_days = spec["due_in_days"]
+            created_at = now - dt.timedelta(days=2)
+            task = Task(
+                matter_id=matter_map[spec["matter_no"]].id,
+                title=spec["title"],
+                description=spec["description"],
+                status=spec["status"],
+                due_date=(now.date() + dt.timedelta(days=due_in_days)),
+                assigned_to=spec["assigned_to"],
+                created_by=associate_id,
+                created_at=created_at,
+                priority=spec["priority"],
+                sla_hours=spec["sla_hours"],
+                approval_state=spec["approval_state"],
+                requires_two_person_review=bool(spec["requires_two_person_review"]),
+                recurrence_rule=spec.get("recurrence_rule"),
+                approved_by=partner_id if spec["status"] == "Done" else None,
+                approved_at=(created_at + dt.timedelta(hours=10)) if spec["status"] == "Done" else None,
+                locked_at=(created_at + dt.timedelta(hours=12)) if spec["status"] == "Done" else None,
             )
+            db.session.add(task)
+            task_rows.append(task)
+            task_map[(spec["matter_no"], spec["title"])] = task
 
         contacts = [
             ("Zanele Dube", "Acme Holdings", "zanele.dube@acme.co.za", "+27 11 555 0101", "Primary GC contact for litigation updates."),
@@ -676,6 +1112,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 ],
             },
         ]
+        doc_file_rows: list[DocumentFile] = []
         for i, spec in enumerate(doc_specs, start=1):
             original_filename = spec["original_filename"]
             stored_filename = f"demo_{i}_{original_filename}"
@@ -695,22 +1132,2213 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 payload = text_payload.encode("utf-8")
                 content_type = "text/plain"
             digest = hashlib.sha256(payload).hexdigest()
+            row = DocumentFile(
+                matter_id=matter_map[spec["matter_no"]].id,
+                original_filename=original_filename,
+                stored_filename=stored_filename,
+                sha256=digest,
+                content_type=content_type,
+                category=spec["category"],
+                doc_version=spec["version"],
+                lifecycle_stage=spec["lifecycle_stage"],
+                owner_name=spec["owner_name"],
+                is_privileged=spec["is_privileged"],
+                uploaded_by=paralegal_id,
+                uploaded_at=now - dt.timedelta(days=2),
+            )
+            db.session.add(row)
+            doc_file_rows.append(row)
+
+        db.session.flush()
+        doc_file_map = {row.original_filename: row for row in doc_file_rows}
+
+        expanded_counts: dict[str, int] = {}
+
+        # -------------------------------------------------------------------
+        # Identity, Sessions, Federation, and Policy Baseline
+        # -------------------------------------------------------------------
+        session_specs = [
+            (admin_id, "10.0.10.21", "Mozilla/5.0 (Macintosh; Intel Mac OS X)", 10, 480, None),
+            (partner_id, "10.0.10.31", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 8, 300, None),
+            (associate_id, "10.0.10.41", "Mozilla/5.0 (X11; Linux x86_64)", 4, 180, None),
+            (paralegal_id, "10.0.10.51", "Mozilla/5.0 (iPad; CPU OS 17_2)", 2, 120, now - dt.timedelta(hours=2)),
+            (staff_id, "10.0.10.61", "Mozilla/5.0 (Android 14; Mobile)", 1, 120, None),
+        ]
+        for idx, (user_id, ip, user_agent, created_hours_ago, ttl_minutes, revoked_at) in enumerate(session_specs, start=1):
+            token_seed = f"demo-session-{idx}-{user_id}"
             db.session.add(
-                DocumentFile(
-                    matter_id=matter_map[spec["matter_no"]].id,
-                    original_filename=original_filename,
-                    stored_filename=stored_filename,
-                    sha256=digest,
-                    content_type=content_type,
-                    category=spec["category"],
-                    doc_version=spec["version"],
-                    lifecycle_stage=spec["lifecycle_stage"],
-                    owner_name=spec["owner_name"],
-                    is_privileged=spec["is_privileged"],
-                    uploaded_by=paralegal_id,
-                    uploaded_at=now - dt.timedelta(days=2),
+                UserSession(
+                    user_id=user_id,
+                    session_token_hash=hashlib.sha256(token_seed.encode("utf-8")).hexdigest(),
+                    ip=ip,
+                    user_agent=user_agent,
+                    created_at=now - dt.timedelta(hours=created_hours_ago),
+                    last_seen_at=now - dt.timedelta(minutes=created_hours_ago * 3),
+                    expires_at=now + dt.timedelta(minutes=ttl_minutes),
+                    revoked_at=revoked_at,
                 )
             )
+        expanded_counts["user_sessions"] = len(session_specs)
+
+        trusted_device_specs = [
+            (admin_id, "Alicia-MacBook-Pro", "trusted-device-admin-1", 40, True),
+            (partner_id, "Daniel-Lenovo-T14", "trusted-device-partner-1", 25, True),
+            (associate_id, "Nandi-iPhone", "trusted-device-associate-1", 7, True),
+            (paralegal_id, "Sipho-iPad", "trusted-device-paralegal-1", 10, False),
+        ]
+        for user_id, device_name, fingerprint_seed, created_days_ago, is_active in trusted_device_specs:
+            db.session.add(
+                TrustedDevice(
+                    user_id=user_id,
+                    device_name=device_name,
+                    fingerprint_hash=hashlib.sha256(fingerprint_seed.encode("utf-8")).hexdigest(),
+                    created_at=now - dt.timedelta(days=created_days_ago),
+                    last_seen_at=now - dt.timedelta(hours=created_days_ago),
+                    is_active=is_active,
+                )
+            )
+        expanded_counts["trusted_devices"] = len(trusted_device_specs)
+
+        backup_code_specs = [
+            (admin_id, "ABC-123", False),
+            (admin_id, "DEF-456", False),
+            (admin_id, "GHI-789", True),
+            (partner_id, "JKL-123", False),
+            (partner_id, "MNO-456", False),
+            (partner_id, "PQR-789", False),
+        ]
+        for idx, (user_id, backup_code, is_used) in enumerate(backup_code_specs):
+            db.session.add(
+                UserMFABackupCode(
+                    user_id=user_id,
+                    code_hash=hash_backup_code(backup_code),
+                    created_at=now - dt.timedelta(days=idx + 1),
+                    used_at=(now - dt.timedelta(days=1, hours=3)) if is_used else None,
+                )
+            )
+        expanded_counts["mfa_backup_codes"] = len(backup_code_specs)
+
+        sso_app = SSOApplication(
+            name="Client Portal Companion",
+            client_id="portal-companion-web",
+            client_secret_hash=hash_backup_code("portal-client-secret-2026"),
+            redirect_uri="https://portal.elf-ai-demo.co.za/sso/callback",
+            is_active=True,
+            created_at=now - dt.timedelta(days=18),
+        )
+        db.session.add(sso_app)
+        db.session.flush()
+
+        auth_code = SSOAuthorizationCode(
+            app_id=sso_app.id,
+            user_id=partner_id,
+            code_hash=hashlib.sha256(b"sso-auth-code-1").hexdigest(),
+            scope="openid profile matters.read",
+            created_at=now - dt.timedelta(minutes=20),
+            expires_at=now + dt.timedelta(minutes=10),
+            consumed_at=now - dt.timedelta(minutes=15),
+        )
+        db.session.add(auth_code)
+
+        sso_token = SSOToken(
+            app_id=sso_app.id,
+            user_id=partner_id,
+            access_token_hash=hashlib.sha256(b"sso-access-token-1").hexdigest(),
+            refresh_token_hash=hashlib.sha256(b"sso-refresh-token-1").hexdigest(),
+            scope="openid profile matters.read",
+            created_at=now - dt.timedelta(minutes=15),
+            expires_at=now + dt.timedelta(hours=3),
+            revoked_at=None,
+        )
+        db.session.add(sso_token)
+        expanded_counts["sso_apps"] = 1
+        expanded_counts["sso_authorization_codes"] = 1
+        expanded_counts["sso_tokens"] = 1
+
+        permission_specs = [
+            ("admin", "matter", "manage", True),
+            ("admin", "billing", "approve", True),
+            ("admin", "trust", "post", True),
+            ("lawyer", "matter", "read", True),
+            ("lawyer", "matter", "update", True),
+            ("lawyer", "billing", "approve", True),
+            ("lawyer", "trust", "approve", True),
+            ("paralegal", "matter", "read", True),
+            ("paralegal", "matter", "update", True),
+            ("paralegal", "billing", "approve", False),
+            ("staff", "matter", "read", True),
+            ("staff", "trust", "post", False),
+        ]
+        for role, resource, action, is_allowed in permission_specs:
+            db.session.add(
+                PermissionGrant(
+                    role=role,
+                    resource=resource,
+                    action=action,
+                    is_allowed=is_allowed,
+                    created_at=now - dt.timedelta(days=20),
+                )
+            )
+        expanded_counts["permission_grants"] = len(permission_specs)
+
+        wall = EthicalWall(
+            name="Acme Counterparty Isolation",
+            description="Restrict staff from both sides of adverse matters and conflict-sensitive exports.",
+            is_active=True,
+            created_by=admin_id,
+            created_at=now - dt.timedelta(days=12),
+        )
+        db.session.add(wall)
+        db.session.flush()
+        wall_rules = [
+            EthicalWallRule(
+                wall_id=wall.id,
+                user_id=staff_id,
+                is_deny=True,
+                is_active=True,
+                created_at=now - dt.timedelta(days=12),
+            ),
+            EthicalWallRule(
+                wall_id=wall.id,
+                user_id=paralegal_id,
+                is_deny=False,
+                is_active=True,
+                created_at=now - dt.timedelta(days=10),
+            ),
+        ]
+        db.session.add_all(wall_rules)
+        wall_matter_links = [
+            EthicalWallMatter(wall_id=wall.id, matter_id=matter_map["2026-LIT-0142"].id, created_at=now - dt.timedelta(days=12)),
+            EthicalWallMatter(wall_id=wall.id, matter_id=matter_map["2026-COM-0055"].id, created_at=now - dt.timedelta(days=9)),
+        ]
+        db.session.add_all(wall_matter_links)
+        expanded_counts["ethical_walls"] = 1
+        expanded_counts["ethical_wall_rules"] = len(wall_rules)
+        expanded_counts["ethical_wall_matter_links"] = len(wall_matter_links)
+
+        legal_hold_rows = [
+            LegalHold(
+                matter_id=matter_map["2026-LIT-0142"].id,
+                reason="Pending discovery obligations and hold notice from client GC.",
+                is_active=True,
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=6),
+                released_at=None,
+            ),
+            LegalHold(
+                matter_id=matter_map["2025-PROB-0119"].id,
+                reason="Retention pending tax authority post-close review.",
+                is_active=False,
+                created_by=admin_id,
+                created_at=now - dt.timedelta(days=40),
+                released_at=now - dt.timedelta(days=8),
+            ),
+        ]
+        db.session.add_all(legal_hold_rows)
+        expanded_counts["legal_holds"] = len(legal_hold_rows)
+
+        retention_rows = [
+            RetentionPolicy(
+                name="Commercial Litigation ZA",
+                matter_type="Commercial Litigation",
+                jurisdiction="ZA-GP",
+                retain_days=3650,
+                archive_after_days=730,
+                is_active=True,
+                created_at=now - dt.timedelta(days=45),
+            ),
+            RetentionPolicy(
+                name="Employment Matters ZA",
+                matter_type="Employment Law",
+                jurisdiction="ZA-GP",
+                retain_days=2555,
+                archive_after_days=365,
+                is_active=True,
+                created_at=now - dt.timedelta(days=45),
+            ),
+            RetentionPolicy(
+                name="Estate Administration ZA",
+                matter_type="Estates",
+                jurisdiction="ZA-WC",
+                retain_days=4380,
+                archive_after_days=1095,
+                is_active=True,
+                created_at=now - dt.timedelta(days=30),
+            ),
+        ]
+        db.session.add_all(retention_rows)
+        expanded_counts["retention_policies"] = len(retention_rows)
+
+        residency_rows = [
+            DataResidencyPolicy(
+                name="Primary ZA Data",
+                data_class="primary_storage",
+                region_code="za-central-1",
+                is_active=True,
+                created_at=now - dt.timedelta(days=60),
+            ),
+            DataResidencyPolicy(
+                name="Export Controls",
+                data_class="exports",
+                region_code="za-central-1",
+                is_active=True,
+                created_at=now - dt.timedelta(days=60),
+            ),
+            DataResidencyPolicy(
+                name="Backups Residency",
+                data_class="backups",
+                region_code="za-central-1",
+                is_active=True,
+                created_at=now - dt.timedelta(days=60),
+            ),
+        ]
+        db.session.add_all(residency_rows)
+        expanded_counts["data_residency_policies"] = len(residency_rows)
+
+        suspicious_alerts = [
+            SuspiciousActivityAlert(
+                alert_type="mass_export_attempt",
+                severity="high",
+                status="open",
+                details_json=json.dumps({"matter_id": matter_map["2026-LIT-0142"].id, "attempt_count": 5}),
+                created_at=now - dt.timedelta(hours=6),
+                resolved_at=None,
+                resolved_by=None,
+            ),
+            SuspiciousActivityAlert(
+                alert_type="repeated_denied_access",
+                severity="medium",
+                status="resolved",
+                details_json=json.dumps({"user_id": staff_id, "denied_count": 8}),
+                created_at=now - dt.timedelta(days=2),
+                resolved_at=now - dt.timedelta(days=1, hours=2),
+                resolved_by=admin_id,
+            ),
+        ]
+        db.session.add_all(suspicious_alerts)
+        expanded_counts["suspicious_alerts"] = len(suspicious_alerts)
+
+        notifications = [
+            Notification(
+                event_type="deadline_digest",
+                actor_user_id=partner_id,
+                subject_ref=f"matter:{matter_map['2026-LIT-0142'].id}",
+                channel="in_app",
+                status="delivered",
+                created_at=now - dt.timedelta(hours=4),
+                delivered_at=now - dt.timedelta(hours=4) + dt.timedelta(minutes=1),
+            ),
+            Notification(
+                event_type="task_escalation",
+                actor_user_id=associate_id,
+                subject_ref=f"task:{task_map[('2026-LIT-0142', 'Court filing QC')].id}",
+                channel="in_app",
+                status="queued",
+                created_at=now - dt.timedelta(hours=2),
+                delivered_at=None,
+            ),
+            Notification(
+                event_type="invoice_created",
+                actor_user_id=partner_id,
+                subject_ref=f"matter:{matter_map['2026-COM-0055'].id}",
+                channel="email",
+                status="delivered",
+                created_at=now - dt.timedelta(days=1),
+                delivered_at=now - dt.timedelta(days=1) + dt.timedelta(minutes=4),
+            ),
+        ]
+        db.session.add_all(notifications)
+        expanded_counts["notifications"] = len(notifications)
+
+        # -------------------------------------------------------------------
+        # Admin settings and templates
+        # -------------------------------------------------------------------
+        firm_settings = [
+            ("firm_profile", {"name": "Elf AI Demo Attorneys", "jurisdiction_default": "ZA-GP", "timezone": "Africa/Johannesburg"}),
+            ("default_tax", {"code": "VAT", "rate_percent": 15.0}),
+            ("deadline_policy", {"default_calendar": "South Africa Court Calendar", "business_day_adjust": True}),
+        ]
+        for key, value in firm_settings:
+            db.session.add(
+                FirmSetting(
+                    setting_key=key,
+                    setting_value_json=json.dumps(value),
+                    updated_at=now - dt.timedelta(days=3),
+                    updated_by=admin_id,
+                )
+            )
+        expanded_counts["firm_settings"] = len(firm_settings)
+
+        office_specs = [
+            ("Johannesburg", "ZA-GP", True),
+            ("Cape Town", "ZA-WC", True),
+            ("Durban", "ZA-KZN", True),
+        ]
+        office_rows: dict[str, Office] = {}
+        for name, jurisdiction, is_active in office_specs:
+            row = Office(
+                name=name,
+                jurisdiction=jurisdiction,
+                is_active=is_active,
+                created_at=now - dt.timedelta(days=200),
+            )
+            db.session.add(row)
+            office_rows[name] = row
+        expanded_counts["offices"] = len(office_specs)
+
+        practice_area_rows = []
+        for name in ["Commercial Litigation", "Employment Law", "Corporate and M&A", "Regulatory", "Estates"]:
+            row = PracticeArea(name=name, is_active=True, created_at=now - dt.timedelta(days=180))
+            db.session.add(row)
+            practice_area_rows.append(row)
+        expanded_counts["practice_areas"] = len(practice_area_rows)
+
+        timekeeper_role_rows: dict[str, TimekeeperRole] = {}
+        for name in ["Partner", "Associate", "Paralegal", "Support Staff"]:
+            row = TimekeeperRole(name=name, is_active=True)
+            db.session.add(row)
+            timekeeper_role_rows[name] = row
+        expanded_counts["timekeeper_roles"] = len(timekeeper_role_rows)
+
+        matter_templates = [
+            MatterTemplate(
+                name="Commercial Dispute Standard",
+                practice_area="Commercial Litigation",
+                default_stage="Intake",
+                default_risk_level="Medium",
+                checklist_json=json.dumps(["Conflict check", "Engagement letter", "Initial strategy memo"]),
+                created_by=admin_id,
+                created_at=now - dt.timedelta(days=20),
+            ),
+            MatterTemplate(
+                name="Regulatory Remediation",
+                practice_area="Regulatory",
+                default_stage="Assessment",
+                default_risk_level="High",
+                checklist_json=json.dumps(["Regulator notice review", "Filing checklist", "Executive briefing"]),
+                created_by=admin_id,
+                created_at=now - dt.timedelta(days=20),
+            ),
+        ]
+        db.session.add_all(matter_templates)
+        expanded_counts["matter_templates"] = len(matter_templates)
+
+        task_template = TaskTemplate(
+            name="Litigation Hearing Sprint",
+            matter_type="Commercial Litigation",
+            priority="High",
+            sla_hours=24,
+            recurrence_rule=None,
+            created_by=admin_id,
+            created_at=now - dt.timedelta(days=18),
+        )
+        db.session.add(task_template)
+        db.session.flush()
+        task_template_items = [
+            TaskTemplateItem(task_template_id=task_template.id, title="Bundle QA", description="Confirm indexed exhibits", position=1),
+            TaskTemplateItem(task_template_id=task_template.id, title="Witness confirmations", description="Finalize witness readiness", position=2),
+            TaskTemplateItem(task_template_id=task_template.id, title="Counsel prep memo", description="Summarize hearing objectives", position=3),
+        ]
+        db.session.add_all(task_template_items)
+        expanded_counts["task_templates"] = 1
+        expanded_counts["task_template_items"] = len(task_template_items)
+
+        document_templates = [
+            DocumentTemplate(
+                name="Engagement Letter ZA",
+                template_type="engagement_letter",
+                body="This engagement letter confirms scope, fees, and obligations under South African law.",
+                requires_signature=True,
+                created_by=admin_id,
+                created_at=now - dt.timedelta(days=15),
+            ),
+            DocumentTemplate(
+                name="Without Prejudice Offer",
+                template_type="settlement_offer",
+                body="This communication is made without prejudice and for settlement purposes only.",
+                requires_signature=False,
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=10),
+            ),
+        ]
+        db.session.add_all(document_templates)
+        expanded_counts["document_templates"] = len(document_templates)
+
+        db.session.flush()
+
+        # -------------------------------------------------------------------
+        # Matter graph, notes, stage history, closing checklist
+        # -------------------------------------------------------------------
+        entity_specs = [
+            ("Acme Holdings (Pty) Ltd", "organization", "legal@acme.co.za", "+27 11 555 0100", {"classification": "client"}),
+            ("Mkhize Engineering", "organization", "legal@mkhizeeng.co.za", "+27 11 555 0130", {"classification": "counterparty"}),
+            ("Zanele Dube", "person", "zanele.dube@acme.co.za", "+27 11 555 0101", {"role": "General Counsel"}),
+            ("Ethan Ross", "person", "ethan.ross@mkhizeeng.co.za", "+27 11 555 0122", {"role": "Opposing Counsel"}),
+            ("Silverstream Capital", "organization", "legal@silverstream.vc", "+27 21 555 0150", {"classification": "client"}),
+            ("Blue Dune Energy", "organization", "compliance@bluedune.energy", "+27 11 555 0199", {"classification": "client"}),
+            ("NERSA", "organization", "licensing@nersa.org.za", "+27 12 555 0001", {"classification": "regulator"}),
+        ]
+        entities: dict[str, Entity] = {}
+        for name, entity_type, email, phone, metadata in entity_specs:
+            row = Entity(
+                name=name,
+                entity_type=entity_type,
+                email=email,
+                phone=phone,
+                metadata_json=json.dumps(metadata),
+                created_at=now - dt.timedelta(days=40),
+            )
+            db.session.add(row)
+            entities[name] = row
+        db.session.flush()
+        expanded_counts["entities"] = len(entity_specs)
+
+        relationship_rows = [
+            EntityRelationship(
+                src_entity_id=entities["Zanele Dube"].id,
+                dst_entity_id=entities["Acme Holdings (Pty) Ltd"].id,
+                relationship_type="represents",
+                created_at=now - dt.timedelta(days=38),
+            ),
+            EntityRelationship(
+                src_entity_id=entities["Ethan Ross"].id,
+                dst_entity_id=entities["Mkhize Engineering"].id,
+                relationship_type="represents",
+                created_at=now - dt.timedelta(days=38),
+            ),
+            EntityRelationship(
+                src_entity_id=entities["Blue Dune Energy"].id,
+                dst_entity_id=entities["NERSA"].id,
+                relationship_type="regulated_by",
+                created_at=now - dt.timedelta(days=20),
+            ),
+        ]
+        db.session.add_all(relationship_rows)
+        expanded_counts["entity_relationships"] = len(relationship_rows)
+
+        matter_party_rows = [
+            MatterParty(
+                matter_id=matter_map["2026-LIT-0142"].id,
+                entity_id=entities["Acme Holdings (Pty) Ltd"].id,
+                party_role="client",
+                is_primary=True,
+                created_at=now - dt.timedelta(days=20),
+            ),
+            MatterParty(
+                matter_id=matter_map["2026-LIT-0142"].id,
+                entity_id=entities["Mkhize Engineering"].id,
+                party_role="counterparty",
+                is_primary=False,
+                created_at=now - dt.timedelta(days=20),
+            ),
+            MatterParty(
+                matter_id=matter_map["2026-CORP-0033"].id,
+                entity_id=entities["Silverstream Capital"].id,
+                party_role="client",
+                is_primary=True,
+                created_at=now - dt.timedelta(days=9),
+            ),
+            MatterParty(
+                matter_id=matter_map["2026-REG-0021"].id,
+                entity_id=entities["Blue Dune Energy"].id,
+                party_role="client",
+                is_primary=True,
+                created_at=now - dt.timedelta(days=12),
+            ),
+            MatterParty(
+                matter_id=matter_map["2026-REG-0021"].id,
+                entity_id=entities["NERSA"].id,
+                party_role="regulator",
+                is_primary=False,
+                created_at=now - dt.timedelta(days=12),
+            ),
+        ]
+        db.session.add_all(matter_party_rows)
+        expanded_counts["matter_parties"] = len(matter_party_rows)
+
+        note_rows = [
+            MatterNote(
+                matter_id=matter_map["2026-LIT-0142"].id,
+                body="Client approved conditional settlement range subject to board notification.",
+                tags="settlement,client,strategy",
+                privilege_label="Attorney-Client",
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=2),
+                updated_at=now - dt.timedelta(days=1),
+            ),
+            MatterNote(
+                matter_id=matter_map["2026-CORP-0033"].id,
+                body="Beneficial ownership checks flagged two unresolved disclosures for escalation.",
+                tags="due-diligence,ownership,escalation",
+                privilege_label="Work Product",
+                created_by=associate_id,
+                created_at=now - dt.timedelta(days=3),
+                updated_at=now - dt.timedelta(days=2),
+            ),
+            MatterNote(
+                matter_id=matter_map["2026-REG-0021"].id,
+                body="Regulator requested additional environmental compliance annexure by next week.",
+                tags="regulator,follow-up",
+                privilege_label="Internal",
+                created_by=staff_id,
+                created_at=now - dt.timedelta(days=1),
+                updated_at=now - dt.timedelta(hours=12),
+            ),
+        ]
+        db.session.add_all(note_rows)
+        db.session.flush()
+        note_acl_rows = [
+            MatterNoteACL(note_id=note_rows[0].id, user_id=partner_id, can_read=True, can_edit=True),
+            MatterNoteACL(note_id=note_rows[0].id, user_id=associate_id, can_read=True, can_edit=False),
+            MatterNoteACL(note_id=note_rows[1].id, user_id=associate_id, can_read=True, can_edit=True),
+            MatterNoteACL(note_id=note_rows[2].id, user_id=staff_id, can_read=True, can_edit=True),
+            MatterNoteACL(note_id=note_rows[2].id, user_id=partner_id, can_read=True, can_edit=False),
+        ]
+        db.session.add_all(note_acl_rows)
+        expanded_counts["matter_notes"] = len(note_rows)
+        expanded_counts["matter_note_acl"] = len(note_acl_rows)
+
+        stage_history_rows = [
+            MatterStageHistory(
+                matter_id=matter_map["2026-LIT-0142"].id,
+                from_stage="Intake",
+                to_stage="Discovery",
+                reason="Pleadings and document requests exchanged.",
+                changed_by=partner_id,
+                changed_at=now - dt.timedelta(days=8),
+            ),
+            MatterStageHistory(
+                matter_id=matter_map["2026-CORP-0033"].id,
+                from_stage="Intake",
+                to_stage="Due Diligence",
+                reason="Transaction scope and workstreams approved.",
+                changed_by=partner_id,
+                changed_at=now - dt.timedelta(days=7),
+            ),
+            MatterStageHistory(
+                matter_id=matter_map["2026-REG-0021"].id,
+                from_stage="Assessment",
+                to_stage="Regulatory Response",
+                reason="Supplementary filing request received.",
+                changed_by=partner_id,
+                changed_at=now - dt.timedelta(days=6),
+            ),
+        ]
+        db.session.add_all(stage_history_rows)
+        expanded_counts["matter_stage_history"] = len(stage_history_rows)
+
+        closing_items: list[MatterClosingChecklistItem] = []
+        for matter_no, metadata in matter_metadata.items():
+            matter_id = matter_map[matter_no].id
+            for idx, item_text in enumerate(metadata["closing_checklist"], start=1):
+                is_done = matter_no == "2025-PROB-0119" or idx == 1
+                closing_items.append(
+                    MatterClosingChecklistItem(
+                        matter_id=matter_id,
+                        item_text=item_text,
+                        is_done=is_done,
+                        done_at=(now - dt.timedelta(days=4 + idx)) if is_done else None,
+                        done_by=partner_id if is_done else None,
+                    )
+                )
+        db.session.add_all(closing_items)
+        expanded_counts["matter_closing_items"] = len(closing_items)
+
+        # -------------------------------------------------------------------
+        # Calendaring, deadlines, task workflow extensions
+        # -------------------------------------------------------------------
+        holiday_rows = [
+            HolidayCalendar(
+                name="South Africa Court Calendar",
+                jurisdiction="ZA-GP",
+                office_id=office_rows["Johannesburg"].id,
+                holiday_date=dt.date(now.year, 3, 21),
+                label="Human Rights Day",
+            ),
+            HolidayCalendar(
+                name="South Africa Court Calendar",
+                jurisdiction="ZA-WC",
+                office_id=office_rows["Cape Town"].id,
+                holiday_date=dt.date(now.year, 4, 27),
+                label="Freedom Day",
+            ),
+            HolidayCalendar(
+                name="South Africa Court Calendar",
+                jurisdiction="ZA-KZN",
+                office_id=office_rows["Durban"].id,
+                holiday_date=dt.date(now.year, 12, 16),
+                label="Day of Reconciliation",
+            ),
+        ]
+        db.session.add_all(holiday_rows)
+        expanded_counts["holiday_calendar_rows"] = len(holiday_rows)
+
+        deadline_rules = [
+            DeadlineRule(
+                name="High Court Filing Cutoff",
+                matter_id=matter_map["2026-LIT-0142"].id,
+                jurisdiction="ZA-GP",
+                office_id=office_rows["Johannesburg"].id,
+                trigger_type="hearing_date",
+                offset_days=-5,
+                business_day_adjust=True,
+                is_active=True,
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=10),
+            ),
+            DeadlineRule(
+                name="Regulator Response SLA",
+                matter_id=matter_map["2026-REG-0021"].id,
+                jurisdiction="ZA-GP",
+                office_id=office_rows["Johannesburg"].id,
+                trigger_type="regulator_query",
+                offset_days=7,
+                business_day_adjust=True,
+                is_active=True,
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=8),
+            ),
+            DeadlineRule(
+                name="Mediation Readiness Reminder",
+                matter_id=matter_map["2026-COM-0055"].id,
+                jurisdiction="ZA-KZN",
+                office_id=office_rows["Durban"].id,
+                trigger_type="mediation_notice",
+                offset_days=3,
+                business_day_adjust=False,
+                is_active=True,
+                created_by=associate_id,
+                created_at=now - dt.timedelta(days=6),
+            ),
+        ]
+        db.session.add_all(deadline_rules)
+        db.session.flush()
+        expanded_counts["deadline_rules"] = len(deadline_rules)
+
+        deadline_rows = [
+            Deadline(
+                matter_id=matter_map["2026-LIT-0142"].id,
+                task_id=task_map[("2026-LIT-0142", "Court filing QC")].id,
+                title="Court filing package due",
+                due_at=now.date() + dt.timedelta(days=2),
+                is_critical=True,
+                source_rule_id=deadline_rules[0].id,
+                calculation_trace=json.dumps({"trigger": "hearing_date", "offset_days": -5, "business_day_adjusted": True}),
+                status="open",
+                acknowledged_by=partner_id,
+                acknowledged_at=now - dt.timedelta(hours=5),
+                override_reason=None,
+                overridden_by=None,
+                overridden_at=None,
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=1),
+            ),
+            Deadline(
+                matter_id=matter_map["2026-REG-0021"].id,
+                task_id=task_map[("2026-REG-0021", "Regulator response tracker")].id,
+                title="Submit regulator clarification annexure",
+                due_at=now.date() + dt.timedelta(days=5),
+                is_critical=True,
+                source_rule_id=deadline_rules[1].id,
+                calculation_trace=json.dumps({"trigger": "regulator_query", "offset_days": 7}),
+                status="open",
+                acknowledged_by=None,
+                acknowledged_at=None,
+                override_reason="Extended by authority after interim submission",
+                overridden_by=partner_id,
+                overridden_at=now - dt.timedelta(hours=8),
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=1),
+            ),
+            Deadline(
+                matter_id=matter_map["2026-COM-0055"].id,
+                task_id=task_map[("2026-COM-0055", "Mediation prep binder")].id,
+                title="Deliver mediation bundle to counsel",
+                due_at=now.date() + dt.timedelta(days=1),
+                is_critical=False,
+                source_rule_id=deadline_rules[2].id,
+                calculation_trace=json.dumps({"trigger": "mediation_notice", "offset_days": 3}),
+                status="open",
+                acknowledged_by=associate_id,
+                acknowledged_at=now - dt.timedelta(hours=3),
+                override_reason=None,
+                overridden_by=None,
+                overridden_at=None,
+                created_by=associate_id,
+                created_at=now - dt.timedelta(days=2),
+            ),
+        ]
+        db.session.add_all(deadline_rows)
+        expanded_counts["deadlines"] = len(deadline_rows)
+
+        dependency_rows = [
+            TaskDependency(
+                task_id=task_map[("2026-LIT-0142", "Court filing QC")].id,
+                depends_on_task_id=task_map[("2026-LIT-0142", "Prepare witness bundle")].id,
+                created_at=now - dt.timedelta(days=2),
+            ),
+            TaskDependency(
+                task_id=task_map[("2026-LIT-0142", "Court filing QC")].id,
+                depends_on_task_id=task_map[("2026-LIT-0142", "Draft settlement position")].id,
+                created_at=now - dt.timedelta(days=2),
+            ),
+            TaskDependency(
+                task_id=task_map[("2026-COM-0055", "Without-prejudice offer draft")].id,
+                depends_on_task_id=task_map[("2026-COM-0055", "Client operations workshop")].id,
+                created_at=now - dt.timedelta(days=1),
+            ),
+        ]
+        db.session.add_all(dependency_rows)
+        expanded_counts["task_dependencies"] = len(dependency_rows)
+
+        checklist_rows = [
+            TaskChecklistItem(
+                task_id=task_map[("2026-LIT-0142", "Prepare witness bundle")].id,
+                item_text="Confirm exhibit pagination",
+                is_done=True,
+                position=1,
+            ),
+            TaskChecklistItem(
+                task_id=task_map[("2026-LIT-0142", "Prepare witness bundle")].id,
+                item_text="Validate affidavit signatures",
+                is_done=False,
+                position=2,
+            ),
+            TaskChecklistItem(
+                task_id=task_map[("2026-CORP-0033", "Draft risk matrix")].id,
+                item_text="Map risks by severity and probability",
+                is_done=True,
+                position=1,
+            ),
+            TaskChecklistItem(
+                task_id=task_map[("2026-REG-0021", "Risk committee briefing")].id,
+                item_text="Attach regulator correspondence bundle",
+                is_done=False,
+                position=1,
+            ),
+        ]
+        db.session.add_all(checklist_rows)
+        expanded_counts["task_checklists"] = len(checklist_rows)
+
+        task_approvals = [
+            TaskApproval(
+                task_id=task_map[("2026-LIT-0142", "Court filing QC")].id,
+                requested_by=associate_id,
+                approver_user_id=partner_id,
+                state="approved",
+                notes="Approved subject to final hearing list confirmation.",
+                created_at=now - dt.timedelta(hours=20),
+                decided_at=now - dt.timedelta(hours=18),
+            ),
+            TaskApproval(
+                task_id=task_map[("2026-CORP-0033", "Supplier concentration note")].id,
+                requested_by=associate_id,
+                approver_user_id=partner_id,
+                state="pending",
+                notes="Waiting for final supplier concentration data.",
+                created_at=now - dt.timedelta(hours=8),
+                decided_at=None,
+            ),
+            TaskApproval(
+                task_id=task_map[("2026-REG-0021", "Risk committee briefing")].id,
+                requested_by=staff_id,
+                approver_user_id=partner_id,
+                state="rejected",
+                notes="Need updated regulator timeline before briefing.",
+                created_at=now - dt.timedelta(hours=10),
+                decided_at=now - dt.timedelta(hours=7),
+            ),
+        ]
+        db.session.add_all(task_approvals)
+        expanded_counts["task_approvals"] = len(task_approvals)
+
+        # -------------------------------------------------------------------
+        # DMS normalized containers, versions, OCR, productions, email capture
+        # -------------------------------------------------------------------
+        def _chain_hash(prev_hash: str | None, file_sha256: str) -> str:
+            seed = f"{prev_hash or 'GENESIS'}:{file_sha256}"
+            return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+        document_state_map = {
+            "Draft": "draft",
+            "For Review": "reviewed",
+            "Final": "final",
+        }
+        document_records: dict[str, DocumentRecord] = {}
+        for spec in doc_specs:
+            row = DocumentRecord(
+                matter_id=matter_map[spec["matter_no"]].id,
+                title=Path(spec["original_filename"]).stem.replace("-", " ").title(),
+                document_type=spec["category"],
+                confidentiality="Confidential" if spec["is_privileged"] else "Internal",
+                privilege_label="Attorney-Client" if spec["is_privileged"] else None,
+                retention_category="litigation_record" if spec["category"] == "Court Filing" else "advisory",
+                legal_hold=(spec["matter_no"] == "2026-LIT-0142"),
+                created_by=paralegal_id,
+                created_at=now - dt.timedelta(days=2),
+            )
+            db.session.add(row)
+            document_records[spec["original_filename"]] = row
+        db.session.flush()
+
+        document_latest_version: dict[int, DocumentVersion] = {}
+        all_document_versions: list[DocumentVersion] = []
+        for spec in doc_specs:
+            legacy = doc_file_map[spec["original_filename"]]
+            container = document_records[spec["original_filename"]]
+            state = document_state_map.get(spec["lifecycle_stage"], "draft")
+            base_version = DocumentVersion(
+                document_id=container.id,
+                document_file_id=legacy.id,
+                version_no=1,
+                original_filename=legacy.original_filename,
+                stored_filename=legacy.stored_filename,
+                sha256=legacy.sha256,
+                hash_chain_prev=None,
+                hash_chain_current=_chain_hash(None, legacy.sha256),
+                state=state,
+                notes=f"Initial migration from legacy DocumentFile ({legacy.doc_version}).",
+                filed_reference=None,
+                is_immutable=False,
+                uploaded_by=legacy.uploaded_by,
+                uploaded_at=legacy.uploaded_at,
+            )
+            db.session.add(base_version)
+            db.session.flush()
+            db.session.add(
+                DocumentOCRText(
+                    document_version_id=base_version.id,
+                    extracted_text="\n".join(spec["lines"]),
+                    extracted_at=now - dt.timedelta(days=1),
+                )
+            )
+            current_version = base_version
+
+            if spec["original_filename"] in {"acme-hearing-pack.pdf", "silverstream-dd-brief.docx"}:
+                revised_lines = spec["lines"] + ["Revision note: Counsel comments incorporated."]
+                revised_payload = "\n".join(revised_lines).encode("utf-8")
+                revised_filename = f"demo_dms_{container.id}_v2.txt"
+                revised_path = upload_dir / revised_filename
+                revised_path.write_bytes(revised_payload)
+                revised_sha = hashlib.sha256(revised_payload).hexdigest()
+
+                revised_version = DocumentVersion(
+                    document_id=container.id,
+                    document_file_id=None,
+                    version_no=2,
+                    original_filename=f"{Path(spec['original_filename']).stem}-v2.txt",
+                    stored_filename=revised_filename,
+                    sha256=revised_sha,
+                    hash_chain_prev=base_version.hash_chain_current,
+                    hash_chain_current=_chain_hash(base_version.hash_chain_current, revised_sha),
+                    state="filed" if spec["original_filename"] == "acme-hearing-pack.pdf" else "final",
+                    notes="Revision prepared after partner QA.",
+                    filed_reference="PTA-HC-2026-2198" if spec["original_filename"] == "acme-hearing-pack.pdf" else None,
+                    is_immutable=(spec["original_filename"] == "acme-hearing-pack.pdf"),
+                    uploaded_by=partner_id if spec["original_filename"] == "acme-hearing-pack.pdf" else associate_id,
+                    uploaded_at=now - dt.timedelta(hours=30),
+                )
+                db.session.add(revised_version)
+                db.session.flush()
+                db.session.add(
+                    DocumentOCRText(
+                        document_version_id=revised_version.id,
+                        extracted_text="\n".join(revised_lines),
+                        extracted_at=now - dt.timedelta(hours=28),
+                    )
+                )
+                current_version = revised_version
+                all_document_versions.append(revised_version)
+
+            document_latest_version[container.id] = current_version
+            all_document_versions.append(base_version)
+
+        db.session.flush()
+
+        lock_row = DocumentLock(
+            document_id=document_records["silverstream-dd-brief.docx"].id,
+            locked_by=associate_id,
+            lock_reason="Transaction memo update in progress.",
+            locked_at=now - dt.timedelta(hours=5),
+            expires_at=now + dt.timedelta(hours=3),
+            released_at=None,
+        )
+        db.session.add(lock_row)
+
+        saved_searches = [
+            SavedSearch(
+                user_id=admin_id,
+                name="Privileged court filings",
+                query_json=json.dumps({"document_type": "Court Filing", "privilege_label": "Attorney-Client"}),
+                matter_id=None,
+                created_at=now - dt.timedelta(days=2),
+            ),
+            SavedSearch(
+                user_id=partner_id,
+                name="Mediation package",
+                query_json=json.dumps({"matter_no": "2026-COM-0055", "q": "mediation"}),
+                matter_id=matter_map["2026-COM-0055"].id,
+                created_at=now - dt.timedelta(days=1),
+            ),
+        ]
+        db.session.add_all(saved_searches)
+
+        production_set = ProductionSet(
+            matter_id=matter_map["2026-LIT-0142"].id,
+            name="Acme Production Round 1",
+            confidentiality_designation="Confidential",
+            watermark_text="Produced - Confidential",
+            bates_prefix="ACME",
+            bates_start=1001,
+            bates_end=1002,
+            created_by=partner_id,
+            created_at=now - dt.timedelta(hours=14),
+        )
+        db.session.add(production_set)
+        db.session.flush()
+        bates_range = BatesRange(
+            production_set_id=production_set.id,
+            prefix="ACME",
+            start_no=1001,
+            end_no=1002,
+            created_at=now - dt.timedelta(hours=14),
+        )
+        db.session.add(bates_range)
+
+        production_versions = [
+            document_latest_version[document_records["acme-hearing-pack.pdf"].id],
+            document_latest_version[document_records["board-risk-brief.txt"].id],
+        ]
+        production_items = []
+        for offset, ver in enumerate(production_versions):
+            production_items.append(
+                ProductionItem(
+                    production_set_id=production_set.id,
+                    document_version_id=ver.id,
+                    bates_number=f"ACME{1001 + offset:06d}",
+                )
+            )
+        db.session.add_all(production_items)
+
+        email_capture_rows = [
+            EmailCapture(
+                matter_id=matter_map["2026-LIT-0142"].id,
+                message_id_hash=hashlib.sha256(b"<acme-lit-1@demo.mail>").hexdigest(),
+                dedup_key=hashlib.sha256(b"acme-lit-1").hexdigest(),
+                subject="Witness schedule confirmation",
+                sender="gc@acme.co.za",
+                received_at=now - dt.timedelta(hours=19),
+                stored_filename="demo_email_lit_1.eml",
+                attachment_hash=hashlib.sha256(b"witness-pack-attachment").hexdigest(),
+                captured_by=paralegal_id,
+                captured_at=now - dt.timedelta(hours=18),
+            ),
+            EmailCapture(
+                matter_id=matter_map["2026-REG-0021"].id,
+                message_id_hash=hashlib.sha256(b"<blue-dune-reg-1@demo.mail>").hexdigest(),
+                dedup_key=hashlib.sha256(b"blue-dune-reg-1").hexdigest(),
+                subject="Supplementary annexure request",
+                sender="licensing@nersa.org.za",
+                received_at=now - dt.timedelta(hours=9),
+                stored_filename="demo_email_reg_1.eml",
+                attachment_hash=hashlib.sha256(b"annexure-checklist").hexdigest(),
+                captured_by=staff_id,
+                captured_at=now - dt.timedelta(hours=8),
+            ),
+        ]
+        db.session.add_all(email_capture_rows)
+        expanded_counts["document_records"] = len(document_records)
+        expanded_counts["document_versions"] = len(all_document_versions)
+        expanded_counts["document_locks"] = 1
+        expanded_counts["saved_searches"] = len(saved_searches)
+        expanded_counts["production_sets"] = 1
+        expanded_counts["production_items"] = len(production_items)
+        expanded_counts["bates_ranges"] = 1
+        expanded_counts["email_captures"] = len(email_capture_rows)
+
+        # -------------------------------------------------------------------
+        # Timekeeping, expenses, billing and receivables
+        # -------------------------------------------------------------------
+        rounding_rows = [
+            TimeRoundingPolicy(
+                client_name="Acme Holdings (Pty) Ltd",
+                matter_id=matter_map["2026-LIT-0142"].id,
+                increment_hours=0.1,
+                min_narrative_length=25,
+                require_activity_code=True,
+                daily_hour_cap=10.0,
+                is_active=True,
+            ),
+            TimeRoundingPolicy(
+                client_name=None,
+                matter_id=None,
+                increment_hours=0.25,
+                min_narrative_length=15,
+                require_activity_code=False,
+                daily_hour_cap=12.0,
+                is_active=True,
+            ),
+        ]
+        db.session.add_all(rounding_rows)
+        expanded_counts["time_rounding_policies"] = len(rounding_rows)
+
+        timer_rows = [
+            TimeTimer(
+                user_id=associate_id,
+                matter_id=matter_map["2026-LIT-0142"].id,
+                task_id=task_map[("2026-LIT-0142", "Draft settlement position")].id,
+                label="Settlement drafting block",
+                started_at=now - dt.timedelta(minutes=55),
+                paused_at=None,
+                elapsed_seconds=2400,
+                status="running",
+                created_at=now - dt.timedelta(hours=2),
+                updated_at=now - dt.timedelta(minutes=1),
+            ),
+            TimeTimer(
+                user_id=paralegal_id,
+                matter_id=matter_map["2026-COM-0055"].id,
+                task_id=task_map[("2026-COM-0055", "Mediation prep binder")].id,
+                label="Mediation bundle indexing",
+                started_at=now - dt.timedelta(hours=5),
+                paused_at=now - dt.timedelta(hours=3),
+                elapsed_seconds=3900,
+                status="paused",
+                created_at=now - dt.timedelta(days=1),
+                updated_at=now - dt.timedelta(hours=3),
+            ),
+        ]
+        db.session.add_all(timer_rows)
+        expanded_counts["time_timers"] = len(timer_rows)
+
+        time_entries = [
+            TimeEntry(
+                user_id=partner_id,
+                matter_id=matter_map["2026-LIT-0142"].id,
+                task_id=task_map[("2026-LIT-0142", "Client strategy call")].id,
+                start_at=now - dt.timedelta(days=5, hours=4),
+                end_at=now - dt.timedelta(days=5, hours=1),
+                hours=3.0,
+                rounded_hours=3.0,
+                narrative="Client strategy call and exposure review with CFO.",
+                task_code="LIT-STRAT",
+                activity_code="A101",
+                is_billable=True,
+                status="approved",
+                approved_by=partner_id,
+                approved_at=now - dt.timedelta(days=4, hours=20),
+                locked_at=now - dt.timedelta(days=4, hours=18),
+                created_at=now - dt.timedelta(days=5),
+                updated_at=now - dt.timedelta(days=4, hours=18),
+            ),
+            TimeEntry(
+                user_id=associate_id,
+                matter_id=matter_map["2026-LIT-0142"].id,
+                task_id=task_map[("2026-LIT-0142", "Draft settlement position")].id,
+                start_at=now - dt.timedelta(days=4, hours=6),
+                end_at=now - dt.timedelta(days=4, hours=3, minutes=30),
+                hours=2.5,
+                rounded_hours=2.6,
+                narrative="Drafted settlement framework and fallback options.",
+                task_code="LIT-SETTLE",
+                activity_code="A103",
+                is_billable=True,
+                status="approved",
+                approved_by=partner_id,
+                approved_at=now - dt.timedelta(days=3, hours=23),
+                locked_at=None,
+                created_at=now - dt.timedelta(days=4),
+                updated_at=now - dt.timedelta(days=3, hours=23),
+            ),
+            TimeEntry(
+                user_id=paralegal_id,
+                matter_id=matter_map["2026-CORP-0033"].id,
+                task_id=task_map[("2026-CORP-0033", "Corporate registry search")].id,
+                start_at=now - dt.timedelta(days=3, hours=8),
+                end_at=now - dt.timedelta(days=3, hours=4),
+                hours=4.0,
+                rounded_hours=4.0,
+                narrative="Registry extracts and cross-jurisdiction verification.",
+                task_code="DD-REG",
+                activity_code="B201",
+                is_billable=True,
+                status="approved",
+                approved_by=partner_id,
+                approved_at=now - dt.timedelta(days=3, hours=2),
+                locked_at=None,
+                created_at=now - dt.timedelta(days=3),
+                updated_at=now - dt.timedelta(days=3, hours=2),
+            ),
+            TimeEntry(
+                user_id=staff_id,
+                matter_id=matter_map["2026-REG-0021"].id,
+                task_id=task_map[("2026-REG-0021", "Regulator response tracker")].id,
+                start_at=now - dt.timedelta(days=2, hours=5),
+                end_at=now - dt.timedelta(days=2, hours=3, minutes=45),
+                hours=1.25,
+                rounded_hours=1.3,
+                narrative="Regulator correspondence log updates and action assignment.",
+                task_code="REG-TRACK",
+                activity_code="C302",
+                is_billable=False,
+                status="approved",
+                approved_by=partner_id,
+                approved_at=now - dt.timedelta(days=2, hours=2),
+                locked_at=None,
+                created_at=now - dt.timedelta(days=2),
+                updated_at=now - dt.timedelta(days=2, hours=2),
+            ),
+            TimeEntry(
+                user_id=associate_id,
+                matter_id=matter_map["2026-COM-0055"].id,
+                task_id=task_map[("2026-COM-0055", "Without-prejudice offer draft")].id,
+                start_at=now - dt.timedelta(days=1, hours=4),
+                end_at=now - dt.timedelta(days=1, hours=2, minutes=30),
+                hours=1.5,
+                rounded_hours=1.5,
+                narrative="Initial offer draft pending partner review.",
+                task_code="COM-OFFER",
+                activity_code="A110",
+                is_billable=True,
+                status="draft",
+                approved_by=None,
+                approved_at=None,
+                locked_at=None,
+                created_at=now - dt.timedelta(days=1),
+                updated_at=now - dt.timedelta(days=1, hours=1),
+            ),
+        ]
+        db.session.add_all(time_entries)
+        db.session.flush()
+        expanded_counts["time_entries"] = len(time_entries)
+
+        validation_rows = [
+            TimeValidationEvent(
+                time_entry_id=time_entries[0].id,
+                event_type="validated",
+                message="Narrative and activity code meet policy minimum.",
+                created_at=now - dt.timedelta(days=4, hours=20),
+            ),
+            TimeValidationEvent(
+                time_entry_id=time_entries[1].id,
+                event_type="rounded",
+                message="Rounded from 2.50h to 2.60h under client policy.",
+                created_at=now - dt.timedelta(days=3, hours=23),
+            ),
+            TimeValidationEvent(
+                time_entry_id=time_entries[4].id,
+                event_type="warning",
+                message="Draft entry pending approval.",
+                created_at=now - dt.timedelta(days=1, hours=1),
+            ),
+        ]
+        db.session.add_all(validation_rows)
+        expanded_counts["time_validation_events"] = len(validation_rows)
+
+        expense_specs = [
+            {
+                "matter_no": "2026-LIT-0142",
+                "user_id": partner_id,
+                "amount": 1800.0,
+                "category": "Travel",
+                "description": "Court filing courier and travel disbursements.",
+                "incurred_on": now.date() - dt.timedelta(days=6),
+                "status": "approved",
+                "approved_by": partner_id,
+                "approved_at": now - dt.timedelta(days=5),
+                "filename": "demo_receipt_lit_1.txt",
+                "receipt_text": "Receipt: Court courier and travel expenses, ZAR 1,800.00",
+            },
+            {
+                "matter_no": "2026-CORP-0033",
+                "user_id": staff_id,
+                "amount": 750.0,
+                "category": "Search Fees",
+                "description": "Cross-border registry filing fees.",
+                "incurred_on": now.date() - dt.timedelta(days=4),
+                "status": "draft",
+                "approved_by": None,
+                "approved_at": None,
+                "filename": "demo_receipt_corp_1.txt",
+                "receipt_text": "Receipt: Corporate registry search fees, ZAR 750.00",
+            },
+            {
+                "matter_no": "2026-REG-0021",
+                "user_id": paralegal_id,
+                "amount": 520.0,
+                "category": "Filing",
+                "description": "Supplementary filing packet print and certification.",
+                "incurred_on": now.date() - dt.timedelta(days=3),
+                "status": "approved",
+                "approved_by": partner_id,
+                "approved_at": now - dt.timedelta(days=2, hours=10),
+                "filename": "demo_receipt_reg_1.txt",
+                "receipt_text": "Receipt: Regulatory filing packet and certification, ZAR 520.00",
+            },
+        ]
+        expense_rows: list[ExpenseEntry] = []
+        for spec in expense_specs:
+            receipt_path = upload_dir / spec["filename"]
+            receipt_path.write_text(spec["receipt_text"], encoding="utf-8")
+            receipt_sha = hashlib.sha256(spec["receipt_text"].encode("utf-8")).hexdigest()
+            row = ExpenseEntry(
+                matter_id=matter_map[spec["matter_no"]].id,
+                user_id=spec["user_id"],
+                amount=spec["amount"],
+                currency="ZAR",
+                category=spec["category"],
+                description=spec["description"],
+                incurred_on=spec["incurred_on"],
+                is_reimbursable=True,
+                status=spec["status"],
+                approved_by=spec["approved_by"],
+                approved_at=spec["approved_at"],
+                receipt_filename=spec["filename"],
+                receipt_sha256=receipt_sha,
+                receipt_ocr_text=spec["receipt_text"],
+                invoice_id=None,
+                created_at=now - dt.timedelta(days=2),
+            )
+            db.session.add(row)
+            expense_rows.append(row)
+        db.session.flush()
+        expanded_counts["expenses"] = len(expense_rows)
+
+        rate_rows = [
+            RateCard(
+                name="Partner Standard",
+                client_name="Acme Holdings (Pty) Ltd",
+                matter_id=matter_map["2026-LIT-0142"].id,
+                timekeeper_role_id=timekeeper_role_rows["Partner"].id,
+                user_id=partner_id,
+                currency="ZAR",
+                rate_per_hour=3500.0,
+                effective_from=now.date() - dt.timedelta(days=180),
+                effective_to=None,
+                is_active=True,
+            ),
+            RateCard(
+                name="Associate Standard",
+                client_name="Acme Holdings (Pty) Ltd",
+                matter_id=matter_map["2026-LIT-0142"].id,
+                timekeeper_role_id=timekeeper_role_rows["Associate"].id,
+                user_id=associate_id,
+                currency="ZAR",
+                rate_per_hour=2200.0,
+                effective_from=now.date() - dt.timedelta(days=180),
+                effective_to=None,
+                is_active=True,
+            ),
+            RateCard(
+                name="Paralegal Diligence",
+                client_name="Silverstream Capital",
+                matter_id=matter_map["2026-CORP-0033"].id,
+                timekeeper_role_id=timekeeper_role_rows["Paralegal"].id,
+                user_id=paralegal_id,
+                currency="ZAR",
+                rate_per_hour=1400.0,
+                effective_from=now.date() - dt.timedelta(days=120),
+                effective_to=None,
+                is_active=True,
+            ),
+        ]
+        db.session.add_all(rate_rows)
+        expanded_counts["rate_cards"] = len(rate_rows)
+
+        fee_arrangements = [
+            FeeArrangement(
+                matter_id=matter_map["2026-LIT-0142"].id,
+                arrangement_type="capped",
+                fixed_amount=None,
+                cap_amount=350000.0,
+                blended_rate=None,
+                notes="Cap approval required beyond threshold.",
+            ),
+            FeeArrangement(
+                matter_id=matter_map["2026-CORP-0033"].id,
+                arrangement_type="blended",
+                fixed_amount=None,
+                cap_amount=None,
+                blended_rate=2100.0,
+                notes="Blend applies across associate/paralegal diligence work.",
+            ),
+        ]
+        db.session.add_all(fee_arrangements)
+        expanded_counts["fee_arrangements"] = len(fee_arrangements)
+
+        tax_rules = [
+            TaxRule(jurisdiction="ZA-GP", name="VAT", rate_percent=15.0, is_active=True),
+            TaxRule(jurisdiction="ZA-WC", name="VAT", rate_percent=15.0, is_active=True),
+        ]
+        db.session.add_all(tax_rules)
+        expanded_counts["tax_rules"] = len(tax_rules)
+
+        invoice_1_subtotal = 19110.0
+        invoice_1_tax = 2866.5
+        invoice_2_subtotal = 5600.0
+        invoice_2_tax = 840.0
+        invoice_rows = [
+            Invoice(
+                matter_id=matter_map["2026-LIT-0142"].id,
+                client_name=matter_map["2026-LIT-0142"].client_name,
+                period_start=now.date() - dt.timedelta(days=30),
+                period_end=now.date() - dt.timedelta(days=1),
+                status="approved",
+                subtotal=invoice_1_subtotal,
+                tax_total=invoice_1_tax,
+                total=invoice_1_subtotal + invoice_1_tax,
+                approved_by=partner_id,
+                approved_at=now - dt.timedelta(hours=30),
+                pdf_path=None,
+                created_by=partner_id,
+                created_at=now - dt.timedelta(hours=40),
+            ),
+            Invoice(
+                matter_id=matter_map["2026-CORP-0033"].id,
+                client_name=matter_map["2026-CORP-0033"].client_name,
+                period_start=now.date() - dt.timedelta(days=28),
+                period_end=now.date() - dt.timedelta(days=2),
+                status="draft",
+                subtotal=invoice_2_subtotal,
+                tax_total=invoice_2_tax,
+                total=invoice_2_subtotal + invoice_2_tax,
+                approved_by=None,
+                approved_at=None,
+                pdf_path=None,
+                created_by=associate_id,
+                created_at=now - dt.timedelta(hours=14),
+            ),
+        ]
+        db.session.add_all(invoice_rows)
+        db.session.flush()
+        expanded_counts["invoices"] = len(invoice_rows)
+
+        lit_invoice = invoice_rows[0]
+        corp_invoice = invoice_rows[1]
+        invoice_line_rows = [
+            InvoiceLine(
+                invoice_id=lit_invoice.id,
+                time_entry_id=time_entries[0].id,
+                expense_id=None,
+                description="Partner strategy and hearing prep",
+                hours=time_entries[0].rounded_hours,
+                rate=3500.0,
+                amount=10500.0,
+                tax_amount=1575.0,
+                task_code=time_entries[0].task_code,
+                activity_code=time_entries[0].activity_code,
+            ),
+            InvoiceLine(
+                invoice_id=lit_invoice.id,
+                time_entry_id=time_entries[1].id,
+                expense_id=None,
+                description="Associate settlement drafting",
+                hours=time_entries[1].rounded_hours,
+                rate=2200.0,
+                amount=5720.0,
+                tax_amount=858.0,
+                task_code=time_entries[1].task_code,
+                activity_code=time_entries[1].activity_code,
+            ),
+            InvoiceLine(
+                invoice_id=lit_invoice.id,
+                time_entry_id=None,
+                expense_id=expense_rows[0].id,
+                description="Travel and courier disbursement",
+                hours=0.0,
+                rate=0.0,
+                amount=1800.0,
+                tax_amount=270.0,
+                task_code=None,
+                activity_code=None,
+            ),
+            InvoiceLine(
+                invoice_id=corp_invoice.id,
+                time_entry_id=time_entries[2].id,
+                expense_id=None,
+                description="Registry and diligence verification",
+                hours=time_entries[2].rounded_hours,
+                rate=1400.0,
+                amount=5600.0,
+                tax_amount=840.0,
+                task_code=time_entries[2].task_code,
+                activity_code=time_entries[2].activity_code,
+            ),
+        ]
+        db.session.add_all(invoice_line_rows)
+        expanded_counts["invoice_lines"] = len(invoice_line_rows)
+
+        expense_rows[0].invoice_id = lit_invoice.id
+
+        invoice_adjustments = [
+            InvoiceAdjustment(
+                invoice_id=corp_invoice.id,
+                adjustment_type="write_down",
+                reason="Scope reduction approved by partner.",
+                amount=-640.0,
+                created_by=partner_id,
+                created_at=now - dt.timedelta(hours=4),
+            )
+        ]
+        db.session.add_all(invoice_adjustments)
+        expanded_counts["invoice_adjustments"] = len(invoice_adjustments)
+
+        ledes_dir = upload_dir / "ledes"
+        ledes_dir.mkdir(parents=True, exist_ok=True)
+        ledes_path = ledes_dir / f"demo_invoice_{lit_invoice.id}_1998b.csv"
+        ledes_payload = "INVOICE_DATE|INVOICE_NUMBER|LINE_ITEM_NUMBER|LINE_ITEM_TOTAL\n"
+        ledes_payload += f"{lit_invoice.period_end:%Y%m%d}|{lit_invoice.id}|1|{lit_invoice.total:.2f}\n"
+        ledes_path.write_text(ledes_payload, encoding="utf-8")
+        ledes_export = LEDESExport(
+            invoice_id=lit_invoice.id,
+            variant="1998B",
+            file_path=str(ledes_path),
+            created_by=partner_id,
+            created_at=now - dt.timedelta(hours=3),
+        )
+        db.session.add(ledes_export)
+        expanded_counts["ledes_exports"] = 1
+
+        payment_rows = [
+            PaymentAllocation(
+                invoice_id=lit_invoice.id,
+                amount=12000.0,
+                method="EFT",
+                reference="EFT-ACME-2026-02-11",
+                allocated_at=now - dt.timedelta(hours=2),
+                created_by=staff_id,
+            )
+        ]
+        db.session.add_all(payment_rows)
+        expanded_counts["payment_allocations"] = len(payment_rows)
+
+        ar_rows = [
+            ARSnapshot(
+                as_of_date=now.date(),
+                invoice_id=lit_invoice.id,
+                outstanding_amount=round(lit_invoice.total - payment_rows[0].amount, 2),
+                aging_bucket="0-30",
+                collection_notes="Payment plan acknowledged by client finance.",
+                created_at=now - dt.timedelta(hours=1),
+            ),
+            ARSnapshot(
+                as_of_date=now.date(),
+                invoice_id=corp_invoice.id,
+                outstanding_amount=corp_invoice.total,
+                aging_bucket="0-30",
+                collection_notes="Draft invoice under internal review.",
+                created_at=now - dt.timedelta(hours=1),
+            ),
+        ]
+        db.session.add_all(ar_rows)
+        expanded_counts["ar_snapshots"] = len(ar_rows)
+
+        # -------------------------------------------------------------------
+        # Trust accounting and reconciliation
+        # -------------------------------------------------------------------
+        trust_account = TrustAccount(
+            name="Main Client Trust Account",
+            bank_name="Standard Bank",
+            account_no_last4="4419",
+            jurisdiction="ZA-GP",
+            currency="ZAR",
+            is_active=True,
+            created_at=now - dt.timedelta(days=100),
+        )
+        db.session.add(trust_account)
+        db.session.flush()
+
+        trust_ledger_lit = TrustClientLedger(
+            trust_account_id=trust_account.id,
+            client_name=matter_map["2026-LIT-0142"].client_name,
+            matter_id=matter_map["2026-LIT-0142"].id,
+            current_balance=110000.0,
+            created_at=now - dt.timedelta(days=90),
+        )
+        trust_ledger_reg = TrustClientLedger(
+            trust_account_id=trust_account.id,
+            client_name=matter_map["2026-REG-0021"].client_name,
+            matter_id=matter_map["2026-REG-0021"].id,
+            current_balance=10000.0,
+            created_at=now - dt.timedelta(days=60),
+        )
+        db.session.add_all([trust_ledger_lit, trust_ledger_reg])
+        db.session.flush()
+
+        trust_entry_1 = TrustLedgerEntry(
+            trust_account_id=trust_account.id,
+            client_ledger_id=trust_ledger_lit.id,
+            entry_type="deposit",
+            amount=120000.0,
+            currency="ZAR",
+            description="Initial litigation trust funding.",
+            supporting_document_id=document_latest_version[document_records["acme-hearing-pack.pdf"].id].id,
+            reversal_of_entry_id=None,
+            immutable_ref="TRUST-2026-0001",
+            created_by=partner_id,
+            created_at=now - dt.timedelta(days=20),
+        )
+        db.session.add(trust_entry_1)
+        db.session.flush()
+        trust_entry_2 = TrustLedgerEntry(
+            trust_account_id=trust_account.id,
+            client_ledger_id=trust_ledger_lit.id,
+            entry_type="disbursement",
+            amount=25000.0,
+            currency="ZAR",
+            description="Counsel briefing and filing disbursement.",
+            supporting_document_id=None,
+            reversal_of_entry_id=None,
+            immutable_ref="TRUST-2026-0002",
+            created_by=partner_id,
+            created_at=now - dt.timedelta(days=12),
+        )
+        db.session.add(trust_entry_2)
+        db.session.flush()
+        trust_entry_3 = TrustLedgerEntry(
+            trust_account_id=trust_account.id,
+            client_ledger_id=trust_ledger_lit.id,
+            entry_type="transfer",
+            amount=10000.0,
+            currency="ZAR",
+            description="Transfer to regulatory matter reserve.",
+            supporting_document_id=None,
+            reversal_of_entry_id=None,
+            immutable_ref="TRUST-2026-0003",
+            created_by=partner_id,
+            created_at=now - dt.timedelta(days=8),
+        )
+        trust_entry_4 = TrustLedgerEntry(
+            trust_account_id=trust_account.id,
+            client_ledger_id=trust_ledger_reg.id,
+            entry_type="transfer",
+            amount=10000.0,
+            currency="ZAR",
+            description="Transfer in from litigation reserve.",
+            supporting_document_id=None,
+            reversal_of_entry_id=None,
+            immutable_ref="TRUST-2026-0004",
+            created_by=partner_id,
+            created_at=now - dt.timedelta(days=8),
+        )
+        db.session.add_all([trust_entry_3, trust_entry_4])
+        db.session.flush()
+        trust_entry_5 = TrustLedgerEntry(
+            trust_account_id=trust_account.id,
+            client_ledger_id=trust_ledger_lit.id,
+            entry_type="reversal",
+            amount=25000.0,
+            currency="ZAR",
+            description="Reversal of duplicate counsel disbursement posting.",
+            supporting_document_id=None,
+            reversal_of_entry_id=trust_entry_2.id,
+            immutable_ref="TRUST-2026-0005",
+            created_by=admin_id,
+            created_at=now - dt.timedelta(days=7),
+        )
+        db.session.add(trust_entry_5)
+        db.session.flush()
+
+        trust_recon = TrustReconciliationRun(
+            trust_account_id=trust_account.id,
+            period_start=now - dt.timedelta(days=30),
+            period_end=now,
+            bank_closing_balance=120000.0,
+            ledger_closing_balance=120000.0,
+            client_subledger_total=120000.0,
+            status="completed",
+            exception_notes=None,
+            created_by=admin_id,
+            created_at=now - dt.timedelta(hours=6),
+        )
+        db.session.add(trust_recon)
+
+        trust_alert = TrustThresholdAlert(
+            client_ledger_id=trust_ledger_reg.id,
+            threshold_amount=15000.0,
+            current_balance=10000.0,
+            status="open",
+            created_at=now - dt.timedelta(hours=5),
+            resolved_at=None,
+            resolved_by=None,
+        )
+        db.session.add(trust_alert)
+
+        trust_approval = TrustApprovalRequest(
+            action_type="transfer",
+            payload_json=json.dumps(
+                {
+                    "trust_account_id": trust_account.id,
+                    "source_ledger_id": trust_ledger_lit.id,
+                    "target_ledger_id": trust_ledger_reg.id,
+                    "amount": 10000.0,
+                }
+            ),
+            status="approved",
+            requested_by=associate_id,
+            approved_by=partner_id,
+            requested_at=now - dt.timedelta(days=8, hours=1),
+            approved_at=now - dt.timedelta(days=8),
+            executed_at=now - dt.timedelta(days=8),
+            executed_entry_id=trust_entry_3.id,
+            notes="Maker-checker policy satisfied.",
+        )
+        db.session.add(trust_approval)
+        expanded_counts["trust_accounts"] = 1
+        expanded_counts["trust_client_ledgers"] = 2
+        expanded_counts["trust_ledger_entries"] = 5
+        expanded_counts["trust_reconciliations"] = 1
+        expanded_counts["trust_threshold_alerts"] = 1
+        expanded_counts["trust_approvals"] = 1
+
+        # -------------------------------------------------------------------
+        # CRM, intake, conflicts, engagement
+        # -------------------------------------------------------------------
+        lead_rows = [
+            CRMLead(
+                full_name="Themba Nkosi",
+                organization="Nkosi Manufacturing",
+                email="themba.nkosi@nkosimfg.co.za",
+                phone="+27 11 555 0201",
+                source="Referral",
+                stage="qualified",
+                notes="Potential commercial recovery matter.",
+                assigned_to=associate_id,
+                created_by=admin_id,
+                created_at=now - dt.timedelta(days=9),
+                updated_at=now - dt.timedelta(days=2),
+            ),
+            CRMLead(
+                full_name="Aisha Peters",
+                organization="Peters Renewables",
+                email="aisha@petersrenewables.co.za",
+                phone="+27 21 555 0202",
+                source="Website",
+                stage="proposal",
+                notes="Needs regulatory response support.",
+                assigned_to=partner_id,
+                created_by=admin_id,
+                created_at=now - dt.timedelta(days=6),
+                updated_at=now - dt.timedelta(days=1),
+            ),
+            CRMLead(
+                full_name="Marius van Heerden",
+                organization="Van Heerden Estates",
+                email="marius@vhestates.co.za",
+                phone="+27 11 555 0203",
+                source="Conference",
+                stage="new",
+                notes="Preliminary probate advisory request.",
+                assigned_to=staff_id,
+                created_by=admin_id,
+                created_at=now - dt.timedelta(days=2),
+                updated_at=now - dt.timedelta(days=1),
+            ),
+        ]
+        db.session.add_all(lead_rows)
+        db.session.flush()
+        expanded_counts["crm_leads"] = len(lead_rows)
+
+        follow_ups = [
+            CRMFollowUp(
+                lead_id=lead_rows[0].id,
+                due_at=now + dt.timedelta(days=1),
+                note="Schedule conflict-screening call with finance head.",
+                status="open",
+                created_by=associate_id,
+                created_at=now - dt.timedelta(days=1),
+            ),
+            CRMFollowUp(
+                lead_id=lead_rows[1].id,
+                due_at=now + dt.timedelta(days=2),
+                note="Deliver regulatory roadmap and pricing proposal.",
+                status="open",
+                created_by=partner_id,
+                created_at=now - dt.timedelta(hours=20),
+            ),
+        ]
+        db.session.add_all(follow_ups)
+        expanded_counts["crm_followups"] = len(follow_ups)
+
+        intake_rows = [
+            IntakeForm(
+                lead_id=lead_rows[0].id,
+                matter_id=matter_map["2026-LIT-0142"].id,
+                data_json=json.dumps(
+                    {
+                        "client_name": lead_rows[0].organization,
+                        "entities": [lead_rows[0].organization, "Acme Holdings (Pty) Ltd"],
+                        "notes": "Potential overlap with existing counterparty list.",
+                    }
+                ),
+                created_by=associate_id,
+                created_at=now - dt.timedelta(days=1),
+            ),
+            IntakeForm(
+                lead_id=lead_rows[1].id,
+                matter_id=matter_map["2026-REG-0021"].id,
+                data_json=json.dumps(
+                    {
+                        "client_name": lead_rows[1].organization,
+                        "entities": [lead_rows[1].organization, "NERSA"],
+                        "notes": "Urgent regulator response work.",
+                    }
+                ),
+                created_by=partner_id,
+                created_at=now - dt.timedelta(hours=18),
+            ),
+        ]
+        db.session.add_all(intake_rows)
+        db.session.flush()
+        expanded_counts["intake_forms"] = len(intake_rows)
+
+        conflict_rows = [
+            ConflictCheck(
+                intake_form_id=intake_rows[0].id,
+                status="hit",
+                result_json=json.dumps(
+                    {
+                        "matched_matter_no": "2026-LIT-0142",
+                        "match_reason": "entity_name_overlap",
+                        "score": 0.94,
+                    }
+                ),
+                override_required=True,
+                overridden_by=partner_id,
+                override_reason="Client consent obtained and ethical wall in place.",
+                created_at=now - dt.timedelta(hours=14),
+            ),
+            ConflictCheck(
+                intake_form_id=intake_rows[1].id,
+                status="clear",
+                result_json=json.dumps({"score": 0.08, "matched_entities": []}),
+                override_required=False,
+                overridden_by=None,
+                override_reason=None,
+                created_at=now - dt.timedelta(hours=12),
+            ),
+        ]
+        db.session.add_all(conflict_rows)
+        expanded_counts["conflict_checks"] = len(conflict_rows)
+
+        engagement_rows = [
+            EngagementLetter(
+                matter_id=matter_map["2026-LIT-0142"].id,
+                template_name="Engagement Letter ZA",
+                content="Engagement approved for Acme dispute resolution and hearing representation.",
+                status="signed",
+                signed_by="Zanele Dube",
+                signed_at=now - dt.timedelta(days=5),
+                signed_ip="154.0.23.11",
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=6),
+            ),
+            EngagementLetter(
+                matter_id=matter_map["2026-REG-0021"].id,
+                template_name="Engagement Letter ZA",
+                content="Regulatory intervention scope and fee schedule.",
+                status="sent",
+                signed_by=None,
+                signed_at=None,
+                signed_ip=None,
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=2),
+            ),
+        ]
+        db.session.add_all(engagement_rows)
+        expanded_counts["engagement_letters"] = len(engagement_rows)
+
+        # -------------------------------------------------------------------
+        # Client portal
+        # -------------------------------------------------------------------
+        portal_users = [
+            PortalUser(
+                email="client.zanele@acme.co.za",
+                full_name="Zanele Dube",
+                password_hash="x",
+                mfa_enabled=True,
+                mfa_secret="NB2W45DFOIZA====NB2W45DFOIZA====",
+                is_active=True,
+                created_at=now - dt.timedelta(days=12),
+                last_login_at=now - dt.timedelta(hours=9),
+            ),
+            PortalUser(
+                email="ops.bongani@ntulilogistics.co.za",
+                full_name="Bongani Ndlovu",
+                password_hash="x",
+                mfa_enabled=False,
+                mfa_secret=None,
+                is_active=True,
+                created_at=now - dt.timedelta(days=9),
+                last_login_at=now - dt.timedelta(hours=16),
+            ),
+        ]
+        portal_users[0].set_password(password)
+        portal_users[1].set_password(password)
+        db.session.add_all(portal_users)
+        db.session.flush()
+        expanded_counts["portal_users"] = len(portal_users)
+
+        portal_access_rows = [
+            PortalMatterAccess(
+                portal_user_id=portal_users[0].id,
+                matter_id=matter_map["2026-LIT-0142"].id,
+                visibility_level="full_curated",
+                granted_by=admin_id,
+                granted_at=now - dt.timedelta(days=11),
+                revoked_at=None,
+            ),
+            PortalMatterAccess(
+                portal_user_id=portal_users[0].id,
+                matter_id=matter_map["2026-COM-0055"].id,
+                visibility_level="shared_docs",
+                granted_by=admin_id,
+                granted_at=now - dt.timedelta(days=9),
+                revoked_at=None,
+            ),
+            PortalMatterAccess(
+                portal_user_id=portal_users[1].id,
+                matter_id=matter_map["2026-COM-0055"].id,
+                visibility_level="summary_only",
+                granted_by=admin_id,
+                granted_at=now - dt.timedelta(days=8),
+                revoked_at=None,
+            ),
+        ]
+        db.session.add_all(portal_access_rows)
+        expanded_counts["portal_matter_access"] = len(portal_access_rows)
+
+        thread = PortalMessageThread(
+            matter_id=matter_map["2026-LIT-0142"].id,
+            subject="Discovery packet status",
+            created_by_user_id=associate_id,
+            created_by_portal_user_id=None,
+            created_at=now - dt.timedelta(days=1, hours=8),
+        )
+        db.session.add(thread)
+        db.session.flush()
+        portal_messages = [
+            PortalMessage(
+                thread_id=thread.id,
+                body="We have uploaded the latest discovery packet for your review.",
+                from_user_id=associate_id,
+                from_portal_user_id=None,
+                created_at=now - dt.timedelta(days=1, hours=7),
+            ),
+            PortalMessage(
+                thread_id=thread.id,
+                body="Received, please confirm filing deadline for court bundle.",
+                from_user_id=None,
+                from_portal_user_id=portal_users[0].id,
+                created_at=now - dt.timedelta(days=1, hours=6),
+            ),
+        ]
+        db.session.add_all(portal_messages)
+        expanded_counts["portal_threads"] = 1
+        expanded_counts["portal_messages"] = len(portal_messages)
+
+        portal_upload_payload = "invoice_ref,description,amount\nLIT-EXP-1,Courier advance,300.00\n"
+        portal_upload_name = "demo_portal_upload_1.csv"
+        (upload_dir / portal_upload_name).write_text(portal_upload_payload, encoding="utf-8")
+        portal_upload_row = PortalUpload(
+            matter_id=matter_map["2026-LIT-0142"].id,
+            portal_user_id=portal_users[0].id,
+            filename="client-courier-advance.csv",
+            stored_filename=portal_upload_name,
+            sha256=hashlib.sha256(portal_upload_payload.encode("utf-8")).hexdigest(),
+            uploaded_at=now - dt.timedelta(hours=10),
+        )
+        db.session.add(portal_upload_row)
+        expanded_counts["portal_uploads"] = 1
+
+        portal_invoice_view = PortalInvoiceView(
+            portal_user_id=portal_users[0].id,
+            invoice_id=lit_invoice.id,
+            last_viewed_at=now - dt.timedelta(hours=6),
+        )
+        db.session.add(portal_invoice_view)
+        expanded_counts["portal_invoice_views"] = 1
+
+        portal_receipt = PortalPaymentReceipt(
+            invoice_id=lit_invoice.id,
+            portal_user_id=portal_users[0].id,
+            amount=12000.0,
+            currency="ZAR",
+            status="recorded",
+            reference="PORTAL-EFT-2026-0212",
+            created_at=now - dt.timedelta(hours=2),
+        )
+        db.session.add(portal_receipt)
+        expanded_counts["portal_payment_receipts"] = 1
+
+        link_tokens = [
+            PortalLinkToken(
+                portal_user_id=portal_users[0].id,
+                matter_id=matter_map["2026-LIT-0142"].id,
+                document_version_id=None,
+                token_hash=hashlib.sha256(b"portal-link-matter-1").hexdigest(),
+                expires_at=now + dt.timedelta(days=2),
+                created_at=now - dt.timedelta(hours=4),
+                used_at=None,
+            ),
+            PortalLinkToken(
+                portal_user_id=portal_users[0].id,
+                matter_id=None,
+                document_version_id=document_latest_version[document_records["acme-hearing-pack.pdf"].id].id,
+                token_hash=hashlib.sha256(b"portal-link-document-1").hexdigest(),
+                expires_at=now + dt.timedelta(hours=36),
+                created_at=now - dt.timedelta(hours=3),
+                used_at=None,
+            ),
+        ]
+        db.session.add_all(link_tokens)
+        expanded_counts["portal_link_tokens"] = len(link_tokens)
+
+        # -------------------------------------------------------------------
+        # Analytics, worker queue, and operations controls
+        # -------------------------------------------------------------------
+        analytics_rows = [
+            AnalyticsMetricSnapshot(
+                as_of_date=now.date(),
+                metric_key="utilization",
+                scope_type="firm",
+                scope_id=None,
+                value_num=0.73,
+                value_text=None,
+                created_at=now - dt.timedelta(hours=1),
+            ),
+            AnalyticsMetricSnapshot(
+                as_of_date=now.date(),
+                metric_key="realization",
+                scope_type="firm",
+                scope_id=None,
+                value_num=0.88,
+                value_text=None,
+                created_at=now - dt.timedelta(hours=1),
+            ),
+            AnalyticsMetricSnapshot(
+                as_of_date=now.date(),
+                metric_key="ehr",
+                scope_type="firm",
+                scope_id=None,
+                value_num=2650.0,
+                value_text="ZAR/hr",
+                created_at=now - dt.timedelta(hours=1),
+            ),
+            AnalyticsMetricSnapshot(
+                as_of_date=now.date(),
+                metric_key="workload_open_tasks",
+                scope_type="user",
+                scope_id=associate_id,
+                value_num=6,
+                value_text=None,
+                created_at=now - dt.timedelta(hours=1),
+            ),
+            AnalyticsMetricSnapshot(
+                as_of_date=now.date(),
+                metric_key="profitability_index",
+                scope_type="matter",
+                scope_id=matter_map["2026-LIT-0142"].id,
+                value_num=1.24,
+                value_text=None,
+                created_at=now - dt.timedelta(hours=1),
+            ),
+        ]
+        db.session.add_all(analytics_rows)
+        expanded_counts["analytics_snapshots"] = len(analytics_rows)
+
+        forecast_rows = [
+            WorkloadForecast(
+                as_of_date=now.date(),
+                user_id=partner_id,
+                predicted_hours=34.0,
+                confidence=0.82,
+                features_json=json.dumps({"open_tasks": 5, "active_matters": 4}),
+                created_at=now - dt.timedelta(hours=1),
+            ),
+            WorkloadForecast(
+                as_of_date=now.date(),
+                user_id=associate_id,
+                predicted_hours=42.5,
+                confidence=0.78,
+                features_json=json.dumps({"open_tasks": 8, "active_matters": 5}),
+                created_at=now - dt.timedelta(hours=1),
+            ),
+            WorkloadForecast(
+                as_of_date=now.date(),
+                user_id=paralegal_id,
+                predicted_hours=30.0,
+                confidence=0.75,
+                features_json=json.dumps({"open_tasks": 6, "active_matters": 4}),
+                created_at=now - dt.timedelta(hours=1),
+            ),
+        ]
+        db.session.add_all(forecast_rows)
+        expanded_counts["workload_forecasts"] = len(forecast_rows)
+
+        burnout_rows = [
+            BurnoutSignal(
+                user_id=associate_id,
+                as_of_date=now.date(),
+                score=0.68,
+                reason="High concentration of critical deadlines",
+                status="open",
+                created_at=now - dt.timedelta(hours=1),
+            ),
+            BurnoutSignal(
+                user_id=staff_id,
+                as_of_date=now.date(),
+                score=0.32,
+                reason="Balanced workload after reassignment",
+                status="monitoring",
+                created_at=now - dt.timedelta(hours=1),
+            ),
+        ]
+        db.session.add_all(burnout_rows)
+        expanded_counts["burnout_signals"] = len(burnout_rows)
+
+        job_rows = [
+            JobQueue(
+                job_type="deadline_sweep",
+                payload_json=json.dumps({"scope": "all_matters"}),
+                status="queued",
+                worker_id=None,
+                lease_until=None,
+                attempts=0,
+                max_attempts=5,
+                last_error=None,
+                run_after=now + dt.timedelta(minutes=5),
+                created_at=now - dt.timedelta(minutes=15),
+                started_at=None,
+                finished_at=None,
+            ),
+            JobQueue(
+                job_type="ocr_extract",
+                payload_json=json.dumps({"document_version_id": document_latest_version[document_records["acme-hearing-pack.pdf"].id].id}),
+                status="succeeded",
+                worker_id="worker-1",
+                lease_until=None,
+                attempts=1,
+                max_attempts=5,
+                last_error=None,
+                run_after=now - dt.timedelta(hours=6),
+                created_at=now - dt.timedelta(hours=6, minutes=5),
+                started_at=now - dt.timedelta(hours=6),
+                finished_at=now - dt.timedelta(hours=5, minutes=58),
+            ),
+            JobQueue(
+                job_type="suspicious_activity_scan",
+                payload_json=json.dumps({"window_minutes": 60}),
+                status="failed",
+                worker_id="worker-2",
+                lease_until=None,
+                attempts=2,
+                max_attempts=5,
+                last_error="Transient DB timeout during scan.",
+                run_after=now - dt.timedelta(minutes=20),
+                created_at=now - dt.timedelta(hours=1),
+                started_at=now - dt.timedelta(minutes=25),
+                finished_at=now - dt.timedelta(minutes=23),
+            ),
+        ]
+        db.session.add_all(job_rows)
+        db.session.flush()
+        expanded_counts["job_queue"] = len(job_rows)
+
+        job_history_rows = [
+            JobHistory(job_id=job_rows[0].id, status="queued", message="Waiting for lease claim.", created_at=now - dt.timedelta(minutes=15)),
+            JobHistory(job_id=job_rows[1].id, status="running", message="OCR extraction started.", created_at=now - dt.timedelta(hours=6)),
+            JobHistory(job_id=job_rows[1].id, status="succeeded", message="OCR extraction completed.", created_at=now - dt.timedelta(hours=5, minutes=58)),
+            JobHistory(job_id=job_rows[2].id, status="running", message="Suspicious scan started.", created_at=now - dt.timedelta(minutes=25)),
+            JobHistory(job_id=job_rows[2].id, status="failed", message="Transient DB timeout during scan.", created_at=now - dt.timedelta(minutes=23)),
+        ]
+        db.session.add_all(job_history_rows)
+        expanded_counts["job_history"] = len(job_history_rows)
+
+        scheduled_jobs = [
+            ScheduledJob(
+                job_type="deadline_sweep",
+                default_payload={"scope": "all_matters"},
+                interval_minutes=15,
+                next_run_at=now + dt.timedelta(minutes=5),
+                last_run_at=now - dt.timedelta(minutes=10),
+                is_active=True,
+            ),
+            ScheduledJob(
+                job_type="retention_sweep",
+                default_payload={"mode": "archive_candidates"},
+                interval_minutes=1440,
+                next_run_at=now + dt.timedelta(hours=4),
+                last_run_at=now - dt.timedelta(hours=20),
+                is_active=True,
+            ),
+            ScheduledJob(
+                job_type="analytics_snapshot",
+                default_payload={"scope": "firm"},
+                interval_minutes=60,
+                next_run_at=now + dt.timedelta(minutes=30),
+                last_run_at=now - dt.timedelta(minutes=35),
+                is_active=True,
+            ),
+        ]
+        db.session.add_all(scheduled_jobs)
+        expanded_counts["scheduled_jobs"] = len(scheduled_jobs)
+
+        backup_dir = upload_dir / "backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        backup_manifest_path = backup_dir / "demo_backup_manifest.json"
+        backup_manifest_payload = {
+            "backup_run_id": "demo-seed",
+            "db_dump_path": "uploads/backups/demo_seed.dbdump",
+            "uploads_archive_path": "uploads/backups/demo_seed_uploads.tar.gz",
+            "db_dump_sha256": hashlib.sha256(b"demo-db-dump").hexdigest(),
+            "uploads_archive_sha256": hashlib.sha256(b"demo-uploads-archive").hexdigest(),
+            "encryption": {"enabled": True, "algorithm": "aes-256-gcm"},
+        }
+        backup_manifest_path.write_text(json.dumps(backup_manifest_payload, indent=2), encoding="utf-8")
+
+        backup_run = BackupRun(
+            started_at=now - dt.timedelta(hours=5),
+            finished_at=now - dt.timedelta(hours=5) + dt.timedelta(minutes=2),
+            status="succeeded",
+            location=str(backup_manifest_path),
+            details_json=json.dumps(backup_manifest_payload),
+            triggered_by=admin_id,
+        )
+        db.session.add(backup_run)
+        db.session.flush()
+
+        restore_verification = RestoreVerification(
+            backup_run_id=backup_run.id,
+            verified_at=now - dt.timedelta(hours=4),
+            status="passed",
+            notes="Checksum and decryption checks validated.",
+            verified_by=admin_id,
+        )
+        db.session.add(restore_verification)
+
+        dr_targets = [
+            DRTarget(
+                name="Primary Region",
+                rpo_minutes_target=30,
+                rto_minutes_target=120,
+                last_actual_rpo_minutes=18,
+                last_actual_rto_minutes=92,
+                updated_at=now - dt.timedelta(hours=2),
+            ),
+            DRTarget(
+                name="Secondary Region",
+                rpo_minutes_target=60,
+                rto_minutes_target=240,
+                last_actual_rpo_minutes=44,
+                last_actual_rto_minutes=210,
+                updated_at=now - dt.timedelta(hours=2),
+            ),
+        ]
+        db.session.add_all(dr_targets)
+        expanded_counts["backup_runs"] = 1
+        expanded_counts["restore_verifications"] = 1
+        expanded_counts["dr_targets"] = len(dr_targets)
 
         incident_specs = [
             (
@@ -782,10 +3410,21 @@ def seed_demo_data(app, password: str, reset: bool = False):
             )
 
         audit_seed_entries = [
-            ("demo_seed", "System", None, admin_id, {"seeded": True, "version": 3}),
+            ("demo_seed", "System", None, admin_id, {"seeded": True, "version": 4}),
             ("login", "User", admin_id, admin_id, {"channel": "web"}),
             ("matter_summary_update", "Matter", matter_map["2026-LIT-0142"].id, partner_id, {"risk_level": "High"}),
-            ("document_upload", "DocumentFile", None, paralegal_id, {"filename": "acme-hearing-pack.pdf"}),
+            ("document_upload", "DocumentFile", doc_file_map["acme-hearing-pack.pdf"].id, paralegal_id, {"filename": "acme-hearing-pack.pdf"}),
+            (
+                "dms_state_change",
+                "DocumentVersion",
+                document_latest_version[document_records["acme-hearing-pack.pdf"].id].id,
+                partner_id,
+                {"state": document_latest_version[document_records["acme-hearing-pack.pdf"].id].state},
+            ),
+            ("invoice_approve", "Invoice", lit_invoice.id, partner_id, {"total": lit_invoice.total}),
+            ("trust_post", "TrustLedgerEntry", trust_entry_5.id, admin_id, {"entry_type": "reversal"}),
+            ("conflict_override", "ConflictCheck", conflict_rows[0].id, partner_id, {"override": True}),
+            ("backup_run", "BackupRun", backup_run.id, admin_id, {"status": backup_run.status}),
             ("incident_create", "GovernanceIncident", None, admin_id, {"type": "Change"}),
         ]
         for i, (action, entity_type, entity_id, actor_user_id, details) in enumerate(audit_seed_entries):
@@ -803,7 +3442,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
             )
 
         db.session.commit()
-        return {
+        summary = {
             "users": len(user_specs),
             "announcements": len(announcements),
             "matters": len(matter_specs),
@@ -816,31 +3455,244 @@ def seed_demo_data(app, password: str, reset: bool = False):
             "matter_activity": len(activity_specs),
             "incidents": len(incident_specs),
             "audit_logs": len(audit_seed_entries),
-            "password": password,
         }
+        summary.update(expanded_counts)
+        summary["password"] = password
+        return summary
 
 
 def _reset_demo_dataset(app):
-    delete_order = [
-        AuditLog,
-        GovernanceIncident,
-        MatterTimelineEvent,
-        MatterActivity,
-        DocumentFile,
-        Task,
-        MatterMember,
-        Contact,
-        KnowledgeBase,
+    all_models = [
+        ARSnapshot,
         Announcement,
+        AnalyticsMetricSnapshot,
+        AuditLog,
+        BackupRun,
+        BatesRange,
+        BurnoutSignal,
+        CRMFollowUp,
+        CRMLead,
+        ConflictCheck,
+        Contact,
+        DRTarget,
+        DataResidencyPolicy,
+        Deadline,
+        DeadlineRule,
+        DocumentFile,
+        DocumentLock,
+        DocumentOCRText,
+        DocumentRecord,
+        DocumentTemplate,
+        DocumentVersion,
+        EmailCapture,
+        EngagementLetter,
+        Entity,
+        EntityRelationship,
+        EthicalWall,
+        EthicalWallMatter,
+        EthicalWallRule,
+        ExpenseEntry,
+        FeeArrangement,
+        FirmSetting,
+        GovernanceIncident,
+        HolidayCalendar,
+        IntakeForm,
+        Invoice,
+        InvoiceAdjustment,
+        InvoiceLine,
+        JobHistory,
+        JobQueue,
+        KnowledgeBase,
+        LEDESExport,
+        LegalHold,
         Matter,
+        MatterActivity,
+        MatterClosingChecklistItem,
+        MatterMember,
+        MatterNote,
+        MatterNoteACL,
+        MatterParty,
+        MatterStageHistory,
+        MatterTemplate,
+        MatterTimelineEvent,
+        Notification,
+        Office,
+        PaymentAllocation,
+        PermissionGrant,
+        PortalInvoiceView,
+        PortalLinkToken,
+        PortalMatterAccess,
+        PortalMessage,
+        PortalMessageThread,
+        PortalPaymentReceipt,
+        PortalUpload,
+        PortalUser,
+        PracticeArea,
+        ProductionItem,
+        ProductionSet,
+        RateCard,
+        RestoreVerification,
+        RetentionPolicy,
+        SSOApplication,
+        SSOAuthorizationCode,
+        SSOToken,
+        SavedSearch,
+        ScheduledJob,
+        SuspiciousActivityAlert,
+        Task,
+        TaskApproval,
+        TaskChecklistItem,
+        TaskDependency,
+        TaskTemplate,
+        TaskTemplateItem,
+        TaxRule,
+        TimeEntry,
+        TimeRoundingPolicy,
+        TimeTimer,
+        TimeValidationEvent,
+        TimekeeperRole,
+        TrustAccount,
+        TrustApprovalRequest,
+        TrustClientLedger,
+        TrustLedgerEntry,
+        TrustReconciliationRun,
+        TrustThresholdAlert,
+        TrustedDevice,
         User,
+        UserMFABackupCode,
+        UserSession,
+        WorkloadForecast,
     ]
-    for model in delete_order:
-        db.session.query(model).delete(synchronize_session=False)
-    db.session.commit()
+
+    bind = db.session.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        table_names = ", ".join(sorted({model.__table__.name for model in all_models}))
+        db.session.execute(sa.text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
+        db.session.commit()
+    else:
+        if bind is not None and bind.dialect.name == "sqlite":
+            # Clear hold flags so legal-hold delete guards permit demo reset paths.
+            db.session.query(LegalHold).update({LegalHold.is_active: False}, synchronize_session=False)
+            db.session.query(DocumentRecord).update({DocumentRecord.legal_hold: False}, synchronize_session=False)
+            db.session.commit()
+
+            # Demo reset must bypass immutable trigger guards before bulk deletes.
+            sqlite_triggers = db.session.execute(
+                sa.text("SELECT name FROM sqlite_master WHERE type='trigger'")
+            ).scalars().all()
+            for trigger_name in sqlite_triggers:
+                lowered = str(trigger_name).lower()
+                if "audit_log_no_" in lowered or "trust_ledger_no_" in lowered:
+                    db.session.execute(sa.text(f'DROP TRIGGER IF EXISTS "{trigger_name}"'))
+            db.session.commit()
+
+        delete_order = [
+            AuditLog,
+            SuspiciousActivityAlert,
+            Notification,
+            RestoreVerification,
+            BackupRun,
+            DRTarget,
+            JobHistory,
+            JobQueue,
+            PortalLinkToken,
+            PortalPaymentReceipt,
+            PortalInvoiceView,
+            PortalUpload,
+            PortalMessage,
+            PortalMessageThread,
+            PortalMatterAccess,
+            PortalUser,
+            EngagementLetter,
+            ConflictCheck,
+            IntakeForm,
+            CRMFollowUp,
+            CRMLead,
+            TrustApprovalRequest,
+            TrustThresholdAlert,
+            TrustReconciliationRun,
+            TrustLedgerEntry,
+            TrustClientLedger,
+            TrustAccount,
+            ARSnapshot,
+            PaymentAllocation,
+            LEDESExport,
+            InvoiceAdjustment,
+            InvoiceLine,
+            ExpenseEntry,
+            Invoice,
+            TaxRule,
+            FeeArrangement,
+            RateCard,
+            TimeValidationEvent,
+            TimeEntry,
+            TimeTimer,
+            TimeRoundingPolicy,
+            EmailCapture,
+            ProductionItem,
+            BatesRange,
+            ProductionSet,
+            SavedSearch,
+            LegalHold,
+            DocumentOCRText,
+            DocumentLock,
+            DocumentVersion,
+            DocumentRecord,
+            TaskApproval,
+            TaskChecklistItem,
+            TaskDependency,
+            Task,
+            Deadline,
+            DeadlineRule,
+            HolidayCalendar,
+            MatterClosingChecklistItem,
+            MatterStageHistory,
+            MatterNoteACL,
+            MatterNote,
+            MatterParty,
+            EntityRelationship,
+            Entity,
+            MatterTimelineEvent,
+            MatterActivity,
+            MatterMember,
+            DocumentFile,
+            EthicalWallMatter,
+            EthicalWallRule,
+            EthicalWall,
+            MatterTemplate,
+            TaskTemplateItem,
+            TaskTemplate,
+            DocumentTemplate,
+            FirmSetting,
+            PracticeArea,
+            Office,
+            TimekeeperRole,
+            PermissionGrant,
+            RetentionPolicy,
+            DataResidencyPolicy,
+            GovernanceIncident,
+            KnowledgeBase,
+            Contact,
+            Announcement,
+            WorkloadForecast,
+            BurnoutSignal,
+            AnalyticsMetricSnapshot,
+            SSOToken,
+            SSOAuthorizationCode,
+            SSOApplication,
+            UserMFABackupCode,
+            TrustedDevice,
+            UserSession,
+            ScheduledJob,
+            Matter,
+            User,
+        ]
+        for model in delete_order:
+            db.session.query(model).delete(synchronize_session=False)
+        db.session.commit()
 
     upload_dir = Path(app.config["UPLOAD_DIR"])
     if upload_dir.exists():
-        for path in upload_dir.glob("demo_*"):
+        for path in upload_dir.rglob("demo_*"):
             if path.is_file():
                 path.unlink()

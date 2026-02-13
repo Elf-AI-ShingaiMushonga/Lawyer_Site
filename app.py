@@ -105,18 +105,27 @@ def main() -> None:
     elif args.cmd == "seed-demo":
         summary = seed_demo_data(app, password=args.password, reset=args.reset)
         print("Demo data seeded:")
-        print(f"  users={summary['users']}")
-        print(f"  announcements={summary['announcements']}")
-        print(f"  matters={summary['matters']}")
-        print(f"  matter_memberships={summary['matter_memberships']}")
-        print(f"  tasks={summary['tasks']}")
-        print(f"  documents={summary['documents']}")
-        print(f"  contacts={summary['contacts']}")
-        print(f"  knowledge_articles={summary['knowledge_articles']}")
-        print(f"  timeline_events={summary['timeline_events']}")
-        print(f"  matter_activity={summary['matter_activity']}")
-        print(f"  incidents={summary['incidents']}")
-        print(f"  audit_logs={summary['audit_logs']}")
+        primary_keys = [
+            "users",
+            "announcements",
+            "matters",
+            "matter_memberships",
+            "tasks",
+            "documents",
+            "contacts",
+            "knowledge_articles",
+            "timeline_events",
+            "matter_activity",
+            "incidents",
+            "audit_logs",
+        ]
+        for key in primary_keys:
+            if key in summary:
+                print(f"  {key}={summary[key]}")
+
+        extra_keys = sorted(k for k in summary.keys() if k not in set(primary_keys + ["password"]))
+        for key in extra_keys:
+            print(f"  {key}={summary[key]}")
         print("Login credentials:")
         print("  admin@elf-ai-demo.co.za")
         print("  partner@elf-ai-demo.co.za")
