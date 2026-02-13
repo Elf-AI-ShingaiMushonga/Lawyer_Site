@@ -393,6 +393,12 @@
       font-weight: 700;
     }
 
+    .form-label.is-required::after {
+      content: " *";
+      color: var(--accent);
+      font-weight: 800;
+    }
+
     .form-help {
       margin-top: 4px;
       font-size: 12px;
@@ -415,6 +421,58 @@
       border-radius: 12px;
       background: var(--panel-alt);
       padding: 12px;
+    }
+
+    .form-error-summary {
+      margin-bottom: 10px;
+      border: 1px solid rgba(225, 6, 0, 0.45);
+      background: #fff1f1;
+      color: #69211f;
+    }
+
+    .form-error-summary-title {
+      margin-bottom: 4px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+    }
+
+    .form-error-summary-list {
+      margin: 0;
+      padding-left: 1rem;
+      display: grid;
+      gap: 2px;
+    }
+
+    .form-error-link {
+      border: 0;
+      background: transparent;
+      color: #7f2421;
+      text-align: left;
+      text-decoration: underline;
+      padding: 0;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .form-error-link:hover {
+      color: #5d1715;
+    }
+
+    .field-error {
+      margin-top: 4px;
+      font-size: 12px;
+      line-height: 1.35;
+      color: #7f2220;
+      font-weight: 700;
+    }
+
+    .form-control.is-invalid,
+    .form-select.is-invalid,
+    textarea.form-control.is-invalid {
+      border-color: rgba(225, 6, 0, 0.75);
+      box-shadow: 0 0 0 .2rem rgba(225, 6, 0, 0.15);
+      background: #fff5f5;
     }
 
     .assignee-checklist {
@@ -568,6 +626,19 @@
     .table-tools .form-control {
       min-width: 240px;
       max-width: 360px;
+    }
+
+    .table-tools-meta {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .table-clear-btn[hidden] {
+      display: none !important;
     }
 
     .table-count {
@@ -1533,6 +1604,36 @@
       background: var(--accent);
     }
 
+    .back-to-top {
+      position: fixed;
+      right: 14px;
+      bottom: 18px;
+      z-index: 95;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      min-width: 78px;
+      border-radius: 999px;
+      border: 1px solid rgba(225, 6, 0, 0.45);
+      background: rgba(255, 255, 255, 0.95);
+      color: #731f1c;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      box-shadow: 0 10px 24px rgba(75, 22, 22, 0.2);
+      backdrop-filter: blur(4px);
+    }
+
+    .back-to-top:hover {
+      color: #ffffff;
+      border-color: rgba(225, 6, 0, 0.82);
+      background: var(--accent);
+    }
+
+    .back-to-top.is-visible {
+      display: inline-flex;
+    }
+
     @keyframes fade-up {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
@@ -1834,6 +1935,15 @@
         max-width: none;
       }
 
+      .table-tools-meta {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .table-clear-btn {
+        min-width: 92px;
+      }
+
       .table thead th {
         font-size: 11px;
       }
@@ -1858,6 +1968,10 @@
 
       .mobile-dock {
         display: flex;
+      }
+
+      .back-to-top {
+        bottom: 72px;
       }
 
       .command-palette {
@@ -2267,6 +2381,7 @@
     <button class="mobile-dock-link" type="button" data-command-open>Jump</button>
   </div>
 {% endif %}
+<button class="back-to-top" type="button" data-back-to-top aria-label="Back to top">Top</button>
 <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 </body>
 </html>

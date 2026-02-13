@@ -516,7 +516,34 @@
       }
 
       const search = toolbar.querySelector("[data-table-search]");
-      const count = toolbar.querySelector("[data-table-count]");
+      let count = toolbar.querySelector("[data-table-count]");
+      if (!(count instanceof HTMLElement)) {
+        count = document.createElement("div");
+        count.className = "table-count";
+        count.setAttribute("data-table-count", "");
+        count.setAttribute("aria-live", "polite");
+      }
+
+      let meta = toolbar.querySelector("[data-table-tools-meta]");
+      if (!(meta instanceof HTMLElement)) {
+        meta = document.createElement("div");
+        meta.className = "table-tools-meta";
+        meta.setAttribute("data-table-tools-meta", "");
+        toolbar.appendChild(meta);
+      }
+      if (!meta.contains(count)) {
+        meta.appendChild(count);
+      }
+
+      let clearButton = toolbar.querySelector("[data-table-clear]");
+      if (!(clearButton instanceof HTMLButtonElement)) {
+        clearButton = document.createElement("button");
+        clearButton.type = "button";
+        clearButton.className = "btn btn-sm btn-outline-light table-clear-btn";
+        clearButton.textContent = "Clear";
+        clearButton.setAttribute("data-table-clear", "");
+        meta.appendChild(clearButton);
+      }
       const headerCells = Array.from(table.querySelectorAll("thead th"));
       headerCells.forEach((header, index) => {
         if (!(header instanceof HTMLTableCellElement)) {
@@ -549,6 +576,9 @@
           search && search instanceof HTMLInputElement
             ? search.value.trim().toLowerCase()
             : "";
+        if (clearButton) {
+          clearButton.hidden = query.length === 0;
+        }
         let visible = 0;
         rows.forEach((row) => {
           const haystack = (row.dataset.search || row.textContent || "").toLowerCase();
@@ -605,6 +635,27 @@
 
       if (search && search instanceof HTMLInputElement) {
         search.addEventListener("input", applySearch);
+        search.addEventListener("keydown", (event) => {
+          if (event.key !== "Escape") {
+            return;
+          }
+          if (!search.value) {
+            return;
+          }
+          event.preventDefault();
+          search.value = "";
+          applySearch();
+        });
+      }
+
+      if (clearButton) {
+        clearButton.addEventListener("click", () => {
+          if (search && search instanceof HTMLInputElement) {
+            search.value = "";
+            search.focus();
+          }
+          applySearch();
+        });
       }
 
       sortableHeaders.forEach((header) => {
@@ -622,6 +673,267 @@
       });
 
       applySearch();
+    });
+  };
+
+  const initBackToTop = () => {
+    const button = document.querySelector("[data-back-to-top]");
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    const toggle = () => {
+      button.classList.toggle("is-visible", window.scrollY > 460);
+    };
+
+    window.addEventListener("scroll", toggle, { passive: true });
+    toggle();
+
+    button.addEventListener("click", () => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  };
+
+  const initFormValidationUX = () => {
+    const forms = Array.from(document.querySelectorAll("form"));
+    if (forms.length === 0) {
+      return;
+    }
+
+    const cssEscape = (value) => {
+      if (typeof value !== "string") {
+        return "";
+      }
+      if (window.CSS && typeof window.CSS.escape === "function") {
+        return window.CSS.escape(value);
+      }
+      return value.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+    };
+
+    const isValidatableControl = (control) => {
+      if (
+        !(control instanceof HTMLInputElement) &&
+        !(control instanceof HTMLTextAreaElement) &&
+        !(control instanceof HTMLSelectElement)
+      ) {
+        return false;
+      }
+      if (control.disabled || control.type === "hidden") {
+        return false;
+      }
+      if (
+        control instanceof HTMLInputElement &&
+        ["submit", "button", "reset", "image", "file"].includes(control.type)
+      ) {
+        return false;
+      }
+      return true;
+    };
+
+    const ensureControlId = (form, control) => {
+      if (control.id) {
+        return control.id;
+      }
+      const base = control.getAttribute("name") || "field";
+      const suffix = Math.random().toString(36).slice(2, 8);
+      const id = `auto-${base.replace(/[^a-zA-Z0-9_-]/g, "-")}-${suffix}`;
+      control.id = id;
+      return id;
+    };
+
+    const findControlLabel = (form, control) => {
+      const id = ensureControlId(form, control);
+      let label = form.querySelector(`label[for="${cssEscape(id)}"]`);
+      if (label instanceof HTMLLabelElement) {
+        return label;
+      }
+      label = control.closest("label");
+      if (label instanceof HTMLLabelElement) {
+        return label;
+      }
+      return null;
+    };
+
+    const getControlLabelText = (form, control) => {
+      const label = findControlLabel(form, control);
+      if (!label) {
+        return control.getAttribute("name") || "Field";
+      }
+      return (label.textContent || "Field").replace(/\s*\*\s*$/, "").trim() || "Field";
+    };
+
+    const getControlErrorMessage = (control) => {
+      if (control.validity.valueMissing) {
+        return "This field is required.";
+      }
+      if (control.validity.typeMismatch) {
+        return "Please enter a valid value.";
+      }
+      if (control.validity.tooShort) {
+        return `Please use at least ${control.minLength} characters.`;
+      }
+      if (control.validity.tooLong) {
+        return `Please use no more than ${control.maxLength} characters.`;
+      }
+      if (control.validity.rangeUnderflow || control.validity.rangeOverflow) {
+        return "Please choose a value within the allowed range.";
+      }
+      return (control.validationMessage || "Please correct this field.").trim();
+    };
+
+    const ensureFieldErrorNode = (form, control) => {
+      const key = ensureControlId(form, control);
+      let node = form.querySelector(`[data-field-error-for="${cssEscape(key)}"]`);
+      if (node instanceof HTMLElement) {
+        return node;
+      }
+      node = document.createElement("div");
+      node.className = "field-error";
+      node.setAttribute("data-field-error-for", key);
+      node.setAttribute("aria-live", "polite");
+      node.hidden = true;
+
+      const anchor = control.closest(".input-group") || control;
+      anchor.insertAdjacentElement("afterend", node);
+      return node;
+    };
+
+    const setControlValid = (form, control) => {
+      const key = control.id || ensureControlId(form, control);
+      const node = form.querySelector(`[data-field-error-for="${cssEscape(key)}"]`);
+      control.classList.remove("is-invalid");
+      control.removeAttribute("aria-invalid");
+      if (node instanceof HTMLElement) {
+        node.hidden = true;
+        node.textContent = "";
+      }
+    };
+
+    const setControlInvalid = (form, control) => {
+      const node = ensureFieldErrorNode(form, control);
+      const message = getControlErrorMessage(control);
+      control.classList.add("is-invalid");
+      control.setAttribute("aria-invalid", "true");
+      if (node instanceof HTMLElement) {
+        node.hidden = false;
+        node.textContent = message;
+      }
+      return message;
+    };
+
+    const renderSummary = (form, invalidControls) => {
+      let summary = form.querySelector("[data-form-error-summary]");
+      if (invalidControls.length === 0) {
+        if (summary instanceof HTMLElement) {
+          summary.remove();
+        }
+        return;
+      }
+
+      if (!(summary instanceof HTMLElement)) {
+        summary = document.createElement("div");
+        summary.className = "alert form-error-summary";
+        summary.setAttribute("data-form-error-summary", "");
+        summary.tabIndex = -1;
+        form.prepend(summary);
+      }
+
+      const title = invalidControls.length === 1
+        ? "Please correct 1 field before submitting."
+        : `Please correct ${invalidControls.length} fields before submitting.`;
+      const items = invalidControls
+        .map((control) => {
+          const id = ensureControlId(form, control);
+          const label = getControlLabelText(form, control);
+          return `<li><button type="button" class="form-error-link" data-form-error-target="${id}">${label}</button></li>`;
+        })
+        .join("");
+
+      summary.innerHTML = `
+        <div class="form-error-summary-title">${title}</div>
+        <ul class="form-error-summary-list">${items}</ul>
+      `;
+
+      Array.from(summary.querySelectorAll("[data-form-error-target]")).forEach((button) => {
+        button.addEventListener("click", () => {
+          const target = button.getAttribute("data-form-error-target") || "";
+          const control = target ? form.querySelector(`#${cssEscape(target)}`) : null;
+          if (
+            control instanceof HTMLInputElement ||
+            control instanceof HTMLTextAreaElement ||
+            control instanceof HTMLSelectElement
+          ) {
+            control.focus();
+            control.scrollIntoView({ block: "center", behavior: "smooth" });
+          }
+        });
+      });
+
+      summary.focus();
+    };
+
+    forms.forEach((form) => {
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+      if (form.dataset.formValidationUx === "off") {
+        return;
+      }
+
+      const controls = Array.from(form.querySelectorAll("input, textarea, select")).filter(
+        isValidatableControl
+      );
+      if (controls.length === 0) {
+        return;
+      }
+
+      controls.forEach((control) => {
+        if (control.required) {
+          const label = findControlLabel(form, control);
+          if (label) {
+            label.classList.add("is-required");
+          }
+        }
+
+        const eventName =
+          control instanceof HTMLInputElement &&
+          (control.type === "checkbox" || control.type === "radio")
+            ? "change"
+            : "input";
+        control.addEventListener(eventName, () => {
+          if (control.checkValidity()) {
+            setControlValid(form, control);
+          }
+        });
+        control.addEventListener("blur", () => {
+          if (!control.checkValidity()) {
+            setControlInvalid(form, control);
+          }
+        });
+      });
+
+      form.addEventListener(
+        "submit",
+        (event) => {
+          const invalidControls = controls.filter((control) => !control.checkValidity());
+          controls.forEach((control) => {
+            if (invalidControls.includes(control)) {
+              setControlInvalid(form, control);
+            } else {
+              setControlValid(form, control);
+            }
+          });
+
+          renderSummary(form, invalidControls);
+          if (invalidControls.length > 0) {
+            event.preventDefault();
+            event.stopPropagation();
+            invalidControls[0].focus();
+            invalidControls[0].scrollIntoView({ block: "center", behavior: "smooth" });
+          }
+        },
+        { capture: true }
+      );
     });
   };
 
@@ -679,6 +991,8 @@
     initMatterQuickFilters();
     initTimePrompts();
     initTableTools();
+    initBackToTop();
+    initFormValidationUX();
     initSubmitState();
   };
 
