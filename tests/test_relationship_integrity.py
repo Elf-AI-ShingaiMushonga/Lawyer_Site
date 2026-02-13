@@ -11,7 +11,7 @@ import pytest
 
 from intranet.extensions import db
 from intranet.jobs.worker import _handle_retention_archive_sweep
-from intranet.mfa import _totp, generate_totp_secret
+from intranet.mfa import _totp, generate_totp_secret, verify_totp
 from intranet.models import (
     AuditLog,
     ConflictCheck,
@@ -325,6 +325,22 @@ def test_portal_login_enforces_optional_mfa_when_enabled(app_ctx):
     )
     assert with_mfa.status_code == 302
     assert "/portal/matters" in (with_mfa.headers.get("Location") or "")
+
+
+def test_verify_totp_handles_legacy_secret_format_and_clock_skew(monkeypatch):
+    # Freeze counter so we can assert deterministic skew-window behavior.
+    fixed_counter = 100_000
+    monkeypatch.setattr("intranet.mfa.time.time", lambda: fixed_counter * 30)
+
+    legacy_secret = "NB2W45DFOIZA====NB2W45DFOIZA===="
+    normalized_secret = "NB2W45DFOIZANB2W45DFOIZA"
+    code = _totp(normalized_secret, fixed_counter - 2)
+
+    assert verify_totp(legacy_secret, code)
+
+
+def test_verify_totp_rejects_malformed_secret_without_crashing():
+    assert verify_totp("not-a-base32-secret", "123456") is False
 
 
 def test_time_offline_sync_creates_entries_and_skips_duplicates(app_ctx):

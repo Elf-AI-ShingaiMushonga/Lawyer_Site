@@ -2958,7 +2958,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 full_name="Zanele Dube",
                 password_hash="x",
                 mfa_enabled=True,
-                mfa_secret="NB2W45DFOIZA====NB2W45DFOIZA====",
+                mfa_secret="NB2W45DFOIZSIYLUMVZXI2LOM5XW6YTB",
                 is_active=True,
                 created_at=now - dt.timedelta(days=12),
                 last_login_at=now - dt.timedelta(hours=9),
