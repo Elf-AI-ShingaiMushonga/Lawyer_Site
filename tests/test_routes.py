@@ -39,6 +39,7 @@ REQUIRED_ROUTES = {
     "/tasks/<int:task_id>/checklist",
     "/tasks/<int:task_id>/approve",
     "/tasks/<int:task_id>/recur",
+    "/dms",
     "/matters/<int:matter_id>/dms",
     "/documents/<int:document_id>/versions",
     "/documents/<int:document_id>/lock",
@@ -131,6 +132,7 @@ REQUIRED_ROUTES = {
     "/integrations/third-party/import/cost-recovery",
     "/integrations/third-party/import/conveyancing",
     "/mobile/hub",
+    "/readyz",
 }
 
 

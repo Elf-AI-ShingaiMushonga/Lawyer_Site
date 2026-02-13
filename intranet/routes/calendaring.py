@@ -91,6 +91,12 @@ def register_calendar_routes(app):
         )
         deadlines = [d for d in all_deadlines if _deadline_matches_filter(d, active_filter, today, week_end)]
         stats = _deadline_stats(all_deadlines, today, week_end)
+        matter_ids_for_view = sorted({int(d.matter_id) for d in all_deadlines if d.matter_id is not None})
+        matter_by_id = (
+            {row.id: row for row in Matter.query.filter(Matter.id.in_(matter_ids_for_view)).all()}
+            if matter_ids_for_view
+            else {}
+        )
         return page(
             "My Calendar",
             "calendar/my.html",
@@ -98,6 +104,7 @@ def register_calendar_routes(app):
             active_filter=active_filter,
             stats=stats,
             today=today,
+            matter_by_id=matter_by_id,
         )
 
     @app.get("/calendar/team")
@@ -117,6 +124,12 @@ def register_calendar_routes(app):
             )
         deadlines = [d for d in all_deadlines if _deadline_matches_filter(d, active_filter, today, week_end)]
         stats = _deadline_stats(all_deadlines, today, week_end)
+        matter_ids_for_view = sorted({int(d.matter_id) for d in all_deadlines if d.matter_id is not None})
+        matter_by_id = (
+            {row.id: row for row in Matter.query.filter(Matter.id.in_(matter_ids_for_view)).all()}
+            if matter_ids_for_view
+            else {}
+        )
         return page(
             "Team Calendar",
             "calendar/team.html",
@@ -124,6 +137,7 @@ def register_calendar_routes(app):
             active_filter=active_filter,
             stats=stats,
             today=today,
+            matter_by_id=matter_by_id,
         )
 
     @app.get("/calendar/milestones/report")

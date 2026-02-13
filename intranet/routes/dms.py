@@ -75,6 +75,14 @@ def _safe_query_json(raw: str) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _safe_remove_file(path: str) -> None:
+    try:
+        if path and os.path.isfile(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
 def _parse_generation_fields(raw: str | None) -> dict[str, str]:
     fields: dict[str, str] = {}
     for line in (raw or "").splitlines():
@@ -129,6 +137,22 @@ def _render_template_body(body: str, context: dict[str, str]) -> tuple[str, list
 
 
 def register_dms_routes(app):
+    @app.get("/dms")
+    @login_required
+    def dms_home():
+        matter_query = Matter.query
+        if not is_admin():
+            scoped_ids = visible_matter_ids()
+            if not scoped_ids:
+                flash("You do not currently have matter access for DMS.", "warning")
+                return redirect(url_for("matters"))
+            matter_query = matter_query.filter(Matter.id.in_(scoped_ids))
+        matter = matter_query.order_by(Matter.last_updated_at.desc(), Matter.opened_at.desc()).first()
+        if matter is None:
+            flash("Create a matter first to use DMS.", "warning")
+            return redirect(url_for("matters"))
+        return redirect(url_for("matter_dms", matter_id=matter.id))
+
     @app.route("/matters/<int:matter_id>/dms", methods=["GET", "POST"])
     @login_required
     def matter_dms(matter_id: int):
@@ -169,61 +193,67 @@ def register_dms_routes(app):
                     return redirect(url_for("matter_dms", matter_id=matter_id))
 
                 sha = sha256_file(path)
-                container = DocumentRecord(
-                    matter_id=matter_id,
-                    title=generated_title,
-                    document_type=(request.form.get("generated_document_type") or template.template_type or "General").strip()
-                    or "General",
-                    confidentiality=(request.form.get("generated_confidentiality") or "Internal").strip() or "Internal",
-                    privilege_label=(request.form.get("generated_privilege_label") or "").strip() or None,
-                    retention_category=(request.form.get("generated_retention_category") or "").strip() or None,
-                    legal_hold=(request.form.get("generated_legal_hold") or "").lower() in {"1", "true", "yes", "on"},
-                    created_by=current_user.id,
-                )
-                db.session.add(container)
-                db.session.flush()
-
-                legacy_file = DocumentFile(
-                    matter_id=matter_id,
-                    original_filename=safe_name,
-                    stored_filename=stored,
-                    sha256=sha,
-                    content_type="text/plain",
-                    category=container.document_type,
-                    doc_version="1",
-                    lifecycle_stage="Draft",
-                    owner_name=current_user.full_name,
-                    is_privileged=bool(container.privilege_label),
-                    uploaded_by=current_user.id,
-                )
-                db.session.add(legacy_file)
-                db.session.flush()
-
-                notes = (request.form.get("generated_version_notes") or "").strip()
-                if not notes:
-                    notes = f"Generated from template '{template.name}'."
-                version = DocumentVersion(
-                    document_id=container.id,
-                    document_file_id=legacy_file.id,
-                    version_no=1,
-                    original_filename=safe_name,
-                    stored_filename=stored,
-                    sha256=sha,
-                    hash_chain_prev=None,
-                    hash_chain_current=_chain_hash(None, sha),
-                    state="draft",
-                    notes=notes,
-                    uploaded_by=current_user.id,
-                )
-                db.session.add(version)
-                db.session.flush()
-                db.session.add(
-                    DocumentOCRText(
-                        document_version_id=version.id,
-                        extracted_text=(rendered_body.strip() or "No generated text."),
+                try:
+                    container = DocumentRecord(
+                        matter_id=matter_id,
+                        title=generated_title,
+                        document_type=(request.form.get("generated_document_type") or template.template_type or "General").strip()
+                        or "General",
+                        confidentiality=(request.form.get("generated_confidentiality") or "Internal").strip() or "Internal",
+                        privilege_label=(request.form.get("generated_privilege_label") or "").strip() or None,
+                        retention_category=(request.form.get("generated_retention_category") or "").strip() or None,
+                        legal_hold=(request.form.get("generated_legal_hold") or "").lower() in {"1", "true", "yes", "on"},
+                        created_by=current_user.id,
                     )
-                )
-                db.session.commit()
+                    db.session.add(container)
+                    db.session.flush()
+
+                    legacy_file = DocumentFile(
+                        matter_id=matter_id,
+                        original_filename=safe_name,
+                        stored_filename=stored,
+                        sha256=sha,
+                        content_type="text/plain",
+                        category=container.document_type,
+                        doc_version="1",
+                        lifecycle_stage="Draft",
+                        owner_name=current_user.full_name,
+                        is_privileged=bool(container.privilege_label),
+                        uploaded_by=current_user.id,
+                    )
+                    db.session.add(legacy_file)
+                    db.session.flush()
+
+                    notes = (request.form.get("generated_version_notes") or "").strip()
+                    if not notes:
+                        notes = f"Generated from template '{template.name}'."
+                    version = DocumentVersion(
+                        document_id=container.id,
+                        document_file_id=legacy_file.id,
+                        version_no=1,
+                        original_filename=safe_name,
+                        stored_filename=stored,
+                        sha256=sha,
+                        hash_chain_prev=None,
+                        hash_chain_current=_chain_hash(None, sha),
+                        state="draft",
+                        notes=notes,
+                        uploaded_by=current_user.id,
+                    )
+                    db.session.add(version)
+                    db.session.flush()
+                    db.session.add(
+                        DocumentOCRText(
+                            document_version_id=version.id,
+                            extracted_text=(rendered_body.strip() or "No generated text."),
+                        )
+                    )
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                    _safe_remove_file(path)
+                    flash("Failed to save generated document. Please retry.", "warning")
+                    return redirect(url_for("matter_dms", matter_id=matter_id))
 
                 audit(
                     "dms_template_generate",
@@ -256,62 +286,70 @@ def register_dms_routes(app):
             enforce_data_residency("primary_storage")
 
             safe_name = secure_filename(f.filename)
+            if not safe_name:
+                flash("Invalid filename.", "warning")
+                return redirect(url_for("matter_dms", matter_id=matter_id))
             stored = f"dms_{matter_id}_{uuid.uuid4().hex}_{safe_name}"
             path = os.path.join(app.config["UPLOAD_DIR"], stored)
             f.save(path)
             sha = sha256_file(path)
-
-            container = DocumentRecord(
-                matter_id=matter_id,
-                title=title,
-                document_type=(request.form.get("document_type") or "General").strip() or "General",
-                confidentiality=(request.form.get("confidentiality") or "Internal").strip() or "Internal",
-                privilege_label=(request.form.get("privilege_label") or "").strip() or None,
-                retention_category=(request.form.get("retention_category") or "").strip() or None,
-                legal_hold=(request.form.get("legal_hold") or "").lower() in {"1", "true", "yes", "on"},
-                created_by=current_user.id,
-            )
-            db.session.add(container)
-            db.session.flush()
-
-            legacy_file = DocumentFile(
-                matter_id=matter_id,
-                original_filename=safe_name,
-                stored_filename=stored,
-                sha256=sha,
-                content_type=f.mimetype,
-                category=container.document_type,
-                doc_version="1",
-                lifecycle_stage="Draft",
-                owner_name=current_user.full_name,
-                is_privileged=bool(container.privilege_label),
-                uploaded_by=current_user.id,
-            )
-            db.session.add(legacy_file)
-            db.session.flush()
-
-            version = DocumentVersion(
-                document_id=container.id,
-                document_file_id=legacy_file.id,
-                version_no=1,
-                original_filename=safe_name,
-                stored_filename=stored,
-                sha256=sha,
-                hash_chain_prev=None,
-                hash_chain_current=_chain_hash(None, sha),
-                state="draft",
-                notes=(request.form.get("version_notes") or "").strip() or None,
-                uploaded_by=current_user.id,
-            )
-            db.session.add(version)
-            db.session.flush()
-            db.session.add(
-                DocumentOCRText(
-                    document_version_id=version.id,
-                    extracted_text=_extract_ocr_text(path, f.mimetype),
+            try:
+                container = DocumentRecord(
+                    matter_id=matter_id,
+                    title=title,
+                    document_type=(request.form.get("document_type") or "General").strip() or "General",
+                    confidentiality=(request.form.get("confidentiality") or "Internal").strip() or "Internal",
+                    privilege_label=(request.form.get("privilege_label") or "").strip() or None,
+                    retention_category=(request.form.get("retention_category") or "").strip() or None,
+                    legal_hold=(request.form.get("legal_hold") or "").lower() in {"1", "true", "yes", "on"},
+                    created_by=current_user.id,
                 )
-            )
-            db.session.commit()
+                db.session.add(container)
+                db.session.flush()
+
+                legacy_file = DocumentFile(
+                    matter_id=matter_id,
+                    original_filename=safe_name,
+                    stored_filename=stored,
+                    sha256=sha,
+                    content_type=f.mimetype,
+                    category=container.document_type,
+                    doc_version="1",
+                    lifecycle_stage="Draft",
+                    owner_name=current_user.full_name,
+                    is_privileged=bool(container.privilege_label),
+                    uploaded_by=current_user.id,
+                )
+                db.session.add(legacy_file)
+                db.session.flush()
+
+                version = DocumentVersion(
+                    document_id=container.id,
+                    document_file_id=legacy_file.id,
+                    version_no=1,
+                    original_filename=safe_name,
+                    stored_filename=stored,
+                    sha256=sha,
+                    hash_chain_prev=None,
+                    hash_chain_current=_chain_hash(None, sha),
+                    state="draft",
+                    notes=(request.form.get("version_notes") or "").strip() or None,
+                    uploaded_by=current_user.id,
+                )
+                db.session.add(version)
+                db.session.flush()
+                db.session.add(
+                    DocumentOCRText(
+                        document_version_id=version.id,
+                        extracted_text=_extract_ocr_text(path, f.mimetype),
+                    )
+                )
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                _safe_remove_file(path)
+                flash("Document upload failed. Please retry.", "warning")
+                return redirect(url_for("matter_dms", matter_id=matter_id))
 
             audit("dms_document_create", "DocumentRecord", container.id, {"matter_id": matter_id})
             flash("Document created in DMS.", "info")
@@ -488,12 +526,13 @@ def register_dms_routes(app):
                 db.session.commit()
             except IntegrityError:
                 db.session.rollback()
-                if os.path.isfile(path):
-                    try:
-                        os.remove(path)
-                    except OSError:
-                        pass
+                _safe_remove_file(path)
                 flash("Another version was uploaded at the same time. Please retry.", "warning")
+                return redirect(url_for("document_versions", document_id=document_id))
+            except Exception:
+                db.session.rollback()
+                _safe_remove_file(path)
+                flash("Version upload failed. Please retry.", "warning")
                 return redirect(url_for("document_versions", document_id=document_id))
             NotificationEngine.enqueue("document_uploaded", current_user.id, f"document_version:{ver.id}")
             audit("dms_version_add", "DocumentVersion", ver.id, {"document_id": doc.id, "version_no": next_no})
@@ -795,6 +834,7 @@ def register_dms_routes(app):
 
             stored_filename = None
             attachment_hash = None
+            attachment_path = None
             f = request.files.get("attachment")
             if f and f.filename:
                 if not allowed_doc(f.filename):
@@ -802,24 +842,33 @@ def register_dms_routes(app):
                     return redirect(url_for("matter_email_capture", matter_id=matter_id))
                 enforce_data_residency("primary_storage")
                 safe_name = secure_filename(f.filename)
+                if not safe_name:
+                    flash("Invalid attachment filename.", "warning")
+                    return redirect(url_for("matter_email_capture", matter_id=matter_id))
                 stored_filename = f"email_{matter_id}_{uuid.uuid4().hex}_{safe_name}"
-                path = os.path.join(app.config["UPLOAD_DIR"], stored_filename)
-                f.save(path)
-                attachment_hash = sha256_file(path)
+                attachment_path = os.path.join(app.config["UPLOAD_DIR"], stored_filename)
+                f.save(attachment_path)
+                attachment_hash = sha256_file(attachment_path)
 
-            row = EmailCapture(
-                matter_id=matter_id,
-                message_id_hash=message_hash,
-                dedup_key=dedup_key,
-                subject=(request.form.get("subject") or "").strip() or None,
-                sender=(request.form.get("sender") or "").strip() or None,
-                received_at=received_at,
-                stored_filename=stored_filename,
-                attachment_hash=attachment_hash,
-                captured_by=current_user.id,
-            )
-            db.session.add(row)
-            db.session.commit()
+            try:
+                row = EmailCapture(
+                    matter_id=matter_id,
+                    message_id_hash=message_hash,
+                    dedup_key=dedup_key,
+                    subject=(request.form.get("subject") or "").strip() or None,
+                    sender=(request.form.get("sender") or "").strip() or None,
+                    received_at=received_at,
+                    stored_filename=stored_filename,
+                    attachment_hash=attachment_hash,
+                    captured_by=current_user.id,
+                )
+                db.session.add(row)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                _safe_remove_file(attachment_path or "")
+                flash("Failed to capture email. Please retry.", "warning")
+                return redirect(url_for("matter_email_capture", matter_id=matter_id))
             audit("email_capture_create", "EmailCapture", row.id, {"matter_id": matter_id})
             flash("Email captured.", "info")
             return redirect(url_for("matter_email_capture", matter_id=matter_id))

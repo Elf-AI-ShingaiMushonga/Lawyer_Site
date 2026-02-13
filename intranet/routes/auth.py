@@ -414,7 +414,7 @@ def register_auth_routes(app):
             "documents": url_for("matter_documents", matter_id=flagship_matter.id) if flagship_matter else url_for("matters"),
             "calendar": url_for("calendar_my"),
             "workflow": url_for("task_templates"),
-            "dms": url_for("matter_dms", matter_id=flagship_matter.id) if flagship_matter else url_for("matters"),
+            "dms": url_for("matter_dms", matter_id=flagship_matter.id) if flagship_matter else url_for("dms_home"),
             "billing": url_for("billing_invoices"),
             "trust": url_for("trust_ledger") if trust_visible else url_for("trust_security"),
             "crm": url_for("crm_leads"),

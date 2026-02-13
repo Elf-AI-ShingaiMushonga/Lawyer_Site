@@ -52,7 +52,7 @@
         <div class="table-count" data-table-count aria-live="polite"></div>
       </div>
       <div class="table-responsive">
-        <table class="table" id="calendar-matter-deadline-table">
+        <table class="table table-mobile-cards" id="calendar-matter-deadline-table">
           <thead>
             <tr>
               <th data-sort-index="0" data-sort-type="date">Due</th>
@@ -84,13 +84,13 @@
                 {% set due_class = 'risk-low' %}
               {% endif %}
               <tr data-table-row data-search="{{ deadline.due_at }} {{ deadline.title }} {{ deadline.task_id or '' }} {{ deadline.is_critical }} {{ deadline.status }} {{ deadline.override_reason or '' }}">
-                <td>
+                <td data-label="Due">
                   <div class="deadline-meta">
                     <span>{{ deadline.due_at }}</span>
                     <span class="risk-chip {{ due_class }}">{{ due_label }}</span>
                   </div>
                 </td>
-                <td>
+                <td data-label="Horizon">
                   {% if days_left < 0 %}
                     {{ (days_left * -1) }}d late
                   {% elif days_left == 0 %}
@@ -99,11 +99,11 @@
                     in {{ days_left }}d
                   {% endif %}
                 </td>
-                <td>{{ deadline.title }}</td>
-                <td>{{ deadline.task_id or '-' }}</td>
-                <td>{{ 'Yes' if deadline.is_critical else 'No' }}</td>
-                <td><span class="badge badge-soft status-badge">{{ deadline.status }}</span></td>
-                <td class="text-end">
+                <td data-label="Title">{{ deadline.title }}</td>
+                <td data-label="Task">{{ deadline.task_id or '-' }}</td>
+                <td data-label="Critical">{{ 'Yes' if deadline.is_critical else 'No' }}</td>
+                <td data-label="Status"><span class="badge badge-soft status-badge">{{ deadline.status }}</span></td>
+                <td data-label="Actions" class="text-end">
                   <div class="deadline-actions">
                     {% if deadline.status != 'acknowledged' %}
                       <form method="post" action="{{ url_for('deadline_ack', deadline_id=deadline.id) }}">

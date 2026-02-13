@@ -119,6 +119,7 @@ from .models import (
     UserSession,
     WorkloadForecast,
 )
+from .schema_sync import sync_schema_compatibility
 
 
 def _detect_schema_gaps():
@@ -127,6 +128,8 @@ def _detect_schema_gaps():
     required = {
         "matter": {"objective", "risk_level", "budget_status", "outcome_summary", "last_update_note", "last_updated_at"},
         "document_file": {"category", "doc_version", "lifecycle_stage", "owner_name", "is_privileged"},
+        "payment_allocation": {"status", "settled_at", "settled_by", "external_txn_id", "processor_note"},
+        "trust_reconciliation_run": {"bank_statement_import_id"},
         "matter_timeline_event": {"id", "matter_id", "event_date", "event_type", "title", "created_by"},
         "matter_activity": {"id", "matter_id", "action", "created_at"},
         "governance_incident": {"id", "title", "incident_type", "severity", "status", "summary", "created_by"},
@@ -321,6 +324,14 @@ def seed_demo_data(app, password: str, reset: bool = False):
     with app.app_context():
         # Keep local/demo workflows frictionless even before migrations are run.
         db.create_all()
+        try:
+            # Additive compatibility sync for legacy databases that are a few columns behind.
+            sync_schema_compatibility()
+        except Exception as exc:
+            raise SystemExit(
+                "Failed to run additive schema compatibility sync. "
+                "Run 'flask --app app.py db upgrade -d migrations' and retry."
+            ) from exc
         missing_tables, missing_columns = _detect_schema_gaps()
         if missing_tables or missing_columns:
             raise SystemExit(_schema_not_ready_error(app, missing_tables, missing_columns))

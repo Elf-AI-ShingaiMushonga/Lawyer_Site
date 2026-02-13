@@ -78,8 +78,13 @@
             {% for t in tasks %}
               <div class="list-item">
                 <div class="list-title">{{ t.title }}</div>
+                {% set task_matter = matter_by_id.get(t.matter_id) if matter_by_id else None %}
                 <div class="list-meta mt-1">
-                  <span>Matter #{{ t.matter_id }}</span>
+                  {% if task_matter %}
+                    <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=task_matter.id) }}">{{ task_matter.matter_no }} - {{ task_matter.title }}</a>
+                  {% else %}
+                    <span>Matter #{{ t.matter_id }}</span>
+                  {% endif %}
                   <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
                 </div>
               </div>
@@ -100,8 +105,13 @@
             {% for d in docs %}
               <div class="list-item">
                 <div class="list-title">{{ d.original_filename }}</div>
+                {% set doc_matter = matter_by_id.get(d.matter_id) if matter_by_id else None %}
                 <div class="list-meta mt-1">
-                  <span>Matter #{{ d.matter_id }}</span>
+                  {% if doc_matter %}
+                    <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=doc_matter.id) }}">{{ doc_matter.matter_no }} - {{ doc_matter.title }}</a>
+                  {% else %}
+                    <span>Matter #{{ d.matter_id }}</span>
+                  {% endif %}
                   <span>sha256 {{ d.sha256[:12] }}...</span>
                   <span>{{ d.category or "General" }}</span>
                   <span>{{ d.lifecycle_stage }}</span>

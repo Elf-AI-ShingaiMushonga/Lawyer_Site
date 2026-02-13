@@ -52,7 +52,7 @@
     <div class="table-count" data-table-count aria-live="polite"></div>
   </div>
   <div class="table-responsive">
-    <table class="table" id="calendar-team-table">
+    <table class="table table-mobile-cards" id="calendar-team-table">
       <thead>
         <tr>
           <th data-sort-index="0" data-sort-type="date">Due</th>
@@ -67,6 +67,7 @@
       <tbody>
         {% for deadline in deadlines %}
           {% set days_left = (deadline.due_at - today).days %}
+          {% set matter = matter_by_id.get(deadline.matter_id) if matter_by_id else None %}
           {% if deadline.status == 'acknowledged' %}
             {% set due_label = 'Acknowledged' %}
             {% set due_class = 'risk-low' %}
@@ -83,14 +84,14 @@
             {% set due_label = 'Upcoming' %}
             {% set due_class = 'risk-low' %}
           {% endif %}
-          <tr data-table-row data-search="{{ deadline.due_at }} {{ deadline.matter_id }} {{ deadline.title }} {{ deadline.is_critical }} {{ deadline.status }} {{ due_label }}">
-            <td>
+          <tr data-table-row data-search="{{ deadline.due_at }} {{ deadline.matter_id }} {{ (matter.matter_no if matter else '') }} {{ (matter.title if matter else '') }} {{ deadline.title }} {{ deadline.is_critical }} {{ deadline.status }} {{ due_label }}">
+            <td data-label="Due">
               <div class="deadline-meta">
                 <span>{{ deadline.due_at }}</span>
                 <span class="risk-chip {{ due_class }}">{{ due_label }}</span>
               </div>
             </td>
-            <td>
+            <td data-label="Horizon">
               {% if days_left < 0 %}
                 {{ (days_left * -1) }}d late
               {% elif days_left == 0 %}
@@ -99,11 +100,17 @@
                 in {{ days_left }}d
               {% endif %}
             </td>
-            <td>#{{ deadline.matter_id }}</td>
-            <td>{{ deadline.title }}</td>
-            <td>{{ 'Yes' if deadline.is_critical else 'No' }}</td>
-            <td><span class="badge badge-soft status-badge">{{ deadline.status }}</span></td>
-            <td class="text-end"><a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_matter', matter_id=deadline.matter_id) }}">Open Matter</a></td>
+            <td data-label="Matter">
+              {% if matter %}
+                <a class="text-decoration-none" href="{{ url_for('calendar_matter', matter_id=matter.id) }}">{{ matter.matter_no }} - {{ matter.title }}</a>
+              {% else %}
+                #{{ deadline.matter_id }}
+              {% endif %}
+            </td>
+            <td data-label="Title">{{ deadline.title }}</td>
+            <td data-label="Critical">{{ 'Yes' if deadline.is_critical else 'No' }}</td>
+            <td data-label="Status"><span class="badge badge-soft status-badge">{{ deadline.status }}</span></td>
+            <td data-label="Action" class="text-end"><a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_matter', matter_id=deadline.matter_id) }}">Open Matter</a></td>
           </tr>
         {% endfor %}
         <tr data-table-empty-row class="table-empty-row" {% if deadlines|length > 0 %}hidden{% endif %}>

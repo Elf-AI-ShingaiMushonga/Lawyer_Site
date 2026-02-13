@@ -26,6 +26,7 @@
       --risk-chip-min-width: 9ch;
       --category-chip-min-width: 11ch;
       --field-control-height: calc(1.5em + .75rem + 2px);
+      --touch-target-min-height: 44px;
       --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
     }
 
@@ -1578,6 +1579,78 @@
       }
     }
 
+    @media (max-width: 768px) {
+      .table-mobile-cards {
+        border: 0;
+        background: transparent;
+      }
+
+      table.table-mobile-cards {
+        margin-bottom: 0;
+      }
+
+      table.table-mobile-cards thead {
+        display: none;
+      }
+
+      table.table-mobile-cards tbody {
+        display: block;
+      }
+
+      table.table-mobile-cards tbody tr[data-table-row] {
+        display: block;
+        border: 1px solid rgba(225, 6, 0, 0.2);
+        border-radius: 11px;
+        padding: 8px 10px;
+        background: #fffdfd;
+      }
+
+      table.table-mobile-cards tbody tr[data-table-row] + tr[data-table-row] {
+        margin-top: 8px;
+      }
+
+      table.table-mobile-cards tbody td {
+        display: grid;
+        grid-template-columns: minmax(92px, 42%) 1fr;
+        gap: 7px 10px;
+        align-items: start;
+        border: 0;
+        padding: 6px 0;
+        text-align: left !important;
+      }
+
+      table.table-mobile-cards tbody td::before {
+        content: attr(data-label);
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #8d6565;
+      }
+
+      table.table-mobile-cards tbody tr[data-table-empty-row] td {
+        display: block;
+        padding: 12px;
+      }
+
+      table.table-mobile-cards tbody tr[data-table-empty-row] td::before {
+        content: none;
+      }
+
+      .table-mobile-cards .deadline-actions,
+      .table-mobile-cards .table-actions {
+        justify-content: flex-start;
+      }
+
+      .table-mobile-cards .deadline-actions form,
+      .table-mobile-cards .table-actions form,
+      .table-mobile-cards .deadline-actions .btn,
+      .table-mobile-cards .table-actions .btn {
+        width: 100%;
+      }
+    }
+
     @media (max-width: 576px) {
       body::before {
         opacity: 0.35;
@@ -1662,6 +1735,24 @@
 
       .form-label {
         font-size: 11px;
+      }
+
+      .btn,
+      .nav-pill,
+      .filter-chip-btn,
+      .mobile-dock-link,
+      .form-control,
+      .form-select {
+        min-height: var(--touch-target-min-height);
+      }
+
+      .form-control,
+      .form-select {
+        font-size: 16px;
+      }
+
+      form.row {
+        row-gap: 10px;
       }
 
       .form-section {
@@ -1785,7 +1876,7 @@
   {% set trust_endpoints = ["trust_policy", "trust_security", "trust_incidents"] %}
   {% set calendar_endpoints = ["calendar_my", "calendar_team", "calendar_matter", "calendar_milestone_report"] %}
   {% set workflow_endpoints = ["task_templates", "task_dependencies", "task_checklist", "task_approve", "task_recur"] %}
-  {% set dms_endpoints = ["matter_dms", "document_versions", "document_lock", "document_unlock", "document_state", "productions", "production_export", "bates_ranges", "email_capture", "email_capture_attachment"] %}
+  {% set dms_endpoints = ["dms_home", "matter_dms", "document_versions", "document_lock", "document_unlock", "document_state", "productions", "production_export", "bates_ranges", "email_capture", "email_capture_attachment"] %}
   {% set finance_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "billing_tax_invoice_pdf", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses", "trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
   {% set portal_endpoints = ["portal_login", "portal_matters", "portal_matter_detail", "portal_messages", "portal_uploads", "portal_invoices", "portal_payments", "admin_portal_users", "portal_links"] %}
   {% set billing_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "billing_tax_invoice_pdf", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses"] %}
@@ -1811,7 +1902,7 @@
     {% if request.view_args and request.view_args.get("matter_id") %}
       {% set next_story_url = url_for('matter_dms', matter_id=request.view_args.get("matter_id")) %}
     {% else %}
-      {% set next_story_url = url_for('matters', q='2026-LIT-0142') %}
+      {% set next_story_url = url_for('dms_home') %}
     {% endif %}
     {% set next_story_label = "5. Show document lifecycle controls" %}
   {% elif endpoint in dms_endpoints %}
@@ -1893,6 +1984,7 @@
         <a class="nav-pill {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">Matters</a>
         <a class="nav-pill {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my') }}">Calendar</a>
         <a class="nav-pill {{ 'is-active' if endpoint in workflow_endpoints else '' }}" href="{{ url_for('task_templates') }}">Workflow</a>
+        <a class="nav-pill {{ 'is-active' if endpoint in dms_endpoints else '' }}" href="{{ url_for('dms_home') }}">DMS</a>
         <a class="nav-pill {{ 'is-active' if endpoint in ['billing_invoices', 'billing_invoice_detail', 'billing_rates', 'billing_ar_aging', 'billing_tax_invoice_pdf', 'billing_account_statement', 'billing_trial_balance', 'billing_auditor_report', 'billing_transactions', 'billing_audit_log'] else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
         <a class="nav-pill {{ 'is-active' if endpoint == 'expenses' else '' }}" href="{{ url_for('expenses') }}">Expenses</a>
         <a class="nav-pill {{ 'is-active' if endpoint in ['trust_ledger', 'trust_reconciliations', 'trust_cashbook', 'trust_section86', 'trust_reports_monthly', 'trust_trial_balance_report', 'trust_auditor_report'] else '' }}" href="{{ url_for('trust_ledger') }}">Trust Acct</a>
@@ -1986,6 +2078,13 @@
             <span>
               <span class="command-item-title">Workflow Console</span>
               <span class="command-item-meta">Task templates, dependencies, approvals</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          <a class="command-item" href="{{ url_for('dms_home') }}" data-command-item data-keywords="dms documents versions productions bates ocr">
+            <span>
+              <span class="command-item-title">DMS Workspace</span>
+              <span class="command-item-meta">Document versions, controls, and productions</span>
             </span>
             <span class="code-like">Go</span>
           </a>
@@ -2089,7 +2188,7 @@
           {% set chip_matters = url_for('matters', q='2026-LIT-0142') %}
           {% set chip_calendar = url_for('calendar_my') %}
           {% set chip_workflow = url_for('task_templates') %}
-          {% set chip_dms = url_for('matters', q='2026-LIT-0142') %}
+          {% set chip_dms = url_for('dms_home') %}
           {% set chip_billing = url_for('billing_invoices') %}
           {% set chip_trust = story_trust_url %}
           {% set chip_crm = url_for('crm_leads') %}

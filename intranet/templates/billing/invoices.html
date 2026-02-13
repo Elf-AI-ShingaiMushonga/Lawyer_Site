@@ -83,7 +83,7 @@
   </div>
 
   <div class="table-responsive">
-    <table class="table" id="invoice-table">
+    <table class="table table-mobile-cards" id="invoice-table">
       <thead>
         <tr>
           <th data-sort-index="0" data-sort-type="number">Invoice</th>
@@ -102,8 +102,8 @@
             data-table-row
             data-search="{{ invoice.id }} {{ invoice.client_name }} {{ invoice.status }} {{ matter.matter_no if matter else '' }} {{ matter.title if matter else '' }}"
           >
-            <td>#{{ invoice.id }}</td>
-            <td>
+            <td data-label="Invoice">#{{ invoice.id }}</td>
+            <td data-label="Matter">
               {% if matter %}
                 <div class="fw-semibold">{{ matter.matter_no }}</div>
                 <div class="muted small">{{ matter.title }}</div>
@@ -111,11 +111,11 @@
                 {{ invoice.matter_id }}
               {% endif %}
             </td>
-            <td>{{ invoice.client_name }}</td>
-            <td>{{ invoice.period_start }} to {{ invoice.period_end }}</td>
-            <td><span class="badge badge-soft status-badge">{{ invoice.status }}</span></td>
-            <td>{{ "%.2f"|format(invoice.total or 0) }}</td>
-            <td class="text-end">
+            <td data-label="Client">{{ invoice.client_name }}</td>
+            <td data-label="Period">{{ invoice.period_start }} to {{ invoice.period_end }}</td>
+            <td data-label="Status"><span class="badge badge-soft status-badge">{{ invoice.status }}</span></td>
+            <td data-label="Total">{{ "%.2f"|format(invoice.total or 0) }}</td>
+            <td data-label="Action" class="text-end">
               <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_invoice_detail', invoice_id=invoice.id) }}">Open</a>
             </td>
           </tr>

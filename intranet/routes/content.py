@@ -108,6 +108,7 @@ def register_content_routes(app):
     def search():
         q = normalize_query(request.args.get("q", ""))
         matters = tasks = docs = articles = contacts = []
+        matter_by_id: dict[int, Matter] = {}
         if q:
             like = f"%{q}%"
             m_base = Matter.query
@@ -140,6 +141,15 @@ def register_content_routes(app):
             ).limit(25).all()
             articles = KnowledgeBase.query.filter(KnowledgeBase.title.ilike(like) | KnowledgeBase.body.ilike(like)).limit(25).all()
             contacts = Contact.query.filter(Contact.name.ilike(like) | Contact.organization.ilike(like) | Contact.email.ilike(like)).limit(25).all()
+            matter_by_id = {m.id: m for m in matters}
+            extra_matter_ids = {int(row.matter_id) for row in tasks if row.matter_id} | {
+                int(row.matter_id) for row in docs if row.matter_id
+            }
+            extra_matter_ids = {matter_id for matter_id in extra_matter_ids if matter_id not in matter_by_id}
+            if extra_matter_ids:
+                rows = Matter.query.filter(Matter.id.in_(extra_matter_ids)).all()
+                for row in rows:
+                    matter_by_id[row.id] = row
 
         return page(
             "Search",
@@ -150,4 +160,5 @@ def register_content_routes(app):
             docs=docs,
             articles=articles,
             contacts=contacts,
+            matter_by_id=matter_by_id,
         )
