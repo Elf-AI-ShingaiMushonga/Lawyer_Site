@@ -6,6 +6,7 @@ packages:
   - python3-pip
   - git
   - nginx
+  - ssl-cert
   - redis-server
   - postgresql-client
 
@@ -119,12 +120,15 @@ write_files:
         sudo -u "${APP_USER}" \
           DATABASE_URL="${DATABASE_URL}" \
           FLASK_SECRET_KEY="${FLASK_SECRET_KEY}" \
+          BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY}" \
           FLASK_ENV=production \
           "${APP_DIR}/venv/bin/flask" --app "${APP_DIR}/app.py" db upgrade -d "${APP_DIR}/migrations"
       else
         sudo -u "${APP_USER}" \
           DATABASE_URL="${DATABASE_URL}" \
           FLASK_SECRET_KEY="${FLASK_SECRET_KEY}" \
+          BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY}" \
+          FLASK_ENV=production \
           "${APP_DIR}/venv/bin/python" "${APP_DIR}/app.py" init-db
       fi
 
@@ -133,6 +137,8 @@ write_files:
       sudo -u "${APP_USER}" \
         DATABASE_URL="${DATABASE_URL}" \
         FLASK_SECRET_KEY="${FLASK_SECRET_KEY}" \
+        BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY}" \
+        FLASK_ENV=production \
         "${APP_DIR}/venv/bin/python" "${APP_DIR}/app.py" create-user \
           --email "${ADMIN_EMAIL}" \
           --password "${ADMIN_PASSWORD}" \
@@ -179,6 +185,10 @@ write_files:
       systemctl enable --now redis-server
       systemctl enable --now law-intranet-worker
       systemctl enable --now law-intranet-scheduler
+
+      if [[ -x /usr/sbin/make-ssl-cert ]]; then
+        make-ssl-cert generate-default-snakeoil --force-overwrite
+      fi
 
       nginx -t
       systemctl enable --now nginx
