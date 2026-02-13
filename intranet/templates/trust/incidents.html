@@ -76,9 +76,9 @@
         <h3 class="section-title">Governance Feed</h3>
       </div>
       <div class="list-actions">
-        <a class="btn btn-sm btn-outline-light {{ 'is-active' if status_filter == 'all' else '' }}" href="{{ url_for('trust_incidents', status='all') }}">All</a>
-        <a class="btn btn-sm btn-outline-light {{ 'is-active' if status_filter == 'open' else '' }}" href="{{ url_for('trust_incidents', status='open') }}">Open</a>
-        <a class="btn btn-sm btn-outline-light {{ 'is-active' if status_filter == 'closed' else '' }}" href="{{ url_for('trust_incidents', status='closed') }}">Closed</a>
+        <a class="filter-chip-btn {{ 'is-active' if status_filter == 'all' else '' }}" href="{{ url_for('trust_incidents', status='all') }}">All</a>
+        <a class="filter-chip-btn {{ 'is-active' if status_filter == 'open' else '' }}" href="{{ url_for('trust_incidents', status='open') }}">Open</a>
+        <a class="filter-chip-btn {{ 'is-active' if status_filter == 'closed' else '' }}" href="{{ url_for('trust_incidents', status='closed') }}">Closed</a>
       </div>
     </div>
 

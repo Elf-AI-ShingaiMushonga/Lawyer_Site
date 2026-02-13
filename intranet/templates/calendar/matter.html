@@ -1,78 +1,215 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Matter Calendar - {{ m.matter_no }}</h3>
+      <p class="page-intro mb-0">Coordinate deadlines, hearing events, and override decisions in one workspace.</p>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Matter Workspace</a>
+  </div>
+
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Deadlines</div>
+      <div class="value">{{ stats.total }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Overdue</div>
+      <div class="value">{{ stats.overdue }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Today</div>
+      <div class="value">{{ stats.today }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Critical</div>
+      <div class="value">{{ stats.critical }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Timeline Events</div>
+      <div class="value">{{ timeline | length }}</div>
+    </div>
+  </div>
+
+  <div class="filter-chip-row mt-3">
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'all' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='all') }}">All <span class="code-like">{{ stats.total }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'overdue' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='overdue') }}">Overdue <span class="code-like">{{ stats.overdue }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'today' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='today') }}">Today <span class="code-like">{{ stats.today }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'next7' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='next7') }}">Next 7d <span class="code-like">{{ stats.next7 }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'critical' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='critical') }}">Critical <span class="code-like">{{ stats.critical }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'open' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='open') }}">Open <span class="code-like">{{ stats.open }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'ack' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='ack') }}">Acknowledged <span class="code-like">{{ stats.ack }}</span></a>
+  </div>
+</div>
+
 <div class="row g-3">
   <div class="col-lg-8">
     <div class="card p-3">
-      <h3>Matter Calendar - {{ m.matter_no }}</h3>
-      <table class="table">
-        <thead><tr><th>Due</th><th>Title</th><th>Status</th><th>Ack</th></tr></thead>
-        <tbody>
-          {% for d in deadlines %}
-          <tr>
-            <td>{{ d.due_at }}</td>
-            <td>{{ d.title }}</td>
-            <td>{{ d.status }}</td>
-            <td>
-              {% if d.status != "acknowledged" %}
-              <form method="post" action="{{ url_for('deadline_ack', deadline_id=d.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-light">Ack</button>
-              </form>
+      <h4 class="mb-2">Deadlines</h4>
+      <div class="table-tools" data-table-tools data-table-target="calendar-matter-deadline-table">
+        <input class="form-control" type="search" data-table-search placeholder="Filter by title, status, task id, or due date...">
+        <div class="table-count" data-table-count aria-live="polite"></div>
+      </div>
+      <div class="table-responsive">
+        <table class="table" id="calendar-matter-deadline-table">
+          <thead>
+            <tr>
+              <th data-sort-index="0" data-sort-type="date">Due</th>
+              <th data-sort-index="1" data-sort-type="number">Horizon</th>
+              <th data-sort-index="2">Title</th>
+              <th data-sort-index="3" data-sort-type="number">Task</th>
+              <th data-sort-index="4">Critical</th>
+              <th data-sort-index="5">Status</th>
+              <th class="text-end" data-no-sort>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for deadline in deadlines %}
+              {% set days_left = (deadline.due_at - today).days %}
+              {% if deadline.status == 'acknowledged' %}
+                {% set due_label = 'Acknowledged' %}
+                {% set due_class = 'risk-low' %}
+              {% elif deadline.due_at < today %}
+                {% set due_label = 'Overdue' %}
+                {% set due_class = 'risk-high' %}
+              {% elif deadline.due_at == today %}
+                {% set due_label = 'Today' %}
+                {% set due_class = 'risk-medium' %}
+              {% elif days_left <= 7 %}
+                {% set due_label = 'Next 7d' %}
+                {% set due_class = 'risk-low' %}
+              {% else %}
+                {% set due_label = 'Upcoming' %}
+                {% set due_class = 'risk-low' %}
               {% endif %}
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="4" class="muted">No deadlines.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+              <tr data-table-row data-search="{{ deadline.due_at }} {{ deadline.title }} {{ deadline.task_id or '' }} {{ deadline.is_critical }} {{ deadline.status }} {{ deadline.override_reason or '' }}">
+                <td>
+                  <div class="deadline-meta">
+                    <span>{{ deadline.due_at }}</span>
+                    <span class="risk-chip {{ due_class }}">{{ due_label }}</span>
+                  </div>
+                </td>
+                <td>
+                  {% if days_left < 0 %}
+                    {{ (days_left * -1) }}d late
+                  {% elif days_left == 0 %}
+                    today
+                  {% else %}
+                    in {{ days_left }}d
+                  {% endif %}
+                </td>
+                <td>{{ deadline.title }}</td>
+                <td>{{ deadline.task_id or '-' }}</td>
+                <td>{{ 'Yes' if deadline.is_critical else 'No' }}</td>
+                <td><span class="badge badge-soft status-badge">{{ deadline.status }}</span></td>
+                <td class="text-end">
+                  <div class="deadline-actions">
+                    {% if deadline.status != 'acknowledged' %}
+                      <form method="post" action="{{ url_for('deadline_ack', deadline_id=deadline.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
+                        <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Acking...">Ack</button>
+                      </form>
+                    {% endif %}
+                    <details class="inline-override">
+                      <summary>Override</summary>
+                      <form method="post" action="{{ url_for('deadline_override', deadline_id=deadline.id) }}" class="row g-2 inline-override-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
+                        <div class="col-12">
+                          <label class="form-label" for="override-due-{{ deadline.id }}">New Due Date</label>
+                          <input class="form-control form-control-sm" id="override-due-{{ deadline.id }}" name="due_at" type="date" value="{{ deadline.due_at }}" required>
+                        </div>
+                        <div class="col-12">
+                          <label class="form-label" for="override-reason-{{ deadline.id }}">Reason</label>
+                          <input class="form-control form-control-sm" id="override-reason-{{ deadline.id }}" name="reason" placeholder="Reason for override" required>
+                        </div>
+                        <div class="col-12 d-grid">
+                          <button class="btn btn-sm btn-light" type="submit" data-submitting-text="Saving...">Save Override</button>
+                        </div>
+                      </form>
+                    </details>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+            <tr data-table-empty-row class="table-empty-row" {% if deadlines|length > 0 %}hidden{% endif %}>
+              <td colspan="7" class="muted">No deadlines in this filter.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
+
   <div class="col-lg-4">
     <div class="card p-3 mb-3">
-      <h4>Add Deadline</h4>
-      <form method="post" class="row g-2">
+      <h4 class="mb-2">Add Deadline</h4>
+      <form method="post" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="create_deadline">
-        <div class="col-12"><input class="form-control" name="title" placeholder="Deadline title" required></div>
-        <div class="col-12"><input class="form-control" name="due_at" type="date" required></div>
-        <div class="col-12"><input class="form-control" name="task_id" type="number" placeholder="Task ID (optional)"></div>
+        <div class="col-12">
+          <label class="form-label" for="deadline-title">Title</label>
+          <input class="form-control" id="deadline-title" name="title" placeholder="Deadline title" required>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="deadline-due">Due Date</label>
+          <input class="form-control" id="deadline-due" name="due_at" type="date" required>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="deadline-task-id">Task ID</label>
+          <input class="form-control" id="deadline-task-id" name="task_id" type="number" min="1" placeholder="Optional">
+        </div>
         <div class="col-12">
           <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="is_critical" value="1" id="is-critical">
-            <label class="form-check-label" for="is-critical">Critical deadline</label>
+            <input class="form-check-input" type="checkbox" name="is_critical" value="1" id="deadline-is-critical">
+            <label class="form-check-label" for="deadline-is-critical">Critical deadline</label>
           </div>
         </div>
-        <div class="col-12 d-grid"><button class="btn btn-light">Save Deadline</button></div>
+        <div class="col-12 d-grid"><button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Deadline</button></div>
       </form>
     </div>
+
     <div class="card p-3 mb-3">
-      <h4>Schedule Hearing</h4>
-      <form method="post" class="row g-2">
+      <h4 class="mb-2">Schedule Hearing</h4>
+      <form method="post" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="schedule_hearing">
-        <div class="col-12"><input class="form-control" name="title" placeholder="Hearing title"></div>
-        <div class="col-12"><input class="form-control" name="event_date" type="date" required></div>
-        <div class="col-12"><textarea class="form-control" name="description" rows="2" placeholder="Notes"></textarea></div>
-        <div class="col-12 d-grid"><button class="btn btn-light">Add Hearing</button></div>
+        <div class="col-12">
+          <label class="form-label" for="hearing-title">Hearing Title</label>
+          <input class="form-control" id="hearing-title" name="title" placeholder="Hearing title">
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="hearing-date">Date</label>
+          <input class="form-control" id="hearing-date" name="event_date" type="date" required>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="hearing-description">Description</label>
+          <textarea class="form-control" id="hearing-description" name="description" rows="2" placeholder="Hearing notes"></textarea>
+        </div>
+        <div class="col-12 d-grid"><button class="btn btn-light" type="submit" data-submitting-text="Scheduling...">Add Hearing</button></div>
       </form>
     </div>
+
     <div class="card p-3">
-      <h4>Override Deadline</h4>
-      <form method="post" action="{{ url_for('deadline_override', deadline_id=(deadlines[0].id if deadlines else 0)) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="mb-2">
-          <select class="form-select" name="deadline_id" disabled>
-            {% for d in deadlines %}
-            <option>#{{ d.id }} - {{ d.title }}</option>
-            {% endfor %}
-          </select>
+      <h4 class="mb-2">Timeline Events</h4>
+      {% if timeline %}
+        <div class="timeline-list">
+          {% for event in timeline %}
+            <div class="timeline-item">
+              <div class="timeline-date">{{ event.event_date }}</div>
+              <div class="fw-semibold">{{ event.title }}</div>
+              <div class="muted small">{{ event.event_type }}</div>
+              {% if event.description %}
+                <div class="small mt-1">{{ event.description }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
         </div>
-        <div class="mb-2"><input class="form-control" name="due_at" type="date" required></div>
-        <div class="mb-2"><input class="form-control" name="reason" placeholder="Reason" required></div>
-        <button class="btn btn-light">Override first deadline</button>
-      </form>
-      <div class="muted small mt-2">Use list actions for specific IDs.</div>
+      {% else %}
+        <div class="empty-state">No timeline events yet.</div>
+      {% endif %}
     </div>
   </div>
 </div>

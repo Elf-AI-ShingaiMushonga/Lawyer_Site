@@ -1,5 +1,80 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3"><h3>Restore Verification</h3><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-4"><select class="form-select" name="backup_run_id">{% for r in runs %}<option value="{{ r.id }}">Run #{{ r.id }} ({{ r.status }})</option>{% endfor %}</select></div><div class="col-md-8"><input class="form-control" name="notes" placeholder="Optional verification notes"></div><div class="col-12 d-grid"><button class="btn btn-light">Run Verification</button></div></form></div>
-<div class="card p-3"><table class="table"><thead><tr><th>ID</th><th>Backup Run</th><th>Status</th><th>Verified At</th><th>Notes</th></tr></thead><tbody>{% for v in verifications %}<tr><td>{{ v.id }}</td><td>{{ v.backup_run_id or '-' }}</td><td>{{ v.status }}</td><td>{{ v.verified_at }}</td><td>{{ v.notes or '-' }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No verifications.</td></tr>{% endfor %}</tbody></table></div>
+{% set failed_count = verifications | selectattr('status', 'equalto', 'failed') | list | length %}
+
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Restore Verification</h3>
+  <p class="page-intro mb-0">Run periodic verification against backup artifacts and retain an auditable restore history.</p>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Backups</div>
+      <div class="value">{{ runs | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Verifications</div>
+      <div class="value">{{ verifications | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Failed</div>
+      <div class="value">{{ failed_count }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Run Verification</h4>
+  <form method="post" class="row g-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-4">
+      <label class="form-label" for="restore-backup-run">Backup Run</label>
+      <select class="form-select" id="restore-backup-run" name="backup_run_id">
+        {% for run in runs %}
+          <option value="{{ run.id }}">Run #{{ run.id }} ({{ run.status }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-8">
+      <label class="form-label" for="restore-notes">Notes</label>
+      <input class="form-control" id="restore-notes" name="notes" placeholder="Optional verification notes">
+    </div>
+    <div class="col-12 d-grid d-md-flex justify-content-md-end">
+      <button class="btn btn-light" type="submit" data-submitting-text="Running...">Run Verification</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h4 class="mb-2">Verification History</h4>
+  <div class="table-tools" data-table-tools data-table-target="restore-verification-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by run id, status, or notes...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="restore-verification-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">ID</th>
+          <th data-sort-index="1" data-sort-type="number">Backup Run</th>
+          <th data-sort-index="2">Status</th>
+          <th data-sort-index="3" data-sort-type="date">Verified At</th>
+          <th data-sort-index="4">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for verification in verifications %}
+          <tr data-table-row data-search="{{ verification.id }} {{ verification.backup_run_id or '' }} {{ verification.status }} {{ verification.verified_at }} {{ verification.notes or '' }}">
+            <td>{{ verification.id }}</td>
+            <td>{{ verification.backup_run_id or '-' }}</td>
+            <td><span class="badge badge-soft status-badge">{{ verification.status }}</span></td>
+            <td>{{ verification.verified_at }}</td>
+            <td>{{ verification.notes or '-' }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if verifications|length > 0 %}hidden{% endif %}>
+          <td colspan="5" class="muted">No verifications yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

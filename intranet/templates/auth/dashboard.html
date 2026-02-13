@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% set announcements_href = url_for('admin_announcements') if current_user.role == "admin" else "#dashboard-announcements" %}
 <div class="row g-3 mb-1">
   <div class="col-12">
     <div class="card p-3">
@@ -17,34 +18,41 @@
         Why this matters: partners can quickly identify delivery risk before it impacts client outcomes.
       </div>
       <div class="metric-grid mt-3">
-        <div class="metric-card">
+        <a class="metric-card metric-card-link" href="{{ url_for('matters') }}">
           <div class="metric-label">Accessible Matters</div>
           <div class="metric-value">{{ stats.matter_count }}</div>
-        </div>
-        <div class="metric-card">
+          <div class="metric-link-hint">Open Matter Directory</div>
+        </a>
+        <a class="metric-card metric-card-link" href="#dashboard-my-tasks">
           <div class="metric-label">My Open Tasks</div>
           <div class="metric-value">{{ stats.assigned_open_tasks }}</div>
-        </div>
-        <div class="metric-card">
+          <div class="metric-link-hint">Jump to My Tasks</div>
+        </a>
+        <a class="metric-card metric-card-link" href="{{ url_for('search') }}">
           <div class="metric-label">Documents</div>
           <div class="metric-value">{{ stats.document_count }}</div>
-        </div>
-        <div class="metric-card">
+          <div class="metric-link-hint">Open Global Search</div>
+        </a>
+        <a class="metric-card metric-card-link" href="{{ announcements_href }}">
           <div class="metric-label">Announcements</div>
           <div class="metric-value">{{ stats.announcement_count }}</div>
-        </div>
-        <div class="metric-card">
+          <div class="metric-link-hint">{{ "Open Announcements" if current_user.role == "admin" else "Jump to Announcements" }}</div>
+        </a>
+        <a class="metric-card metric-card-link" href="{{ url_for('calendar_my', filter='overdue') }}">
           <div class="metric-label">Overdue Tasks</div>
           <div class="metric-value">{{ stats.overdue_tasks }}</div>
-        </div>
-        <div class="metric-card">
+          <div class="metric-link-hint">Open Overdue Calendar View</div>
+        </a>
+        <a class="metric-card metric-card-link" href="{{ url_for('calendar_my', filter='next7') }}">
           <div class="metric-label">Due This Week</div>
           <div class="metric-value">{{ stats.due_this_week }}</div>
-        </div>
-        <div class="metric-card">
+          <div class="metric-link-hint">Open Next 7 Days Calendar</div>
+        </a>
+        <a class="metric-card metric-card-link" href="{{ url_for('task_templates') }}">
           <div class="metric-label">Urgent Unassigned</div>
           <div class="metric-value">{{ stats.urgent_unassigned }}</div>
-        </div>
+          <div class="metric-link-hint">Open Workflow Controls</div>
+        </a>
       </div>
     </div>
   </div>
@@ -74,7 +82,7 @@
       </div>
     </div>
 
-    <div class="card p-3">
+    <div class="card p-3" id="dashboard-announcements">
       <div class="d-flex justify-content-between align-items-center">
         <h4 class="mb-0">Announcements</h4>
         {% if current_user.role == "admin" %}
@@ -98,7 +106,7 @@
   </div>
 
   <div class="col-lg-5">
-    <div class="card p-3 mb-3">
+    <div class="card p-3 mb-3" id="dashboard-my-tasks">
       <div class="d-flex justify-content-between align-items-center">
         <h4 class="mb-0">My Tasks</h4>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Open Matters</a>

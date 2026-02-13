@@ -1,12 +1,122 @@
 {% extends "base.html" %}
 {% block content %}
+{% set running_count = timers | selectattr('status', 'equalto', 'running') | list | length %}
+{% set paused_count = timers | selectattr('status', 'equalto', 'paused') | list | length %}
+{% set elapsed_total = timers | sum(attribute='elapsed_seconds') %}
+
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Timers</h3>
+  <p class="page-intro mb-0">Track live work and switch focus quickly without losing captured time.</p>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Running</div>
+      <div class="value">{{ running_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Paused</div>
+      <div class="value">{{ paused_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Elapsed (s)</div>
+      <div class="value">{{ elapsed_total }}</div>
+    </div>
+  </div>
+</div>
+
 <div class="row g-3">
   <div class="col-lg-5">
-    <div class="card p-3 mb-3"><h3>Start Timer</h3><form method="post" action="{{ url_for('time_timer_start') }}" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-6"><input class="form-control" name="matter_id" type="number" placeholder="Matter ID"></div><div class="col-md-6"><input class="form-control" name="task_id" type="number" placeholder="Task ID"></div><div class="col-12"><input class="form-control" name="label" placeholder="Label"></div><div class="col-12 d-grid"><button class="btn btn-light">Start</button></div></form></div>
-    <div class="card p-3"><h4>Switch Timer</h4><form method="post" action="{{ url_for('time_timer_switch') }}" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-6"><input class="form-control" name="matter_id" type="number" placeholder="Matter ID"></div><div class="col-md-6"><input class="form-control" name="task_id" type="number" placeholder="Task ID"></div><div class="col-12"><input class="form-control" name="label" placeholder="Label"></div><div class="col-12 d-grid"><button class="btn btn-outline-light">Switch</button></div></form></div>
+    <div class="card p-3 mb-3">
+      <h4 class="mb-2">Start Timer</h4>
+      <form method="post" action="{{ url_for('time_timer_start') }}" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-6">
+          <label class="form-label" for="timer-start-matter">Matter ID</label>
+          <input class="form-control" id="timer-start-matter" name="matter_id" type="number" min="1" placeholder="Optional">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="timer-start-task">Task ID</label>
+          <input class="form-control" id="timer-start-task" name="task_id" type="number" min="1" placeholder="Optional">
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="timer-start-label">Label</label>
+          <input class="form-control" id="timer-start-label" name="label" placeholder="Drafting affidavit">
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-light" type="submit" data-submitting-text="Starting...">Start</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card p-3">
+      <h4 class="mb-2">Switch Timer</h4>
+      <form method="post" action="{{ url_for('time_timer_switch') }}" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-6">
+          <label class="form-label" for="timer-switch-matter">Matter ID</label>
+          <input class="form-control" id="timer-switch-matter" name="matter_id" type="number" min="1" placeholder="Optional">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="timer-switch-task">Task ID</label>
+          <input class="form-control" id="timer-switch-task" name="task_id" type="number" min="1" placeholder="Optional">
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="timer-switch-label">Label</label>
+          <input class="form-control" id="timer-switch-label" name="label" placeholder="Client review call">
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-outline-light" type="submit" data-submitting-text="Switching...">Switch</button>
+        </div>
+      </form>
+    </div>
   </div>
+
   <div class="col-lg-7">
-    <div class="card p-3"><h3>Your Timers</h3><table class="table"><thead><tr><th>ID</th><th>Matter</th><th>Task</th><th>Status</th><th>Elapsed (s)</th><th></th></tr></thead><tbody>{% for t in timers %}<tr><td>{{ t.id }}</td><td>{{ t.matter_id or '-' }}</td><td>{{ t.task_id or '-' }}</td><td>{{ t.status }}</td><td>{{ t.elapsed_seconds }}</td><td>{% if t.status == 'running' %}<form method="post" action="{{ url_for('time_timer_pause') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="timer_id" value="{{ t.id }}"><button class="btn btn-sm btn-outline-light">Pause</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="6" class="muted">No timers.</td></tr>{% endfor %}</tbody></table></div>
+    <div class="card p-3">
+      <h4 class="mb-2">Your Timers</h4>
+      <div class="table-tools" data-table-tools data-table-target="time-timers-table">
+        <input class="form-control" type="search" data-table-search placeholder="Filter by id, matter, task, or status...">
+        <div class="table-count" data-table-count aria-live="polite"></div>
+      </div>
+      <div class="table-responsive">
+        <table class="table" id="time-timers-table">
+          <thead>
+            <tr>
+              <th data-sort-index="0" data-sort-type="number">ID</th>
+              <th data-sort-index="1" data-sort-type="number">Matter</th>
+              <th data-sort-index="2" data-sort-type="number">Task</th>
+              <th data-sort-index="3">Status</th>
+              <th data-sort-index="4" data-sort-type="number">Elapsed (s)</th>
+              <th class="text-end">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for timer in timers %}
+              <tr data-table-row data-search="{{ timer.id }} {{ timer.matter_id or '' }} {{ timer.task_id or '' }} {{ timer.status }} {{ timer.elapsed_seconds }} {{ timer.label or '' }}">
+                <td>{{ timer.id }}</td>
+                <td>{{ timer.matter_id or '-' }}</td>
+                <td>{{ timer.task_id or '-' }}</td>
+                <td><span class="badge badge-soft status-badge">{{ timer.status }}</span></td>
+                <td>{{ timer.elapsed_seconds }}</td>
+                <td class="text-end">
+                  {% if timer.status == 'running' %}
+                    <form method="post" action="{{ url_for('time_timer_pause') }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="timer_id" value="{{ timer.id }}">
+                      <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Pausing...">Pause</button>
+                    </form>
+                  {% else %}
+                    <span class="muted small">-</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+            <tr data-table-empty-row class="table-empty-row" {% if timers|length > 0 %}hidden{% endif %}>
+              <td colspan="6" class="muted">No timers yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

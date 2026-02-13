@@ -1,5 +1,98 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3"><h3>Create Production Set</h3><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-3"><select class="form-select" name="matter_id" required>{% for m in matters %}<option value="{{ m.id }}">{{ m.matter_no }} - {{ m.title }}</option>{% endfor %}</select></div><div class="col-md-3"><input class="form-control" name="name" placeholder="Set name" required></div><div class="col-md-2"><input class="form-control" name="confidentiality_designation" placeholder="Confidentiality"></div><div class="col-md-2"><input class="form-control" name="watermark_text" placeholder="Watermark"></div><div class="col-md-2"><input class="form-control" name="bates_prefix" placeholder="Bates prefix"></div><div class="col-md-2"><input class="form-control" name="bates_start" type="number" placeholder="Start"></div><div class="col-md-2"><input class="form-control" name="bates_end" type="number" placeholder="End"></div><div class="col-md-2 d-grid"><button class="btn btn-light">Create</button></div></form></div>
-<div class="card p-3"><h3>Production Sets</h3><table class="table"><thead><tr><th>ID</th><th>Matter</th><th>Name</th><th>Bates</th><th></th></tr></thead><tbody>{% for s in sets %}<tr><td>{{ s.id }}</td><td>{{ s.matter_id }}</td><td>{{ s.name }}</td><td>{{ s.bates_prefix or '-' }} {{ s.bates_start or '-' }}-{{ s.bates_end or '-' }}</td><td><a class="btn btn-sm btn-outline-light" href="{{ url_for('production_export', production_id=s.id) }}">Export</a></td></tr>{% else %}<tr><td colspan="5" class="muted">No production sets.</td></tr>{% endfor %}</tbody></table></div>
+{% set with_bates = sets | selectattr('bates_prefix') | list | length %}
+
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Production Sets</h3>
+  <p class="page-intro mb-0">Prepare curated export sets with confidentiality, watermark, and Bates metadata.</p>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Sets</div>
+      <div class="value">{{ sets | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Bates Ready</div>
+      <div class="value">{{ with_bates }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Create Production Set</h4>
+  <form method="post" class="row g-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-4">
+      <label class="form-label" for="prod-matter-id">Matter</label>
+      <select class="form-select" id="prod-matter-id" name="matter_id" required>
+        {% for matter in matters %}
+          <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="prod-name">Set Name</label>
+      <input class="form-control" id="prod-name" name="name" placeholder="Plaintiff production batch 01" required>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="prod-confidentiality">Confidentiality</label>
+      <input class="form-control" id="prod-confidentiality" name="confidentiality_designation" placeholder="Confidential">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="prod-watermark">Watermark</label>
+      <input class="form-control" id="prod-watermark" name="watermark_text" placeholder="Privileged & Confidential">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="prod-bates-prefix">Bates Prefix</label>
+      <input class="form-control" id="prod-bates-prefix" name="bates_prefix" placeholder="ELF">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="prod-bates-start">Bates Start</label>
+      <input class="form-control" id="prod-bates-start" name="bates_start" type="number" min="1" placeholder="1">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="prod-bates-end">Bates End</label>
+      <input class="form-control" id="prod-bates-end" name="bates_end" type="number" min="1" placeholder="1000">
+    </div>
+    <div class="col-12 d-grid d-md-flex justify-content-md-end">
+      <button class="btn btn-light" type="submit" data-submitting-text="Creating...">Create</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h4 class="mb-2">Production Registry</h4>
+  <div class="table-tools" data-table-tools data-table-target="production-sets-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by name, matter, or bates...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="production-sets-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">ID</th>
+          <th data-sort-index="1" data-sort-type="number">Matter</th>
+          <th data-sort-index="2">Name</th>
+          <th data-sort-index="3">Bates</th>
+          <th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for set_row in sets %}
+          <tr data-table-row data-search="{{ set_row.id }} {{ set_row.matter_id }} {{ set_row.name }} {{ set_row.bates_prefix or '' }} {{ set_row.bates_start or '' }} {{ set_row.bates_end or '' }}">
+            <td>{{ set_row.id }}</td>
+            <td>{{ set_row.matter_id }}</td>
+            <td>{{ set_row.name }}</td>
+            <td>{{ set_row.bates_prefix or '-' }} {{ set_row.bates_start or '-' }}-{{ set_row.bates_end or '-' }}</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-light" href="{{ url_for('production_export', production_id=set_row.id) }}">Export</a>
+            </td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if sets|length > 0 %}hidden{% endif %}>
+          <td colspan="5" class="muted">No production sets yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

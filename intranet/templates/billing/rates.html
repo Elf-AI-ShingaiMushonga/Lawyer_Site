@@ -1,87 +1,198 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="row g-3">
-  <div class="col-lg-6">
-    <div class="card p-3 mb-3">
-      <h3>Billing Rates</h3>
-      <form method="post" class="row g-2">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="action" value="rate">
-        <div class="col-md-6"><input class="form-control" name="name" placeholder="Name"></div>
-        <div class="col-md-6"><input class="form-control" name="client_name" placeholder="Client"></div>
-        <div class="col-md-6"><input class="form-control" name="matter_id" type="number" placeholder="Matter ID"></div>
-        <div class="col-md-6"><input class="form-control" name="user_id" type="number" placeholder="User ID"></div>
-        <div class="col-md-6"><input class="form-control" name="currency" value="ZAR"></div>
-        <div class="col-md-6"><input class="form-control" name="rate_per_hour" type="number" step="0.01" placeholder="Rate" required></div>
-        <div class="col-12 d-grid"><button class="btn btn-light">Save Rate</button></div>
-      </form>
+{% set total_rate_cards = rates | length %}
+{% set total_arrangements = arrangements | length %}
+{% set active_rates = rates | selectattr('is_active') | list | length %}
+{% set average_rate = ((rates | sum(attribute='rate_per_hour')) / total_rate_cards) if total_rate_cards else 0 %}
+
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Billing Rates and Arrangements</h3>
+  <p class="page-intro mb-0">
+    Maintain rate cards and matter-specific fee arrangements used by invoice generation and profitability calculations.
+  </p>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Rate Cards</div>
+      <div class="value">{{ total_rate_cards }}</div>
     </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card p-3 mb-3">
-      <h3>Fee Arrangement</h3>
-      <form method="post" class="row g-2">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="action" value="fee_arrangement">
-        <div class="col-md-6"><input class="form-control" name="matter_id" type="number" placeholder="Matter ID" required></div>
-        <div class="col-md-6">
-          <select class="form-select" name="arrangement_type">
-            <option value="hourly">hourly</option>
-            <option value="fixed">fixed</option>
-            <option value="capped">capped</option>
-            <option value="blended">blended</option>
-          </select>
-        </div>
-        <div class="col-md-4"><input class="form-control" name="fixed_amount" type="number" step="0.01" placeholder="Fixed amount"></div>
-        <div class="col-md-4"><input class="form-control" name="cap_amount" type="number" step="0.01" placeholder="Cap amount"></div>
-        <div class="col-md-4"><input class="form-control" name="blended_rate" type="number" step="0.01" placeholder="Blended rate"></div>
-        <div class="col-12"><input class="form-control" name="notes" placeholder="Notes"></div>
-        <div class="col-12 d-grid"><button class="btn btn-light">Save Arrangement</button></div>
-      </form>
+    <div class="kpi-pill">
+      <div class="label">Active Rates</div>
+      <div class="value">{{ active_rates }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Fee Arrangements</div>
+      <div class="value">{{ total_arrangements }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Average Rate</div>
+      <div class="value">{{ "%.2f"|format(average_rate or 0) }}</div>
     </div>
   </div>
 </div>
 
+{% if current_user.role == "admin" %}
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card p-3 mb-3">
+        <h4 class="mb-2">Add Rate Card</h4>
+        <form method="post" class="row g-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="rate">
+          <div class="col-md-6">
+            <label class="form-label" for="rate-name">Name</label>
+            <input class="form-control" id="rate-name" name="name" placeholder="Commercial rate">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="rate-client-name">Client</label>
+            <input class="form-control" id="rate-client-name" name="client_name" placeholder="Client name">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="rate-matter-id">Matter ID</label>
+            <input class="form-control" id="rate-matter-id" name="matter_id" type="number" min="1" placeholder="Optional">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="rate-user-id">User ID</label>
+            <input class="form-control" id="rate-user-id" name="user_id" type="number" min="1" placeholder="Optional">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="rate-currency">Currency</label>
+            <input class="form-control" id="rate-currency" name="currency" value="ZAR">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="rate-per-hour">Rate Per Hour</label>
+            <input class="form-control" id="rate-per-hour" name="rate_per_hour" type="number" min="0.01" step="0.01" placeholder="0.00" required>
+          </div>
+          <div class="col-12 d-grid">
+            <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Rate</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card p-3 mb-3">
+        <h4 class="mb-2">Add Fee Arrangement</h4>
+        <form method="post" class="row g-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="fee_arrangement">
+          <div class="col-md-6">
+            <label class="form-label" for="arr-matter-id">Matter ID</label>
+            <input class="form-control" id="arr-matter-id" name="matter_id" type="number" min="1" placeholder="Required" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="arr-type">Arrangement Type</label>
+            <select class="form-select" id="arr-type" name="arrangement_type">
+              <option value="hourly">hourly</option>
+              <option value="fixed">fixed</option>
+              <option value="capped">capped</option>
+              <option value="blended">blended</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="arr-fixed">Fixed Amount</label>
+            <input class="form-control" id="arr-fixed" name="fixed_amount" type="number" min="0" step="0.01" placeholder="Optional">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="arr-cap">Cap Amount</label>
+            <input class="form-control" id="arr-cap" name="cap_amount" type="number" min="0" step="0.01" placeholder="Optional">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="arr-blended">Blended Rate</label>
+            <input class="form-control" id="arr-blended" name="blended_rate" type="number" min="0" step="0.01" placeholder="Optional">
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="arr-notes">Notes</label>
+            <input class="form-control" id="arr-notes" name="notes" placeholder="Approval or contract notes">
+          </div>
+          <div class="col-12 d-grid">
+            <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Arrangement</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% else %}
+  <div class="card p-3 mb-3">
+    <div class="why-note">Rate and arrangement creation is restricted to admin users.</div>
+  </div>
+{% endif %}
+
 <div class="card p-3 mb-3">
-  <h3>Rate Cards</h3>
-  <table class="table">
-    <thead><tr><th>ID</th><th>Name</th><th>Client</th><th>Matter</th><th>User</th><th>Rate</th></tr></thead>
-    <tbody>
-      {% for r in rates %}
-      <tr>
-        <td>{{ r.id }}</td>
-        <td>{{ r.name or "-" }}</td>
-        <td>{{ r.client_name or "-" }}</td>
-        <td>{{ r.matter_id or "-" }}</td>
-        <td>{{ r.user_id or "-" }}</td>
-        <td>{{ r.rate_per_hour }} {{ r.currency }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="6" class="muted">No rates.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <h4 class="mb-2">Rate Cards</h4>
+  <div class="table-tools" data-table-tools data-table-target="rate-cards-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by name, client, matter, or user...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="rate-cards-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">ID</th>
+          <th data-sort-index="1">Name</th>
+          <th data-sort-index="2">Client</th>
+          <th data-sort-index="3" data-sort-type="number">Matter</th>
+          <th data-sort-index="4" data-sort-type="number">User</th>
+          <th data-sort-index="5" data-sort-type="number">Rate</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rate in rates %}
+          <tr data-table-row data-search="{{ rate.id }} {{ rate.name or '' }} {{ rate.client_name or '' }} {{ rate.matter_id or '' }} {{ rate.user_id or '' }}">
+            <td>{{ rate.id }}</td>
+            <td>{{ rate.name or "-" }}</td>
+            <td>{{ rate.client_name or "-" }}</td>
+            <td>{{ rate.matter_id or "-" }}</td>
+            <td>{{ rate.user_id or "-" }}</td>
+            <td>{{ "%.2f"|format(rate.rate_per_hour or 0) }} {{ rate.currency }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if rates|length > 0 %}hidden{% endif %}>
+          <td colspan="6" class="muted">No rates in scope.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <div class="card p-3">
-  <h3>Fee Arrangements</h3>
-  <table class="table">
-    <thead><tr><th>ID</th><th>Matter</th><th>Type</th><th>Fixed</th><th>Cap</th><th>Blended</th><th>Notes</th></tr></thead>
-    <tbody>
-      {% for row in arrangements %}
-      <tr>
-        <td>{{ row.id }}</td>
-        <td>{{ row.matter_id }}</td>
-        <td>{{ row.arrangement_type }}</td>
-        <td>{{ row.fixed_amount or "-" }}</td>
-        <td>{{ row.cap_amount or "-" }}</td>
-        <td>{{ row.blended_rate or "-" }}</td>
-        <td>{{ row.notes or "-" }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="7" class="muted">No fee arrangements.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <h4 class="mb-2">Fee Arrangements</h4>
+  <div class="table-tools" data-table-tools data-table-target="fee-arrangements-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by matter, type, or notes...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="fee-arrangements-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">ID</th>
+          <th data-sort-index="1" data-sort-type="number">Matter</th>
+          <th data-sort-index="2">Type</th>
+          <th data-sort-index="3" data-sort-type="number">Fixed</th>
+          <th data-sort-index="4" data-sort-type="number">Cap</th>
+          <th data-sort-index="5" data-sort-type="number">Blended</th>
+          <th data-sort-index="6">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for arrangement in arrangements %}
+          <tr
+            data-table-row
+            data-search="{{ arrangement.id }} {{ arrangement.matter_id }} {{ arrangement.arrangement_type }} {{ arrangement.notes or '' }}"
+          >
+            <td>{{ arrangement.id }}</td>
+            <td>{{ arrangement.matter_id }}</td>
+            <td>{{ arrangement.arrangement_type }}</td>
+            <td>{{ "%.2f"|format(arrangement.fixed_amount or 0) if arrangement.fixed_amount is not none else "-" }}</td>
+            <td>{{ "%.2f"|format(arrangement.cap_amount or 0) if arrangement.cap_amount is not none else "-" }}</td>
+            <td>{{ "%.2f"|format(arrangement.blended_rate or 0) if arrangement.blended_rate is not none else "-" }}</td>
+            <td>{{ arrangement.notes or "-" }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if arrangements|length > 0 %}hidden{% endif %}>
+          <td colspan="7" class="muted">No fee arrangements in scope.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

@@ -4,6 +4,7 @@ import datetime as dt
 import os
 import uuid
 
+import sqlalchemy as sa
 from flask import abort, flash, redirect, request, send_from_directory, url_for
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
@@ -35,6 +36,48 @@ def register_matter_routes(app):
     @login_required
     def matters():
         q = normalize_query(request.args.get("q", ""))
+        sort = normalize_query(request.args.get("sort", "opened_desc")).lower() or "opened_desc"
+        risk_rank = sa.case(
+            (Matter.risk_level == "Critical", 4),
+            (Matter.risk_level == "High", 3),
+            (Matter.risk_level == "Medium", 2),
+            (Matter.risk_level == "Low", 1),
+            else_=0,
+        )
+        sort_order = {
+            "opened_desc": (Matter.opened_at.desc(), Matter.id.desc()),
+            "opened_asc": (Matter.opened_at.asc(), Matter.id.asc()),
+            "updated_desc": (Matter.last_updated_at.desc(), Matter.id.desc()),
+            "updated_asc": (Matter.last_updated_at.asc(), Matter.id.asc()),
+            "matter_no_asc": (Matter.matter_no.asc(), Matter.id.asc()),
+            "matter_no_desc": (Matter.matter_no.desc(), Matter.id.desc()),
+            "client_asc": (Matter.client_name.asc(), Matter.id.asc()),
+            "client_desc": (Matter.client_name.desc(), Matter.id.desc()),
+            "title_asc": (Matter.title.asc(), Matter.id.asc()),
+            "title_desc": (Matter.title.desc(), Matter.id.desc()),
+            "risk_desc": (risk_rank.desc(), Matter.opened_at.desc()),
+            "risk_asc": (risk_rank.asc(), Matter.opened_at.desc()),
+            "status_asc": (Matter.status.asc(), Matter.opened_at.desc()),
+            "status_desc": (Matter.status.desc(), Matter.opened_at.desc()),
+        }
+        sort_options = (
+            ("opened_desc", "Opened date (newest)"),
+            ("opened_asc", "Opened date (oldest)"),
+            ("updated_desc", "Last updated (newest)"),
+            ("updated_asc", "Last updated (oldest)"),
+            ("matter_no_asc", "Matter number (A-Z)"),
+            ("matter_no_desc", "Matter number (Z-A)"),
+            ("client_asc", "Client name (A-Z)"),
+            ("client_desc", "Client name (Z-A)"),
+            ("title_asc", "Title (A-Z)"),
+            ("title_desc", "Title (Z-A)"),
+            ("risk_desc", "Risk (Critical -> Low)"),
+            ("risk_asc", "Risk (Low -> Critical)"),
+            ("status_asc", "Status (A-Z)"),
+            ("status_desc", "Status (Z-A)"),
+        )
+        if sort not in sort_order:
+            sort = "opened_desc"
         base = Matter.query
         if not is_admin():
             ids = visible_matter_ids()
@@ -45,8 +88,8 @@ def register_matter_routes(app):
         if q:
             like = f"%{q}%"
             base = base.filter((Matter.matter_no.ilike(like)) | (Matter.title.ilike(like)) | (Matter.client_name.ilike(like)))
-        ms = base.order_by(Matter.opened_at.desc()).limit(200).all()
-        return page("Matters", "matters/list.html", ms=ms, q=q)
+        ms = base.order_by(*sort_order[sort]).limit(200).all()
+        return page("Matters", "matters/list.html", ms=ms, q=q, sort=sort, sort_options=sort_options)
 
     @app.route("/matters/new", methods=["GET", "POST"])
     @login_required

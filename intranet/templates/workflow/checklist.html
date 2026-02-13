@@ -1,5 +1,61 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3"><h3>Task Checklist - #{{ t.id }} {{ t.title }}</h3><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add"><div class="col-md-9"><input class="form-control" name="item_text" placeholder="Checklist item" required></div><div class="col-md-3 d-grid"><button class="btn btn-light">Add Item</button></div></form></div>
-<div class="card p-3"><h4>Items</h4>{% for i in items %}<div class="activity-item d-flex justify-content-between align-items-center"><div><strong>{{ i.item_text }}</strong> <span class="muted">({{ 'done' if i.is_done else 'open' }})</span></div><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="toggle"><input type="hidden" name="item_id" value="{{ i.id }}"><button class="btn btn-sm btn-outline-light">Toggle</button></form></div>{% else %}<div class="muted">No checklist items.</div>{% endfor %}</div>
+{% set done_count = items | selectattr('is_done') | list | length %}
+{% set open_count = (items | length) - done_count %}
+
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Task Checklist</h3>
+  <p class="page-intro mb-0">Task #{{ t.id }}: {{ t.title }}</p>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Open</div>
+      <div class="value">{{ open_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Done</div>
+      <div class="value">{{ done_count }}</div>
+    </div>
+  </div>
+  <form method="post" class="row g-3 mt-1">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="add">
+    <div class="col-md-9">
+      <label class="form-label" for="checklist-item-text">Checklist Item</label>
+      <input class="form-control" id="checklist-item-text" name="item_text" placeholder="Prepare witness statement pack" required>
+    </div>
+    <div class="col-md-3 d-grid">
+      <label class="form-label visually-hidden" for="checklist-add">Add</label>
+      <button class="btn btn-light" id="checklist-add" type="submit" data-submitting-text="Adding...">Add Item</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h4 class="mb-2">Items</h4>
+  {% if items %}
+    <div class="list-stack">
+      {% for item in items %}
+        <div class="list-item">
+          <div class="list-row">
+            <div>
+              <div class="list-title">{{ item.item_text }}</div>
+              <div class="list-meta">
+                <span>Position {{ item.position }}</span>
+                <span class="badge badge-soft status-badge {{ 'status-done' if item.is_done else 'status-todo' }}">{{ 'done' if item.is_done else 'open' }}</span>
+              </div>
+            </div>
+            <form method="post">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="toggle">
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Updating...">Toggle</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">No checklist items yet.</div>
+  {% endif %}
+</div>
 {% endblock %}

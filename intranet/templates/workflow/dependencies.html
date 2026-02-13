@@ -1,5 +1,51 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3"><h3>Task Dependencies - #{{ t.id }} {{ t.title }}</h3><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-9"><select class="form-select" name="depends_on_task_id" required>{% for o in options %}<option value="{{ o.id }}">#{{ o.id }} {{ o.title }}</option>{% endfor %}</select></div><div class="col-md-3 d-grid"><button class="btn btn-light">Add Dependency</button></div></form></div>
-<div class="card p-3"><h4>Current Dependencies</h4><table class="table"><thead><tr><th>Task</th><th>Depends On</th></tr></thead><tbody>{% for d in deps %}<tr><td>#{{ d.task_id }}</td><td>#{{ d.depends_on_task_id }}</td></tr>{% else %}<tr><td colspan="2" class="muted">No dependencies.</td></tr>{% endfor %}</tbody></table></div>
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Task Dependencies</h3>
+  <p class="page-intro mb-0">Task #{{ t.id }}: {{ t.title }}</p>
+  <form method="post" class="row g-3 mt-1">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-9">
+      <label class="form-label" for="depends-on-task-id">Depends On Task</label>
+      <select class="form-select" id="depends-on-task-id" name="depends_on_task_id" required>
+        {% for option in options %}
+          <option value="{{ option.id }}">#{{ option.id }} {{ option.title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3 d-grid">
+      <label class="form-label visually-hidden" for="dependency-submit">Add</label>
+      <button class="btn btn-light" id="dependency-submit" type="submit" data-submitting-text="Adding...">Add Dependency</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h4 class="mb-2">Current Dependencies</h4>
+  <div class="table-tools" data-table-tools data-table-target="task-dependency-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by task id...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="task-dependency-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">Task</th>
+          <th data-sort-index="1" data-sort-type="number">Depends On</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dep in deps %}
+          <tr data-table-row data-search="{{ dep.task_id }} {{ dep.depends_on_task_id }}">
+            <td>#{{ dep.task_id }}</td>
+            <td>#{{ dep.depends_on_task_id }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if deps|length > 0 %}hidden{% endif %}>
+          <td colspan="2" class="muted">No dependencies for this task.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

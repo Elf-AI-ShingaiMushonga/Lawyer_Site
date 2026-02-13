@@ -1,5 +1,66 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3"><h3>Backup Status</h3><form method="post" action="{{ url_for('ops_backup_run') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-light">Run Backup</button></form></div>
-<div class="card p-3"><table class="table"><thead><tr><th>ID</th><th>Started</th><th>Finished</th><th>Status</th><th>Manifest</th></tr></thead><tbody>{% for r in runs %}<tr><td>{{ r.id }}</td><td>{{ r.started_at }}</td><td>{{ r.finished_at or '-' }}</td><td>{{ r.status }}</td><td>{{ r.location or '-' }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No backup runs.</td></tr>{% endfor %}</tbody></table></div>
+{% set running_count = runs | selectattr('status', 'equalto', 'running') | list | length %}
+{% set failed_count = runs | selectattr('status', 'equalto', 'failed') | list | length %}
+
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Backup Status</h3>
+      <p class="page-intro mb-0">Run manual backup jobs and inspect completion state for operational assurance.</p>
+    </div>
+    <form method="post" action="{{ url_for('ops_backup_run') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-light" type="submit" data-submitting-text="Running...">Run Backup</button>
+    </form>
+  </div>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Runs</div>
+      <div class="value">{{ runs | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Running</div>
+      <div class="value">{{ running_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Failed</div>
+      <div class="value">{{ failed_count }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3">
+  <div class="table-tools" data-table-tools data-table-target="ops-backup-runs-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by run id, status, or artifact path...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="ops-backup-runs-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">ID</th>
+          <th data-sort-index="1" data-sort-type="date">Started</th>
+          <th data-sort-index="2" data-sort-type="date">Finished</th>
+          <th data-sort-index="3">Status</th>
+          <th data-sort-index="4">Manifest</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+          <tr data-table-row data-search="{{ run.id }} {{ run.started_at }} {{ run.finished_at or '' }} {{ run.status }} {{ run.location or '' }}">
+            <td>{{ run.id }}</td>
+            <td>{{ run.started_at }}</td>
+            <td>{{ run.finished_at or '-' }}</td>
+            <td><span class="badge badge-soft status-badge">{{ run.status }}</span></td>
+            <td>{{ run.location or '-' }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if runs|length > 0 %}hidden{% endif %}>
+          <td colspan="5" class="muted">No backup runs yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

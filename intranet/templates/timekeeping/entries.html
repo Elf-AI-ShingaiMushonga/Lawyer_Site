@@ -1,6 +1,144 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3"><h3>New Time Entry</h3><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-3"><select class="form-select" name="matter_id" required>{% for m in matters %}<option value="{{ m.id }}">{{ m.matter_no }} - {{ m.title }}</option>{% endfor %}</select></div><div class="col-md-2"><input class="form-control" name="task_id" type="number" placeholder="Task ID"></div><div class="col-md-3"><input class="form-control" name="start_at" placeholder="YYYY-MM-DDTHH:MM:SS" required></div><div class="col-md-3"><input class="form-control" name="end_at" placeholder="YYYY-MM-DDTHH:MM:SS" required></div><div class="col-md-1"><div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="is_billable" value="1" checked><label class="form-check-label">Bill</label></div></div><div class="col-md-3"><input class="form-control" name="task_code" placeholder="Task code"></div><div class="col-md-3"><input class="form-control" name="activity_code" placeholder="Activity code"></div><div class="col-12"><textarea class="form-control" name="narrative" rows="3" placeholder="Narrative"></textarea></div><div class="col-12 d-grid"><button class="btn btn-light">Save Entry</button></div></form></div>
-<div class="card p-3 mb-3"><h4>Entries</h4><table class="table"><thead><tr><th>ID</th><th>Matter</th><th>Start</th><th>End</th><th>Hours</th><th>Rounded</th><th>Status</th></tr></thead><tbody>{% for e in entries %}<tr><td>{{ e.id }}</td><td>{{ e.matter_id }}</td><td>{{ e.start_at }}</td><td>{{ e.end_at }}</td><td>{{ e.hours }}</td><td>{{ e.rounded_hours }}</td><td>{{ e.status }}</td></tr>{% else %}<tr><td colspan="7" class="muted">No entries.</td></tr>{% endfor %}</tbody></table></div>
-<div class="card p-3"><h4>Validation Events</h4><table class="table"><thead><tr><th>Entry</th><th>Event</th><th>Message</th><th>At</th></tr></thead><tbody>{% for v in validations %}<tr><td>{{ v.time_entry_id }}</td><td>{{ v.event_type }}</td><td>{{ v.message }}</td><td>{{ v.created_at }}</td></tr>{% else %}<tr><td colspan="4" class="muted">No validation events.</td></tr>{% endfor %}</tbody></table></div>
+{% set approved_count = entries | selectattr('status', 'equalto', 'approved') | list | length %}
+{% set review_count = entries | selectattr('status', 'equalto', 'needs_review') | list | length %}
+
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Time Entries</h3>
+  <p class="page-intro mb-0">Capture work logs with narrative and coding so entries are ready for review and billing.</p>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Entries</div>
+      <div class="value">{{ entries | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Needs Review</div>
+      <div class="value">{{ review_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Approved</div>
+      <div class="value">{{ approved_count }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">New Time Entry</h4>
+  <form method="post" class="row g-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-4">
+      <label class="form-label" for="entry-matter-id">Matter</label>
+      <select class="form-select" id="entry-matter-id" name="matter_id" required>
+        {% for matter in matters %}
+          <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="entry-task-id">Task ID</label>
+      <input class="form-control" id="entry-task-id" name="task_id" type="number" min="1" placeholder="Optional">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="entry-start-at">Start At (ISO)</label>
+      <input class="form-control" id="entry-start-at" name="start_at" placeholder="2026-03-01T09:00:00" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="entry-end-at">End At (ISO)</label>
+      <input class="form-control" id="entry-end-at" name="end_at" placeholder="2026-03-01T11:00:00" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="entry-task-code">Task Code</label>
+      <input class="form-control" id="entry-task-code" name="task_code" placeholder="L100">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="entry-activity-code">Activity Code</label>
+      <input class="form-control" id="entry-activity-code" name="activity_code" placeholder="A101">
+    </div>
+    <div class="col-md-3 d-flex align-items-end">
+      <div class="form-check">
+        <input class="form-check-input" id="entry-billable" type="checkbox" name="is_billable" value="1" checked>
+        <label class="form-check-label" for="entry-billable">Billable</label>
+      </div>
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="entry-narrative">Narrative</label>
+      <textarea class="form-control" id="entry-narrative" name="narrative" rows="3" placeholder="Describe work completed"></textarea>
+    </div>
+    <div class="col-12 d-grid d-md-flex justify-content-md-end">
+      <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Entry</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Entries</h4>
+  <div class="table-tools" data-table-tools data-table-target="time-entries-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by matter, status, or narrative...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="time-entries-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">ID</th>
+          <th data-sort-index="1" data-sort-type="number">Matter</th>
+          <th data-sort-index="2" data-sort-type="date">Start</th>
+          <th data-sort-index="3" data-sort-type="date">End</th>
+          <th data-sort-index="4" data-sort-type="number">Hours</th>
+          <th data-sort-index="5" data-sort-type="number">Rounded</th>
+          <th data-sort-index="6">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+          <tr data-table-row data-search="{{ entry.id }} {{ entry.matter_id }} {{ entry.status }} {{ entry.narrative or '' }} {{ entry.task_code or '' }} {{ entry.activity_code or '' }}">
+            <td>{{ entry.id }}</td>
+            <td>{{ entry.matter_id }}</td>
+            <td>{{ entry.start_at }}</td>
+            <td>{{ entry.end_at }}</td>
+            <td>{{ entry.hours }}</td>
+            <td>{{ entry.rounded_hours }}</td>
+            <td><span class="badge badge-soft status-badge">{{ entry.status }}</span></td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if entries|length > 0 %}hidden{% endif %}>
+          <td colspan="7" class="muted">No entries yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card p-3">
+  <h4 class="mb-2">Validation Events</h4>
+  <div class="table-tools" data-table-tools data-table-target="time-validations-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by event type, entry id, or message...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="time-validations-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">Entry</th>
+          <th data-sort-index="1">Event</th>
+          <th data-sort-index="2">Message</th>
+          <th data-sort-index="3" data-sort-type="date">At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for validation in validations %}
+          <tr data-table-row data-search="{{ validation.time_entry_id }} {{ validation.event_type }} {{ validation.message }} {{ validation.created_at }}">
+            <td>{{ validation.time_entry_id }}</td>
+            <td>{{ validation.event_type }}</td>
+            <td>{{ validation.message }}</td>
+            <td>{{ validation.created_at }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if validations|length > 0 %}hidden{% endif %}>
+          <td colspan="4" class="muted">No validation events recorded.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

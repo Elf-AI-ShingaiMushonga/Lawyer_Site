@@ -1,5 +1,112 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3"><h3>Create Lead</h3><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-3"><input class="form-control" name="full_name" placeholder="Full name" required></div><div class="col-md-2"><input class="form-control" name="organization" placeholder="Organization"></div><div class="col-md-2"><input class="form-control" name="email" type="email" placeholder="Email"></div><div class="col-md-2"><input class="form-control" name="phone" placeholder="Phone"></div><div class="col-md-1"><input class="form-control" name="source" placeholder="Source"></div><div class="col-md-2"><input class="form-control" name="assigned_to" type="number" placeholder="User ID"></div><div class="col-12"><textarea class="form-control" name="notes" rows="2" placeholder="Notes"></textarea></div><div class="col-12 d-grid"><button class="btn btn-light">Add Lead</button></div></form></div>
-<div class="card p-3"><h3>Lead Pipeline</h3><table class="table"><thead><tr><th>ID</th><th>Name</th><th>Org</th><th>Email</th><th>Source</th><th>Stage</th><th></th></tr></thead><tbody>{% for l in leads %}<tr><td>{{ l.id }}</td><td>{{ l.full_name }}</td><td>{{ l.organization or '-' }}</td><td>{{ l.email or '-' }}</td><td>{{ l.source or '-' }}</td><td>{{ l.stage }}</td><td><a class="btn btn-sm btn-outline-light" href="{{ url_for('crm_lead_detail', lead_id=l.id) }}">Open</a></td></tr>{% else %}<tr><td colspan="7" class="muted">No leads.</td></tr>{% endfor %}</tbody></table></div>
+{% set stage_counts = {} %}
+{% for stage in stages %}
+  {% set _ = stage_counts.update({stage: (leads | selectattr('stage', 'equalto', stage) | list | length)}) %}
+{% endfor %}
+
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Lead Intake</h3>
+  <p class="page-intro mb-0">Capture potential clients, assign ownership, and progress intake toward engagement.</p>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Total Leads</div>
+      <div class="value">{{ leads | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">New</div>
+      <div class="value">{{ stage_counts.get('new', 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Qualified</div>
+      <div class="value">{{ stage_counts.get('qualified', 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Retained</div>
+      <div class="value">{{ stage_counts.get('retained', 0) }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Create Lead</h4>
+  <form method="post" class="row g-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-4">
+      <label class="form-label" for="crm-full-name">Full Name</label>
+      <input class="form-control" id="crm-full-name" name="full_name" placeholder="Nandi Dlamini" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="crm-organization">Organization</label>
+      <input class="form-control" id="crm-organization" name="organization" placeholder="Dlamini Holdings">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="crm-email">Email</label>
+      <input class="form-control" id="crm-email" name="email" type="email" placeholder="client@example.com">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="crm-phone">Phone</label>
+      <input class="form-control" id="crm-phone" name="phone" placeholder="+27 82 ...">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="crm-source">Source</label>
+      <input class="form-control" id="crm-source" name="source" placeholder="Referral / Web / Event">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="crm-assigned-to">Assigned User ID</label>
+      <input class="form-control" id="crm-assigned-to" name="assigned_to" type="number" min="1" placeholder="Optional">
+    </div>
+    <div class="col-md-7">
+      <label class="form-label" for="crm-notes">Notes</label>
+      <textarea class="form-control" id="crm-notes" name="notes" rows="2" placeholder="Initial context, urgency, and conflict notes"></textarea>
+    </div>
+    <div class="col-12 d-grid d-md-flex justify-content-md-end">
+      <button class="btn btn-light" type="submit" data-submitting-text="Creating...">Add Lead</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <div class="toolbar-row mb-1">
+    <div>
+      <h4 class="mb-1">Lead Pipeline</h4>
+      <div class="muted small">Filter and sort by stage, source, and ownership cues.</div>
+    </div>
+  </div>
+  <div class="table-tools" data-table-tools data-table-target="crm-lead-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by name, organization, stage, or source...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="crm-lead-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">ID</th>
+          <th data-sort-index="1">Name</th>
+          <th data-sort-index="2">Organization</th>
+          <th data-sort-index="3">Email</th>
+          <th data-sort-index="4">Source</th>
+          <th data-sort-index="5">Stage</th>
+          <th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lead in leads %}
+          <tr data-table-row data-search="{{ lead.id }} {{ lead.full_name }} {{ lead.organization or '' }} {{ lead.email or '' }} {{ lead.source or '' }} {{ lead.stage }}">
+            <td>{{ lead.id }}</td>
+            <td>{{ lead.full_name }}</td>
+            <td>{{ lead.organization or '-' }}</td>
+            <td>{{ lead.email or '-' }}</td>
+            <td>{{ lead.source or '-' }}</td>
+            <td><span class="badge badge-soft status-badge">{{ lead.stage }}</span></td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-light" href="{{ url_for('crm_lead_detail', lead_id=lead.id) }}">Open</a></td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if leads|length > 0 %}hidden{% endif %}>
+          <td colspan="7" class="muted">No leads yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

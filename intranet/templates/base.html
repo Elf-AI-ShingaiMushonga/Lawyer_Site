@@ -22,6 +22,9 @@
       --focus-ring: rgba(225, 6, 0, 0.2);
       --ok: #218346;
       --warn: #9a6200;
+      --status-chip-min-width: 10ch;
+      --risk-chip-min-width: 9ch;
+      --category-chip-min-width: 11ch;
       --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
     }
 
@@ -194,6 +197,49 @@
       flex-wrap: wrap;
     }
 
+    .nav-utility {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      max-width: 760px;
+    }
+
+    .nav-search {
+      min-width: 240px;
+      max-width: 340px;
+      flex: 1 1 280px;
+    }
+
+    .nav-search .form-control {
+      font-size: 13px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border-color: rgba(225, 6, 0, 0.32);
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .nav-search .form-control:focus {
+      background: #ffffff;
+    }
+
+    .command-launch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .command-launch .code-like {
+      border: 1px solid rgba(225, 6, 0, 0.25);
+      border-radius: 999px;
+      padding: 2px 7px;
+      font-size: 11px;
+      color: #8a5755;
+      background: rgba(225, 6, 0, 0.06);
+    }
+
     .nav-pill {
       font-size: 13px;
       border-radius: 999px;
@@ -221,6 +267,56 @@
       border-color: rgba(225, 6, 0, 0.92);
       background: rgba(225, 6, 0, 0.12);
       color: var(--accent-strong);
+    }
+
+    .quick-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(225, 6, 0, 0.3);
+    }
+
+    .quick-chip {
+      border: 1px solid rgba(225, 6, 0, 0.26);
+      border-radius: 12px;
+      text-decoration: none;
+      background: rgba(255, 255, 255, 0.92);
+      color: #5f3939;
+      padding: 8px 11px;
+      min-width: 120px;
+      transition: all .16s ease;
+    }
+
+    .quick-chip:hover {
+      border-color: rgba(225, 6, 0, 0.75);
+      color: var(--accent-strong);
+      transform: translateY(-1px);
+      background: rgba(225, 6, 0, 0.06);
+    }
+
+    .quick-chip.is-active {
+      border-color: rgba(225, 6, 0, 0.85);
+      background: rgba(225, 6, 0, 0.14);
+      color: #6b1916;
+      box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.12);
+    }
+
+    .quick-chip-label {
+      display: block;
+      font-size: 12px;
+      line-height: 1.1;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 800;
+    }
+
+    .quick-chip-meta {
+      display: block;
+      margin-top: 2px;
+      font-size: 12px;
+      color: #896f6f;
     }
 
     .badge-soft {
@@ -287,9 +383,9 @@
     .form-label {
       margin-bottom: 4px;
       font-size: 12px;
-      letter-spacing: 0.02em;
-      text-transform: uppercase;
-      color: #7f6a6a;
+      letter-spacing: 0.01em;
+      text-transform: none;
+      color: #6f5555;
       font-weight: 700;
     }
 
@@ -346,11 +442,154 @@
       z-index: 1;
     }
 
+    .table-tools {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .table-tools .form-control {
+      min-width: 240px;
+      max-width: 360px;
+    }
+
+    .table-count {
+      font-size: 12px;
+      color: #8f7474;
+    }
+
+    .table-sort {
+      cursor: pointer;
+      user-select: none;
+      padding-right: 18px !important;
+      position: relative;
+    }
+
+    .table-sort::after {
+      content: "↕";
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-48%);
+      font-size: 10px;
+      color: #b59696;
+    }
+
+    .table-sort[aria-sort="ascending"]::after {
+      content: "↑";
+      color: #7a201d;
+    }
+
+    .table-sort[aria-sort="descending"]::after {
+      content: "↓";
+      color: #7a201d;
+    }
+
+    .table-empty-row[hidden] {
+      display: none;
+    }
+
+    form.is-submitting {
+      opacity: 0.86;
+    }
+
+    form.is-submitting .btn,
+    form.is-submitting .nav-pill {
+      pointer-events: none;
+    }
+
+    [aria-busy="true"] {
+      position: relative;
+    }
+
+    [aria-busy="true"]::after {
+      content: "";
+      display: inline-block;
+      width: 0.8em;
+      height: 0.8em;
+      margin-left: 0.45em;
+      border-radius: 999px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      border-top-color: rgba(255, 255, 255, 0.98);
+      vertical-align: -0.06em;
+      animation: busy-spin 0.75s linear infinite;
+    }
+
     .alert {
       border-radius: 12px;
       border: 1px solid rgba(225, 6, 0, 0.28);
       background: var(--accent-soft);
       color: var(--text);
+    }
+
+    .flash-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .flash-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(225, 6, 0, 0.24);
+      background: #fff9f9;
+      color: var(--text);
+      padding: 11px 12px;
+    }
+
+    .flash-card.is-warning {
+      border-color: rgba(182, 121, 38, 0.45);
+      background: #fff5e7;
+      color: #6c4a18;
+    }
+
+    .flash-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      font-size: 12px;
+      line-height: 1;
+      font-weight: 800;
+      background: rgba(225, 6, 0, 0.14);
+      color: #741f1c;
+      border: 1px solid rgba(225, 6, 0, 0.3);
+      flex: 0 0 auto;
+    }
+
+    .flash-card.is-warning .flash-icon {
+      background: rgba(182, 121, 38, 0.2);
+      border-color: rgba(182, 121, 38, 0.4);
+      color: #6c4a18;
+    }
+
+    .flash-message {
+      flex: 1 1 auto;
+      line-height: 1.45;
+    }
+
+    .flash-close {
+      border: 0;
+      background: transparent;
+      color: #8c6f6f;
+      font-size: 18px;
+      line-height: 1;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      flex: 0 0 auto;
+    }
+
+    .flash-close:hover {
+      background: rgba(225, 6, 0, 0.12);
+      color: #5f1a18;
     }
 
     .main-content {
@@ -384,6 +623,26 @@
       background: #fff7f7;
     }
 
+    .metric-card-link {
+      display: block;
+      color: inherit;
+      text-decoration: none;
+      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+    }
+
+    .metric-card-link:hover {
+      transform: translateY(-1px);
+      border-color: rgba(225, 6, 0, 0.52);
+      box-shadow: 0 8px 18px rgba(123, 42, 42, 0.12);
+      color: inherit;
+    }
+
+    .metric-card-link:focus-visible {
+      outline: 0;
+      box-shadow: 0 0 0 3px rgba(225, 6, 0, 0.22);
+      border-color: rgba(225, 6, 0, 0.75);
+    }
+
     .metric-label {
       font-size: 12px;
       letter-spacing: .06em;
@@ -399,6 +658,15 @@
       color: #3a1d1d;
     }
 
+    .metric-link-hint {
+      margin-top: 7px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #8b4a48;
+    }
+
     .code-like {
       font-family: var(--mono);
       font-size: 12px;
@@ -406,9 +674,15 @@
     }
 
     .status-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: var(--status-chip-min-width);
       border: 1px solid transparent;
       font-weight: 700;
       letter-spacing: 0.02em;
+      text-align: center;
+      white-space: nowrap;
     }
 
     .status-open,
@@ -614,6 +888,103 @@
       align-items: center;
     }
 
+    .filter-chip-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-chip-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: var(--category-chip-min-width);
+      gap: 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(225, 6, 0, 0.3);
+      background: rgba(225, 6, 0, 0.08);
+      color: #6f2f2c;
+      padding: 6px 11px;
+      font-size: 12px;
+      text-decoration: none;
+      line-height: 1.1;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .filter-chip-btn .code-like {
+      margin-left: 2px;
+    }
+
+    .filter-chip-btn:hover {
+      border-color: rgba(225, 6, 0, 0.72);
+      background: rgba(225, 6, 0, 0.14);
+      color: #631715;
+    }
+
+    .filter-chip-btn.is-active {
+      border-color: rgba(225, 6, 0, 0.82);
+      background: rgba(225, 6, 0, 0.16);
+      color: #621714;
+      box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.15);
+    }
+
+    .deadline-meta {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+
+    .deadline-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    .inline-override {
+      position: relative;
+      display: inline-block;
+    }
+
+    .inline-override > summary {
+      list-style: none;
+      cursor: pointer;
+      border: 1px solid rgba(225, 6, 0, 0.4);
+      border-radius: 9px;
+      padding: 5px 9px;
+      font-size: 12px;
+      line-height: 1;
+      color: #7a2a27;
+      background: rgba(255, 255, 255, 0.88);
+      font-weight: 700;
+      user-select: none;
+    }
+
+    .inline-override > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .inline-override[open] > summary {
+      color: #ffffff;
+      border-color: rgba(225, 6, 0, 0.82);
+      background: var(--accent);
+    }
+
+    .inline-override-form {
+      margin-top: 8px;
+      min-width: 230px;
+      max-width: 290px;
+      border: 1px solid rgba(225, 6, 0, 0.24);
+      border-radius: 11px;
+      background: #fff7f7;
+      padding: 9px;
+      box-shadow: 0 8px 20px rgba(90, 30, 30, 0.15);
+    }
+
     .tag-chip {
       display: inline-block;
       border-radius: 999px;
@@ -712,7 +1083,10 @@
     }
 
     .risk-chip {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: var(--risk-chip-min-width);
       border-radius: 999px;
       padding: 4px 8px;
       font-size: 11px;
@@ -721,6 +1095,18 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
       font-weight: 700;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    button.nav-pill[data-matter-filter],
+    a.nav-pill[data-matter-filter] {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: var(--category-chip-min-width);
+      text-align: center;
+      white-space: nowrap;
     }
 
     .risk-low {
@@ -789,9 +1175,169 @@
       letter-spacing: .03em;
     }
 
+    .command-palette {
+      position: fixed;
+      inset: 0;
+      z-index: 1100;
+      display: grid;
+      place-items: start center;
+      padding: 11vh 14px 20px;
+      pointer-events: none;
+    }
+
+    .command-palette[hidden] {
+      display: none;
+    }
+
+    .command-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(31, 11, 11, 0.56);
+      backdrop-filter: blur(2px);
+      pointer-events: auto;
+    }
+
+    .command-dialog {
+      position: relative;
+      width: min(760px, 100%);
+      max-height: 76vh;
+      border-radius: 16px;
+      border: 1px solid rgba(225, 6, 0, 0.28);
+      background: #ffffff;
+      box-shadow: 0 26px 52px rgba(69, 17, 17, 0.33);
+      overflow: hidden;
+      pointer-events: auto;
+      animation: fade-up .22s ease both;
+    }
+
+    .command-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border-bottom: 1px solid rgba(225, 6, 0, 0.17);
+      background: #fff9f9;
+    }
+
+    .command-head .form-control {
+      border-radius: 10px;
+      font-size: 14px;
+      padding: 10px 12px;
+    }
+
+    .command-list {
+      max-height: calc(76vh - 76px);
+      overflow: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .command-section {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8d6161;
+      margin: 8px 8px 2px;
+      font-weight: 700;
+    }
+
+    .command-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid rgba(225, 6, 0, 0.18);
+      border-radius: 11px;
+      padding: 9px 10px;
+      text-decoration: none;
+      color: #4f2d2d;
+      background: #fffdfd;
+      transition: all .15s ease;
+    }
+
+    .command-item:hover,
+    .command-item:focus-visible {
+      border-color: rgba(225, 6, 0, 0.65);
+      background: rgba(225, 6, 0, 0.08);
+      color: #6f1d1a;
+    }
+
+    .command-item-title {
+      font-weight: 700;
+      display: block;
+      line-height: 1.2;
+    }
+
+    .command-item-meta {
+      font-size: 12px;
+      color: #8c7070;
+      display: block;
+      margin-top: 2px;
+    }
+
+    .command-empty {
+      border: 1px dashed rgba(225, 6, 0, 0.35);
+      border-radius: 11px;
+      padding: 14px;
+      text-align: center;
+      color: #856f6f;
+      background: #fff7f7;
+      margin: 2px;
+    }
+
+    .mobile-dock {
+      position: fixed;
+      left: 10px;
+      right: 10px;
+      bottom: max(10px, env(safe-area-inset-bottom));
+      z-index: 90;
+      border: 1px solid rgba(225, 6, 0, 0.26);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 12px 30px rgba(75, 22, 22, 0.18);
+      display: none;
+      padding: 6px;
+      gap: 6px;
+    }
+
+    .mobile-dock-link {
+      flex: 1 1 0;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 10px;
+      padding: 7px 4px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      color: #6f4545;
+      border: 1px solid transparent;
+    }
+
+    button.mobile-dock-link {
+      background: transparent;
+    }
+
+    .mobile-dock-link.is-active {
+      border-color: rgba(225, 6, 0, 0.6);
+      color: #731c19;
+      background: rgba(225, 6, 0, 0.12);
+    }
+
+    .mobile-dock-link:hover {
+      color: #ffffff;
+      background: var(--accent);
+    }
+
     @keyframes fade-up {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes busy-spin {
+      to { transform: rotate(360deg); }
     }
 
     @keyframes story-pulse {
@@ -803,6 +1349,16 @@
     @media (max-width: 992px) {
       .brand-sub {
         display: none;
+      }
+
+      .nav-utility {
+        width: 100%;
+        justify-content: stretch;
+      }
+
+      .nav-search {
+        max-width: none;
+        flex: 1 1 100%;
       }
 
       .nav-auth {
@@ -823,6 +1379,21 @@
         background: rgba(225, 6, 0, 0.3);
         border-radius: 999px;
       }
+
+      .quick-strip {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 4px;
+      }
+
+      .quick-strip::-webkit-scrollbar {
+        height: 7px;
+      }
+
+      .quick-strip::-webkit-scrollbar-thumb {
+        background: rgba(225, 6, 0, 0.3);
+        border-radius: 999px;
+      }
     }
 
     @media (max-width: 576px) {
@@ -832,7 +1403,7 @@
 
       .shell {
         margin: 16px auto;
-        padding: 0 10px 20px;
+        padding: 0 10px 78px;
       }
 
       .navbar {
@@ -944,8 +1515,26 @@
         width: 100%;
       }
 
+      .deadline-actions {
+        justify-content: flex-start;
+      }
+
+      .inline-override-form {
+        min-width: 0;
+        max-width: 100%;
+      }
+
       .table-responsive {
         border-radius: 10px;
+      }
+
+      .table-tools {
+        align-items: stretch;
+      }
+
+      .table-tools .form-control {
+        min-width: 100%;
+        max-width: none;
       }
 
       .table thead th {
@@ -969,6 +1558,30 @@
       .footer-note {
         margin-top: 16px;
       }
+
+      .mobile-dock {
+        display: flex;
+      }
+
+      .command-palette {
+        padding-top: 10px;
+      }
+
+      .command-dialog {
+        max-height: 88vh;
+      }
+
+      .command-list {
+        max-height: calc(88vh - 76px);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
+      }
     }
 
     a:focus-visible,
@@ -989,6 +1602,9 @@
   {% set admin_endpoints = ["admin", "admin_users", "admin_announcements", "admin_audit"] %}
   {% set trust_endpoints = ["trust_policy", "trust_security", "trust_incidents"] %}
   {% set calendar_endpoints = ["calendar_my", "calendar_team", "calendar_matter"] %}
+  {% set workflow_endpoints = ["task_templates", "task_dependencies", "task_checklist", "task_approve", "task_recur"] %}
+  {% set finance_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "expenses", "trust_ledger", "trust_reconciliations", "trust_reports_monthly"] %}
+  {% set portal_endpoints = ["portal_login", "portal_matters", "portal_matter_detail", "portal_messages", "portal_uploads", "portal_invoices", "portal_payments", "admin_portal_users", "portal_links"] %}
   {% set billing_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "expenses"] %}
   {% set crm_endpoints = ["crm_leads", "crm_lead_detail"] %}
   {% set analytics_endpoints = ["analytics_utilization", "analytics_realization", "analytics_ehr", "analytics_workload", "analytics_profitability", "analytics_forecast", "analytics_burnout"] %}
@@ -1036,23 +1652,36 @@
         {% endif %}
       </div>
 
-      <div class="nav-auth">
+      <div class="nav-utility">
         {% if current_user.is_authenticated %}
-          <form method="post" action="{{ url_for('toggle_story_mode') }}" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="enabled" value="{{ '0' if story_mode_enabled else '1' }}">
-            <input type="hidden" name="next" value="{{ next_path }}">
-            <button class="nav-pill {{ 'is-active' if story_mode_enabled else '' }}" type="submit">
-              {{ "Story Mode On" if story_mode_enabled else "Story Mode Off" }}
-            </button>
+          <form class="nav-search" method="get" action="{{ url_for('search') }}" role="search">
+            <label class="visually-hidden" for="global-nav-search">Search</label>
+            <input class="form-control" id="global-nav-search" type="search" name="q" placeholder="Search matters, docs, contacts, notes..." value="{{ request.args.get('q','') if endpoint == 'search' else '' }}">
           </form>
-          <form method="post" action="{{ url_for('logout') }}" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn btn-sm btn-light" type="submit">Logout</button>
-          </form>
-        {% else %}
-          <a class="btn btn-sm btn-light" href="{{ url_for('login') }}">Login</a>
+          <button class="nav-pill command-launch" type="button" data-command-open aria-haspopup="dialog" aria-controls="command-palette">
+            Quick Jump
+            <span class="code-like">Ctrl+K</span>
+          </button>
         {% endif %}
+
+        <div class="nav-auth">
+          {% if current_user.is_authenticated %}
+            <form method="post" action="{{ url_for('toggle_story_mode') }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="enabled" value="{{ '0' if story_mode_enabled else '1' }}">
+              <input type="hidden" name="next" value="{{ next_path }}">
+              <button class="nav-pill {{ 'is-active' if story_mode_enabled else '' }}" type="submit">
+                {{ "Story Mode On" if story_mode_enabled else "Story Mode Off" }}
+              </button>
+            </form>
+            <form method="post" action="{{ url_for('logout') }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-light" type="submit">Logout</button>
+            </form>
+          {% else %}
+            <a class="btn btn-sm btn-light" href="{{ url_for('login') }}">Login</a>
+          {% endif %}
+        </div>
       </div>
     </div>
 
@@ -1060,8 +1689,8 @@
       <div class="nav-actions" role="navigation" aria-label="Primary">
         <a class="nav-pill {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">Matters</a>
         <a class="nav-pill {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my') }}">Calendar</a>
-        <a class="nav-pill {{ 'is-active' if endpoint == 'task_templates' else '' }}" href="{{ url_for('task_templates') }}">Workflow</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in ['billing_invoices', 'billing_invoice_detail', 'billing_rates'] else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
+        <a class="nav-pill {{ 'is-active' if endpoint in workflow_endpoints else '' }}" href="{{ url_for('task_templates') }}">Workflow</a>
+        <a class="nav-pill {{ 'is-active' if endpoint in ['billing_invoices', 'billing_invoice_detail', 'billing_rates', 'billing_ar_aging'] else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
         <a class="nav-pill {{ 'is-active' if endpoint == 'expenses' else '' }}" href="{{ url_for('expenses') }}">Expenses</a>
         <a class="nav-pill {{ 'is-active' if endpoint in ['trust_ledger', 'trust_reconciliations', 'trust_reports_monthly'] else '' }}" href="{{ url_for('trust_ledger') }}">Trust Acct</a>
         <a class="nav-pill {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM</a>
@@ -1070,15 +1699,154 @@
         <a class="nav-pill {{ 'is-active' if endpoint == 'search' else '' }}" href="{{ url_for('search') }}">Search</a>
         <a class="nav-pill {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_utilization') }}">Analytics</a>
         <a class="nav-pill {{ 'is-active' if endpoint in trust_endpoints else '' }}" href="{{ url_for('trust_policy') }}">Trust</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in ['portal_matters', 'portal_matter_detail', 'portal_messages', 'portal_uploads', 'portal_invoices', 'portal_payments', 'admin_portal_users'] else '' }}" href="{{ url_for('portal_login') }}">Portal</a>
+        <a class="nav-pill {{ 'is-active' if endpoint in portal_endpoints else '' }}" href="{{ url_for('portal_login') }}">Portal</a>
         <a class="nav-pill {{ 'is-active' if endpoint == 'client_story' else '' }}" href="{{ url_for('client_story') }}">Story</a>
         {% if current_user.role == "admin" %}
           <a class="nav-pill {{ 'is-active' if endpoint in admin_endpoints else '' }}" href="{{ url_for('admin') }}">Admin</a>
           <a class="nav-pill {{ 'is-active' if endpoint in ops_endpoints else '' }}" href="{{ url_for('ops_backup_status') }}">Ops</a>
         {% endif %}
       </div>
+
+      <div class="quick-strip" role="navigation" aria-label="Quick Access">
+        <a class="quick-chip {{ 'is-active' if endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">
+          <span class="quick-chip-label">Dashboard</span>
+          <span class="quick-chip-meta">Operational snapshot</span>
+        </a>
+        <a class="quick-chip {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">
+          <span class="quick-chip-label">Matter Hub</span>
+          <span class="quick-chip-meta">Open, triage, collaborate</span>
+        </a>
+        <a class="quick-chip {{ 'is-active' if endpoint in finance_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">
+          <span class="quick-chip-label">Finance</span>
+          <span class="quick-chip-meta">Billing, trust, AR</span>
+        </a>
+        <a class="quick-chip {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">
+          <span class="quick-chip-label">Intake</span>
+          <span class="quick-chip-meta">Leads and conflicts</span>
+        </a>
+        <a class="quick-chip {{ 'is-active' if endpoint in portal_endpoints else '' }}" href="{{ url_for('portal_login') }}">
+          <span class="quick-chip-label">Client Portal</span>
+          <span class="quick-chip-meta">Messages and uploads</span>
+        </a>
+        <a class="quick-chip {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_utilization') }}">
+          <span class="quick-chip-label">Analytics</span>
+          <span class="quick-chip-meta">Utilization and forecast</span>
+        </a>
+      </div>
     {% endif %}
   </nav>
+
+  {% if current_user.is_authenticated %}
+    <div class="command-palette" id="command-palette" hidden>
+      <div class="command-backdrop" data-command-close></div>
+      <div class="command-dialog" role="dialog" aria-modal="true" aria-label="Quick jump">
+        <div class="command-head">
+          <input class="form-control" id="command-search" type="search" placeholder="Type to filter navigation...">
+          <button class="nav-pill" type="button" data-command-close>Esc</button>
+        </div>
+        <div class="command-list" id="command-list">
+          <div class="command-section">Core Navigation</div>
+          <a class="command-item" href="{{ url_for('dashboard') }}" data-command-item data-keywords="dashboard home overview snapshot">
+            <span>
+              <span class="command-item-title">Dashboard</span>
+              <span class="command-item-meta">Firm-wide operational snapshot</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          <a class="command-item" href="{{ url_for('matters') }}" data-command-item data-keywords="matters directory cases">
+            <span>
+              <span class="command-item-title">Matter Directory</span>
+              <span class="command-item-meta">Browse and triage all active matters</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          <a class="command-item" href="{{ url_for('matter_create') }}" data-command-item data-keywords="new matter create intake">
+            <span>
+              <span class="command-item-title">Create Matter</span>
+              <span class="command-item-meta">Open a new engagement</span>
+            </span>
+            <span class="code-like">Action</span>
+          </a>
+          <a class="command-item" href="{{ url_for('calendar_my') }}" data-command-item data-keywords="calendar deadlines docket">
+            <span>
+              <span class="command-item-title">My Calendar</span>
+              <span class="command-item-meta">Upcoming hearings, filings, and deadlines</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          <a class="command-item" href="{{ url_for('task_templates') }}" data-command-item data-keywords="workflow templates dependencies approvals">
+            <span>
+              <span class="command-item-title">Workflow Console</span>
+              <span class="command-item-meta">Task templates, dependencies, approvals</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          <a class="command-item" href="{{ url_for('search') }}" id="command-search-route" data-command-item data-keywords="search global find documents contacts">
+            <span>
+              <span class="command-item-title">Global Search</span>
+              <span class="command-item-meta">Search across matters, docs, notes, contacts</span>
+            </span>
+            <span class="code-like">/</span>
+          </a>
+
+          <div class="command-section">Finance and Risk</div>
+          <a class="command-item" href="{{ url_for('billing_invoices') }}" data-command-item data-keywords="billing invoices finance collections">
+            <span>
+              <span class="command-item-title">Invoices</span>
+              <span class="command-item-meta">Generate, approve, and export invoices</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          <a class="command-item" href="{{ url_for('trust_ledger') }}" data-command-item data-keywords="trust ledger reconciliation accounting">
+            <span>
+              <span class="command-item-title">Trust Ledger</span>
+              <span class="command-item-meta">Deposits, disbursements, and controls</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          <a class="command-item" href="{{ url_for('crm_leads') }}" data-command-item data-keywords="crm leads intake conflict">
+            <span>
+              <span class="command-item-title">CRM and Intake</span>
+              <span class="command-item-meta">Lead pipeline, conflict checks, engagements</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          <a class="command-item" href="{{ url_for('analytics_utilization') }}" data-command-item data-keywords="analytics utilization realization profitability forecast">
+            <span>
+              <span class="command-item-title">Analytics</span>
+              <span class="command-item-meta">Utilization, realization, workload, burnout</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          <a class="command-item" href="{{ url_for('portal_login') }}" data-command-item data-keywords="portal client messages uploads invoices">
+            <span>
+              <span class="command-item-title">Client Portal</span>
+              <span class="command-item-meta">Client-facing matter access and exchange</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          {% if current_user.role == "admin" %}
+            <div class="command-section">Admin</div>
+            <a class="command-item" href="{{ url_for('admin') }}" data-command-item data-keywords="admin users governance settings">
+              <span>
+                <span class="command-item-title">Admin Console</span>
+                <span class="command-item-meta">Users, announcements, and governance</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+            <a class="command-item" href="{{ url_for('ops_backup_status') }}" data-command-item data-keywords="ops backups restore dr">
+              <span>
+                <span class="command-item-title">Operations</span>
+                <span class="command-item-meta">Backups, restore checks, DR targets</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+          {% endif %}
+          <div class="command-empty" id="command-empty" hidden>No matching actions. Refine your search.</div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
 
   <main id="main-content" class="main-content" tabindex="-1">
     {% if current_user.is_authenticated and story_mode_enabled %}
@@ -1111,9 +1879,16 @@
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ 'warning' if category == 'warning' else 'info' }}">{{ message }}</div>
-        {% endfor %}
+        <div class="flash-stack" aria-live="polite">
+          {% for category, message in messages %}
+            {% set is_warning = category in ["warning", "error", "danger"] %}
+            <div class="flash-card {{ 'is-warning' if is_warning else '' }}">
+              <span class="flash-icon" aria-hidden="true">{{ "!" if is_warning else "i" }}</span>
+              <div class="flash-message">{{ message }}</div>
+              <button class="flash-close" type="button" data-dismiss-alert aria-label="Dismiss">&times;</button>
+            </div>
+          {% endfor %}
+        </div>
       {% endif %}
     {% endwith %}
 
@@ -1124,5 +1899,15 @@
     Demo intranet showcase. Final production controls still include SSO/MFA, backup policy, retention policy, and monitoring.
   </div>
 </div>
+{% if current_user.is_authenticated %}
+  <div class="mobile-dock" role="navigation" aria-label="Mobile shortcuts">
+    <a class="mobile-dock-link {{ 'is-active' if endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">Home</a>
+    <a class="mobile-dock-link {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">Matters</a>
+    <a class="mobile-dock-link {{ 'is-active' if endpoint in finance_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">Finance</a>
+    <a class="mobile-dock-link {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">Intake</a>
+    <button class="mobile-dock-link" type="button" data-command-open>Jump</button>
+  </div>
+{% endif %}
+<script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 </body>
 </html>

@@ -1,36 +1,76 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card p-3 mb-3">
-  <h3>AR Aging</h3>
-  <form method="post" class="row g-2">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">AR Aging</h3>
+      <p class="page-intro mb-0">Track outstanding receivables and prioritize collection follow-up by aging bucket.</p>
+    </div>
+  </div>
+  <form method="post" class="row g-3 mt-1">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-md-4"><input class="form-control" type="date" name="as_of_date" value="{{ as_of.isoformat() }}" required></div>
-    <div class="col-md-2 d-grid"><button class="btn btn-light">Refresh</button></div>
+    <div class="col-md-4">
+      <label class="form-label" for="aging-as-of-date">As Of Date</label>
+      <input class="form-control" id="aging-as-of-date" type="date" name="as_of_date" value="{{ as_of.isoformat() }}" required>
+    </div>
+    <div class="col-md-2 d-grid">
+      <label class="form-label visually-hidden" for="aging-refresh">Refresh</label>
+      <button class="btn btn-light" id="aging-refresh" type="submit" data-submitting-text="Refreshing...">Refresh</button>
+    </div>
   </form>
-  <div class="mt-3 d-flex flex-wrap gap-2">
-    <span class="badge text-bg-secondary">0-30: {{ totals["0-30"] }}</span>
-    <span class="badge text-bg-secondary">31-60: {{ totals["31-60"] }}</span>
-    <span class="badge text-bg-secondary">61-90: {{ totals["61-90"] }}</span>
-    <span class="badge text-bg-secondary">90+: {{ totals["90+"] }}</span>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">0-30 Days</div>
+      <div class="value">{{ "%.2f"|format(totals["0-30"] or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">31-60 Days</div>
+      <div class="value">{{ "%.2f"|format(totals["31-60"] or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">61-90 Days</div>
+      <div class="value">{{ "%.2f"|format(totals["61-90"] or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">90+ Days</div>
+      <div class="value">{{ "%.2f"|format(totals["90+"] or 0) }}</div>
+    </div>
   </div>
 </div>
 <div class="card p-3">
-  <table class="table">
-    <thead><tr><th>Invoice</th><th>Matter</th><th>Age (days)</th><th>Bucket</th><th>Outstanding</th><th>Collection Notes</th></tr></thead>
-    <tbody>
-      {% for row in rows %}
-      <tr>
-        <td><a href="{{ url_for('billing_invoice_detail', invoice_id=row.invoice.id) }}">#{{ row.invoice.id }}</a></td>
-        <td>{{ row.invoice.matter_id }}</td>
-        <td>{{ row.age_days }}</td>
-        <td>{{ row.bucket }}</td>
-        <td>{{ row.outstanding }}</td>
-        <td>{{ row.collection_notes }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="6" class="muted">No outstanding receivables for selected date.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <h4 class="mb-2">Receivables</h4>
+  <div class="table-tools" data-table-tools data-table-target="ar-aging-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by invoice, matter, bucket, or notes...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="ar-aging-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">Invoice</th>
+          <th data-sort-index="1" data-sort-type="number">Matter</th>
+          <th data-sort-index="2" data-sort-type="number">Age (days)</th>
+          <th data-sort-index="3">Bucket</th>
+          <th data-sort-index="4" data-sort-type="number">Outstanding</th>
+          <th data-sort-index="5">Collection Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr data-table-row data-search="{{ row.invoice.id }} {{ row.invoice.matter_id }} {{ row.bucket }} {{ row.collection_notes or '' }}">
+            <td><a href="{{ url_for('billing_invoice_detail', invoice_id=row.invoice.id) }}">#{{ row.invoice.id }}</a></td>
+            <td>{{ row.invoice.matter_id }}</td>
+            <td>{{ row.age_days }}</td>
+            <td>{{ row.bucket }}</td>
+            <td>{{ "%.2f"|format(row.outstanding or 0) }}</td>
+            <td>{{ row.collection_notes or "-" }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if rows|length > 0 %}hidden{% endif %}>
+          <td colspan="6" class="muted">No outstanding receivables for selected date.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

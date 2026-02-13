@@ -1,17 +1,72 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card p-3 mb-3">
-  <h3>Matter Parties - {{ m.matter_no }}</h3>
-  <form method="post" class="row g-2">
+  <h3 class="mb-1">Matter Parties - {{ m.matter_no }}</h3>
+  <p class="page-intro mb-0">Link client, opposing, witness, and expert entities to maintain a complete matter map.</p>
+  <form method="post" class="row g-3 mt-1">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-md-4"><input class="form-control" name="entity_name" placeholder="Entity Name" required></div>
-    <div class="col-md-3"><input class="form-control" name="entity_type" value="organization"></div>
-    <div class="col-md-3"><input class="form-control" name="party_role" placeholder="Role (Client/Opposing/Witness)" required></div>
-    <div class="col-md-2"><div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="is_primary" value="1" id="is_primary"><label class="form-check-label" for="is_primary">Primary</label></div></div>
-    <div class="col-md-4"><input class="form-control" name="email" placeholder="Email"></div>
-    <div class="col-md-4"><input class="form-control" name="phone" placeholder="Phone"></div>
-    <div class="col-md-4 d-grid"><button class="btn btn-light">Add Party</button></div>
+    <div class="col-md-4">
+      <label class="form-label" for="party-entity-name">Entity Name</label>
+      <input class="form-control" id="party-entity-name" name="entity_name" placeholder="Entity Name" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="party-entity-type">Entity Type</label>
+      <input class="form-control" id="party-entity-type" name="entity_type" value="organization">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="party-role">Role</label>
+      <input class="form-control" id="party-role" name="party_role" placeholder="Client / Opposing / Witness" required>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="is_primary" value="1" id="party-is-primary">
+        <label class="form-check-label" for="party-is-primary">Primary</label>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="party-email">Email</label>
+      <input class="form-control" id="party-email" name="email" placeholder="Email">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="party-phone">Phone</label>
+      <input class="form-control" id="party-phone" name="phone" placeholder="Phone">
+    </div>
+    <div class="col-md-4 d-grid d-md-flex justify-content-md-end align-items-end">
+      <button class="btn btn-light" type="submit" data-submitting-text="Adding...">Add Party</button>
+    </div>
   </form>
 </div>
-<div class="card p-3"><h4>Linked Parties</h4><table class="table"><thead><tr><th>Entity</th><th>Type</th><th>Role</th><th>Primary</th></tr></thead><tbody>{% for mp, e in parties %}<tr><td>{{ e.name }}</td><td>{{ e.entity_type }}</td><td>{{ mp.party_role }}</td><td>{{ mp.is_primary }}</td></tr>{% else %}<tr><td colspan="4" class="muted">No parties linked.</td></tr>{% endfor %}</tbody></table></div>
+
+<div class="card p-3">
+  <h4 class="mb-2">Linked Parties</h4>
+  <div class="table-tools" data-table-tools data-table-target="matter-parties-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by entity, type, role, or primary flag...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="matter-parties-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0">Entity</th>
+          <th data-sort-index="1">Type</th>
+          <th data-sort-index="2">Role</th>
+          <th data-sort-index="3">Primary</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for matter_party, entity in parties %}
+          <tr data-table-row data-search="{{ entity.name }} {{ entity.entity_type }} {{ matter_party.party_role }} {{ matter_party.is_primary }}">
+            <td>{{ entity.name }}</td>
+            <td>{{ entity.entity_type }}</td>
+            <td>{{ matter_party.party_role }}</td>
+            <td>{{ matter_party.is_primary }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if parties|length > 0 %}hidden{% endif %}>
+          <td colspan="4" class="muted">No parties linked yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

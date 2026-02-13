@@ -1,4 +1,113 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3"><h3>Team Calendar</h3><table class="table"><thead><tr><th>Due</th><th>Matter</th><th>Title</th><th>Critical</th><th>Status</th></tr></thead><tbody>{% for d in deadlines %}<tr><td>{{ d.due_at }}</td><td>#{{ d.matter_id }}</td><td>{{ d.title }}</td><td>{{ d.is_critical }}</td><td>{{ d.status }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No deadlines.</td></tr>{% endfor %}</tbody></table></div>
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Team Calendar</h3>
+      <p class="page-intro mb-0">Monitor shared deadline load across matters and focus team attention on high-risk due dates.</p>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_my') }}">My View</a>
+  </div>
+
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Deadlines</div>
+      <div class="value">{{ stats.total }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Overdue</div>
+      <div class="value">{{ stats.overdue }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Today</div>
+      <div class="value">{{ stats.today }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Next 7 Days</div>
+      <div class="value">{{ stats.next7 }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Critical</div>
+      <div class="value">{{ stats.critical }}</div>
+    </div>
+  </div>
+
+  <div class="filter-chip-row mt-3">
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'all' else '' }}" href="{{ url_for('calendar_team', filter='all') }}">All <span class="code-like">{{ stats.total }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'overdue' else '' }}" href="{{ url_for('calendar_team', filter='overdue') }}">Overdue <span class="code-like">{{ stats.overdue }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'today' else '' }}" href="{{ url_for('calendar_team', filter='today') }}">Today <span class="code-like">{{ stats.today }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'next7' else '' }}" href="{{ url_for('calendar_team', filter='next7') }}">Next 7d <span class="code-like">{{ stats.next7 }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'critical' else '' }}" href="{{ url_for('calendar_team', filter='critical') }}">Critical <span class="code-like">{{ stats.critical }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'open' else '' }}" href="{{ url_for('calendar_team', filter='open') }}">Open <span class="code-like">{{ stats.open }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'ack' else '' }}" href="{{ url_for('calendar_team', filter='ack') }}">Acknowledged <span class="code-like">{{ stats.ack }}</span></a>
+  </div>
+</div>
+
+<div class="card p-3">
+  <div class="table-tools" data-table-tools data-table-target="calendar-team-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by title, matter, status, or criticality...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="calendar-team-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="date">Due</th>
+          <th data-sort-index="1" data-sort-type="number">Horizon</th>
+          <th data-sort-index="2" data-sort-type="number">Matter</th>
+          <th data-sort-index="3">Title</th>
+          <th data-sort-index="4">Critical</th>
+          <th data-sort-index="5">Status</th>
+          <th class="text-end" data-no-sort>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for deadline in deadlines %}
+          {% set days_left = (deadline.due_at - today).days %}
+          {% if deadline.status == 'acknowledged' %}
+            {% set due_label = 'Acknowledged' %}
+            {% set due_class = 'risk-low' %}
+          {% elif deadline.due_at < today %}
+            {% set due_label = 'Overdue' %}
+            {% set due_class = 'risk-high' %}
+          {% elif deadline.due_at == today %}
+            {% set due_label = 'Today' %}
+            {% set due_class = 'risk-medium' %}
+          {% elif days_left <= 7 %}
+            {% set due_label = 'Next 7d' %}
+            {% set due_class = 'risk-low' %}
+          {% else %}
+            {% set due_label = 'Upcoming' %}
+            {% set due_class = 'risk-low' %}
+          {% endif %}
+          <tr data-table-row data-search="{{ deadline.due_at }} {{ deadline.matter_id }} {{ deadline.title }} {{ deadline.is_critical }} {{ deadline.status }} {{ due_label }}">
+            <td>
+              <div class="deadline-meta">
+                <span>{{ deadline.due_at }}</span>
+                <span class="risk-chip {{ due_class }}">{{ due_label }}</span>
+              </div>
+            </td>
+            <td>
+              {% if days_left < 0 %}
+                {{ (days_left * -1) }}d late
+              {% elif days_left == 0 %}
+                today
+              {% else %}
+                in {{ days_left }}d
+              {% endif %}
+            </td>
+            <td>#{{ deadline.matter_id }}</td>
+            <td>{{ deadline.title }}</td>
+            <td>{{ 'Yes' if deadline.is_critical else 'No' }}</td>
+            <td><span class="badge badge-soft status-badge">{{ deadline.status }}</span></td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_matter', matter_id=deadline.matter_id) }}">Open Matter</a></td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if deadlines|length > 0 %}hidden{% endif %}>
+          <td colspan="7" class="muted">No deadlines for this filter.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

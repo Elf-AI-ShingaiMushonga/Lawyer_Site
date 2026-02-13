@@ -1,4 +1,53 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3"><h3>Monthly Trust Reports</h3><p class="muted">Select a reconciliation run to export report JSON.</p><table class="table"><thead><tr><th>Run ID</th><th>Account</th><th>Period End</th><th>Status</th><th></th></tr></thead><tbody>{% for r in runs %}<tr><td>{{ r.id }}</td><td>{{ r.trust_account_id }}</td><td>{{ r.period_end }}</td><td>{{ r.status }}</td><td><a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_reports_monthly', run_id=r.id) }}">Download</a></td></tr>{% else %}<tr><td colspan="5" class="muted">No runs.</td></tr>{% endfor %}</tbody></table></div>
+{% set exception_count = runs | selectattr('status', 'equalto', 'exception') | list | length %}
+
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Monthly Trust Reports</h3>
+  <p class="page-intro mb-0">Select a reconciliation run and export a regulator-ready JSON report.</p>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Runs</div>
+      <div class="value">{{ runs | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Exceptions</div>
+      <div class="value">{{ exception_count }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3">
+  <div class="table-tools" data-table-tools data-table-target="trust-report-runs-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by run, account, or status...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="trust-report-runs-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">Run ID</th>
+          <th data-sort-index="1" data-sort-type="number">Account</th>
+          <th data-sort-index="2" data-sort-type="date">Period End</th>
+          <th data-sort-index="3">Status</th>
+          <th class="text-end">Export</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+          <tr data-table-row data-search="{{ run.id }} {{ run.trust_account_id }} {{ run.period_end }} {{ run.status }}">
+            <td>{{ run.id }}</td>
+            <td>{{ run.trust_account_id }}</td>
+            <td>{{ run.period_end }}</td>
+            <td><span class="badge badge-soft status-badge">{{ run.status }}</span></td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_reports_monthly', run_id=run.id) }}">Download</a></td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if runs|length > 0 %}hidden{% endif %}>
+          <td colspan="5" class="muted">No reconciliation runs available.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

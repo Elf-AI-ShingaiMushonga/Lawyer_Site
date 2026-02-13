@@ -1,5 +1,124 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3"><h3>Generate Invoice</h3><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-4"><select class="form-select" name="matter_id" required>{% for m in matters %}<option value="{{ m.id }}">{{ m.matter_no }} - {{ m.title }}</option>{% endfor %}</select></div><div class="col-md-3"><input class="form-control" type="date" name="period_start" required></div><div class="col-md-3"><input class="form-control" type="date" name="period_end" required></div><div class="col-md-2 d-grid"><button class="btn btn-light">Generate</button></div></form><div class="mt-2"><a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_ar_aging') }}">Open AR Aging</a></div></div>
-<div class="card p-3"><h3>Invoices</h3><table class="table"><thead><tr><th>ID</th><th>Matter</th><th>Period</th><th>Status</th><th>Total</th><th></th></tr></thead><tbody>{% for i in invoices %}<tr><td>{{ i.id }}</td><td>{{ i.matter_id }}</td><td>{{ i.period_start }} to {{ i.period_end }}</td><td>{{ i.status }}</td><td>{{ i.total }}</td><td><a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_invoice_detail', invoice_id=i.id) }}">Open</a></td></tr>{% else %}<tr><td colspan="6" class="muted">No invoices.</td></tr>{% endfor %}</tbody></table></div>
+{% set total_billed = invoices | sum(attribute='total') %}
+{% set approved_count = invoices | selectattr('status', 'equalto', 'approved') | list | length %}
+{% set draft_count = invoices | selectattr('status', 'equalto', 'draft') | list | length %}
+{% set matter_lookup = {} %}
+{% for matter in matters %}
+  {% set _ = matter_lookup.update({matter.id: matter}) %}
+{% endfor %}
+
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Generate Invoice</h3>
+      <p class="page-intro mb-0">
+        Build a billing draft from approved time and expenses for a selected period.
+      </p>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_ar_aging') }}">Open AR Aging</a>
+  </div>
+
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Invoices</div>
+      <div class="value">{{ invoices | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Approved</div>
+      <div class="value">{{ approved_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Draft</div>
+      <div class="value">{{ draft_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Total Billed</div>
+      <div class="value">{{ "%.2f"|format(total_billed or 0) }}</div>
+    </div>
+  </div>
+
+  <form method="post" class="row g-3 mt-1">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-5">
+      <label class="form-label" for="invoice-matter-id">Matter</label>
+      <select class="form-select" id="invoice-matter-id" name="matter_id" required>
+        {% for matter in matters %}
+          <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="invoice-period-start">Period Start</label>
+      <input class="form-control" id="invoice-period-start" type="date" name="period_start" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="invoice-period-end">Period End</label>
+      <input class="form-control" id="invoice-period-end" type="date" name="period_end" required>
+    </div>
+    <div class="col-md-1 d-grid">
+      <label class="form-label visually-hidden" for="invoice-generate">Generate</label>
+      <button class="btn btn-light" id="invoice-generate" type="submit" data-submitting-text="Generating...">Generate</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <div class="toolbar-row mb-1">
+    <div>
+      <h3 class="mb-1">Invoice Register</h3>
+      <div class="muted small">Use quick search and sortable columns to triage billing quickly.</div>
+    </div>
+  </div>
+
+  <div class="table-tools" data-table-tools data-table-target="invoice-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter invoices by client, matter, status, or id...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table" id="invoice-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">Invoice</th>
+          <th data-sort-index="1">Matter</th>
+          <th data-sort-index="2">Client</th>
+          <th data-sort-index="3">Period</th>
+          <th data-sort-index="4">Status</th>
+          <th data-sort-index="5" data-sort-type="number">Total</th>
+          <th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for invoice in invoices %}
+          {% set matter = matter_lookup.get(invoice.matter_id) %}
+          <tr
+            data-table-row
+            data-search="{{ invoice.id }} {{ invoice.client_name }} {{ invoice.status }} {{ matter.matter_no if matter else '' }} {{ matter.title if matter else '' }}"
+          >
+            <td>#{{ invoice.id }}</td>
+            <td>
+              {% if matter %}
+                <div class="fw-semibold">{{ matter.matter_no }}</div>
+                <div class="muted small">{{ matter.title }}</div>
+              {% else %}
+                {{ invoice.matter_id }}
+              {% endif %}
+            </td>
+            <td>{{ invoice.client_name }}</td>
+            <td>{{ invoice.period_start }} to {{ invoice.period_end }}</td>
+            <td><span class="badge badge-soft status-badge">{{ invoice.status }}</span></td>
+            <td>{{ "%.2f"|format(invoice.total or 0) }}</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_invoice_detail', invoice_id=invoice.id) }}">Open</a>
+            </td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if invoices|length > 0 %}hidden{% endif %}>
+          <td colspan="7" class="muted">No invoices available for your scope.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

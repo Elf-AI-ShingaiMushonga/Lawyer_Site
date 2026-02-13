@@ -1,17 +1,251 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3"><h3>Lead #{{ lead.id }} - {{ lead.full_name }}</h3><div class="muted">Organization: {{ lead.organization or '-' }} • Stage: {{ lead.stage }}</div></div>
+{% set retained_letters = letters | selectattr('status', 'equalto', 'signed') | list | length %}
+
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Lead #{{ lead.id }} - {{ lead.full_name }}</h3>
+      <div class="muted small">Organization: {{ lead.organization or '-' }} • Stage: {{ lead.stage }}</div>
+    </div>
+    <span class="badge badge-soft status-badge">{{ lead.stage }}</span>
+  </div>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Follow-ups</div>
+      <div class="value">{{ followups | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Intake Forms</div>
+      <div class="value">{{ intakes | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Conflict Runs</div>
+      <div class="value">{{ conflicts | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Signed Letters</div>
+      <div class="value">{{ retained_letters }}</div>
+    </div>
+  </div>
+</div>
 
 <div class="row g-3">
-  <div class="col-lg-6">
-    <div class="card p-3 mb-3"><h4>Update Stage</h4><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="update"><div class="col-md-6"><select class="form-select" name="stage">{% for s in stages %}<option value="{{ s }}" {% if s == lead.stage %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></div><div class="col-md-6"><button class="btn btn-light w-100">Save</button></div><div class="col-12"><textarea class="form-control" name="notes" rows="2" placeholder="Notes">{{ lead.notes or '' }}</textarea></div></form></div>
-    <div class="card p-3 mb-3"><h4>Add Follow-up</h4><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="follow_up"><div class="col-md-6"><input class="form-control" name="due_at" placeholder="YYYY-MM-DDTHH:MM:SS" required></div><div class="col-md-6"><input class="form-control" name="note" placeholder="Follow-up note" required></div><div class="col-12 d-grid"><button class="btn btn-outline-light">Add Follow-up</button></div></form></div>
-    <div class="card p-3"><h4>Create Intake / Engagement</h4><form method="post" class="row g-2 mb-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="intake"><div class="col-md-8"><input class="form-control" name="matter_id" type="number" placeholder="Matter ID (optional)"></div><div class="col-md-4 d-grid"><button class="btn btn-outline-light">Create Intake</button></div></form><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="engagement"><div class="col-md-3"><input class="form-control" name="matter_id" type="number" placeholder="Matter ID" required></div><div class="col-md-3"><input class="form-control" name="template_name" value="default"></div><div class="col-md-6"><input class="form-control" name="content" placeholder="Engagement content"></div><div class="col-12 d-grid"><button class="btn btn-outline-light">Create Engagement</button></div></form></div>
+  <div class="col-lg-5">
+    <div class="card p-3 mb-3">
+      <h4 class="mb-2">Update Stage</h4>
+      <form method="post" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="update">
+        <div class="col-md-6">
+          <label class="form-label" for="lead-stage">Stage</label>
+          <select class="form-select" id="lead-stage" name="stage">
+            {% for stage in stages %}
+              <option value="{{ stage }}" {% if stage == lead.stage %}selected{% endif %}>{{ stage }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6 d-grid">
+          <label class="form-label visually-hidden" for="lead-stage-save">Save</label>
+          <button class="btn btn-light" id="lead-stage-save" type="submit" data-submitting-text="Saving...">Save</button>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="lead-notes">Notes</label>
+          <textarea class="form-control" id="lead-notes" name="notes" rows="3" placeholder="Add lead notes">{{ lead.notes or '' }}</textarea>
+        </div>
+      </form>
+    </div>
+
+    <div class="card p-3 mb-3">
+      <h4 class="mb-2">Add Follow-up</h4>
+      <form method="post" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="follow_up">
+        <div class="col-md-6">
+          <label class="form-label" for="follow-up-due">Due At (ISO)</label>
+          <input class="form-control" id="follow-up-due" name="due_at" placeholder="2026-03-01T10:00:00" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="follow-up-note">Note</label>
+          <input class="form-control" id="follow-up-note" name="note" placeholder="Call client for docs" required>
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-outline-light" type="submit" data-submitting-text="Adding...">Add Follow-up</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card p-3">
+      <h4 class="mb-2">Create Intake / Engagement</h4>
+      <form method="post" class="row g-3 mb-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="intake">
+        <div class="col-md-8">
+          <label class="form-label" for="lead-intake-matter">Matter ID (Optional)</label>
+          <input class="form-control" id="lead-intake-matter" name="matter_id" type="number" min="1" placeholder="Existing matter id">
+        </div>
+        <div class="col-md-4 d-grid">
+          <label class="form-label visually-hidden" for="lead-intake-create">Create Intake</label>
+          <button class="btn btn-outline-light" id="lead-intake-create" type="submit" data-submitting-text="Creating...">Create Intake</button>
+        </div>
+      </form>
+
+      <form method="post" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="engagement">
+        <div class="col-md-3">
+          <label class="form-label" for="engage-matter-id">Matter ID</label>
+          <input class="form-control" id="engage-matter-id" name="matter_id" type="number" min="1" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="engage-template">Template</label>
+          <input class="form-control" id="engage-template" name="template_name" value="default">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="engage-content">Content</label>
+          <input class="form-control" id="engage-content" name="content" placeholder="Engagement terms">
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-outline-light" type="submit" data-submitting-text="Creating...">Create Engagement</button>
+        </div>
+      </form>
+    </div>
   </div>
-  <div class="col-lg-6">
-    <div class="card p-3 mb-3"><h4>Follow-ups</h4><table class="table"><thead><tr><th>Due</th><th>Note</th><th>Status</th></tr></thead><tbody>{% for f in followups %}<tr><td>{{ f.due_at }}</td><td>{{ f.note }}</td><td>{{ f.status }}</td></tr>{% else %}<tr><td colspan="3" class="muted">No follow-ups.</td></tr>{% endfor %}</tbody></table></div>
-    <div class="card p-3 mb-3"><h4>Intake + Conflict</h4>{% for i in intakes %}<div class="activity-item"><div class="fw-semibold">Intake #{{ i.id }}</div><form method="post" action="{{ url_for('crm_conflicts_check') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="intake_id" value="{{ i.id }}"><button class="btn btn-sm btn-outline-light">Run Conflict Check</button></form></div>{% else %}<div class="muted">No intake forms.</div>{% endfor %}<div class="mt-2">{% for c in conflicts %}<div class="activity-item"><div>Conflict #{{ c.id }} - {{ c.status }}</div><a class="btn btn-sm btn-outline-light mb-1" href="{{ url_for('crm_conflict_export', conflict_id=c.id) }}">Export CSV</a>{% if c.override_required and c.status != 'overridden' %}<form method="post" action="{{ url_for('crm_conflict_override', conflict_id=c.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input class="form-control form-control-sm mb-1" name="reason" placeholder="Override reason" required><button class="btn btn-sm btn-outline-light">Override</button></form>{% endif %}</div>{% endfor %}</div></div>
-    <div class="card p-3"><h4>Engagement Letters</h4>{% for l in letters %}<div class="activity-item"><div>#{{ l.id }} matter {{ l.matter_id }} • {{ l.status }}</div>{% if l.status != 'signed' %}<form method="post" action="{{ url_for('crm_engagement_sign', engagement_id=l.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input class="form-control form-control-sm mb-1" name="signer_name" placeholder="Signer" required><button class="btn btn-sm btn-outline-light">Sign</button></form>{% else %}<div class="muted small">Signed by {{ l.signed_by }} at {{ l.signed_at }}</div>{% endif %}</div>{% else %}<div class="muted">No engagement letters.</div>{% endfor %}</div>
+
+  <div class="col-lg-7">
+    <div class="card p-3 mb-3">
+      <h4 class="mb-2">Follow-ups</h4>
+      <div class="table-tools" data-table-tools data-table-target="lead-followups-table">
+        <input class="form-control" type="search" data-table-search placeholder="Filter by due date, note, or status...">
+        <div class="table-count" data-table-count aria-live="polite"></div>
+      </div>
+      <div class="table-responsive">
+        <table class="table" id="lead-followups-table">
+          <thead>
+            <tr>
+              <th data-sort-index="0" data-sort-type="date">Due</th>
+              <th data-sort-index="1">Note</th>
+              <th data-sort-index="2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for followup in followups %}
+              <tr data-table-row data-search="{{ followup.due_at }} {{ followup.note }} {{ followup.status }}">
+                <td>{{ followup.due_at }}</td>
+                <td>{{ followup.note }}</td>
+                <td><span class="badge badge-soft status-badge">{{ followup.status }}</span></td>
+              </tr>
+            {% endfor %}
+            <tr data-table-empty-row class="table-empty-row" {% if followups|length > 0 %}hidden{% endif %}>
+              <td colspan="3" class="muted">No follow-ups yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card p-3 mb-3">
+      <h4 class="mb-2">Intake + Conflict</h4>
+      {% if intakes %}
+        <div class="list-stack">
+          {% for intake in intakes %}
+            <div class="list-item">
+              <div class="list-row">
+                <div>
+                  <div class="list-title">Intake #{{ intake.id }}</div>
+                  <div class="list-meta">
+                    <span>Created {{ intake.created_at }}</span>
+                    <span>Matter {{ intake.matter_id or '-' }}</span>
+                  </div>
+                </div>
+                <form method="post" action="{{ url_for('crm_conflicts_check') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="intake_id" value="{{ intake.id }}">
+                  <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Running...">Run Conflict Check</button>
+                </form>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">No intake forms yet.</div>
+      {% endif %}
+
+      <h5 class="mt-3 mb-2">Conflict Results</h5>
+      {% if conflicts %}
+        <div class="list-stack">
+          {% for conflict in conflicts %}
+            <div class="list-item">
+              <div class="list-row">
+                <div>
+                  <div class="list-title">Conflict #{{ conflict.id }}</div>
+                  <div class="list-meta">
+                    <span class="badge badge-soft status-badge">{{ conflict.status }}</span>
+                    <span>Override required: {{ conflict.override_required }}</span>
+                  </div>
+                </div>
+                <div class="list-actions">
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('crm_conflict_export', conflict_id=conflict.id) }}">Export CSV</a>
+                </div>
+              </div>
+              {% if conflict.override_required and conflict.status != 'overridden' %}
+                <form method="post" action="{{ url_for('crm_conflict_override', conflict_id=conflict.id) }}" class="row g-2 mt-2">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <div class="col-md-9">
+                    <label class="form-label" for="override-reason-{{ conflict.id }}">Override Reason</label>
+                    <input class="form-control" id="override-reason-{{ conflict.id }}" name="reason" placeholder="Reason for override" required>
+                  </div>
+                  <div class="col-md-3 d-grid">
+                    <label class="form-label visually-hidden" for="override-submit-{{ conflict.id }}">Override</label>
+                    <button class="btn btn-sm btn-outline-light" id="override-submit-{{ conflict.id }}" type="submit" data-submitting-text="Saving...">Override</button>
+                  </div>
+                </form>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">No conflict checks yet.</div>
+      {% endif %}
+    </div>
+
+    <div class="card p-3">
+      <h4 class="mb-2">Engagement Letters</h4>
+      {% if letters %}
+        <div class="list-stack">
+          {% for letter in letters %}
+            <div class="list-item">
+              <div class="list-row">
+                <div>
+                  <div class="list-title">Letter #{{ letter.id }}</div>
+                  <div class="list-meta">
+                    <span>Matter {{ letter.matter_id }}</span>
+                    <span class="badge badge-soft status-badge">{{ letter.status }}</span>
+                  </div>
+                </div>
+              </div>
+              {% if letter.status != 'signed' %}
+                <form method="post" action="{{ url_for('crm_engagement_sign', engagement_id=letter.id) }}" class="row g-2 mt-2">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <div class="col-md-9">
+                    <label class="form-label" for="signer-{{ letter.id }}">Signer Name</label>
+                    <input class="form-control" id="signer-{{ letter.id }}" name="signer_name" placeholder="Client signatory" required>
+                  </div>
+                  <div class="col-md-3 d-grid">
+                    <label class="form-label visually-hidden" for="sign-submit-{{ letter.id }}">Sign</label>
+                    <button class="btn btn-sm btn-outline-light" id="sign-submit-{{ letter.id }}" type="submit" data-submitting-text="Signing...">Sign</button>
+                  </div>
+                </form>
+              {% else %}
+                <div class="muted small mt-2">Signed by {{ letter.signed_by }} at {{ letter.signed_at }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">No engagement letters yet.</div>
+      {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}

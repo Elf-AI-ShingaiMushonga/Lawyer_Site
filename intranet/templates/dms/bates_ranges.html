@@ -1,5 +1,83 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3"><h3>Assign Bates Range</h3><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-4"><select class="form-select" name="production_set_id" required>{% for s in sets %}<option value="{{ s.id }}">#{{ s.id }} {{ s.name }}</option>{% endfor %}</select></div><div class="col-md-2"><input class="form-control" name="prefix" placeholder="Prefix" required></div><div class="col-md-2"><input class="form-control" name="start_no" type="number" required></div><div class="col-md-2"><input class="form-control" name="end_no" type="number" required></div><div class="col-md-2 d-grid"><button class="btn btn-light">Assign</button></div></form></div>
-<div class="card p-3"><h3>Bates Ranges</h3><table class="table"><thead><tr><th>Set</th><th>Prefix</th><th>Start</th><th>End</th><th>Created</th></tr></thead><tbody>{% for r in ranges %}<tr><td>{{ r.production_set_id }}</td><td>{{ r.prefix }}</td><td>{{ r.start_no }}</td><td>{{ r.end_no }}</td><td>{{ r.created_at }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No ranges assigned.</td></tr>{% endfor %}</tbody></table></div>
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Bates Ranges</h3>
+  <p class="page-intro mb-0">Assign sequence ranges to production sets for regulator and litigation exports.</p>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Ranges</div>
+      <div class="value">{{ ranges | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Sets Available</div>
+      <div class="value">{{ sets | length }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Assign Bates Range</h4>
+  <form method="post" class="row g-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-5">
+      <label class="form-label" for="bates-production-set">Production Set</label>
+      <select class="form-select" id="bates-production-set" name="production_set_id" required>
+        {% for set_row in sets %}
+          <option value="{{ set_row.id }}">#{{ set_row.id }} {{ set_row.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="bates-prefix">Prefix</label>
+      <input class="form-control" id="bates-prefix" name="prefix" placeholder="ELF" required>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="bates-start">Start No</label>
+      <input class="form-control" id="bates-start" name="start_no" type="number" min="1" required>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="bates-end">End No</label>
+      <input class="form-control" id="bates-end" name="end_no" type="number" min="1" required>
+    </div>
+    <div class="col-md-1 d-grid">
+      <label class="form-label visually-hidden" for="bates-assign">Assign</label>
+      <button class="btn btn-light" id="bates-assign" type="submit" data-submitting-text="Assigning...">Assign</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h4 class="mb-2">Assigned Ranges</h4>
+  <div class="table-tools" data-table-tools data-table-target="bates-range-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by set, prefix, or range...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="bates-range-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">Set</th>
+          <th data-sort-index="1">Prefix</th>
+          <th data-sort-index="2" data-sort-type="number">Start</th>
+          <th data-sort-index="3" data-sort-type="number">End</th>
+          <th data-sort-index="4" data-sort-type="date">Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for range_row in ranges %}
+          <tr data-table-row data-search="{{ range_row.production_set_id }} {{ range_row.prefix }} {{ range_row.start_no }} {{ range_row.end_no }} {{ range_row.created_at }}">
+            <td>{{ range_row.production_set_id }}</td>
+            <td>{{ range_row.prefix }}</td>
+            <td>{{ range_row.start_no }}</td>
+            <td>{{ range_row.end_no }}</td>
+            <td>{{ range_row.created_at }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if ranges|length > 0 %}hidden{% endif %}>
+          <td colspan="5" class="muted">No ranges assigned.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

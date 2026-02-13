@@ -1,44 +1,181 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card p-3 mb-3">
-  <h3>Invoice #{{ inv.id }}</h3>
-  <div class="muted">Matter {{ inv.matter_id }} • {{ inv.client_name }} • {{ inv.period_start }} to {{ inv.period_end }}</div>
-  <div class="mt-2">Status: <strong>{{ inv.status }}</strong> • Subtotal {{ inv.subtotal }} • Tax {{ inv.tax_total }} • Total {{ inv.total }} • Outstanding {{ outstanding }}</div>
-  <div class="d-flex flex-wrap gap-2 mt-2">
-    <form method="post" action="{{ url_for('billing_invoice_approve', invoice_id=inv.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-light">Approve</button></form>
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Invoice #{{ inv.id }}</h3>
+      <div class="muted small">
+        Matter {{ inv.matter_id }} • {{ inv.client_name }} • {{ inv.period_start }} to {{ inv.period_end }}
+      </div>
+    </div>
+    <span class="badge badge-soft status-badge">{{ inv.status }}</span>
+  </div>
+
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Subtotal</div>
+      <div class="value">{{ "%.2f"|format(inv.subtotal or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Tax</div>
+      <div class="value">{{ "%.2f"|format(inv.tax_total or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Total</div>
+      <div class="value">{{ "%.2f"|format(inv.total or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Outstanding</div>
+      <div class="value">{{ "%.2f"|format(outstanding or 0) }}</div>
+    </div>
+  </div>
+
+  {% if outstanding > 0 %}
+    <div class="why-note mt-3">
+      Outstanding balance remains on this invoice. Use adjustments only for approved write-down/off policy.
+    </div>
+  {% endif %}
+
+  <div class="d-flex flex-wrap gap-2 mt-3">
+    {% if inv.status != "approved" %}
+      <form method="post" action="{{ url_for('billing_invoice_approve', invoice_id=inv.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-light" type="submit" data-submitting-text="Approving...">Approve</button>
+      </form>
+    {% endif %}
     <a class="btn btn-outline-light" href="{{ url_for('billing_invoice_pdf', invoice_id=inv.id) }}">Download PDF</a>
     <a class="btn btn-outline-light" href="{{ url_for('billing_invoice_ledes', invoice_id=inv.id) }}">Export LEDES</a>
     <a class="btn btn-outline-light" href="{{ url_for('billing_ar_aging') }}">AR Aging</a>
   </div>
 </div>
-<div class="card p-3 mb-3"><h4>Lines</h4><table class="table"><thead><tr><th>Description</th><th>Hours</th><th>Rate</th><th>Amount</th><th>Tax</th></tr></thead><tbody>{% for l in lines %}<tr><td>{{ l.description }}</td><td>{{ l.hours }}</td><td>{{ l.rate }}</td><td>{{ l.amount }}</td><td>{{ l.tax_amount }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No lines.</td></tr>{% endfor %}</tbody></table></div>
+
 <div class="card p-3 mb-3">
-  <h4>Write-down / Write-off</h4>
-  <form method="post" action="{{ url_for('billing_invoice_adjust', invoice_id=inv.id) }}" class="row g-2">
+  <h4 class="mb-2">Invoice Lines</h4>
+  <div class="table-tools" data-table-tools data-table-target="invoice-lines-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter lines by description or amount...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="invoice-lines-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0">Description</th>
+          <th data-sort-index="1" data-sort-type="number">Hours</th>
+          <th data-sort-index="2" data-sort-type="number">Rate</th>
+          <th data-sort-index="3" data-sort-type="number">Amount</th>
+          <th data-sort-index="4" data-sort-type="number">Tax</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in lines %}
+          <tr data-table-row data-search="{{ line.description }} {{ line.hours }} {{ line.rate }} {{ line.amount }} {{ line.tax_amount }}">
+            <td>{{ line.description }}</td>
+            <td>{{ "%.2f"|format(line.hours or 0) }}</td>
+            <td>{{ "%.2f"|format(line.rate or 0) }}</td>
+            <td>{{ "%.2f"|format(line.amount or 0) }}</td>
+            <td>{{ "%.2f"|format(line.tax_amount or 0) }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if lines|length > 0 %}hidden{% endif %}>
+          <td colspan="5" class="muted">No lines on this invoice.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Write-down / Write-off</h4>
+  <form method="post" action="{{ url_for('billing_invoice_adjust', invoice_id=inv.id) }}" class="row g-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-md-3">
-      <select class="form-select" name="adjustment_type" required>
+      <label class="form-label" for="adjustment-type">Type</label>
+      <select class="form-select" id="adjustment-type" name="adjustment_type" required>
         <option value="write_down">write_down</option>
         <option value="write_off">write_off</option>
       </select>
     </div>
-    <div class="col-md-3"><input class="form-control" type="number" name="amount" min="0.01" step="0.01" placeholder="Amount" required></div>
-    <div class="col-md-4"><input class="form-control" name="reason" placeholder="Reason" required></div>
-    <div class="col-md-2 d-grid"><button class="btn btn-outline-light">Apply</button></div>
+    <div class="col-md-3">
+      <label class="form-label" for="adjustment-amount">Amount</label>
+      <input class="form-control" id="adjustment-amount" type="number" name="amount" min="0.01" step="0.01" placeholder="0.00" required>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="adjustment-reason">Reason</label>
+      <input class="form-control" id="adjustment-reason" name="reason" placeholder="Policy-approved reason" required>
+    </div>
+    <div class="col-md-2 d-grid">
+      <label class="form-label visually-hidden" for="adjustment-submit">Apply</label>
+      <button class="btn btn-outline-light" id="adjustment-submit" type="submit" data-submitting-text="Applying...">Apply</button>
+    </div>
   </form>
 </div>
+
 <div class="card p-3 mb-3">
-  <h4>Adjustments</h4>
-  <table class="table">
-    <thead><tr><th>Type</th><th>Amount</th><th>Reason</th><th>At</th></tr></thead>
-    <tbody>
-      {% for a in adjustments %}
-      <tr><td>{{ a.adjustment_type }}</td><td>{{ a.amount }}</td><td>{{ a.reason }}</td><td>{{ a.created_at }}</td></tr>
-      {% else %}
-      <tr><td colspan="4" class="muted">No adjustments.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <h4 class="mb-2">Adjustments</h4>
+  <div class="table-tools" data-table-tools data-table-target="invoice-adjustments-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter adjustments by type or reason...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="invoice-adjustments-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0">Type</th>
+          <th data-sort-index="1" data-sort-type="number">Amount</th>
+          <th data-sort-index="2">Reason</th>
+          <th data-sort-index="3" data-sort-type="date">Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for adjustment in adjustments %}
+          <tr
+            data-table-row
+            data-search="{{ adjustment.adjustment_type }} {{ adjustment.amount }} {{ adjustment.reason }} {{ adjustment.created_at }}"
+          >
+            <td>{{ adjustment.adjustment_type }}</td>
+            <td>{{ "%.2f"|format(adjustment.amount or 0) }}</td>
+            <td>{{ adjustment.reason }}</td>
+            <td>{{ adjustment.created_at }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if adjustments|length > 0 %}hidden{% endif %}>
+          <td colspan="4" class="muted">No adjustments recorded.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>
-<div class="card p-3"><h4>Payments</h4><table class="table"><thead><tr><th>Amount</th><th>Method</th><th>Reference</th><th>At</th></tr></thead><tbody>{% for p in payments %}<tr><td>{{ p.amount }}</td><td>{{ p.method }}</td><td>{{ p.reference or '-' }}</td><td>{{ p.allocated_at }}</td></tr>{% else %}<tr><td colspan="4" class="muted">No payments recorded.</td></tr>{% endfor %}</tbody></table></div>
+
+<div class="card p-3">
+  <h4 class="mb-2">Payments</h4>
+  <div class="table-tools" data-table-tools data-table-target="invoice-payments-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter payments by method or reference...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="invoice-payments-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">Amount</th>
+          <th data-sort-index="1">Method</th>
+          <th data-sort-index="2">Reference</th>
+          <th data-sort-index="3" data-sort-type="date">Allocated At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for payment in payments %}
+          <tr data-table-row data-search="{{ payment.amount }} {{ payment.method or '' }} {{ payment.reference or '' }} {{ payment.allocated_at }}">
+            <td>{{ "%.2f"|format(payment.amount or 0) }}</td>
+            <td>{{ payment.method or "-" }}</td>
+            <td>{{ payment.reference or "-" }}</td>
+            <td>{{ payment.allocated_at }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if payments|length > 0 %}hidden{% endif %}>
+          <td colspan="4" class="muted">No payments recorded.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

@@ -1,5 +1,80 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3"><h3>DR Targets</h3><form method="post" class="row g-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="col-md-3"><input class="form-control" name="name" placeholder="Target name" required></div><div class="col-md-2"><input class="form-control" name="rpo_minutes_target" type="number" placeholder="RPO target" required></div><div class="col-md-2"><input class="form-control" name="rto_minutes_target" type="number" placeholder="RTO target" required></div><div class="col-md-2"><input class="form-control" name="last_actual_rpo_minutes" type="number" placeholder="Actual RPO"></div><div class="col-md-2"><input class="form-control" name="last_actual_rto_minutes" type="number" placeholder="Actual RTO"></div><div class="col-md-1 d-grid"><button class="btn btn-light">Save</button></div></form></div>
-<div class="card p-3"><table class="table"><thead><tr><th>Name</th><th>RPO Target</th><th>RTO Target</th><th>Actual RPO</th><th>Actual RTO</th><th>Updated</th></tr></thead><tbody>{% for t in targets %}<tr><td>{{ t.name }}</td><td>{{ t.rpo_minutes_target }}</td><td>{{ t.rto_minutes_target }}</td><td>{{ t.last_actual_rpo_minutes or '-' }}</td><td>{{ t.last_actual_rto_minutes or '-' }}</td><td>{{ t.updated_at }}</td></tr>{% else %}<tr><td colspan="6" class="muted">No DR targets.</td></tr>{% endfor %}</tbody></table></div>
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">DR Targets</h3>
+  <p class="page-intro mb-0">Track disaster recovery objectives against observed RPO/RTO performance.</p>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Targets</div>
+      <div class="value">{{ targets | length }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Add or Update DR Target</h4>
+  <form method="post" class="row g-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-4">
+      <label class="form-label" for="dr-name">Target Name</label>
+      <input class="form-control" id="dr-name" name="name" placeholder="Primary Region" required>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="dr-rpo-target">RPO Target (min)</label>
+      <input class="form-control" id="dr-rpo-target" name="rpo_minutes_target" type="number" min="1" placeholder="60" required>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="dr-rto-target">RTO Target (min)</label>
+      <input class="form-control" id="dr-rto-target" name="rto_minutes_target" type="number" min="1" placeholder="240" required>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="dr-rpo-actual">Actual RPO (min)</label>
+      <input class="form-control" id="dr-rpo-actual" name="last_actual_rpo_minutes" type="number" min="0" placeholder="55">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="dr-rto-actual">Actual RTO (min)</label>
+      <input class="form-control" id="dr-rto-actual" name="last_actual_rto_minutes" type="number" min="0" placeholder="180">
+    </div>
+    <div class="col-12 d-grid d-md-flex justify-content-md-end">
+      <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Target</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h4 class="mb-2">Target Registry</h4>
+  <div class="table-tools" data-table-tools data-table-target="dr-targets-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by target name or metric...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="dr-targets-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0">Name</th>
+          <th data-sort-index="1" data-sort-type="number">RPO Target</th>
+          <th data-sort-index="2" data-sort-type="number">RTO Target</th>
+          <th data-sort-index="3" data-sort-type="number">Actual RPO</th>
+          <th data-sort-index="4" data-sort-type="number">Actual RTO</th>
+          <th data-sort-index="5" data-sort-type="date">Updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for target in targets %}
+          <tr data-table-row data-search="{{ target.name }} {{ target.rpo_minutes_target }} {{ target.rto_minutes_target }} {{ target.last_actual_rpo_minutes or '' }} {{ target.last_actual_rto_minutes or '' }} {{ target.updated_at }}">
+            <td>{{ target.name }}</td>
+            <td>{{ target.rpo_minutes_target }}</td>
+            <td>{{ target.rto_minutes_target }}</td>
+            <td>{{ target.last_actual_rpo_minutes or '-' }}</td>
+            <td>{{ target.last_actual_rto_minutes or '-' }}</td>
+            <td>{{ target.updated_at }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if targets|length > 0 %}hidden{% endif %}>
+          <td colspan="6" class="muted">No DR targets yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

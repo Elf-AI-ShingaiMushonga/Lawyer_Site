@@ -3,10 +3,10 @@
 <div class="row g-3 align-items-stretch">
   <div class="col-lg-5">
     <div class="card p-4 h-100">
-      <div class="code-like">SECURE CLIENT PORTAL</div>
-      <h2 class="mt-2 mb-2">Welcome back to your legal workspace</h2>
+      <div class="code-like">LAW FIRM OPERATING SYSTEM</div>
+      <h2 class="mt-2 mb-2">Welcome back to the firm workspace</h2>
       <p class="page-intro mb-3">
-        Track active matters, action tasks, and privileged documents from a single firm dashboard.
+        Access matters, deadlines, workflows, billing, trust accounting, and compliance controls in one place.
       </p>
       <div class="metric-grid">
         <div class="metric-card">
@@ -14,16 +14,18 @@
           <div class="metric-value">24/7</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Audit Trail</div>
-          <div class="metric-value">On</div>
+          <div class="metric-label">Security Controls</div>
+          <div class="metric-value">MFA</div>
         </div>
       </div>
       <div class="card mt-3 p-3">
         <div class="code-like">DEMO TIP</div>
-        <div class="small muted mt-2">If you seeded demo data, use any of these accounts:</div>
+        <div class="small muted mt-2">Use one of the seeded roles to test permissions:</div>
         <div class="small mt-2">admin@elf-ai-demo.co.za</div>
         <div class="small">partner@elf-ai-demo.co.za</div>
         <div class="small">associate@elf-ai-demo.co.za</div>
+        <div class="small">paralegal@elf-ai-demo.co.za</div>
+        <div class="small">staff@elf-ai-demo.co.za</div>
       </div>
     </div>
   </div>
@@ -40,7 +42,10 @@
         </div>
         <div class="col-12">
           <label class="form-label">Password</label>
-          <input class="form-control" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required>
+          <div class="input-group">
+            <input class="form-control" name="password" id="firm-login-password" type="password" placeholder="Enter your password" autocomplete="current-password" required>
+            <button class="btn btn-outline-light" type="button" data-password-toggle="firm-login-password">Show</button>
+          </div>
         </div>
         <div class="col-12">
           <div class="form-section">

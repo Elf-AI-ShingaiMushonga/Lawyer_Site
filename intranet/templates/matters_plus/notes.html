@@ -1,15 +1,51 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card p-3 mb-3">
-  <h3>Matter Notes - {{ m.matter_no }}</h3>
-  <form method="post" class="row g-2">
+  <h3 class="mb-1">Matter Notes - {{ m.matter_no }}</h3>
+  <p class="page-intro mb-0">Capture privileged notes and optional ACL restrictions for sensitive collaboration.</p>
+  <form method="post" class="row g-3 mt-1">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-12"><textarea class="form-control" name="body" rows="4" placeholder="Note body" required></textarea></div>
-    <div class="col-md-4"><input class="form-control" name="tags" placeholder="tags"></div>
-    <div class="col-md-4"><input class="form-control" name="privilege_label" placeholder="Privilege label"></div>
-    <div class="col-md-4"><input class="form-control" name="acl_emails" placeholder="ACL emails (comma separated)"></div>
-    <div class="col-12 d-grid"><button class="btn btn-light">Add Note</button></div>
+    <div class="col-12">
+      <label class="form-label" for="matter-note-body">Note Body</label>
+      <textarea class="form-control" id="matter-note-body" name="body" rows="4" placeholder="Note details" required></textarea>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="matter-note-tags">Tags</label>
+      <input class="form-control" id="matter-note-tags" name="tags" placeholder="strategy, hearing, evidence">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="matter-note-privilege">Privilege Label</label>
+      <input class="form-control" id="matter-note-privilege" name="privilege_label" placeholder="Attorney-Client">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="matter-note-acl">ACL Emails</label>
+      <input class="form-control" id="matter-note-acl" name="acl_emails" placeholder="a@firm.com,b@firm.com">
+    </div>
+    <div class="col-12 d-grid d-md-flex justify-content-md-end">
+      <button class="btn btn-light" type="submit" data-submitting-text="Adding...">Add Note</button>
+    </div>
   </form>
 </div>
-<div class="card p-3"><h4>Notes</h4>{% for n in notes %}<div class="activity-item"><div class="fw-semibold">{{ n.created_at }} • {{ n.tags or 'untagged' }}</div><div>{{ n.body }}</div><div class="muted small">Privilege: {{ n.privilege_label or '-' }}</div></div>{% else %}<div class="muted">No notes.</div>{% endfor %}</div>
+
+<div class="card p-3">
+  <h4 class="mb-2">Notes</h4>
+  {% if notes %}
+    <div class="list-stack">
+      {% for note in notes %}
+        <div class="list-item">
+          <div class="list-row">
+            <div class="list-title">{{ note.created_at }}</div>
+            <div class="list-meta">
+              <span class="tag-chip">{{ note.tags or 'untagged' }}</span>
+              <span>Privilege: {{ note.privilege_label or '-' }}</span>
+            </div>
+          </div>
+          <div class="mt-1">{{ note.body }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">No notes yet.</div>
+  {% endif %}
+</div>
 {% endblock %}

@@ -1,23 +1,77 @@
 from __future__ import annotations
 
 import datetime as dt
+from urllib.parse import urlparse
 
 from flask import abort, flash, redirect, request, url_for
 from flask_login import current_user, login_required
 
 from ..extensions import db
 from ..helpers import audit, can_access_matter
-from ..models import Deadline, Matter, MatterMember, MatterTimelineEvent
+from ..models import Deadline, Matter, MatterTimelineEvent
 from ..policies import visible_matter_ids
 from ..templates import page
+
+
+CALENDAR_FILTERS = {"all", "overdue", "today", "next7", "critical", "open", "ack"}
+
+
+def _normalize_calendar_filter(value: str | None) -> str:
+    key = (value or "all").strip().lower()
+    return key if key in CALENDAR_FILTERS else "all"
+
+
+def _deadline_matches_filter(deadline: Deadline, filter_key: str, today: dt.date, week_end: dt.date) -> bool:
+    if filter_key == "overdue":
+        return deadline.status != "acknowledged" and deadline.due_at < today
+    if filter_key == "today":
+        return deadline.due_at == today
+    if filter_key == "next7":
+        return today <= deadline.due_at <= week_end
+    if filter_key == "critical":
+        return bool(deadline.is_critical)
+    if filter_key == "open":
+        return deadline.status != "acknowledged"
+    if filter_key == "ack":
+        return deadline.status == "acknowledged"
+    return True
+
+
+def _deadline_stats(deadlines: list[Deadline], today: dt.date, week_end: dt.date) -> dict[str, int]:
+    return {
+        "total": len(deadlines),
+        "overdue": sum(1 for d in deadlines if d.status != "acknowledged" and d.due_at < today),
+        "today": sum(1 for d in deadlines if d.due_at == today),
+        "next7": sum(1 for d in deadlines if today <= d.due_at <= week_end),
+        "critical": sum(1 for d in deadlines if d.is_critical),
+        "open": sum(1 for d in deadlines if d.status != "acknowledged"),
+        "ack": sum(1 for d in deadlines if d.status == "acknowledged"),
+    }
+
+
+def _safe_calendar_redirect(default_url: str) -> str:
+    next_raw = (request.form.get("next") or request.args.get("next") or "").strip()
+    if next_raw.startswith("/") and not next_raw.startswith("//"):
+        return next_raw
+
+    ref = (request.referrer or "").strip()
+    if ref:
+        parsed = urlparse(ref)
+        if (not parsed.netloc or parsed.netloc == request.host) and parsed.path.startswith("/"):
+            return f"{parsed.path}?{parsed.query}" if parsed.query else parsed.path
+
+    return default_url
 
 
 def register_calendar_routes(app):
     @app.get("/calendar/my")
     @login_required
     def calendar_my():
+        today = dt.date.today()
+        week_end = today + dt.timedelta(days=7)
+        active_filter = _normalize_calendar_filter(request.args.get("filter"))
         matter_ids = visible_matter_ids()
-        deadlines = (
+        all_deadlines = (
             Deadline.query.filter(Deadline.matter_id.in_(matter_ids))
             .order_by(Deadline.due_at.asc())
             .limit(200)
@@ -25,21 +79,42 @@ def register_calendar_routes(app):
             if matter_ids
             else []
         )
-        return page("My Calendar", "calendar/my.html", deadlines=deadlines)
+        deadlines = [d for d in all_deadlines if _deadline_matches_filter(d, active_filter, today, week_end)]
+        stats = _deadline_stats(all_deadlines, today, week_end)
+        return page(
+            "My Calendar",
+            "calendar/my.html",
+            deadlines=deadlines,
+            active_filter=active_filter,
+            stats=stats,
+            today=today,
+        )
 
     @app.get("/calendar/team")
     @login_required
     def calendar_team():
+        today = dt.date.today()
+        week_end = today + dt.timedelta(days=7)
+        active_filter = _normalize_calendar_filter(request.args.get("filter"))
         if current_user.role == "admin":
-            deadlines = Deadline.query.order_by(Deadline.due_at.asc()).limit(300).all()
+            all_deadlines = Deadline.query.order_by(Deadline.due_at.asc()).limit(300).all()
         else:
             matter_ids = visible_matter_ids()
-            deadlines = (
+            all_deadlines = (
                 Deadline.query.filter(Deadline.matter_id.in_(matter_ids)).order_by(Deadline.due_at.asc()).limit(300).all()
                 if matter_ids
                 else []
             )
-        return page("Team Calendar", "calendar/team.html", deadlines=deadlines)
+        deadlines = [d for d in all_deadlines if _deadline_matches_filter(d, active_filter, today, week_end)]
+        stats = _deadline_stats(all_deadlines, today, week_end)
+        return page(
+            "Team Calendar",
+            "calendar/team.html",
+            deadlines=deadlines,
+            active_filter=active_filter,
+            stats=stats,
+            today=today,
+        )
 
     @app.route("/calendar/matter/<int:matter_id>", methods=["GET", "POST"])
     @login_required
@@ -109,14 +184,28 @@ def register_calendar_routes(app):
             flash("Unsupported calendar action.", "warning")
             return redirect(url_for("calendar_matter", matter_id=matter_id))
 
-        deadlines = Deadline.query.filter_by(matter_id=matter_id).order_by(Deadline.due_at.asc()).all()
+        today = dt.date.today()
+        week_end = today + dt.timedelta(days=7)
+        active_filter = _normalize_calendar_filter(request.args.get("filter"))
+        all_deadlines = Deadline.query.filter_by(matter_id=matter_id).order_by(Deadline.due_at.asc()).all()
+        deadlines = [d for d in all_deadlines if _deadline_matches_filter(d, active_filter, today, week_end)]
+        stats = _deadline_stats(all_deadlines, today, week_end)
         timeline = (
             MatterTimelineEvent.query.filter_by(matter_id=matter_id)
             .order_by(MatterTimelineEvent.event_date.asc())
             .limit(200)
             .all()
         )
-        return page("Matter Calendar", "calendar/matter.html", m=m, deadlines=deadlines, timeline=timeline)
+        return page(
+            "Matter Calendar",
+            "calendar/matter.html",
+            m=m,
+            deadlines=deadlines,
+            timeline=timeline,
+            active_filter=active_filter,
+            stats=stats,
+            today=today,
+        )
 
     @app.post("/deadlines/<int:deadline_id>/override")
     @login_required
@@ -146,7 +235,7 @@ def register_calendar_routes(app):
         db.session.commit()
         audit("deadline_override", "Deadline", row.id, {"reason": reason, "new_due": new_due.isoformat()})
         flash("Deadline override saved.", "info")
-        return redirect(url_for("calendar_matter", matter_id=row.matter_id))
+        return redirect(_safe_calendar_redirect(url_for("calendar_matter", matter_id=row.matter_id)))
 
     @app.post("/deadlines/<int:deadline_id>/ack")
     @login_required
@@ -163,4 +252,4 @@ def register_calendar_routes(app):
         db.session.commit()
         audit("deadline_ack", "Deadline", row.id)
         flash("Deadline acknowledged.", "info")
-        return redirect(url_for("calendar_matter", matter_id=row.matter_id))
+        return redirect(_safe_calendar_redirect(url_for("calendar_matter", matter_id=row.matter_id)))

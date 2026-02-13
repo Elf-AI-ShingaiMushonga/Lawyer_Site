@@ -1,4 +1,84 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3"><h3>Time Review</h3><table class="table"><thead><tr><th>ID</th><th>User</th><th>Matter</th><th>Hours</th><th>Status</th><th>Actions</th></tr></thead><tbody>{% for e in entries %}<tr><td>{{ e.id }}</td><td>{{ e.user_id }}</td><td>{{ e.matter_id }}</td><td>{{ e.rounded_hours }}</td><td>{{ e.status }}</td><td><form method="post" action="{{ url_for('time_review') }}" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="entry_id" value="{{ e.id }}"><input type="hidden" name="state" value="approved"><button class="btn btn-sm btn-outline-light">Approve</button></form> <form method="post" action="{{ url_for('time_review') }}" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="entry_id" value="{{ e.id }}"><input type="hidden" name="state" value="rejected"><button class="btn btn-sm btn-outline-light">Reject</button></form> <form method="post" action="{{ url_for('time_entry_lock', entry_id=e.id) }}" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-light">Lock</button></form></td></tr>{% else %}<tr><td colspan="6" class="muted">No entries for review.</td></tr>{% endfor %}</tbody></table></div>
+{% set approved_count = entries | selectattr('status', 'equalto', 'approved') | list | length %}
+{% set rejected_count = entries | selectattr('status', 'equalto', 'rejected') | list | length %}
+{% set draft_count = entries | selectattr('status', 'equalto', 'draft') | list | length %}
+
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">Time Review</h3>
+  <p class="page-intro mb-0">Approve, reject, and lock reviewed entries before invoice generation.</p>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Entries</div>
+      <div class="value">{{ entries | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Approved</div>
+      <div class="value">{{ approved_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Rejected</div>
+      <div class="value">{{ rejected_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Draft</div>
+      <div class="value">{{ draft_count }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3">
+  <div class="table-tools" data-table-tools data-table-target="time-review-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by user, matter, status, or id...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="time-review-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">ID</th>
+          <th data-sort-index="1" data-sort-type="number">User</th>
+          <th data-sort-index="2" data-sort-type="number">Matter</th>
+          <th data-sort-index="3" data-sort-type="number">Hours</th>
+          <th data-sort-index="4">Status</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+          <tr data-table-row data-search="{{ entry.id }} {{ entry.user_id }} {{ entry.matter_id }} {{ entry.rounded_hours }} {{ entry.status }}">
+            <td>{{ entry.id }}</td>
+            <td>{{ entry.user_id }}</td>
+            <td>{{ entry.matter_id }}</td>
+            <td>{{ entry.rounded_hours }}</td>
+            <td><span class="badge badge-soft status-badge">{{ entry.status }}</span></td>
+            <td class="text-end">
+              <div class="table-actions justify-content-end">
+                <form method="post" action="{{ url_for('time_review') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                  <input type="hidden" name="state" value="approved">
+                  <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Saving...">Approve</button>
+                </form>
+                <form method="post" action="{{ url_for('time_review') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                  <input type="hidden" name="state" value="rejected">
+                  <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Saving...">Reject</button>
+                </form>
+                <form method="post" action="{{ url_for('time_entry_lock', entry_id=entry.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-light" type="submit" data-submitting-text="Locking...">Lock</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if entries|length > 0 %}hidden{% endif %}>
+          <td colspan="6" class="muted">No entries for review.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}
