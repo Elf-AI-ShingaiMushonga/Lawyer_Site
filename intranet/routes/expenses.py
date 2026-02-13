@@ -5,13 +5,15 @@ import io
 import os
 import uuid
 
+import sqlalchemy as sa
 from flask import abort, flash, redirect, request, send_file, send_from_directory, url_for
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
 from ..extensions import db
-from ..helpers import allowed_doc, audit, can_access_matter, sha256_file
+from ..helpers import allowed_doc, audit, can_access_matter, is_admin, sha256_file
 from ..models import ExpenseEntry, Matter
+from ..policies import visible_matter_ids
 from ..templates import page
 
 
@@ -110,10 +112,49 @@ def register_expenses_routes(app):
             flash("Expense submitted.", "info")
             return redirect(url_for("expenses"))
 
-        rows = ExpenseEntry.query.order_by(ExpenseEntry.created_at.desc()).limit(300).all()
-        rows = [r for r in rows if can_access_matter(r.matter_id)]
-        matters = Matter.query.order_by(Matter.opened_at.desc()).limit(200).all()
-        return page("Expenses", "expenses/list.html", expenses=rows, matters=matters)
+        page_number = request.args.get("page", default=1, type=int) or 1
+        if page_number < 1:
+            page_number = 1
+
+        expense_query = ExpenseEntry.query
+        matter_query = Matter.query
+        if not is_admin():
+            scoped_ids = visible_matter_ids()
+            if scoped_ids:
+                expense_query = expense_query.filter(ExpenseEntry.matter_id.in_(scoped_ids))
+                matter_query = matter_query.filter(Matter.id.in_(scoped_ids))
+            else:
+                expense_query = expense_query.filter(ExpenseEntry.id == -1)
+                matter_query = matter_query.filter(Matter.id == -1)
+
+        pagination = expense_query.order_by(ExpenseEntry.created_at.desc()).paginate(page=page_number, per_page=50, error_out=False)
+        rows = pagination.items
+        matters = matter_query.order_by(Matter.opened_at.desc()).limit(200).all()
+        selectable_matter_ids = {matter.id for matter in matters}
+        displayed_matter_ids = {int(row.matter_id) for row in rows if row.matter_id}
+        missing_matter_ids = displayed_matter_ids - selectable_matter_ids
+        display_matters = list(matters)
+        if missing_matter_ids:
+            display_matters.extend(Matter.query.filter(Matter.id.in_(missing_matter_ids)).all())
+        matter_lookup = {matter.id: matter for matter in display_matters}
+
+        total_amount = float(expense_query.with_entities(sa.func.coalesce(sa.func.sum(ExpenseEntry.amount), 0.0)).scalar() or 0.0)
+        reimbursable_count = expense_query.filter(ExpenseEntry.is_reimbursable.is_(True)).count()
+        approved_count = expense_query.filter(ExpenseEntry.status == "approved").count()
+        submitted_count = expense_query.filter(ExpenseEntry.status == "submitted").count()
+        return page(
+            "Expenses",
+            "expenses/list.html",
+            expenses=rows,
+            matters=matters,
+            matter_lookup=matter_lookup,
+            pagination=pagination,
+            total_expenses=pagination.total,
+            reimbursable_count=reimbursable_count,
+            approved_count=approved_count,
+            submitted_count=submitted_count,
+            total_amount=total_amount,
+        )
 
     @app.post("/expenses/<int:expense_id>/approve")
     @login_required

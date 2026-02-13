@@ -1,16 +1,5 @@
 {% extends "base.html" %}
 {% block content %}
-{% set counts = namespace(open=0, hold=0, closed=0) %}
-{% for m in ms %}
-  {% if m.status == "Open" %}
-    {% set counts.open = counts.open + 1 %}
-  {% elif m.status == "On Hold" %}
-    {% set counts.hold = counts.hold + 1 %}
-  {% elif m.status == "Closed" %}
-    {% set counts.closed = counts.closed + 1 %}
-  {% endif %}
-{% endfor %}
-
 <div class="card p-3">
   <div class="toolbar-row">
     <div>
@@ -53,19 +42,19 @@
   <div class="kpi-strip mt-3">
     <div class="kpi-pill">
       <div class="label">Total matters</div>
-      <div class="value">{{ ms|length }}</div>
+      <div class="value">{{ pagination.total }}</div>
     </div>
     <div class="kpi-pill">
       <div class="label">Open</div>
-      <div class="value">{{ counts.open }}</div>
+      <div class="value">{{ status_counts.get("Open", 0) }}</div>
     </div>
     <div class="kpi-pill">
       <div class="label">On hold</div>
-      <div class="value">{{ counts.hold }}</div>
+      <div class="value">{{ status_counts.get("On Hold", 0) }}</div>
     </div>
     <div class="kpi-pill">
       <div class="label">Closed</div>
-      <div class="value">{{ counts.closed }}</div>
+      <div class="value">{{ status_counts.get("Closed", 0) }}</div>
     </div>
   </div>
 
@@ -95,6 +84,9 @@
     {% if q %}
       <div class="mb-2 muted small">Showing filtered results for "{{ q }}".</div>
     {% endif %}
+    <div class="mb-2 muted small">
+      Showing {{ ms|length }} of {{ pagination.total }} matters on page {{ pagination.page }} of {{ pagination.pages or 1 }}.
+    </div>
     {% if ms %}
       <div class="list-stack" id="matter-list">
         {% for m in ms %}
@@ -132,6 +124,54 @@
         {% endfor %}
       </div>
       <div class="empty-state mt-3" id="matter-filter-empty" hidden>No matters match the selected quick filters.</div>
+
+      {% if pagination.pages > 1 %}
+        {% set start_page = pagination.page - 2 if pagination.page - 2 > 1 else 1 %}
+        {% set end_page = pagination.page + 2 if pagination.page + 2 < pagination.pages else pagination.pages %}
+        <nav class="mt-3" aria-label="Matter directory pages">
+          <ul class="pagination pagination-sm mb-0 flex-wrap">
+            <li class="page-item {{ 'disabled' if not pagination.has_prev }}">
+              {% if pagination.has_prev %}
+                <a class="page-link" href="{{ url_for('matters', q=q, sort=sort, page=pagination.prev_num) }}">Previous</a>
+              {% else %}
+                <span class="page-link">Previous</span>
+              {% endif %}
+            </li>
+
+            {% if start_page > 1 %}
+              <li class="page-item"><a class="page-link" href="{{ url_for('matters', q=q, sort=sort, page=1) }}">1</a></li>
+              {% if start_page > 2 %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+              {% endif %}
+            {% endif %}
+
+            {% for page_no in range(start_page, end_page + 1) %}
+              <li class="page-item {{ 'active' if page_no == pagination.page }}">
+                {% if page_no == pagination.page %}
+                  <span class="page-link">{{ page_no }}</span>
+                {% else %}
+                  <a class="page-link" href="{{ url_for('matters', q=q, sort=sort, page=page_no) }}">{{ page_no }}</a>
+                {% endif %}
+              </li>
+            {% endfor %}
+
+            {% if end_page < pagination.pages %}
+              {% if end_page < pagination.pages - 1 %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+              {% endif %}
+              <li class="page-item"><a class="page-link" href="{{ url_for('matters', q=q, sort=sort, page=pagination.pages) }}">{{ pagination.pages }}</a></li>
+            {% endif %}
+
+            <li class="page-item {{ 'disabled' if not pagination.has_next }}">
+              {% if pagination.has_next %}
+                <a class="page-link" href="{{ url_for('matters', q=q, sort=sort, page=pagination.next_num) }}">Next</a>
+              {% else %}
+                <span class="page-link">Next</span>
+              {% endif %}
+            </li>
+          </ul>
+        </nav>
+      {% endif %}
     {% else %}
       <div class="empty-state">No matters found. Create one to start tracking client work.</div>
     {% endif %}

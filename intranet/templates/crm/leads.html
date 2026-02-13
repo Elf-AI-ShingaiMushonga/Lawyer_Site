@@ -1,17 +1,22 @@
 {% extends "base.html" %}
 {% block content %}
-{% set stage_counts = {} %}
-{% for stage in stages %}
-  {% set _ = stage_counts.update({stage: (leads | selectattr('stage', 'equalto', stage) | list | length)}) %}
-{% endfor %}
-
 <div class="card p-3 mb-3">
   <h3 class="mb-1">Lead Intake</h3>
   <p class="page-intro mb-0">Capture potential clients, assign ownership, and progress intake toward engagement.</p>
+  <form method="get" class="row g-2 mt-3">
+    <div class="col-md-9">
+      <label class="form-label" for="crm-lead-search">Search Leads</label>
+      <input class="form-control" id="crm-lead-search" name="q" placeholder="Search by name, organization, email, or source..." value="{{ q }}">
+    </div>
+    <div class="col-md-3 d-grid">
+      <label class="form-label d-none d-md-block">&nbsp;</label>
+      <button class="btn btn-outline-light" type="submit">Apply</button>
+    </div>
+  </form>
   <div class="kpi-strip mt-3">
     <div class="kpi-pill">
       <div class="label">Total Leads</div>
-      <div class="value">{{ leads | length }}</div>
+      <div class="value">{{ total_leads }}</div>
     </div>
     <div class="kpi-pill">
       <div class="label">New</div>
@@ -77,6 +82,9 @@
     <input class="form-control" type="search" data-table-search placeholder="Filter by name, organization, stage, or source...">
     <div class="table-count" data-table-count aria-live="polite"></div>
   </div>
+  <div class="muted small mb-2">
+    Showing {{ leads|length }} of {{ pagination.total }} leads on page {{ pagination.page }} of {{ pagination.pages or 1 }}.
+  </div>
   <div class="table-responsive">
     <table class="table" id="crm-lead-table">
       <thead>
@@ -108,5 +116,53 @@
       </tbody>
     </table>
   </div>
+
+  {% if pagination.pages > 1 %}
+    {% set start_page = pagination.page - 2 if pagination.page - 2 > 1 else 1 %}
+    {% set end_page = pagination.page + 2 if pagination.page + 2 < pagination.pages else pagination.pages %}
+    <nav class="mt-3" aria-label="CRM lead pages">
+      <ul class="pagination pagination-sm mb-0 flex-wrap">
+        <li class="page-item {{ 'disabled' if not pagination.has_prev }}">
+          {% if pagination.has_prev %}
+            <a class="page-link" href="{{ url_for('crm_leads', q=q, page=pagination.prev_num) }}">Previous</a>
+          {% else %}
+            <span class="page-link">Previous</span>
+          {% endif %}
+        </li>
+
+        {% if start_page > 1 %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('crm_leads', q=q, page=1) }}">1</a></li>
+          {% if start_page > 2 %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+        {% endif %}
+
+        {% for page_no in range(start_page, end_page + 1) %}
+          <li class="page-item {{ 'active' if page_no == pagination.page }}">
+            {% if page_no == pagination.page %}
+              <span class="page-link">{{ page_no }}</span>
+            {% else %}
+              <a class="page-link" href="{{ url_for('crm_leads', q=q, page=page_no) }}">{{ page_no }}</a>
+            {% endif %}
+          </li>
+        {% endfor %}
+
+        {% if end_page < pagination.pages %}
+          {% if end_page < pagination.pages - 1 %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('crm_leads', q=q, page=pagination.pages) }}">{{ pagination.pages }}</a></li>
+        {% endif %}
+
+        <li class="page-item {{ 'disabled' if not pagination.has_next }}">
+          {% if pagination.has_next %}
+            <a class="page-link" href="{{ url_for('crm_leads', q=q, page=pagination.next_num) }}">Next</a>
+          {% else %}
+            <span class="page-link">Next</span>
+          {% endif %}
+        </li>
+      </ul>
+    </nav>
+  {% endif %}
 </div>
 {% endblock %}

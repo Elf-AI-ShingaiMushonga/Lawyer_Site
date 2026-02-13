@@ -677,6 +677,40 @@
       display: none;
     }
 
+    .pagination {
+      gap: 4px;
+    }
+
+    .pagination .page-item .page-link {
+      border-radius: 9px;
+      border-color: rgba(225, 6, 0, 0.28);
+      color: #742825;
+      background: rgba(255, 255, 255, 0.92);
+      min-width: 38px;
+      text-align: center;
+      line-height: 1.2;
+      font-weight: 700;
+    }
+
+    .pagination .page-item .page-link:hover {
+      color: #ffffff;
+      border-color: rgba(225, 6, 0, 0.72);
+      background: var(--accent);
+    }
+
+    .pagination .page-item.active .page-link {
+      color: #ffffff;
+      border-color: rgba(225, 6, 0, 0.88);
+      background: linear-gradient(140deg, var(--accent), var(--accent-strong));
+      box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.16);
+    }
+
+    .pagination .page-item.disabled .page-link {
+      color: #ab9191;
+      border-color: rgba(225, 6, 0, 0.16);
+      background: rgba(255, 250, 250, 0.92);
+    }
+
     form.is-submitting {
       opacity: 0.86;
     }

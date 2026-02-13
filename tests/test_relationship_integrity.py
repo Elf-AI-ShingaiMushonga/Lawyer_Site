@@ -15,7 +15,9 @@ from intranet.jobs.worker import _handle_retention_archive_sweep
 from intranet.mfa import _totp, generate_totp_secret, verify_totp
 from intranet.models import (
     AuditLog,
+    CRMLead,
     ConflictCheck,
+    ConflictSemanticHit,
     DataResidencyPolicy,
     Deadline,
     DocumentRecord,
@@ -32,6 +34,7 @@ from intranet.models import (
     InvoiceAdjustment,
     Invoice,
     InvoiceLine,
+    JobQueue,
     LegalHold,
     PortalLinkToken,
     RetentionPolicy,
@@ -714,6 +717,55 @@ def test_billing_engine_uses_matter_client_on_expense_only_invoice(seed_user_mat
     assert invoice.created_by == user.id
 
 
+def test_intake_creation_queues_semantic_conflict_scan(app_ctx):
+    app = app_ctx
+    user = _seed_user("conflict-queue@example.com")
+    matter = _seed_matter(user, "2026-CONFLICT-QUEUE-01", "Queued Conflict Matter", "Queue Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    lead = CRMLead(
+        full_name="Queue Lead",
+        organization="Acme Queue Holdings",
+        email="queue.lead@example.com",
+        stage="qualified",
+        created_by=user.id,
+    )
+    db.session.add(lead)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    csrf = _csrf_token_for_path(client, f"/crm/leads/{lead.id}")
+    response = client.post(
+        f"/crm/leads/{lead.id}",
+        data={
+            "csrf_token": csrf,
+            "action": "intake",
+            "matter_id": matter.id,
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    intake = IntakeForm.query.filter_by(lead_id=lead.id).order_by(IntakeForm.created_at.desc()).first()
+    assert intake is not None
+
+    conflict = ConflictCheck.query.filter_by(intake_form_id=intake.id).order_by(ConflictCheck.created_at.desc()).first()
+    assert conflict is not None
+    assert conflict.status == "pending"
+    payload = json.loads(conflict.result_json or "{}")
+    assert payload.get("semantic_status") == "queued"
+
+    queued_job = (
+        JobQueue.query.filter(
+            JobQueue.job_type == "conflict_semantic_scan",
+            JobQueue.payload_json.like(f'%"conflict_check_id": {conflict.id}%'),
+        )
+        .order_by(JobQueue.created_at.desc())
+        .first()
+    )
+    assert queued_job is not None
+
+
 def test_conflict_report_export_route_returns_csv(app_ctx):
     app = app_ctx
     user = _seed_user("conflict-export@example.com")
@@ -729,6 +781,46 @@ def test_conflict_report_export_route_returns_csv(app_ctx):
         override_required=True,
     )
     db.session.add(conflict)
+    db.session.flush()
+    record = DocumentRecord(
+        matter_id=matter.id,
+        title="Conflict Evidence Memo",
+        document_type="Memo",
+        confidentiality="Internal",
+        created_by=user.id,
+    )
+    db.session.add(record)
+    db.session.flush()
+    version = DocumentVersion(
+        document_id=record.id,
+        version_no=1,
+        original_filename="conflict-evidence.txt",
+        stored_filename="conflict-evidence.txt",
+        sha256="conflict-evidence-sha",
+        state="final",
+        uploaded_by=user.id,
+    )
+    db.session.add(version)
+    db.session.flush()
+    ocr = DocumentOCRText(document_version_id=version.id, extracted_text="Acme Holdings appears in historical memo.")
+    db.session.add(ocr)
+    db.session.flush()
+    db.session.add(
+        ConflictSemanticHit(
+            conflict_check_id=conflict.id,
+            document_ocr_text_id=ocr.id,
+            document_version_id=version.id,
+            matter_id=matter.id,
+            candidate_entity="Acme Holdings",
+            matched_phrase="acme holdings",
+            match_reason="semantic_vector",
+            similarity_score=0.78,
+            lexical_score=0.41,
+            vector_score=0.86,
+            excerpt="Acme Holdings appears in historical memo.",
+            semantic_rank=1,
+        )
+    )
     db.session.commit()
 
     client = app.test_client()
@@ -740,6 +832,8 @@ def test_conflict_report_export_route_returns_csv(app_ctx):
     payload = response.get_data(as_text=True)
     assert "check_id,status,intake_id,matches" in payload
     assert "entity:Acme" in payload
+    assert "semantic_hits" in payload
+    assert "Acme Holdings -> matter" in payload
 
 
 def test_billing_adjustments_and_ar_aging_routes(app_ctx):

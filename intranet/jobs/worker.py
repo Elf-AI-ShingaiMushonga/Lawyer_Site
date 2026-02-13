@@ -307,6 +307,26 @@ def _handle_burnout_heuristics(payload: dict) -> str:
     return f"burnout signals upserted: {upserted}"
 
 
+def _handle_conflict_semantic_scan(payload: dict) -> str:
+    from ..services.conflict_engine import ConflictEngine
+
+    intake_id = int(payload.get("intake_id") or 0)
+    if intake_id <= 0:
+        return "skipped: intake_id missing"
+
+    raw_check_id = payload.get("conflict_check_id")
+    conflict_check_id = int(raw_check_id) if raw_check_id is not None else None
+    if conflict_check_id is not None and conflict_check_id <= 0:
+        conflict_check_id = None
+
+    report = ConflictEngine.run_semantic_scan(intake_id, conflict_check_id=conflict_check_id)
+    semantic_hit_count = sum(1 for item in report.matched_entities if str(item).startswith("semantic:"))
+    return (
+        f"conflict semantic scan: check_id={report.conflict_check_id}, "
+        f"status={report.status}, semantic_hits={semantic_hit_count}"
+    )
+
+
 def _handle_suspicious_activity_scan(payload: dict) -> str:
     from sqlalchemy import func
 
@@ -413,6 +433,7 @@ HANDLERS = {
     "analytics_snapshot": _handle_analytics_snapshot,
     "workload_forecast": _handle_workload_forecast,
     "burnout_heuristics": _handle_burnout_heuristics,
+    "conflict_semantic_scan": _handle_conflict_semantic_scan,
     "suspicious_activity_scan": _handle_suspicious_activity_scan,
 }
 

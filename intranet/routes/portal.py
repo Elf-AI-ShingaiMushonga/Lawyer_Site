@@ -612,17 +612,50 @@ def register_portal_routes(app):
 
             return redirect(url_for("admin_portal_users"))
 
-        users = PortalUser.query.order_by(PortalUser.created_at.desc()).all()
-        accesses = PortalMatterAccess.query.order_by(PortalMatterAccess.granted_at.desc()).all()
+        user_page = request.args.get("user_page", default=1, type=int) or 1
+        access_page = request.args.get("access_page", default=1, type=int) or 1
+        if user_page < 1:
+            user_page = 1
+        if access_page < 1:
+            access_page = 1
+
+        user_pagination = PortalUser.query.order_by(PortalUser.created_at.desc()).paginate(
+            page=user_page,
+            per_page=50,
+            error_out=False,
+        )
+        access_pagination = PortalMatterAccess.query.order_by(PortalMatterAccess.granted_at.desc()).paginate(
+            page=access_page,
+            per_page=75,
+            error_out=False,
+        )
+        users = user_pagination.items
+        accesses = access_pagination.items
+        grant_users = PortalUser.query.order_by(PortalUser.created_at.desc()).limit(300).all()
         matters = Matter.query.order_by(Matter.opened_at.desc()).limit(300).all()
-        user_map = {u.id: u for u in users}
+
+        user_map = {u.id: u for u in grant_users}
+        for user in users:
+            user_map[user.id] = user
+        missing_user_ids = {int(row.portal_user_id) for row in accesses if row.portal_user_id not in user_map}
+        if missing_user_ids:
+            for user in PortalUser.query.filter(PortalUser.id.in_(missing_user_ids)).all():
+                user_map[user.id] = user
+
         matter_map = {m.id: m for m in matters}
+        missing_matter_ids = {int(row.matter_id) for row in accesses if row.matter_id not in matter_map}
+        if missing_matter_ids:
+            for matter in Matter.query.filter(Matter.id.in_(missing_matter_ids)).all():
+                matter_map[matter.id] = matter
         return page(
             "Portal Administration",
             "portal/admin_users.html",
             users=users,
+            grant_users=grant_users,
             accesses=accesses,
             matters=matters,
             user_map=user_map,
             matter_map=matter_map,
+            user_pagination=user_pagination,
+            access_pagination=access_pagination,
         )

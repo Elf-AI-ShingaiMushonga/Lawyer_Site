@@ -1,14 +1,5 @@
 {% extends "base.html" %}
 {% block content %}
-{% set reimbursable_count = expenses | selectattr('is_reimbursable') | list | length %}
-{% set approved_count = expenses | selectattr('status', 'equalto', 'approved') | list | length %}
-{% set submitted_count = expenses | selectattr('status', 'equalto', 'submitted') | list | length %}
-{% set total_amount = expenses | sum(attribute='amount') %}
-{% set matter_lookup = {} %}
-{% for matter in matters %}
-  {% set _ = matter_lookup.update({matter.id: matter}) %}
-{% endfor %}
-
 <div class="card p-3 mb-3">
   <div class="toolbar-row">
     <div>
@@ -22,7 +13,7 @@
   <div class="kpi-strip mt-3">
     <div class="kpi-pill">
       <div class="label">Expenses</div>
-      <div class="value">{{ expenses | length }}</div>
+      <div class="value">{{ total_expenses }}</div>
     </div>
     <div class="kpi-pill">
       <div class="label">Submitted</div>
@@ -100,6 +91,9 @@
     <input class="form-control" type="search" data-table-search placeholder="Filter expenses by matter, category, status, or id...">
     <div class="table-count" data-table-count aria-live="polite"></div>
   </div>
+  <div class="muted small mb-2">
+    Showing {{ expenses|length }} of {{ pagination.total }} expenses on page {{ pagination.page }} of {{ pagination.pages or 1 }}.
+  </div>
 
   <div class="table-responsive">
     <table class="table" id="expenses-table">
@@ -165,5 +159,53 @@
       </tbody>
     </table>
   </div>
+
+  {% if pagination.pages > 1 %}
+    {% set start_page = pagination.page - 2 if pagination.page - 2 > 1 else 1 %}
+    {% set end_page = pagination.page + 2 if pagination.page + 2 < pagination.pages else pagination.pages %}
+    <nav class="mt-3" aria-label="Expense register pages">
+      <ul class="pagination pagination-sm mb-0 flex-wrap">
+        <li class="page-item {{ 'disabled' if not pagination.has_prev }}">
+          {% if pagination.has_prev %}
+            <a class="page-link" href="{{ url_for('expenses', page=pagination.prev_num) }}">Previous</a>
+          {% else %}
+            <span class="page-link">Previous</span>
+          {% endif %}
+        </li>
+
+        {% if start_page > 1 %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('expenses', page=1) }}">1</a></li>
+          {% if start_page > 2 %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+        {% endif %}
+
+        {% for page_no in range(start_page, end_page + 1) %}
+          <li class="page-item {{ 'active' if page_no == pagination.page }}">
+            {% if page_no == pagination.page %}
+              <span class="page-link">{{ page_no }}</span>
+            {% else %}
+              <a class="page-link" href="{{ url_for('expenses', page=page_no) }}">{{ page_no }}</a>
+            {% endif %}
+          </li>
+        {% endfor %}
+
+        {% if end_page < pagination.pages %}
+          {% if end_page < pagination.pages - 1 %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('expenses', page=pagination.pages) }}">{{ pagination.pages }}</a></li>
+        {% endif %}
+
+        <li class="page-item {{ 'disabled' if not pagination.has_next }}">
+          {% if pagination.has_next %}
+            <a class="page-link" href="{{ url_for('expenses', page=pagination.next_num) }}">Next</a>
+          {% else %}
+            <span class="page-link">Next</span>
+          {% endif %}
+        </li>
+      </ul>
+    </nav>
+  {% endif %}
 </div>
 {% endblock %}

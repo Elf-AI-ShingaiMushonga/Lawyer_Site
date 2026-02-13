@@ -131,6 +131,10 @@ After signing in, click `Story Mode Off` in the top navigation to enable guided 
 - `deploy/ubuntu/`: Ubuntu deployment artifacts (cloud-init, systemd service, Nginx config, Gunicorn config)
 - `scripts/seed_demo.sh`: helper wrapper to load demo dataset quickly
 
+## User documentation
+
+- Lawyer user guide: `docs/lawyer_user_guide.md`
+
 ## Required production env vars
 
 - `FLASK_ENV=production`

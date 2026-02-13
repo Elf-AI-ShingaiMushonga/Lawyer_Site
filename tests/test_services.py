@@ -6,8 +6,12 @@ from intranet.extensions import db
 from intranet.jobs.worker import _handle_burnout_heuristics, _handle_workload_forecast
 from intranet.models import (
     BurnoutSignal,
+    ConflictSemanticHit,
     Contact,
     DeadlineRule,
+    DocumentOCRText,
+    DocumentRecord,
+    DocumentVersion,
     FeeArrangement,
     IntakeForm,
     Invoice,
@@ -101,6 +105,71 @@ def test_conflict_engine_detects_contact_match(seed_user_matter):
     assert report.conflict_check_id is not None
     assert report.status == "potential_conflict"
     assert any("acme" in item.lower() for item in report.matched_entities)
+
+
+def test_conflict_engine_semantic_scan_links_ocr_entities(seed_user_matter):
+    user = seed_user_matter["user"]
+    matter = seed_user_matter["matter"]
+
+    prior_matter = Matter(
+        matter_no="2026-CONFLICT-PRIOR-01",
+        title="Prior Representation",
+        client_name="Acme Logistics Group",
+        status="Open",
+        created_by=user.id,
+        opened_at=dt.datetime.utcnow(),
+        last_updated_at=dt.datetime.utcnow(),
+    )
+    db.session.add(prior_matter)
+    db.session.flush()
+
+    record = DocumentRecord(
+        matter_id=prior_matter.id,
+        title="Prior representation memo",
+        document_type="Memo",
+        confidentiality="Internal",
+        created_by=user.id,
+    )
+    db.session.add(record)
+    db.session.flush()
+
+    version = DocumentVersion(
+        document_id=record.id,
+        version_no=1,
+        original_filename="prior-memo.txt",
+        stored_filename="prior-memo.txt",
+        sha256="semantic-sha",
+        state="final",
+        uploaded_by=user.id,
+    )
+    db.session.add(version)
+    db.session.flush()
+
+    db.session.add(
+        DocumentOCRText(
+            document_version_id=version.id,
+            extracted_text=(
+                "Acme Holdings (Pty) Ltd appears as a subsidiary of Acme Logistics Group in this retained matter."
+            ),
+        )
+    )
+    intake = IntakeForm(
+        lead_id=None,
+        matter_id=matter.id,
+        data_json='{"entities": ["Acme Holdings"]}',
+        created_by=user.id,
+    )
+    db.session.add(intake)
+    db.session.commit()
+
+    report = ConflictEngine.run_semantic_scan(intake.id)
+    assert report.conflict_check_id is not None
+    assert report.status == "potential_conflict"
+
+    rows = ConflictSemanticHit.query.filter_by(conflict_check_id=report.conflict_check_id).all()
+    assert rows
+    assert any("acme holdings" in row.candidate_entity.lower() for row in rows)
+    assert any(float(row.similarity_score or 0.0) > 0.4 for row in rows)
 
 
 def test_trust_engine_rejects_ledger_account_mismatch(seed_user_matter):

@@ -48,6 +48,9 @@ def register_matter_routes(app):
     def matters():
         q = normalize_query(request.args.get("q", ""))
         sort = normalize_query(request.args.get("sort", "opened_desc")).lower() or "opened_desc"
+        page_number = request.args.get("page", default=1, type=int) or 1
+        if page_number < 1:
+            page_number = 1
         risk_rank = sa.case(
             (Matter.risk_level == "Critical", 4),
             (Matter.risk_level == "High", 3),
@@ -99,8 +102,22 @@ def register_matter_routes(app):
         if q:
             like = f"%{q}%"
             base = base.filter((Matter.matter_no.ilike(like)) | (Matter.title.ilike(like)) | (Matter.client_name.ilike(like)))
-        ms = base.order_by(*sort_order[sort]).limit(200).all()
-        return page("Matters", "matters/list.html", ms=ms, q=q, sort=sort, sort_options=sort_options)
+        pagination = base.order_by(*sort_order[sort]).paginate(page=page_number, per_page=50, error_out=False)
+        ms = pagination.items
+        status_counts = {"Open": 0, "On Hold": 0, "Closed": 0}
+        for status, count in base.with_entities(Matter.status, sa.func.count(Matter.id)).group_by(Matter.status).all():
+            if status in status_counts:
+                status_counts[status] = int(count)
+        return page(
+            "Matters",
+            "matters/list.html",
+            ms=ms,
+            q=q,
+            sort=sort,
+            sort_options=sort_options,
+            pagination=pagination,
+            status_counts=status_counts,
+        )
 
     @app.route("/matters/new", methods=["GET", "POST"])
     @login_required

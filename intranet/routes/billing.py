@@ -291,6 +291,9 @@ def register_billing_routes(app):
                 flash(f"Invoice {result.invoice_id} generated.", "info")
             return redirect(url_for("billing_invoices"))
 
+        page_number = request.args.get("page", default=1, type=int) or 1
+        if page_number < 1:
+            page_number = 1
         invoice_query = Invoice.query
         matter_query = Matter.query
         if not is_admin():
@@ -301,9 +304,32 @@ def register_billing_routes(app):
             else:
                 invoice_query = invoice_query.filter(Invoice.id == -1)
                 matter_query = matter_query.filter(Matter.id == -1)
-        rows = invoice_query.order_by(Invoice.created_at.desc()).limit(300).all()
+        pagination = invoice_query.order_by(Invoice.created_at.desc()).paginate(page=page_number, per_page=50, error_out=False)
+        rows = pagination.items
         matters = matter_query.order_by(Matter.opened_at.desc()).limit(200).all()
-        return page("Invoices", "billing/invoices.html", invoices=rows, matters=matters)
+        matter_ids_for_display = {int(row.matter_id) for row in rows if row.matter_id}
+        selectable_matter_ids = {matter.id for matter in matters}
+        missing_matter_ids = matter_ids_for_display - selectable_matter_ids
+        display_matters = list(matters)
+        if missing_matter_ids:
+            display_matters.extend(Matter.query.filter(Matter.id.in_(missing_matter_ids)).all())
+        matter_lookup = {matter.id: matter for matter in display_matters}
+
+        total_billed = float(invoice_query.with_entities(func.coalesce(func.sum(Invoice.total), 0.0)).scalar() or 0.0)
+        approved_count = invoice_query.filter(Invoice.status == "approved").count()
+        draft_count = invoice_query.filter(Invoice.status == "draft").count()
+        return page(
+            "Invoices",
+            "billing/invoices.html",
+            invoices=rows,
+            matters=matters,
+            matter_lookup=matter_lookup,
+            pagination=pagination,
+            total_invoices=pagination.total,
+            approved_count=approved_count,
+            draft_count=draft_count,
+            total_billed=total_billed,
+        )
 
     @app.get("/billing/invoices/<int:invoice_id>")
     @login_required

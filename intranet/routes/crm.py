@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+from collections import defaultdict
 
-from flask import Response, abort, flash, redirect, request, url_for
+import sqlalchemy as sa
+from flask import Response, abort, current_app, flash, redirect, request, url_for
 from flask_login import current_user, login_required
 
 from ..extensions import db
 from ..helpers import audit, normalize_query
 from ..reports import export_conflict_report_csv
-from ..models import CRMFollowUp, CRMLead, ConflictCheck, EngagementLetter, IntakeForm, Matter
+from ..models import CRMFollowUp, CRMLead, ConflictCheck, ConflictSemanticHit, EngagementLetter, IntakeForm, Matter
 from ..services.conflict_engine import ConflictEngine
 from ..templates import page
 
@@ -44,6 +46,9 @@ def register_crm_routes(app):
             return redirect(url_for("crm_leads"))
 
         q = normalize_query(request.args.get("q", ""))
+        page_number = request.args.get("page", default=1, type=int) or 1
+        if page_number < 1:
+            page_number = 1
         base = CRMLead.query
         if q:
             like = f"%{q}%"
@@ -53,8 +58,22 @@ def register_crm_routes(app):
                 | (CRMLead.email.ilike(like))
                 | (CRMLead.source.ilike(like))
             )
-        leads = base.order_by(CRMLead.created_at.desc()).limit(300).all()
-        return page("CRM Leads", "crm/leads.html", leads=leads, stages=LEAD_STAGES, q=q)
+        pagination = base.order_by(CRMLead.created_at.desc()).paginate(page=page_number, per_page=50, error_out=False)
+        leads = pagination.items
+        stage_counts = {stage: 0 for stage in LEAD_STAGES}
+        for stage, count in base.with_entities(CRMLead.stage, sa.func.count(CRMLead.id)).group_by(CRMLead.stage).all():
+            if stage in stage_counts:
+                stage_counts[stage] = int(count)
+        return page(
+            "CRM Leads",
+            "crm/leads.html",
+            leads=leads,
+            stages=LEAD_STAGES,
+            q=q,
+            pagination=pagination,
+            stage_counts=stage_counts,
+            total_leads=pagination.total,
+        )
 
     @app.route("/crm/leads/<int:lead_id>", methods=["GET", "POST"])
     @login_required
@@ -111,7 +130,22 @@ def register_crm_routes(app):
                 db.session.add(intake)
                 db.session.commit()
                 audit("intake_create", "IntakeForm", intake.id)
-                flash("Intake form created.", "info")
+                queued_check_id = None
+                try:
+                    queued_check_id = ConflictEngine.enqueue_semantic_scan(intake.id, requested_by=current_user.id)
+                except Exception:  # pragma: no cover - resilience guard for queue/database contention
+                    db.session.rollback()
+                    current_app.logger.exception("Failed to queue semantic conflict scan for intake_id=%s", intake.id)
+                if queued_check_id is not None:
+                    audit(
+                        "conflict_semantic_queued",
+                        "ConflictCheck",
+                        queued_check_id,
+                        {"intake_id": intake.id, "source": "intake_create"},
+                    )
+                    flash("Intake form created. Semantic conflict scan queued.", "info")
+                else:
+                    flash("Intake form created.", "info")
 
             elif action == "engagement":
                 matter_id = request.form.get("matter_id", type=int)
@@ -148,6 +182,61 @@ def register_crm_routes(app):
             .limit(100)
             .all()
         )
+        conflict_ids = [conflict.id for conflict in conflicts]
+        semantic_hits_by_conflict: dict[int, list[ConflictSemanticHit]] = defaultdict(list)
+        if conflict_ids:
+            semantic_rows = (
+                ConflictSemanticHit.query.filter(ConflictSemanticHit.conflict_check_id.in_(conflict_ids))
+                .order_by(
+                    ConflictSemanticHit.conflict_check_id.asc(),
+                    ConflictSemanticHit.semantic_rank.asc(),
+                    ConflictSemanticHit.similarity_score.desc(),
+                )
+                .all()
+            )
+            for row in semantic_rows:
+                semantic_hits_by_conflict[int(row.conflict_check_id)].append(row)
+
+        conflict_meta: dict[int, dict] = {}
+        for conflict in conflicts:
+            payload = {}
+            if conflict.result_json:
+                try:
+                    payload = json.loads(conflict.result_json)
+                except json.JSONDecodeError:
+                    payload = {}
+            direct_matches = payload.get("matches", []) if isinstance(payload.get("matches"), list) else []
+            semantic_hits = semantic_hits_by_conflict.get(conflict.id, [])
+            semantic_status = str(payload.get("semantic_status") or ("completed" if semantic_hits else "not_requested"))
+            semantic_hit_count = int(payload.get("semantic_hit_count") or len(semantic_hits))
+            top_semantic_score = max((float(row.similarity_score or 0.0) for row in semantic_hits), default=0.0)
+            if top_semantic_score <= 0 and isinstance(payload.get("semantic_hits"), list):
+                top_semantic_score = max(
+                    (
+                        float(item.get("similarity_score") or 0.0)
+                        for item in payload.get("semantic_hits", [])
+                        if isinstance(item, dict)
+                    ),
+                    default=0.0,
+                )
+            conflict_meta[conflict.id] = {
+                "direct_match_count": len(direct_matches),
+                "semantic_status": semantic_status,
+                "semantic_hit_count": semantic_hit_count,
+                "top_semantic_score": round(top_semantic_score, 2),
+            }
+
+        matter_lookup = {matter.id: matter for matter in matters}
+        missing_matter_ids = {
+            int(hit.matter_id)
+            for hits in semantic_hits_by_conflict.values()
+            for hit in hits
+            if hit.matter_id and int(hit.matter_id) not in matter_lookup
+        }
+        if missing_matter_ids:
+            for row in Matter.query.filter(Matter.id.in_(missing_matter_ids)).all():
+                matter_lookup[row.id] = row
+
         return page(
             "Lead Detail",
             "crm/lead_detail.html",
@@ -155,7 +244,10 @@ def register_crm_routes(app):
             followups=followups,
             intakes=intakes,
             conflicts=conflicts,
+            conflict_meta=conflict_meta,
+            semantic_hits_by_conflict=semantic_hits_by_conflict,
             matters=matters,
+            matter_lookup=matter_lookup,
             letters=letters,
             stages=LEAD_STAGES,
         )
@@ -176,6 +268,24 @@ def register_crm_routes(app):
                 report.conflict_check_id,
                 {"status": report.status, "matches": report.matched_entities},
             )
+            queued_check_id = None
+            try:
+                queued_check_id = ConflictEngine.enqueue_semantic_scan(
+                    intake_id,
+                    requested_by=current_user.id,
+                    conflict_check_id=report.conflict_check_id,
+                )
+            except Exception:  # pragma: no cover - resilience guard for queue/database contention
+                db.session.rollback()
+                current_app.logger.exception("Failed to queue semantic conflict scan for intake_id=%s", intake_id)
+            if queued_check_id is not None:
+                audit(
+                    "conflict_semantic_queued",
+                    "ConflictCheck",
+                    queued_check_id,
+                    {"intake_id": intake_id, "source": "manual_conflict_run"},
+                )
+                flash("Semantic conflict scan queued in background.", "info")
         flash(f"Conflict check status: {report.status}", "info")
         intake = db.session.get(IntakeForm, intake_id)
         if intake and intake.lead_id:

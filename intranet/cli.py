@@ -24,6 +24,7 @@ from .models import (
     CRMFollowUp,
     CRMLead,
     ConflictCheck,
+    ConflictSemanticHit,
     Contact,
     DRTarget,
     DataResidencyPolicy,
@@ -137,6 +138,14 @@ def _detect_schema_gaps():
         "trust_bank_statement_line": {"id", "import_id", "posted_on", "signed_amount"},
         "section86_investment": {"id", "trust_account_id", "client_ledger_id", "investment_ref", "principal_amount", "annual_rate_percent"},
         "section86_accrual": {"id", "investment_id", "accrual_date", "net_interest_amount"},
+        "conflict_semantic_hit": {
+            "id",
+            "conflict_check_id",
+            "document_ocr_text_id",
+            "candidate_entity",
+            "similarity_score",
+            "semantic_rank",
+        },
     }
     missing_tables = []
     missing_columns = []
@@ -3765,6 +3774,7 @@ def _reset_demo_dataset(app):
         CRMFollowUp,
         CRMLead,
         ConflictCheck,
+        ConflictSemanticHit,
         Contact,
         DRTarget,
         DataResidencyPolicy,
@@ -3914,6 +3924,7 @@ def _reset_demo_dataset(app):
             PortalMatterAccess,
             PortalUser,
             EngagementLetter,
+            ConflictSemanticHit,
             ConflictCheck,
             IntakeForm,
             CRMFollowUp,

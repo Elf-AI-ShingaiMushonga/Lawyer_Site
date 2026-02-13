@@ -161,7 +161,7 @@
                 <form method="post" action="{{ url_for('crm_conflicts_check') }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="intake_id" value="{{ intake.id }}">
-                  <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Running...">Run Conflict Check</button>
+                  <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Running...">Run Check + Semantic</button>
                 </form>
               </div>
             </div>
@@ -182,12 +182,54 @@
                   <div class="list-meta">
                     <span class="badge badge-soft status-badge">{{ conflict.status }}</span>
                     <span>Override required: {{ conflict.override_required }}</span>
+                    <span>Direct matches: {{ conflict_meta.get(conflict.id, {}).get('direct_match_count', 0) }}</span>
+                    <span>Semantic: {{ conflict_meta.get(conflict.id, {}).get('semantic_status', 'not_requested') }}</span>
+                    <span>Semantic hits: {{ conflict_meta.get(conflict.id, {}).get('semantic_hit_count', 0) }}</span>
+                    {% if conflict_meta.get(conflict.id, {}).get('top_semantic_score', 0) > 0 %}
+                      <span>Top score: {{ '%.2f'|format(conflict_meta.get(conflict.id, {}).get('top_semantic_score', 0)) }}</span>
+                    {% endif %}
                   </div>
                 </div>
                 <div class="list-actions">
                   <a class="btn btn-sm btn-outline-light" href="{{ url_for('crm_conflict_export', conflict_id=conflict.id) }}">Export CSV</a>
                 </div>
               </div>
+              {% set semantic_hits = semantic_hits_by_conflict.get(conflict.id, []) %}
+              {% if semantic_hits %}
+                <div class="table-responsive mt-2">
+                  <table class="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Entity</th>
+                        <th>Matter</th>
+                        <th>Score</th>
+                        <th>Reason</th>
+                        <th>Excerpt</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for hit in semantic_hits[:4] %}
+                        {% set hit_matter = matter_lookup.get(hit.matter_id) %}
+                        <tr>
+                          <td>{{ hit.candidate_entity }}</td>
+                          <td>
+                            {% if hit_matter %}
+                              {{ hit_matter.matter_no }} · {{ hit_matter.title }}
+                            {% else %}
+                              {{ hit.matter_id or '-' }}
+                            {% endif %}
+                          </td>
+                          <td>{{ '%.2f'|format(hit.similarity_score or 0) }}</td>
+                          <td>{{ hit.match_reason or '-' }}</td>
+                          <td>{{ hit.excerpt or '-' }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% elif conflict_meta.get(conflict.id, {}).get('semantic_status') in ['queued', 'running', 'pending'] %}
+                <div class="muted small mt-2">Semantic OCR scan is queued. Run worker to process background jobs.</div>
+              {% endif %}
               {% if conflict.override_required and conflict.status != 'overridden' %}
                 <form method="post" action="{{ url_for('crm_conflict_override', conflict_id=conflict.id) }}" class="row g-2 mt-2 align-items-end">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

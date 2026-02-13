@@ -1129,6 +1129,27 @@ class ConflictCheck(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
 
 
+class ConflictSemanticHit(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    conflict_check_id = db.Column(db.Integer, db.ForeignKey("conflict_check.id"), nullable=False, index=True)
+    document_ocr_text_id = db.Column(db.Integer, db.ForeignKey("document_ocr_text.id"), nullable=False, index=True)
+    document_version_id = db.Column(db.Integer, db.ForeignKey("document_version.id"), nullable=True, index=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True, index=True)
+    candidate_entity = db.Column(db.String(255), nullable=False)
+    matched_phrase = db.Column(db.String(255), nullable=True)
+    match_reason = db.Column(db.String(255), nullable=True)
+    similarity_score = db.Column(db.Float, nullable=False, default=0.0)
+    lexical_score = db.Column(db.Float, nullable=False, default=0.0)
+    vector_score = db.Column(db.Float, nullable=False, default=0.0)
+    excerpt = db.Column(db.Text, nullable=True)
+    semantic_rank = db.Column(db.Integer, nullable=False, default=1)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (
+        db.Index("ix_conflict_semantic_hit_conflict_rank", "conflict_check_id", "semantic_rank"),
+        db.Index("ix_conflict_semantic_hit_similarity", "similarity_score", "created_at"),
+    )
+
+
 class EngagementLetter(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
