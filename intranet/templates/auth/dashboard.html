@@ -65,7 +65,7 @@
         <h4 class="mb-0">At-Risk Matters</h4>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Open directory</a>
       </div>
-      <div class="mt-2">
+      <div class="mt-2 entry-scroll">
         {% if at_risk_matters %}
           {% for item in at_risk_matters %}
             <div class="activity-item">
@@ -89,7 +89,7 @@
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_announcements') }}">Post Update</a>
         {% endif %}
       </div>
-      <div class="mt-2">
+      <div class="mt-2 entry-scroll">
         {% if anns %}
           {% for a in anns %}
             <div class="border-top pt-2 mt-2">
@@ -111,7 +111,7 @@
         <h4 class="mb-0">My Tasks</h4>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Open Matters</a>
       </div>
-      <div class="mt-2">
+      <div class="mt-2 entry-scroll">
         {% if my_tasks %}
           {% for t in my_tasks %}
             {% set task_matter = task_matter_map.get(t.matter_id) if task_matter_map else None %}
@@ -142,7 +142,7 @@
         <h4 class="mb-0">Recent Matters</h4>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">View All</a>
       </div>
-      <div class="mt-2">
+      <div class="mt-2 entry-scroll">
         {% if recent_matters %}
           {% for m in recent_matters %}
             <div class="border-top pt-2 mt-2">
