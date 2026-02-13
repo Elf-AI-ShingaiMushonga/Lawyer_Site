@@ -22,13 +22,18 @@ from ..mfa import check_backup_code, verify_totp
 from ..models import (
     Announcement,
     AuditLog,
+    ConflictCheck,
+    Deadline,
     Contact,
     DocumentFile,
+    Invoice,
     KnowledgeBase,
     Matter,
     MatterMember,
+    PortalMessageThread,
     Task,
     TaskAssignee,
+    TrustReconciliationRun,
     User,
     UserMFABackupCode,
 )
@@ -223,6 +228,12 @@ def register_auth_routes(app):
             .limit(8)
             .all()
         )
+        task_matter_ids = sorted({int(task.matter_id) for task in my_tasks if task.matter_id})
+        task_matter_map = (
+            {row.id: row for row in Matter.query.filter(Matter.id.in_(task_matter_ids)).all()}
+            if task_matter_ids
+            else {}
+        )
 
         matter_scope = Matter.query
         scoped_ids: list[int] | None = None
@@ -315,6 +326,7 @@ def register_auth_routes(app):
             recent_matters=recent_matters,
             stats=stats,
             at_risk_matters=at_risk_matters,
+            task_matter_map=task_matter_map,
         )
 
     @app.get("/story")
@@ -337,21 +349,52 @@ def register_auth_routes(app):
 
         open_task_scope = Task.query.filter(Task.status != "Done")
         document_scope = DocumentFile.query
+        invoice_scope = Invoice.query
+        deadline_scope = Deadline.query.filter(
+            Deadline.due_at >= dt.date.today(),
+            Deadline.due_at <= (dt.date.today() + dt.timedelta(days=14)),
+        )
         if not is_admin():
             if scoped_ids:
                 open_task_scope = open_task_scope.filter(Task.matter_id.in_(scoped_ids))
                 document_scope = document_scope.filter(DocumentFile.matter_id.in_(scoped_ids))
+                invoice_scope = invoice_scope.filter(Invoice.matter_id.in_(scoped_ids))
+                deadline_scope = deadline_scope.filter(Deadline.matter_id.in_(scoped_ids))
             else:
                 open_task_scope = open_task_scope.filter(Task.id == -1)
                 document_scope = document_scope.filter(DocumentFile.id == -1)
+                invoice_scope = invoice_scope.filter(Invoice.id == -1)
+                deadline_scope = deadline_scope.filter(Deadline.id == -1)
+
+        trust_visible = current_user.role in {"admin", "lawyer"}
+        ops_visible = current_user.role == "admin"
+        crm_conflict_count = ConflictCheck.query.count() if trust_visible else None
+        portal_thread_count = PortalMessageThread.query.count() if is_admin() else None
+        integration_event_count = (
+            AuditLog.query.filter(
+                or_(
+                    AuditLog.action.like("office365_%"),
+                    AuditLog.action.like("third_party_%"),
+                    AuditLog.action.like("mobile_%"),
+                )
+            ).count()
+            if is_admin()
+            else None
+        )
 
         story_stats = {
             "matter_count": matter_scope.count(),
             "open_task_count": open_task_scope.count(),
             "document_count": document_scope.count(),
+            "deadline_next_14_count": deadline_scope.count(),
+            "invoice_count": invoice_scope.count(),
             "contact_count": Contact.query.count(),
             "knowledge_count": KnowledgeBase.query.count(),
             "announcement_count": Announcement.query.count(),
+            "conflict_count": crm_conflict_count,
+            "trust_reconciliation_count": TrustReconciliationRun.query.count() if trust_visible else None,
+            "portal_thread_count": portal_thread_count,
+            "integration_event_count": integration_event_count,
             "audit_count": AuditLog.query.count() if is_admin() else None,
         }
 
@@ -369,10 +412,74 @@ def register_auth_routes(app):
             "matter_detail": url_for("matter_detail", matter_id=flagship_matter.id) if flagship_matter else url_for("matters"),
             "tasks": url_for("matter_tasks", matter_id=flagship_matter.id) if flagship_matter else url_for("matters"),
             "documents": url_for("matter_documents", matter_id=flagship_matter.id) if flagship_matter else url_for("matters"),
+            "calendar": url_for("calendar_my"),
+            "workflow": url_for("task_templates"),
+            "dms": url_for("matter_dms", matter_id=flagship_matter.id) if flagship_matter else url_for("matters"),
+            "billing": url_for("billing_invoices"),
+            "trust": url_for("trust_ledger") if trust_visible else url_for("trust_security"),
+            "crm": url_for("crm_leads"),
+            "portal": url_for("portal_login"),
+            "integrations": url_for("integrations_office365"),
+            "mobile": url_for("mobile_hub"),
+            "analytics": url_for("analytics_utilization"),
+            "ops": url_for("ops_backup_status") if ops_visible else url_for("trust_security"),
             "knowledge": url_for("kb"),
             "search": url_for("search", q="POPIA"),
-            "audit": url_for("admin_audit") if is_admin() else url_for("kb"),
+            "audit": url_for("admin_audit") if is_admin() else url_for("trust_security"),
         }
+
+        story_sequence = [
+            {
+                "title": "Executive snapshot",
+                "description": "Frame current workload, open risks, and overdue pressure at firm level.",
+                "href": story_links["dashboard"],
+            },
+            {
+                "title": "Matter workspace and stage control",
+                "description": "Open a flagship matter and show stage, risk, parties, and internal notes in one workspace.",
+                "href": story_links["matter_detail"],
+            },
+            {
+                "title": "Calendar and deadline execution",
+                "description": "Show critical deadlines, acknowledgements, and team-level milestone visibility.",
+                "href": story_links["calendar"],
+            },
+            {
+                "title": "Task workflow automation",
+                "description": "Demonstrate templates, dependencies, checklists, and multi-assignee execution.",
+                "href": story_links["workflow"],
+            },
+            {
+                "title": "Document lifecycle and productions",
+                "description": "Walk through DMS versioning, lock controls, OCR discovery, and production sets.",
+                "href": story_links["dms"],
+            },
+            {
+                "title": "Time capture, billing, and collections",
+                "description": "Review per-transaction billing, statements, tax invoices, and settled payment records.",
+                "href": story_links["billing"],
+            },
+            {
+                "title": "Trust accounting and compliance",
+                "description": "Show bank statement imports, cashbook/trial balance views, and Section 86 automation.",
+                "href": story_links["trust"],
+            },
+            {
+                "title": "CRM intake and client portal",
+                "description": "Show lead-to-conflict workflows, engagement progress, and curated client collaboration.",
+                "href": story_links["crm"],
+            },
+            {
+                "title": "Integrations and mobile operations",
+                "description": "Show Office365 exports, third-party import/export, and mobile fee/task capture.",
+                "href": story_links["integrations"],
+            },
+            {
+                "title": "Analytics and governance closeout",
+                "description": "Finish with utilization/profitability indicators and auditable operational controls.",
+                "href": story_links["audit"],
+            },
+        ]
 
         story_pack_nos = ["2026-LIT-0142", "2026-CORP-0033", "2026-EMP-0071"]
         story_pack_rows = (
@@ -389,40 +496,40 @@ def register_auth_routes(app):
                 "title": "Governance-first narrative",
                 "focus": [
                     "Platform-wide control posture and auditability",
-                    "Operational KPIs and adoption metrics",
-                    "Incident/change handling and oversight",
+                    "Operational KPIs, integration telemetry, and adoption metrics",
+                    "Backup/restore controls, trust compliance, and incident oversight",
                 ],
             },
             "partner": {
                 "title": "Partner narrative",
                 "focus": [
                     "Portfolio-level risk posture and business impact",
-                    "Client readiness across flagship matters",
-                    "Governance confidence before board/client reviews",
+                    "Financial confidence across billing, trust, and reconciliations",
+                    "Client readiness across flagship matters and portal touchpoints",
                 ],
             },
             "associate": {
                 "title": "Associate narrative",
                 "focus": [
-                    "Execution detail across tasks, evidence, and deadlines",
+                    "Execution detail across tasks, evidence, deadlines, and stage transitions",
                     "Matter-level accountability and delivery velocity",
-                    "Knowledge reuse and reduced drafting cycle time",
+                    "Knowledge reuse, DMS versioning, and reduced drafting cycle time",
                 ],
             },
             "paralegal": {
                 "title": "Delivery-efficiency narrative",
                 "focus": [
-                    "Document readiness and filing timelines",
-                    "Evidence integrity and retrieval speed",
-                    "Daily execution workflow consistency",
+                    "Document readiness, filing timelines, and production controls",
+                    "Evidence integrity with OCR retrieval and lock discipline",
+                    "Calendar/task execution consistency across matters",
                 ],
             },
             "staff": {
                 "title": "Operations-consistency narrative",
                 "focus": [
-                    "Intake quality and communication consistency",
-                    "Cross-team visibility of priorities",
-                    "Governed process handoffs",
+                    "Intake quality, lead progression, and communication consistency",
+                    "Cross-team visibility of priorities plus mobile quick-capture workflows",
+                    "Governed process handoffs into billing, portal, and analytics views",
                 ],
             },
         }
@@ -440,5 +547,6 @@ def register_auth_routes(app):
             story_links=story_links,
             is_admin_user=is_admin(),
             role_story=role_story,
+            story_sequence=story_sequence,
             story_pack_matters=story_pack_rows,
         )

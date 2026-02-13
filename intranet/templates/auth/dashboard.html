@@ -114,12 +114,21 @@
       <div class="mt-2">
         {% if my_tasks %}
           {% for t in my_tasks %}
+            {% set task_matter = task_matter_map.get(t.matter_id) if task_matter_map else None %}
             <div class="border-top pt-2 mt-2">
               <div class="d-flex justify-content-between">
                 <div class="fw-semibold">{{ t.title }}</div>
                 <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
               </div>
-              <div class="muted small">Matter #{{ t.matter_id }}{% if t.due_date %} - due {{ t.due_date }}{% endif %}</div>
+              <div class="muted small">
+                {% if task_matter %}
+                  <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=task_matter.id) }}">{{ task_matter.matter_no }} - {{ task_matter.title }}</a>
+                {% else %}
+                  Matter #{{ t.matter_id }}
+                {% endif %}
+                {% if t.due_date %} - due {{ t.due_date }}{% endif %}
+                {% if t.priority %} - priority {{ t.priority }}{% endif %}
+              </div>
             </div>
           {% endfor %}
         {% else %}

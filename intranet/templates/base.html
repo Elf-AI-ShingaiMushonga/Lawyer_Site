@@ -1780,11 +1780,12 @@
 <a class="skip-link" href="#main-content">Skip to main content</a>
 <div class="shell">
   {% set endpoint = request.endpoint or "" %}
-  {% set matter_endpoints = ["matters", "matter_create", "matter_detail", "matter_team", "matter_tasks", "matter_documents"] %}
+  {% set matter_endpoints = ["matters", "matter_create", "matter_detail", "matter_team", "matter_tasks", "matter_documents", "matter_intake", "matter_workspace", "matter_parties", "matter_notes", "matter_stage_update", "matter_close"] %}
   {% set admin_endpoints = ["admin", "admin_users", "admin_announcements", "admin_audit"] %}
   {% set trust_endpoints = ["trust_policy", "trust_security", "trust_incidents"] %}
   {% set calendar_endpoints = ["calendar_my", "calendar_team", "calendar_matter", "calendar_milestone_report"] %}
   {% set workflow_endpoints = ["task_templates", "task_dependencies", "task_checklist", "task_approve", "task_recur"] %}
+  {% set dms_endpoints = ["matter_dms", "document_versions", "document_lock", "document_unlock", "document_state", "productions", "production_export", "bates_ranges", "email_capture", "email_capture_attachment"] %}
   {% set finance_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "billing_tax_invoice_pdf", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses", "trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
   {% set portal_endpoints = ["portal_login", "portal_matters", "portal_matter_detail", "portal_messages", "portal_uploads", "portal_invoices", "portal_payments", "admin_portal_users", "portal_links"] %}
   {% set billing_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "billing_tax_invoice_pdf", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses"] %}
@@ -1793,29 +1794,48 @@
   {% set analytics_endpoints = ["analytics_utilization", "analytics_realization", "analytics_ehr", "analytics_workload", "analytics_profitability", "analytics_forecast", "analytics_burnout"] %}
   {% set ops_endpoints = ["ops_backup_status", "ops_restore_verify", "ops_dr_targets"] %}
   {% set next_path = request.full_path if request.query_string else request.path %}
+  {% set story_trust_url = url_for('trust_ledger') if current_user.is_authenticated and current_user.role in ["admin", "lawyer"] else url_for('trust_security') %}
+  {% set story_governance_url = url_for('admin_audit') if current_user.is_authenticated and current_user.role == "admin" else url_for('trust_security') %}
   {% set next_story_url = url_for('dashboard') %}
   {% set next_story_label = "1. Executive snapshot" %}
   {% if endpoint == "dashboard" %}
     {% set next_story_url = url_for('matters', q='2026-LIT-0142') %}
     {% set next_story_label = "2. Open flagship matter" %}
-  {% elif endpoint in ["matter_detail", "matter_team"] and request.view_args and request.view_args.get("matter_id") %}
-    {% set next_story_url = url_for('matter_tasks', matter_id=request.view_args.get("matter_id")) %}
-    {% set next_story_label = "3. Show task accountability" %}
-  {% elif endpoint == "matter_tasks" and request.view_args and request.view_args.get("matter_id") %}
-    {% set next_story_url = url_for('matter_documents', matter_id=request.view_args.get("matter_id")) %}
-    {% set next_story_label = "4. Show document integrity" %}
-  {% elif endpoint in ["matter_documents", "matters", "matter_create"] %}
-    {% set next_story_url = url_for('search', q='POPIA') %}
-    {% set next_story_label = "5. Show knowledge + search" %}
-  {% elif endpoint in ["search", "kb", "kb_view"] %}
-    {% if current_user.is_authenticated and current_user.role == "admin" %}
-      {% set next_story_url = url_for('admin_audit') %}
-      {% set next_story_label = "6. Finish with audit trail" %}
+  {% elif endpoint in matter_endpoints %}
+    {% set next_story_url = url_for('calendar_my') %}
+    {% set next_story_label = "3. Show calendar and deadlines" %}
+  {% elif endpoint in calendar_endpoints %}
+    {% set next_story_url = url_for('task_templates') %}
+    {% set next_story_label = "4. Show workflow automation" %}
+  {% elif endpoint in workflow_endpoints %}
+    {% if request.view_args and request.view_args.get("matter_id") %}
+      {% set next_story_url = url_for('matter_dms', matter_id=request.view_args.get("matter_id")) %}
     {% else %}
-      {% set next_story_url = url_for('trust_security') %}
-      {% set next_story_label = "6. Finish with trust posture" %}
+      {% set next_story_url = url_for('matters', q='2026-LIT-0142') %}
     {% endif %}
-  {% elif endpoint in ["admin_audit", "trust_policy", "trust_security", "trust_incidents"] %}
+    {% set next_story_label = "5. Show document lifecycle controls" %}
+  {% elif endpoint in dms_endpoints %}
+    {% set next_story_url = url_for('billing_invoices') %}
+    {% set next_story_label = "6. Show billing and transactions" %}
+  {% elif endpoint in billing_endpoints or endpoint == "expenses" %}
+    {% set next_story_url = story_trust_url %}
+    {% set next_story_label = "7. Show trust accounting controls" %}
+  {% elif endpoint in ["trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
+    {% set next_story_url = url_for('crm_leads') %}
+    {% set next_story_label = "8. Show CRM and intake flow" %}
+  {% elif endpoint in crm_endpoints %}
+    {% set next_story_url = url_for('portal_login') %}
+    {% set next_story_label = "9. Show client portal" %}
+  {% elif endpoint in portal_endpoints %}
+    {% set next_story_url = url_for('integrations_office365') %}
+    {% set next_story_label = "10. Show integrations and mobile" %}
+  {% elif endpoint in integration_endpoints %}
+    {% set next_story_url = url_for('analytics_utilization') %}
+    {% set next_story_label = "11. Show analytics and forecast" %}
+  {% elif endpoint in analytics_endpoints %}
+    {% set next_story_url = story_governance_url %}
+    {% set next_story_label = "12. Close on governance and auditability" %}
+  {% elif endpoint in ["admin_audit", "trust_policy", "trust_security", "trust_incidents", "ops_backup_status", "ops_restore_verify", "ops_dr_targets"] %}
     {% set next_story_url = url_for('client_story') %}
     {% set next_story_label = "Replay story checklist" %}
   {% endif %}
@@ -2066,15 +2086,29 @@
         </div>
         <div class="story-inline">
           {% set chip_dashboard = url_for('dashboard') %}
-          {% set chip_flagship = url_for('matters', q='2026-LIT-0142') %}
-          {% set chip_search = url_for('search', q='POPIA') %}
-          {% set chip_audit = url_for('admin_audit') if current_user.role == "admin" else '' %}
+          {% set chip_matters = url_for('matters', q='2026-LIT-0142') %}
+          {% set chip_calendar = url_for('calendar_my') %}
+          {% set chip_workflow = url_for('task_templates') %}
+          {% set chip_dms = url_for('matters', q='2026-LIT-0142') %}
+          {% set chip_billing = url_for('billing_invoices') %}
+          {% set chip_trust = story_trust_url %}
+          {% set chip_crm = url_for('crm_leads') %}
+          {% set chip_portal = url_for('portal_login') %}
+          {% set chip_integrations = url_for('integrations_office365') %}
+          {% set chip_analytics = url_for('analytics_utilization') %}
+          {% set chip_governance = story_governance_url %}
           <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_dashboard else '' }}" href="{{ chip_dashboard }}">1. Snapshot</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_flagship else '' }}" href="{{ chip_flagship }}">2. Flagship matter</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_search else '' }}" href="{{ chip_search }}">3. Knowledge + search</a>
-          {% if current_user.role == "admin" %}
-            <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_audit else '' }}" href="{{ chip_audit }}">4. Audit governance</a>
-          {% endif %}
+          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_matters else '' }}" href="{{ chip_matters }}">2. Matter</a>
+          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_calendar else '' }}" href="{{ chip_calendar }}">3. Calendar</a>
+          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_workflow else '' }}" href="{{ chip_workflow }}">4. Workflow</a>
+          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_dms else '' }}" href="{{ chip_dms }}">5. DMS</a>
+          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_billing else '' }}" href="{{ chip_billing }}">6. Billing</a>
+          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_trust else '' }}" href="{{ chip_trust }}">7. Trust</a>
+          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_crm else '' }}" href="{{ chip_crm }}">8. CRM</a>
+          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_portal else '' }}" href="{{ chip_portal }}">9. Portal</a>
+          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_integrations else '' }}" href="{{ chip_integrations }}">10. Integrations</a>
+          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_analytics else '' }}" href="{{ chip_analytics }}">11. Analytics</a>
+          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_governance else '' }}" href="{{ chip_governance }}">12. Governance</a>
         </div>
       </div>
     {% endif %}

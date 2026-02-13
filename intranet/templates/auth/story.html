@@ -7,15 +7,16 @@
         <div>
           <div class="code-like">CLIENT STORY MODE</div>
           <h3 class="mt-1 mb-1">Guided demonstration flow</h3>
-          <div class="page-intro">Walk the client through a coherent operational narrative in under 7 minutes.</div>
+          <div class="page-intro">Walk through end-to-end firm operations in a single narrative across matters, finance, trust, portal, and integrations.</div>
         </div>
         <div class="d-flex gap-2">
-          <a class="btn btn-sm btn-light" href="{{ story_links.dashboard }}">Start from dashboard</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ story_links.search }}">Show global search</a>
+          <a class="btn btn-sm btn-light" href="{{ story_links.dashboard }}">Start sequence</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ story_links.integrations }}">Open integrations</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ story_links.search }}">Global search</a>
         </div>
       </div>
       <div class="why-note mt-3">
-        Why this matters: this script keeps demos outcome-focused and consistent across presenters.
+        Why this matters: this playbook keeps demos consistent and outcome-focused while showing operational depth, not just surface UI.
       </div>
       <div class="metric-grid mt-3">
         <div class="metric-card">
@@ -31,9 +32,41 @@
           <div class="metric-value">{{ story_stats.document_count }}</div>
         </div>
         <div class="metric-card">
+          <div class="metric-label">Deadlines (14d)</div>
+          <div class="metric-value">{{ story_stats.deadline_next_14_count }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Invoices</div>
+          <div class="metric-value">{{ story_stats.invoice_count }}</div>
+        </div>
+        <div class="metric-card">
           <div class="metric-label">Knowledge Articles</div>
           <div class="metric-value">{{ story_stats.knowledge_count }}</div>
         </div>
+        {% if story_stats.conflict_count is not none %}
+          <div class="metric-card">
+            <div class="metric-label">Conflict Checks</div>
+            <div class="metric-value">{{ story_stats.conflict_count }}</div>
+          </div>
+        {% endif %}
+        {% if story_stats.trust_reconciliation_count is not none %}
+          <div class="metric-card">
+            <div class="metric-label">Trust Reconciliations</div>
+            <div class="metric-value">{{ story_stats.trust_reconciliation_count }}</div>
+          </div>
+        {% endif %}
+        {% if story_stats.portal_thread_count is not none %}
+          <div class="metric-card">
+            <div class="metric-label">Portal Threads</div>
+            <div class="metric-value">{{ story_stats.portal_thread_count }}</div>
+          </div>
+        {% endif %}
+        {% if story_stats.integration_event_count is not none %}
+          <div class="metric-card">
+            <div class="metric-label">Integration Events</div>
+            <div class="metric-value">{{ story_stats.integration_event_count }}</div>
+          </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -56,56 +89,17 @@
     <div class="card p-3">
       <h4 class="mb-2">Narrative sequence</h4>
       <div class="why-note mb-2">
-        Next click: start with <span class="fw-semibold">1. Executive snapshot</span>, then follow the highlighted prompts.
+        Run this sequence in order for an end-to-end story from intake to governance closeout.
       </div>
-      <div class="story-step story-step-next">
-        <div>
-          <div class="story-step-title">1. Executive snapshot</div>
-          <div class="muted small">Open the dashboard and frame current workload, activity, and priorities.</div>
-        </div>
-        <a class="btn btn-sm btn-light next-step-btn" href="{{ story_links.dashboard }}">Open</a>
-      </div>
-      <div class="story-step">
-        <div>
-          <div class="story-step-title">2. Flagship matter context</div>
-          <div class="muted small">Show how teams are organized around a client matter and where status is tracked.</div>
-        </div>
-        <a class="btn btn-sm btn-outline-light" href="{{ story_links.matter_detail }}">Open</a>
-      </div>
-      <div class="story-step">
-        <div>
-          <div class="story-step-title">3. Task execution and accountability</div>
-          <div class="muted small">Demonstrate assignments, due dates, and progression from Todo to Done.</div>
-        </div>
-        <a class="btn btn-sm btn-outline-light" href="{{ story_links.tasks }}">Open</a>
-      </div>
-      <div class="story-step">
-        <div>
-          <div class="story-step-title">4. Document integrity and retrieval</div>
-          <div class="muted small">Show uploaded evidence, integrity hashes, and controlled download access.</div>
-        </div>
-        <a class="btn btn-sm btn-outline-light" href="{{ story_links.documents }}">Open</a>
-      </div>
-      <div class="story-step">
-        <div>
-          <div class="story-step-title">5. Knowledge and discoverability</div>
-          <div class="muted small">Show internal know-how capture and firm-wide search across entities.</div>
-        </div>
-        <a class="btn btn-sm btn-outline-light" href="{{ story_links.knowledge }}">Open</a>
-      </div>
-      <div class="story-step">
-        <div>
-          <div class="story-step-title">6. Governance and traceability</div>
-          <div class="muted small">
-            {% if is_admin_user %}
-              Finish with audit history to reinforce governance and accountability.
-            {% else %}
-              Finish with knowledge/search to reinforce operational consistency for non-admin roles.
-            {% endif %}
+      {% for step in story_sequence %}
+        <div class="story-step {{ 'story-step-next' if loop.first else '' }}">
+          <div>
+            <div class="story-step-title">{{ loop.index }}. {{ step.title }}</div>
+            <div class="muted small">{{ step.description }}</div>
           </div>
+          <a class="btn btn-sm {{ 'btn-light next-step-btn' if loop.first else 'btn-outline-light' }}" href="{{ step.href }}">Open</a>
         </div>
-        <a class="btn btn-sm btn-outline-light" href="{{ story_links.audit }}">Open</a>
-      </div>
+      {% endfor %}
     </div>
   </div>
 
@@ -149,6 +143,50 @@
           <div class="metric-value">{{ story_stats.audit_count }}</div>
         </div>
       {% endif %}
+    </div>
+
+    <div class="card p-3 mt-3">
+      <h4 class="mb-2">Module Quick Links</h4>
+      <div class="list-stack">
+        <a class="list-item text-decoration-none" href="{{ story_links.calendar }}">
+          <div class="fw-semibold">Calendar and deadlines</div>
+          <div class="list-meta">Critical due dates, acknowledgements, and milestone flow.</div>
+        </a>
+        <a class="list-item text-decoration-none" href="{{ story_links.workflow }}">
+          <div class="fw-semibold">Workflow controls</div>
+          <div class="list-meta">Template-driven tasks, dependencies, approvals, and recurrence.</div>
+        </a>
+        <a class="list-item text-decoration-none" href="{{ story_links.billing }}">
+          <div class="fw-semibold">Billing and transactions</div>
+          <div class="list-meta">Account statements, trial balance, auditor reports, and payment settlement.</div>
+        </a>
+        <a class="list-item text-decoration-none" href="{{ story_links.trust }}">
+          <div class="fw-semibold">Trust accounting</div>
+          <div class="list-meta">Cashbook, reconciliations, statement imports, and Section 86 workflows.</div>
+        </a>
+        <a class="list-item text-decoration-none" href="{{ story_links.crm }}">
+          <div class="fw-semibold">CRM and intake</div>
+          <div class="list-meta">Lead qualification, conflicts, and engagement progression.</div>
+        </a>
+        <a class="list-item text-decoration-none" href="{{ story_links.portal }}">
+          <div class="fw-semibold">Client portal</div>
+          <div class="list-meta">Scoped matter views, message threads, uploads, and invoice visibility.</div>
+        </a>
+        <a class="list-item text-decoration-none" href="{{ story_links.integrations }}">
+          <div class="fw-semibold">Integrations and mobile</div>
+          <div class="list-meta">Office365 exports, third-party imports, and quick mobile capture.</div>
+        </a>
+        <a class="list-item text-decoration-none" href="{{ story_links.analytics }}">
+          <div class="fw-semibold">Analytics and forecasting</div>
+          <div class="list-meta">Utilization, realization, profitability, and burnout signals.</div>
+        </a>
+        {% if is_admin_user %}
+          <a class="list-item text-decoration-none" href="{{ story_links.ops }}">
+            <div class="fw-semibold">Ops controls</div>
+            <div class="list-meta">Backup posture, restore verification, and DR targets.</div>
+          </a>
+        {% endif %}
+      </div>
     </div>
   </div>
 </div>
