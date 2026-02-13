@@ -4,6 +4,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import uuid
 
 from flask import Response, abort, flash, redirect, request, send_from_directory, url_for
@@ -20,6 +21,7 @@ from ..models import (
     DocumentLock,
     DocumentOCRText,
     DocumentRecord,
+    DocumentTemplate,
     DocumentVersion,
     EmailCapture,
     Matter,
@@ -33,6 +35,7 @@ from ..services.notification_engine import NotificationEngine
 from ..templates import page
 
 DOCUMENT_STATES = {"draft", "reviewed", "final", "filed"}
+TEMPLATE_TOKEN_PATTERN = re.compile(r"\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}")
 
 
 def _latest_version(document_id: int) -> DocumentVersion | None:
@@ -72,6 +75,59 @@ def _safe_query_json(raw: str) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _parse_generation_fields(raw: str | None) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for line in (raw or "").splitlines():
+        candidate = line.strip()
+        if not candidate or "=" not in candidate:
+            continue
+        key_raw, value_raw = candidate.split("=", 1)
+        key = key_raw.strip().lower().replace(" ", "_")
+        if not key:
+            continue
+        fields[key] = value_raw.strip()
+    return fields
+
+
+def _template_context(matter: Matter) -> dict[str, str]:
+    now = dt.datetime.utcnow()
+    return {
+        "matter_id": str(matter.id),
+        "matter_no": matter.matter_no or "",
+        "matter_title": matter.title or "",
+        "title": matter.title or "",
+        "client_name": matter.client_name or "",
+        "status": matter.status or "",
+        "stage": matter.stage or "",
+        "jurisdiction": matter.jurisdiction or "",
+        "court_name": matter.court_name or "",
+        "judge_name": matter.judge_name or "",
+        "practice_area": matter.practice_area or "",
+        "case_type": matter.case_type or "",
+        "today": now.date().isoformat(),
+        "now": now.replace(microsecond=0).isoformat(),
+        "generated_by_name": current_user.full_name or "",
+        "generated_by_email": current_user.email or "",
+    }
+
+
+def _render_template_body(body: str, context: dict[str, str]) -> tuple[str, list[str]]:
+    missing: list[str] = []
+
+    def replace_token(match: re.Match[str]) -> str:
+        key = (match.group(1) or "").strip().lower()
+        if not key:
+            return ""
+        if key in context:
+            return str(context[key])
+        missing.append(key)
+        return ""
+
+    rendered = TEMPLATE_TOKEN_PATTERN.sub(replace_token, body or "")
+    missing_sorted = sorted(set(missing))
+    return rendered, missing_sorted
+
+
 def register_dms_routes(app):
     @app.route("/matters/<int:matter_id>/dms", methods=["GET", "POST"])
     @login_required
@@ -83,6 +139,108 @@ def register_dms_routes(app):
             abort(404)
 
         if request.method == "POST":
+            action = (request.form.get("action") or "upload_document").strip().lower()
+            if action == "generate_from_template":
+                template_id = request.form.get("template_id", type=int)
+                template = db.session.get(DocumentTemplate, template_id) if template_id else None
+                if template is None:
+                    flash("Document template not found.", "warning")
+                    return redirect(url_for("matter_dms", matter_id=matter_id))
+
+                generated_title = (request.form.get("generated_title") or "").strip() or f"{template.name} - {m.matter_no}"
+                context = _template_context(m)
+                context.update(_parse_generation_fields(request.form.get("custom_fields")))
+                rendered_body, missing_tokens = _render_template_body(template.body, context)
+                if not rendered_body.strip():
+                    flash("Generated document body is empty. Add template text or merge fields.", "warning")
+                    return redirect(url_for("matter_dms", matter_id=matter_id))
+
+                enforce_data_residency("primary_storage")
+                os.makedirs(app.config["UPLOAD_DIR"], exist_ok=True)
+                base_name = secure_filename(generated_title) or f"generated_{template.id}"
+                safe_name = f"{base_name[:80]}.txt"
+                stored = f"dms_{matter_id}_{uuid.uuid4().hex}_{safe_name}"
+                path = os.path.join(app.config["UPLOAD_DIR"], stored)
+                try:
+                    with open(path, "w", encoding="utf-8") as handle:
+                        handle.write(rendered_body)
+                except OSError:
+                    flash("Failed to persist generated document.", "warning")
+                    return redirect(url_for("matter_dms", matter_id=matter_id))
+
+                sha = sha256_file(path)
+                container = DocumentRecord(
+                    matter_id=matter_id,
+                    title=generated_title,
+                    document_type=(request.form.get("generated_document_type") or template.template_type or "General").strip()
+                    or "General",
+                    confidentiality=(request.form.get("generated_confidentiality") or "Internal").strip() or "Internal",
+                    privilege_label=(request.form.get("generated_privilege_label") or "").strip() or None,
+                    retention_category=(request.form.get("generated_retention_category") or "").strip() or None,
+                    legal_hold=(request.form.get("generated_legal_hold") or "").lower() in {"1", "true", "yes", "on"},
+                    created_by=current_user.id,
+                )
+                db.session.add(container)
+                db.session.flush()
+
+                legacy_file = DocumentFile(
+                    matter_id=matter_id,
+                    original_filename=safe_name,
+                    stored_filename=stored,
+                    sha256=sha,
+                    content_type="text/plain",
+                    category=container.document_type,
+                    doc_version="1",
+                    lifecycle_stage="Draft",
+                    owner_name=current_user.full_name,
+                    is_privileged=bool(container.privilege_label),
+                    uploaded_by=current_user.id,
+                )
+                db.session.add(legacy_file)
+                db.session.flush()
+
+                notes = (request.form.get("generated_version_notes") or "").strip()
+                if not notes:
+                    notes = f"Generated from template '{template.name}'."
+                version = DocumentVersion(
+                    document_id=container.id,
+                    document_file_id=legacy_file.id,
+                    version_no=1,
+                    original_filename=safe_name,
+                    stored_filename=stored,
+                    sha256=sha,
+                    hash_chain_prev=None,
+                    hash_chain_current=_chain_hash(None, sha),
+                    state="draft",
+                    notes=notes,
+                    uploaded_by=current_user.id,
+                )
+                db.session.add(version)
+                db.session.flush()
+                db.session.add(
+                    DocumentOCRText(
+                        document_version_id=version.id,
+                        extracted_text=(rendered_body.strip() or "No generated text."),
+                    )
+                )
+                db.session.commit()
+
+                audit(
+                    "dms_template_generate",
+                    "DocumentRecord",
+                    container.id,
+                    {"matter_id": matter_id, "template_id": template.id, "missing_tokens": missing_tokens},
+                )
+                NotificationEngine.enqueue("document_generated", current_user.id, f"document_version:{version.id}")
+                if missing_tokens:
+                    flash(
+                        "Document generated, but some merge fields were blank: " + ", ".join(missing_tokens[:6]),
+                        "warning",
+                    )
+                else:
+                    flash("Document generated from template.", "info")
+                return redirect(url_for("matter_dms", matter_id=matter_id))
+
             title = (request.form.get("title") or "").strip()
             if not title:
                 flash("Document title required.", "warning")
@@ -226,6 +384,7 @@ def register_dms_routes(app):
             ranked.sort(key=lambda item: (item[0], item[1].created_at), reverse=True)
             docs = [item[1] for item in ranked]
 
+        doc_templates = DocumentTemplate.query.order_by(DocumentTemplate.created_at.desc()).limit(300).all()
         audit("dms_repository_access", "Matter", matter_id)
         return page(
             "Matter DMS",
@@ -237,6 +396,7 @@ def register_dms_routes(app):
             filter_type=filter_type,
             filter_confidentiality=filter_confidentiality,
             search_scores=search_scores,
+            doc_templates=doc_templates,
         )
 
     @app.route("/documents/<int:document_id>/versions", methods=["GET", "POST"])

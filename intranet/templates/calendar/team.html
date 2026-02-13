@@ -6,7 +6,10 @@
       <h3 class="mb-1">Team Calendar</h3>
       <p class="page-intro mb-0">Monitor shared deadline load across matters and focus team attention on high-risk due dates.</p>
     </div>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_my') }}">My View</a>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_milestone_report', scope='team') }}">Milestone Report</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_my') }}">My View</a>
+    </div>
   </div>
 
   <div class="kpi-strip mt-3">

@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Mobile & Tablet Hub</h3>
+      <p class="page-intro mb-0">Capture fees and assign tasks quickly with touch-friendly controls optimized for mobile access.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries') }}">Full Timekeeping</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Matter Directory</a>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card p-3">
+      <h4 class="mb-2">Quick Fee Capture</h4>
+      <form method="post" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="capture_fee">
+        <div class="col-12">
+          <label class="form-label" for="mobile-fee-matter">Matter</label>
+          <select class="form-select" id="mobile-fee-matter" name="matter_id" required>
+            <option value="">Choose matter</option>
+            {% for matter in matters %}
+              <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label" for="mobile-fee-start">Start</label>
+          <input class="form-control" id="mobile-fee-start" name="start_at" type="datetime-local" value="{{ now_iso }}" required>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label" for="mobile-fee-end">End</label>
+          <input class="form-control" id="mobile-fee-end" name="end_at" type="datetime-local">
+          <div class="form-help">If provided, this takes precedence over duration.</div>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label" for="mobile-fee-duration">Duration Minutes (optional)</label>
+          <input class="form-control" id="mobile-fee-duration" name="duration_minutes" type="number" min="1" placeholder="e.g. 45">
+          <div class="form-help">Used only when End is empty.</div>
+        </div>
+        <div class="col-sm-6 d-flex align-items-end">
+          <div class="form-check mb-2">
+            <input class="form-check-input" id="mobile-fee-billable" type="checkbox" name="is_billable" value="1" checked>
+            <label class="form-check-label" for="mobile-fee-billable">Billable</label>
+          </div>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label" for="mobile-fee-task-code">Task Code</label>
+          <input class="form-control" id="mobile-fee-task-code" name="task_code" placeholder="L100">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label" for="mobile-fee-activity-code">Activity Code</label>
+          <input class="form-control" id="mobile-fee-activity-code" name="activity_code" placeholder="A101">
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="mobile-fee-narrative">Narrative</label>
+          <textarea class="form-control" id="mobile-fee-narrative" name="narrative" rows="3" placeholder="Short narrative for billing"></textarea>
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-light" type="submit" data-submitting-text="Capturing...">Capture Fee Entry</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card p-3">
+      <h4 class="mb-2">Quick Task Assignment</h4>
+      <form method="post" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="assign_task">
+        <div class="col-12">
+          <label class="form-label" for="mobile-task-matter">Matter</label>
+          <select class="form-select" id="mobile-task-matter" name="matter_id" required>
+            <option value="">Choose matter</option>
+            {% for matter in matters %}
+              <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="mobile-task-title">Task Title</label>
+          <input class="form-control" id="mobile-task-title" name="title" placeholder="Task title" required>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label" for="mobile-task-due">Due Date</label>
+          <input class="form-control" id="mobile-task-due" name="due_date" type="date">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label" for="mobile-task-priority">Priority</label>
+          <select class="form-select" id="mobile-task-priority" name="priority">
+            <option>Low</option>
+            <option selected>Medium</option>
+            <option>High</option>
+            <option>Critical</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="mobile-task-assignees">Assign To</label>
+          <div class="form-help mb-1">Tap one or more people.</div>
+          <div class="assignee-checklist" id="mobile-task-assignees" role="group" aria-label="Task assignees">
+            {% for user in users %}
+              <label class="assignee-checklist-item">
+                <input class="form-check-input" type="checkbox" name="assignee_user_ids" value="{{ user.id }}">
+                <span class="assignee-checklist-main">{{ user.full_name }}</span>
+                <span class="assignee-checklist-sub">{{ user.email }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="mobile-task-description">Description</label>
+          <textarea class="form-control" id="mobile-task-description" name="description" rows="3" placeholder="Optional context"></textarea>
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-light" type="submit" data-submitting-text="Assigning...">Assign Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-lg-6">
+    <div class="card p-3">
+      <h4 class="mb-2">Recent Fee Entries</h4>
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr><th>Matter</th><th>Start</th><th>Rounded</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for entry in my_recent_entries %}
+              <tr>
+                <td>#{{ entry.matter_id }}</td>
+                <td>{{ entry.start_at }}</td>
+                <td>{{ entry.rounded_hours }}</td>
+                <td><span class="badge badge-soft status-badge">{{ entry.status }}</span></td>
+              </tr>
+            {% else %}
+              <tr><td colspan="4" class="muted">No recent fee entries.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card p-3">
+      <h4 class="mb-2">My Recently Assigned Tasks</h4>
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr><th>Task</th><th>Matter</th><th>Due</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for task in my_recent_tasks %}
+              <tr>
+                <td>{{ task.title }}</td>
+                <td>#{{ task.matter_id }}</td>
+                <td>{{ task.due_date or "-" }}</td>
+                <td><span class="badge badge-soft status-badge">{{ task.status }}</span></td>
+              </tr>
+            {% else %}
+              <tr><td colspan="4" class="muted">No recent assigned tasks.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

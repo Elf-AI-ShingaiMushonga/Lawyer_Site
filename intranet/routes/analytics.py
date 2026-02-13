@@ -4,7 +4,7 @@ import datetime as dt
 
 from flask import abort
 from flask_login import current_user, login_required
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from ..extensions import db
 from ..helpers import is_admin
@@ -159,7 +159,10 @@ def register_analytics_routes(app):
                 for matter_id, amount in (
                     db.session.query(Invoice.matter_id, func.coalesce(func.sum(PaymentAllocation.amount), 0.0))
                     .join(PaymentAllocation, PaymentAllocation.invoice_id == Invoice.id)
-                    .filter(Invoice.matter_id.in_(matter_ids))
+                    .filter(
+                        Invoice.matter_id.in_(matter_ids),
+                        or_(PaymentAllocation.status == "settled", PaymentAllocation.status.is_(None)),
+                    )
                     .group_by(Invoice.matter_id)
                     .all()
                 )

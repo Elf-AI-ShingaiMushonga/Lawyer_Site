@@ -414,6 +414,98 @@
       padding: 12px;
     }
 
+    .assignee-checklist {
+      display: grid;
+      gap: 8px;
+      max-height: 220px;
+      overflow: auto;
+      border: 1px solid rgba(225, 6, 0, 0.24);
+      border-radius: 11px;
+      background: #fff9f9;
+      padding: 8px;
+    }
+
+    .assignee-checklist-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 8px;
+      align-items: start;
+      border: 1px solid rgba(225, 6, 0, 0.2);
+      border-radius: 10px;
+      background: #ffffff;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+
+    .assignee-checklist-item:hover {
+      border-color: rgba(225, 6, 0, 0.44);
+      background: #fff4f4;
+    }
+
+    .assignee-checklist-item:focus-within {
+      border-color: rgba(225, 6, 0, 0.72);
+      box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.14);
+    }
+
+    .assignee-checklist-item .form-check-input {
+      margin-top: 3px;
+    }
+
+    .assignee-checklist-main {
+      line-height: 1.2;
+      font-weight: 700;
+      color: #4e2b2b;
+    }
+
+    .assignee-checklist-sub {
+      grid-column: 2;
+      font-size: 12px;
+      line-height: 1.2;
+      color: #8b7171;
+      word-break: break-word;
+    }
+
+    .time-prompts {
+      border: 1px solid rgba(225, 6, 0, 0.25);
+      border-radius: 11px;
+      background: #fff8f8;
+      padding: 10px 11px;
+    }
+
+    .time-prompts[hidden] {
+      display: none;
+    }
+
+    .time-prompts-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #8b4f4d;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .time-prompts-list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 5px;
+    }
+
+    .time-prompt-item {
+      font-size: 13px;
+      color: #5a3b3b;
+      line-height: 1.35;
+    }
+
+    .time-prompt-item.time-prompt-warning {
+      color: #7a201d;
+    }
+
+    .time-prompt-item.time-prompt-info {
+      color: #5f3e3e;
+    }
+
     .table {
       color: var(--text);
       margin-bottom: 0;
@@ -668,6 +760,8 @@
       font-weight: 800;
       line-height: 1;
       color: #3a1d1d;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
     }
 
     .metric-link-hint {
@@ -683,6 +777,12 @@
       font-family: var(--mono);
       font-size: 12px;
       color: #8d5e5e;
+    }
+
+    .cell-num {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+      white-space: nowrap;
     }
 
     .status-badge {
@@ -889,6 +989,8 @@
       font-size: 21px;
       font-weight: 800;
       line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
     }
 
     .list-stack {
@@ -1681,12 +1783,13 @@
   {% set matter_endpoints = ["matters", "matter_create", "matter_detail", "matter_team", "matter_tasks", "matter_documents"] %}
   {% set admin_endpoints = ["admin", "admin_users", "admin_announcements", "admin_audit"] %}
   {% set trust_endpoints = ["trust_policy", "trust_security", "trust_incidents"] %}
-  {% set calendar_endpoints = ["calendar_my", "calendar_team", "calendar_matter"] %}
+  {% set calendar_endpoints = ["calendar_my", "calendar_team", "calendar_matter", "calendar_milestone_report"] %}
   {% set workflow_endpoints = ["task_templates", "task_dependencies", "task_checklist", "task_approve", "task_recur"] %}
-  {% set finance_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "expenses", "trust_ledger", "trust_reconciliations", "trust_reports_monthly"] %}
+  {% set finance_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "billing_tax_invoice_pdf", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses", "trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
   {% set portal_endpoints = ["portal_login", "portal_matters", "portal_matter_detail", "portal_messages", "portal_uploads", "portal_invoices", "portal_payments", "admin_portal_users", "portal_links"] %}
-  {% set billing_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "expenses"] %}
+  {% set billing_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "billing_tax_invoice_pdf", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses"] %}
   {% set crm_endpoints = ["crm_leads", "crm_lead_detail"] %}
+  {% set integration_endpoints = ["integrations_office365", "integrations_office365_outlook_feed", "integrations_office365_excel_time_entries", "integrations_office365_excel_invoices", "integrations_office365_word_matter_summary", "integrations_office365_word_matter_summary_query", "integrations_third_party", "integrations_export_cost_recovery", "integrations_export_conveyancing", "integrations_import_cost_recovery", "integrations_import_conveyancing", "mobile_hub"] %}
   {% set analytics_endpoints = ["analytics_utilization", "analytics_realization", "analytics_ehr", "analytics_workload", "analytics_profitability", "analytics_forecast", "analytics_burnout"] %}
   {% set ops_endpoints = ["ops_backup_status", "ops_restore_verify", "ops_dr_targets"] %}
   {% set next_path = request.full_path if request.query_string else request.path %}
@@ -1770,9 +1873,9 @@
         <a class="nav-pill {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">Matters</a>
         <a class="nav-pill {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my') }}">Calendar</a>
         <a class="nav-pill {{ 'is-active' if endpoint in workflow_endpoints else '' }}" href="{{ url_for('task_templates') }}">Workflow</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in ['billing_invoices', 'billing_invoice_detail', 'billing_rates', 'billing_ar_aging'] else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
+        <a class="nav-pill {{ 'is-active' if endpoint in ['billing_invoices', 'billing_invoice_detail', 'billing_rates', 'billing_ar_aging', 'billing_tax_invoice_pdf', 'billing_account_statement', 'billing_trial_balance', 'billing_auditor_report', 'billing_transactions', 'billing_audit_log'] else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
         <a class="nav-pill {{ 'is-active' if endpoint == 'expenses' else '' }}" href="{{ url_for('expenses') }}">Expenses</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in ['trust_ledger', 'trust_reconciliations', 'trust_reports_monthly'] else '' }}" href="{{ url_for('trust_ledger') }}">Trust Acct</a>
+        <a class="nav-pill {{ 'is-active' if endpoint in ['trust_ledger', 'trust_reconciliations', 'trust_cashbook', 'trust_section86', 'trust_reports_monthly', 'trust_trial_balance_report', 'trust_auditor_report'] else '' }}" href="{{ url_for('trust_ledger') }}">Trust Acct</a>
         <a class="nav-pill {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM</a>
         <a class="nav-pill {{ 'is-active' if endpoint == 'contacts' else '' }}" href="{{ url_for('contacts') }}">Contacts</a>
         <a class="nav-pill {{ 'is-active' if endpoint in ['kb', 'kb_view'] else '' }}" href="{{ url_for('kb') }}">Knowledge</a>
@@ -1780,6 +1883,7 @@
         <a class="nav-pill {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_utilization') }}">Analytics</a>
         <a class="nav-pill {{ 'is-active' if endpoint in trust_endpoints else '' }}" href="{{ url_for('trust_policy') }}">Trust</a>
         <a class="nav-pill {{ 'is-active' if endpoint in portal_endpoints else '' }}" href="{{ url_for('portal_login') }}">Portal</a>
+        <a class="nav-pill {{ 'is-active' if endpoint in integration_endpoints else '' }}" href="{{ url_for('integrations_office365') }}">Integrations</a>
         <a class="nav-pill {{ 'is-active' if endpoint == 'client_story' else '' }}" href="{{ url_for('client_story') }}">Story</a>
         {% if current_user.role == "admin" %}
           <a class="nav-pill {{ 'is-active' if endpoint in admin_endpoints else '' }}" href="{{ url_for('admin') }}">Admin</a>
@@ -1807,6 +1911,10 @@
         <a class="quick-chip {{ 'is-active' if endpoint in portal_endpoints else '' }}" href="{{ url_for('portal_login') }}">
           <span class="quick-chip-label">Client Portal</span>
           <span class="quick-chip-meta">Messages and uploads</span>
+        </a>
+        <a class="quick-chip {{ 'is-active' if endpoint in integration_endpoints else '' }}" href="{{ url_for('integrations_office365') }}">
+          <span class="quick-chip-label">Integrations</span>
+          <span class="quick-chip-meta">Office365 and imports</span>
         </a>
         <a class="quick-chip {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_utilization') }}">
           <span class="quick-chip-label">Analytics</span>
@@ -1905,6 +2013,20 @@
             </span>
             <span class="code-like">Go</span>
           </a>
+          <a class="command-item" href="{{ url_for('integrations_office365') }}" data-command-item data-keywords="integrations office365 outlook excel word import export conveyancing cost recovery">
+            <span>
+              <span class="command-item-title">Integrations Hub</span>
+              <span class="command-item-meta">Office365, import/export, and external systems</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          <a class="command-item" href="{{ url_for('mobile_hub') }}" data-command-item data-keywords="mobile tablet quick capture fees tasks">
+            <span>
+              <span class="command-item-title">Mobile Hub</span>
+              <span class="command-item-meta">Touch-friendly fee capture and task assignment</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
           {% if current_user.role == "admin" %}
             <div class="command-section">Admin</div>
             <a class="command-item" href="{{ url_for('admin') }}" data-command-item data-keywords="admin users governance settings">
@@ -1984,7 +2106,7 @@
     <a class="mobile-dock-link {{ 'is-active' if endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">Home</a>
     <a class="mobile-dock-link {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">Matters</a>
     <a class="mobile-dock-link {{ 'is-active' if endpoint in finance_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">Finance</a>
-    <a class="mobile-dock-link {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">Intake</a>
+    <a class="mobile-dock-link {{ 'is-active' if endpoint in integration_endpoints else '' }}" href="{{ url_for('mobile_hub') }}">Mobile</a>
     <button class="mobile-dock-link" type="button" data-command-open>Jump</button>
   </div>
 {% endif %}

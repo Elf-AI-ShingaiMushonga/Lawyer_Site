@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block content %}
+{% set active_count = investments | selectattr('status', 'equalto', 'active') | list | length %}
+{% set accrual_total = accruals | sum(attribute='net_interest_amount') %}
+
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Section 86 Investments</h3>
+      <p class="page-intro mb-0">Import and manage Section 86 investments, run interest automation, and export regulator-ready summaries.</p>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_section86_report', format='csv') }}">Export Report CSV</a>
+  </div>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Investments</div>
+      <div class="value">{{ investments | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Active</div>
+      <div class="value">{{ active_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Accrual Rows</div>
+      <div class="value">{{ accruals | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Net Interest</div>
+      <div class="value">{{ "%.2f"|format(accrual_total or 0) }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Create Investment</h4>
+  <form method="post" class="row g-3 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="create">
+    <div class="col-md-3">
+      <label class="form-label" for="section86-account-id">Trust Account</label>
+      <select class="form-select" id="section86-account-id" name="trust_account_id" required>
+        {% for account in accounts %}
+          <option value="{{ account.id }}">#{{ account.id }} {{ account.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="section86-ledger-id">Client Ledger</label>
+      <select class="form-select" id="section86-ledger-id" name="client_ledger_id" required>
+        {% for ledger in ledgers %}
+          <option value="{{ ledger.id }}">#{{ ledger.id }} {{ ledger.client_name }} (acct {{ ledger.trust_account_id }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="section86-ref">Investment Ref</label>
+      <input class="form-control" id="section86-ref" name="investment_ref" placeholder="INV-S86-2026-001" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="section86-institution">Institution</label>
+      <input class="form-control" id="section86-institution" name="institution" placeholder="Bank name">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="section86-principal">Principal</label>
+      <input class="form-control" id="section86-principal" name="principal_amount" type="number" step="0.01" min="0.01" required>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="section86-rate">Rate %</label>
+      <input class="form-control" id="section86-rate" name="annual_rate_percent" type="number" step="0.0001" min="0" required>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="section86-opened">Opened</label>
+      <input class="form-control" id="section86-opened" name="opened_on" type="date" required>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="section86-maturity">Maturity</label>
+      <input class="form-control" id="section86-maturity" name="maturity_on" type="date">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="section86-status">Status</label>
+      <select class="form-select" id="section86-status" name="status">
+        <option value="active">active</option>
+        <option value="matured">matured</option>
+        <option value="closed">closed</option>
+      </select>
+    </div>
+    <div class="col-md-2 d-grid">
+      <label class="form-label visually-hidden" for="section86-create-btn">Create</label>
+      <button class="btn btn-light" id="section86-create-btn" type="submit" data-submitting-text="Saving...">Create</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Import and Automation</h4>
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <form method="post" action="{{ url_for('trust_section86_import') }}" enctype="multipart/form-data" class="row g-3 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-12">
+          <label class="form-label" for="section86-import-file">Import CSV</label>
+          <input class="form-control" id="section86-import-file" name="import_file" type="file" accept=".csv,text/csv" required>
+          <div class="form-text">Headers: investment_ref, trust_account_id, client_ledger_id, principal_amount, annual_rate_percent, opened_on.</div>
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-outline-light" type="submit" data-submitting-text="Importing...">Import Investments</button>
+        </div>
+      </form>
+    </div>
+    <div class="col-lg-6">
+      <form method="post" class="row g-3 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="automate">
+        <div class="col-md-5">
+          <label class="form-label" for="section86-accrual-date">Accrual Date</label>
+          <input class="form-control" id="section86-accrual-date" name="as_of_date" type="date">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="section86-withholding">Withholding %</label>
+          <input class="form-control" id="section86-withholding" name="withholding_percent" type="number" step="0.01" min="0" value="15">
+        </div>
+        <div class="col-md-3">
+          <div class="form-check mt-4">
+            <input class="form-check-input" id="section86-post-ledger" type="checkbox" name="post_to_ledger" value="1" checked>
+            <label class="form-check-label" for="section86-post-ledger">Post to ledger</label>
+          </div>
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-light" type="submit" data-submitting-text="Running...">Run Automation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Investment Register</h4>
+  <div class="table-tools" data-table-tools data-table-target="section86-investments-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by ref, account, client ledger, or status...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="section86-investments-table">
+      <thead>
+        <tr>
+          <th class="text-end" data-sort-index="0" data-sort-type="number">ID</th>
+          <th data-sort-index="1">Reference</th>
+          <th class="text-end" data-sort-index="2" data-sort-type="number">Account</th>
+          <th class="text-end" data-sort-index="3" data-sort-type="number">Ledger</th>
+          <th class="text-end" data-sort-index="4" data-sort-type="number">Principal</th>
+          <th class="text-end" data-sort-index="5" data-sort-type="number">Rate %</th>
+          <th data-sort-index="6">Status</th>
+          <th data-sort-index="7" data-sort-type="date">Opened</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for investment in investments %}
+          <tr data-table-row data-search="{{ investment.id }} {{ investment.investment_ref }} {{ investment.trust_account_id }} {{ investment.client_ledger_id }} {{ investment.status }}">
+            <td class="text-end cell-num">{{ investment.id }}</td>
+            <td>{{ investment.investment_ref }}</td>
+            <td class="text-end cell-num">{{ investment.trust_account_id }}</td>
+            <td class="text-end cell-num">{{ investment.client_ledger_id }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(investment.principal_amount or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.4f"|format(investment.annual_rate_percent or 0) }}</td>
+            <td><span class="badge badge-soft status-badge">{{ investment.status }}</span></td>
+            <td>{{ investment.opened_on }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if investments|length > 0 %}hidden{% endif %}>
+          <td colspan="8" class="muted">No Section 86 investments yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card p-3">
+  <h4 class="mb-2">Accrual Log</h4>
+  <div class="table-tools" data-table-tools data-table-target="section86-accruals-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by investment, date, or posted entry...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="section86-accruals-table">
+      <thead>
+        <tr>
+          <th class="text-end" data-sort-index="0" data-sort-type="number">ID</th>
+          <th class="text-end" data-sort-index="1" data-sort-type="number">Investment</th>
+          <th data-sort-index="2" data-sort-type="date">Accrual Date</th>
+          <th class="text-end" data-sort-index="3" data-sort-type="number">Interest</th>
+          <th class="text-end" data-sort-index="4" data-sort-type="number">Withholding</th>
+          <th class="text-end" data-sort-index="5" data-sort-type="number">Net</th>
+          <th class="text-end" data-sort-index="6" data-sort-type="number">Posted Entry</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for accrual in accruals %}
+          <tr data-table-row data-search="{{ accrual.id }} {{ accrual.investment_id }} {{ accrual.accrual_date }} {{ accrual.net_interest_amount }} {{ accrual.posted_entry_id or '' }}">
+            <td class="text-end cell-num">{{ accrual.id }}</td>
+            <td class="text-end cell-num">{{ accrual.investment_id }}</td>
+            <td>{{ accrual.accrual_date }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(accrual.interest_amount or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(accrual.withholding_tax_amount or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(accrual.net_interest_amount or 0) }}</td>
+            <td class="text-end cell-num">{{ accrual.posted_entry_id or "-" }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if accruals|length > 0 %}hidden{% endif %}>
+          <td colspan="7" class="muted">No accrual rows yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

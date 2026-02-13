@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">3rd Party Integrations</h3>
+      <p class="page-intro mb-0">Import and export operational data for cost recovery and conveyancing systems.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('integrations_office365') }}">Office365</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('mobile_hub') }}">Mobile Hub</a>
+    </div>
+  </div>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Scoped Matters</div>
+      <div class="value">{{ scoped_matter_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Pending Export Rows</div>
+      <div class="value">{{ pending_export_rows }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card p-3">
+      <h4 class="mb-2">Export Data</h4>
+      <div class="form-help mb-2">Use these exports for downstream systems or ETL pipelines.</div>
+      <div class="d-grid gap-2">
+        <a class="btn btn-light" href="{{ url_for('integrations_export_cost_recovery') }}">Export Cost Recovery CSV</a>
+        <a class="btn btn-outline-light" href="{{ url_for('integrations_export_conveyancing') }}">Export Conveyancing CSV</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card p-3">
+      <h4 class="mb-2">Import Cost Recovery</h4>
+      <div class="form-help mb-2">CSV columns: <span class="code-like">matter_no,start_at,end_at,hours,narrative,task_code,activity_code,is_billable</span></div>
+      <form method="post" action="{{ url_for('integrations_import_cost_recovery') }}" enctype="multipart/form-data" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="import_cost_recovery">
+        <div class="col-12">
+          <label class="form-label" for="import-cost-file">CSV File</label>
+          <input class="form-control" id="import-cost-file" type="file" name="file" accept=".csv,text/csv" required>
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-light" type="submit" data-submitting-text="Importing...">Import Cost Recovery Data</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mt-3">
+  <h4 class="mb-2">Import Conveyancing</h4>
+  <div class="form-help mb-2">CSV columns: <span class="code-like">matter_no,title,client_name,status,practice_area,case_type,stage,jurisdiction</span></div>
+  {% if current_user.role != "admin" %}
+    <div class="alert alert-warning mb-0">Only admins can import conveyancing matters.</div>
+  {% else %}
+    <form method="post" action="{{ url_for('integrations_import_conveyancing') }}" enctype="multipart/form-data" class="row g-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="import_conveyancing">
+      <div class="col-md-8">
+        <label class="form-label" for="import-conveyancing-file">CSV File</label>
+        <input class="form-control" id="import-conveyancing-file" type="file" name="file" accept=".csv,text/csv" required>
+      </div>
+      <div class="col-md-4 d-grid">
+        <button class="btn btn-light" type="submit" data-submitting-text="Importing...">Import Conveyancing Data</button>
+      </div>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

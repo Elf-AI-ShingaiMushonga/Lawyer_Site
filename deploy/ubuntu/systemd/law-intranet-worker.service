@@ -1,7 +1,7 @@
 [Unit]
 Description=Law Firm Intranet Worker
-After=network-online.target law-intranet.service
-Wants=network-online.target
+After=network-online.target redis-server.service law-intranet.service
+Wants=network-online.target redis-server.service
 
 [Service]
 Type=simple

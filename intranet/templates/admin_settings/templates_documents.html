@@ -25,6 +25,16 @@
     <div class="form-section mt-2">
       <label class="form-label" for="doc-template-body">Template Body</label>
       <textarea class="form-control" id="doc-template-body" name="body" rows="6" placeholder="Template body" required></textarea>
+      <div class="form-help mt-2">
+        Merge fields: <span class="code-like">{{ "{{matter_no}}" }}</span>,
+        <span class="code-like">{{ "{{matter_title}}" }}</span>,
+        <span class="code-like">{{ "{{client_name}}" }}</span>,
+        <span class="code-like">{{ "{{stage}}" }}</span>,
+        <span class="code-like">{{ "{{jurisdiction}}" }}</span>,
+        <span class="code-like">{{ "{{today}}" }}</span>,
+        <span class="code-like">{{ "{{generated_by_name}}" }}</span>.
+      </div>
+      <div class="form-help">Custom values can be passed at generation time as key/value pairs.</div>
     </div>
     <div class="d-grid mt-2"><button class="btn btn-light">Save</button></div>
   </form>

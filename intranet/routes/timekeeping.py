@@ -8,7 +8,7 @@ from sqlalchemy import and_, or_
 
 from ..extensions import db
 from ..helpers import audit, can_access_matter
-from ..models import Matter, TimeEntry, TimeRoundingPolicy, TimeTimer, TimeValidationEvent
+from ..models import FeeArrangement, Matter, RateCard, TimeEntry, TimeRoundingPolicy, TimeTimer, TimeValidationEvent
 from ..templates import page
 
 
@@ -31,6 +31,60 @@ def _policy_for_matter(matter_id: int) -> TimeRoundingPolicy | None:
     if policy:
         return policy
     return TimeRoundingPolicy.query.filter_by(client_name=matter.client_name, is_active=True).order_by(TimeRoundingPolicy.id.desc()).first()
+
+
+def _resolve_rate_for_prompt(
+    *,
+    matter_id: int,
+    user_id: int,
+    as_of_date: dt.date | None,
+) -> tuple[RateCard | None, float]:
+    query = RateCard.query.filter(
+        or_(RateCard.matter_id == matter_id, RateCard.matter_id.is_(None)),
+        or_(RateCard.user_id == user_id, RateCard.user_id.is_(None)),
+        RateCard.is_active.is_(True),
+    )
+    if as_of_date is not None:
+        query = query.filter(
+            or_(RateCard.effective_from.is_(None), RateCard.effective_from <= as_of_date),
+            or_(RateCard.effective_to.is_(None), RateCard.effective_to >= as_of_date),
+        )
+    rate_card = (
+        query.order_by(
+            RateCard.matter_id.desc().nullslast(),
+            RateCard.user_id.desc().nullslast(),
+            RateCard.effective_from.desc().nullslast(),
+            RateCard.id.desc(),
+        )
+        .limit(1)
+        .first()
+    )
+    if rate_card is None:
+        return None, 0.0
+
+    resolved_rate = float(rate_card.rate_per_hour or 0.0)
+    return rate_card, resolved_rate
+
+
+def _parse_iso_datetime(raw: str | None) -> tuple[dt.datetime | None, str | None]:
+    candidate = (raw or "").strip()
+    if not candidate:
+        return None, None
+    try:
+        return dt.datetime.fromisoformat(candidate), None
+    except ValueError:
+        return None, "Invalid datetime format. Use ISO format such as 2026-03-01T09:00:00."
+
+
+def _as_bool(raw: str | None, default: bool = True) -> bool:
+    if raw is None:
+        return default
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 def _validate_time_entry(entry: TimeEntry, policy: TimeRoundingPolicy | None) -> list[str]:
@@ -69,6 +123,174 @@ def _validate_time_entry(entry: TimeEntry, policy: TimeRoundingPolicy | None) ->
 
 
 def register_timekeeping_routes(app):
+    @app.get("/time/prompts")
+    @login_required
+    def time_prompts():
+        matter_id = request.args.get("matter_id", type=int)
+        if not matter_id:
+            return jsonify({"ok": True, "prompts": []}), 200
+        if not can_access_matter(matter_id):
+            abort(403)
+
+        matter = db.session.get(Matter, matter_id)
+        if matter is None:
+            return jsonify({"ok": False, "error": "Matter not found."}), 404
+
+        start_at, start_error = _parse_iso_datetime(request.args.get("start_at"))
+        end_at, end_error = _parse_iso_datetime(request.args.get("end_at"))
+        if start_error or end_error:
+            return jsonify({"ok": False, "error": start_error or end_error}), 400
+        if start_at and end_at and end_at <= start_at:
+            return jsonify({"ok": False, "error": "End time must be after start time."}), 400
+
+        policy = _policy_for_matter(matter_id)
+        has_narrative = "narrative" in request.args
+        has_activity_code = "activity_code" in request.args
+        has_task_code = "task_code" in request.args
+        narrative = (request.args.get("narrative") or "").strip()
+        activity_code = (request.args.get("activity_code") or "").strip()
+        task_code = (request.args.get("task_code") or "").strip()
+        is_billable = _as_bool(request.args.get("is_billable"), default=True)
+
+        prompts: list[dict[str, str]] = []
+        if policy and policy.require_activity_code and has_activity_code and not activity_code:
+            prompts.append(
+                {
+                    "level": "warning",
+                    "code": "missing_activity_code",
+                    "message": "This matter requires an activity code before entry approval.",
+                }
+            )
+        if policy and policy.min_narrative_length and has_narrative:
+            min_chars = int(policy.min_narrative_length)
+            if len(narrative) < min_chars:
+                missing = min_chars - len(narrative)
+                prompts.append(
+                    {
+                        "level": "warning",
+                        "code": "narrative_too_short",
+                        "message": f"Narrative is {missing} characters short of the {min_chars}-character minimum.",
+                    }
+                )
+        if has_task_code and not task_code:
+            prompts.append(
+                {
+                    "level": "info",
+                    "code": "missing_task_code",
+                    "message": "Add a task code for cleaner LEDES and realization reporting.",
+                }
+            )
+
+        rounded_hours = None
+        if start_at and end_at:
+            raw_hours = max(0.0, (end_at - start_at).total_seconds() / 3600.0)
+            increment = float(policy.increment_hours if policy else 0.1)
+            rounded_hours = _round_hours(raw_hours, increment)
+            if policy and policy.daily_hour_cap:
+                day_start = dt.datetime.combine(start_at.date(), dt.time.min)
+                day_end = dt.datetime.combine(start_at.date(), dt.time.max)
+                existing_day_total = (
+                    db.session.query(db.func.coalesce(db.func.sum(TimeEntry.rounded_hours), 0.0))
+                    .filter(
+                        TimeEntry.user_id == current_user.id,
+                        TimeEntry.start_at >= day_start,
+                        TimeEntry.start_at <= day_end,
+                    )
+                    .scalar()
+                    or 0.0
+                )
+                projected = float(existing_day_total) + float(rounded_hours)
+                cap = float(policy.daily_hour_cap)
+                if projected > cap:
+                    prompts.append(
+                        {
+                            "level": "warning",
+                            "code": "daily_cap_risk",
+                            "message": f"Projected rounded total {projected:.2f}h exceeds daily cap {cap:.2f}h.",
+                        }
+                    )
+
+            overlap = (
+                TimeEntry.query.filter(
+                    TimeEntry.user_id == current_user.id,
+                    TimeEntry.start_at < end_at,
+                    or_(TimeEntry.end_at.is_(None), TimeEntry.end_at > start_at),
+                )
+                .order_by(TimeEntry.start_at.desc())
+                .limit(1)
+                .first()
+            )
+            if overlap is not None:
+                prompts.append(
+                    {
+                        "level": "warning",
+                        "code": "overlap_detected",
+                        "message": f"Time range overlaps with existing entry #{overlap.id}.",
+                    }
+                )
+
+        rate_card, resolved_rate = _resolve_rate_for_prompt(
+            matter_id=matter_id,
+            user_id=current_user.id,
+            as_of_date=(start_at.date() if start_at else dt.date.today()),
+        )
+        arrangement = FeeArrangement.query.filter_by(matter_id=matter_id).order_by(FeeArrangement.id.desc()).first()
+        if arrangement is not None:
+            arrangement_type = str(arrangement.arrangement_type or "").strip().lower()
+            if arrangement_type in {"fixed", "capped", "blended"}:
+                prompts.append(
+                    {
+                        "level": "info",
+                        "code": "fee_arrangement_active",
+                        "message": (
+                            f"Fee arrangement '{arrangement_type}' is active. Capture narrative cleanly for adjustment transparency."
+                        ),
+                    }
+                )
+
+        preview: dict[str, str | float] | None = None
+        if is_billable:
+            if rate_card is None or resolved_rate <= 0:
+                prompts.append(
+                    {
+                        "level": "warning",
+                        "code": "missing_rate_card",
+                        "message": "No active rate card found for this matter/user scope. Billable entries may price at 0.00.",
+                    }
+                )
+            elif rounded_hours is not None:
+                estimated = round(float(rounded_hours) * float(resolved_rate), 2)
+                preview = {
+                    "currency": (rate_card.currency or "ZAR").upper(),
+                    "hourly_rate": round(float(resolved_rate), 2),
+                    "rounded_hours": round(float(rounded_hours), 4),
+                    "estimated_fee": estimated,
+                }
+                prompts.append(
+                    {
+                        "level": "info",
+                        "code": "fee_preview",
+                        "message": (
+                            f"Estimated fee: {preview['currency']} {preview['estimated_fee']:.2f} "
+                            f"({preview['rounded_hours']:.2f}h at {preview['hourly_rate']:.2f}/h)."
+                        ),
+                    }
+                )
+
+        payload = {
+            "ok": True,
+            "matter_id": matter_id,
+            "prompts": prompts,
+            "policy": {
+                "increment_hours": float(policy.increment_hours) if policy else 0.1,
+                "min_narrative_length": int(policy.min_narrative_length) if policy else 0,
+                "require_activity_code": bool(policy.require_activity_code) if policy else False,
+                "daily_hour_cap": float(policy.daily_hour_cap) if policy and policy.daily_hour_cap else None,
+            },
+            "fee_preview": preview,
+        }
+        return jsonify(payload), 200
+
     @app.get("/time/timers")
     @login_required
     def time_timers():

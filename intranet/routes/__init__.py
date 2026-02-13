@@ -9,6 +9,7 @@ from .content import register_content_routes
 from .crm import register_crm_routes
 from .dms import register_dms_routes
 from .expenses import register_expenses_routes
+from .integrations import register_integration_routes
 from .matters import register_matter_routes
 from .matters_plus import register_matters_plus_routes
 from .ops import register_ops_routes
@@ -30,6 +31,7 @@ def register_routes(app):
     register_workflow_routes(app)
     register_dms_routes(app)
     register_timekeeping_routes(app)
+    register_integration_routes(app)
     register_billing_routes(app)
     register_expenses_routes(app)
     register_trust_accounting_routes(app)

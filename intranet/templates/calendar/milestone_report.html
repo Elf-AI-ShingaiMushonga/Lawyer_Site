@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Milestone Summary Report</h3>
+      <p class="page-intro mb-0">Track milestone throughput, overdue pressure, and next key dates by matter.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_my') }}">My Calendar</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_team') }}">Team Calendar</a>
+    </div>
+  </div>
+
+  <form method="get" class="row g-2 mt-2 align-items-end">
+    <div class="col-sm-6 col-lg-2">
+      <label class="form-label" for="milestone-scope">Scope</label>
+      <select class="form-select" id="milestone-scope" name="scope">
+        <option value="my" {{ 'selected' if scope == 'my' else '' }}>My access</option>
+        {% if current_user.role == 'admin' %}
+          <option value="team" {{ 'selected' if scope == 'team' else '' }}>Team (firm-wide)</option>
+        {% endif %}
+      </select>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <label class="form-label" for="milestone-start">From</label>
+      <input class="form-control" id="milestone-start" type="date" name="start" value="{{ range_start }}">
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <label class="form-label" for="milestone-end">To</label>
+      <input class="form-control" id="milestone-end" type="date" name="end" value="{{ range_end }}">
+    </div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <button class="btn btn-light" type="submit">Refresh</button>
+    </div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <a class="btn btn-outline-light" href="{{ url_for('calendar_milestone_report', scope=scope) }}">Reset</a>
+    </div>
+  </form>
+
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Matters</div>
+      <div class="value">{{ totals.matters }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Milestones (Range)</div>
+      <div class="value">{{ totals.milestones_in_range }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Upcoming Milestones</div>
+      <div class="value">{{ totals.upcoming_milestones }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Open Deadlines</div>
+      <div class="value">{{ totals.open_deadlines }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Overdue</div>
+      <div class="value">{{ totals.overdue_deadlines }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Critical Open</div>
+      <div class="value">{{ totals.critical_open_deadlines }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3">
+  <div class="table-tools" data-table-tools data-table-target="milestone-report-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by matter, client, stage, or risk counts...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="milestone-report-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0">Matter</th>
+          <th data-sort-index="1">Client</th>
+          <th data-sort-index="2">Stage</th>
+          <th data-sort-index="3" data-sort-type="number">Milestones (Range)</th>
+          <th data-sort-index="4" data-sort-type="number">Upcoming</th>
+          <th data-sort-index="5" data-sort-type="number">Open Deadlines</th>
+          <th data-sort-index="6" data-sort-type="number">Overdue</th>
+          <th data-sort-index="7" data-sort-type="number">Critical Open</th>
+          <th data-sort-index="8" data-sort-type="date">Next Key Date</th>
+          <th class="text-end" data-no-sort>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in summaries %}
+          <tr data-table-row data-search="{{ row.matter.matter_no }} {{ row.matter.title }} {{ row.matter.client_name }} {{ row.matter.stage or '' }} {{ row.overdue_deadlines }} {{ row.critical_open_deadlines }}">
+            <td>
+              <a class="list-title" href="{{ url_for('matter_detail', matter_id=row.matter.id) }}">{{ row.matter.matter_no }}</a>
+              <div class="muted small">{{ row.matter.title }}</div>
+            </td>
+            <td>{{ row.matter.client_name }}</td>
+            <td>{{ row.matter.stage or '-' }}</td>
+            <td>{{ row.milestones_in_range }}</td>
+            <td>{{ row.upcoming_milestones }}</td>
+            <td>{{ row.open_deadlines }}</td>
+            <td>{{ row.overdue_deadlines }}</td>
+            <td>{{ row.critical_open_deadlines }}</td>
+            <td>
+              {% if row.next_key_date %}
+                {{ row.next_key_date }}
+                {% set delta_days = (row.next_key_date - today).days %}
+                {% if delta_days < 0 %}
+                  <div class="muted small">{{ (delta_days * -1) }}d late</div>
+                {% elif delta_days == 0 %}
+                  <div class="muted small">today</div>
+                {% else %}
+                  <div class="muted small">in {{ delta_days }}d</div>
+                {% endif %}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_matter', matter_id=row.matter.id) }}">Open Calendar</a>
+            </td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if summaries|length > 0 %}hidden{% endif %}>
+          <td colspan="10" class="muted">No matters found for this scope and date range.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

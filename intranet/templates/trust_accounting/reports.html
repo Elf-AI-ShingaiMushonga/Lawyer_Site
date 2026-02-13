@@ -3,8 +3,17 @@
 {% set exception_count = runs | selectattr('status', 'equalto', 'exception') | list | length %}
 
 <div class="card p-3 mb-3">
-  <h3 class="mb-1">Monthly Trust Reports</h3>
-  <p class="page-intro mb-0">Select a reconciliation run and export a regulator-ready JSON report.</p>
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Monthly Trust Reports</h3>
+      <p class="page-intro mb-0">Select a reconciliation run and export a regulator-ready JSON report.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_trial_balance_report') }}">Trial Balance</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_auditor_report') }}">Auditor Report</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_section86') }}">Section 86</a>
+    </div>
+  </div>
   <div class="kpi-strip mt-3">
     <div class="kpi-pill">
       <div class="label">Runs</div>

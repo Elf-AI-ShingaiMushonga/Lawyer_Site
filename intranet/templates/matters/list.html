@@ -104,9 +104,6 @@
             data-matter-link="{{ url_for('matter_detail', matter_id=m.id) }}"
             data-status="{{ m.status|lower|replace(' ', '-') }}"
             data-risk="{{ m.risk_level|lower }}"
-            role="link"
-            tabindex="0"
-            aria-label="Open matter {{ m.matter_no }} - {{ m.title }}"
           >
             <div class="list-row">
               <div>

@@ -16,7 +16,13 @@
         Build a billing draft from approved time and expenses for a selected period.
       </p>
     </div>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_ar_aging') }}">Open AR Aging</a>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_ar_aging') }}">Open AR Aging</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_trial_balance') }}">Trial Balance</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_auditor_report') }}">Auditor Report</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_transactions') }}">Transactions</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_audit_log') }}">Audit Log</a>
+    </div>
   </div>
 
   <div class="kpi-strip mt-3">

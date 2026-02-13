@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import datetime as dt
+import io
 import os
 import uuid
 
-from flask import abort, flash, redirect, request, send_from_directory, url_for
+from flask import abort, flash, redirect, request, send_file, send_from_directory, url_for
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
@@ -23,6 +24,34 @@ def _extract_receipt_text(path: str) -> str | None:
         except Exception:
             return None
     return None
+
+
+def _build_lines_pdf(text_lines: list[str]) -> bytes:
+    escaped = [
+        (line or "").replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        for line in (text_lines or [""])
+    ]
+    stream = f"BT /F1 10 Tf 50 760 Td 12 TL ({') Tj T* ('.join(escaped)}) Tj ET".encode("utf-8")
+    objects = [
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n",
+        b"4 0 obj\n<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream\nendobj\n",
+        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+    ]
+    out = io.BytesIO()
+    out.write(b"%PDF-1.4\n")
+    offsets = [0]
+    for obj in objects:
+        offsets.append(out.tell())
+        out.write(obj)
+    xref_pos = out.tell()
+    out.write(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    out.write(b"0000000000 65535 f \n")
+    for off in offsets[1:]:
+        out.write(f"{off:010d} 00000 n \n".encode("ascii"))
+    out.write(f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n".encode("ascii"))
+    return out.getvalue()
 
 
 def register_expenses_routes(app):
@@ -121,3 +150,40 @@ def register_expenses_routes(app):
             abort(404)
         audit("expense_receipt_download", "ExpenseEntry", row.id)
         return send_from_directory(app.config["UPLOAD_DIR"], row.receipt_filename, as_attachment=True)
+
+    @app.get("/expenses/<int:expense_id>/receipt/pdf")
+    @login_required
+    def expense_receipt_pdf(expense_id: int):
+        row = db.session.get(ExpenseEntry, expense_id)
+        if not row:
+            abort(404)
+        if not can_access_matter(row.matter_id):
+            abort(403)
+
+        matter = db.session.get(Matter, row.matter_id)
+        text_lines = [
+            "Expense Receipt Summary",
+            f"Expense ID: {row.id}",
+            f"Matter: {(matter.matter_no + ' - ' + matter.title) if matter else row.matter_id}",
+            f"Amount: {float(row.amount or 0.0):.2f} {row.currency}",
+            f"Category: {row.category}",
+            f"Incurred On: {row.incurred_on}",
+            f"Status: {row.status}",
+            f"Description: {(row.description or '').strip() or '-'}",
+            f"Receipt File: {row.receipt_filename or 'none'}",
+            f"Receipt SHA256: {row.receipt_sha256 or '-'}",
+        ]
+        if row.receipt_ocr_text:
+            text_lines.append("OCR Snippet:")
+            text_lines.append((row.receipt_ocr_text or "")[:300].replace("\n", " "))
+
+        payload = _build_lines_pdf(text_lines)
+        buffer = io.BytesIO(payload)
+        buffer.seek(0)
+        audit("expense_receipt_pdf_generate", "ExpenseEntry", row.id)
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=f"expense_receipt_{row.id}.pdf",
+            mimetype="application/pdf",
+        )

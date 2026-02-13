@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import datetime as dt
 import hashlib
 import io
@@ -19,15 +20,18 @@ from intranet.models import (
     Deadline,
     DocumentRecord,
     DocumentOCRText,
+    DocumentTemplate,
     DocumentVersion,
     EmailCapture,
     EthicalWall,
     EthicalWallMatter,
     EthicalWallRule,
     ExpenseEntry,
+    FirmSetting,
     IntakeForm,
     InvoiceAdjustment,
     Invoice,
+    InvoiceLine,
     LegalHold,
     PortalLinkToken,
     RetentionPolicy,
@@ -38,12 +42,20 @@ from intranet.models import (
     MatterNoteACL,
     MatterTimelineEvent,
     Notification,
+    PaymentAllocation,
     PortalMatterAccess,
     PortalMessage,
     PortalUser,
+    RateCard,
+    Section86Accrual,
+    Section86Investment,
+    Task,
+    TaskAssignee,
     TimeEntry,
+    TimeRoundingPolicy,
     TrustAccount,
     TrustApprovalRequest,
+    TrustBankStatementImport,
     TrustClientLedger,
     TrustLedgerEntry,
     TrustReconciliationRun,
@@ -510,6 +522,169 @@ def test_trust_reconciliation_uses_signed_ledger_balances(app_ctx):
     assert float(run.ledger_closing_balance or 0.0) == 800.0
 
 
+def test_trust_statement_import_links_to_reconciliation_and_section86_automation(app_ctx):
+    app = app_ctx
+    reviewer = _seed_user("trust-statement-import@example.com", role="lawyer", mfa_enabled=True)
+    account = TrustAccount(name="Import Trust", currency="ZAR", is_active=True)
+    db.session.add(account)
+    db.session.flush()
+    ledger = TrustClientLedger(
+        trust_account_id=account.id,
+        client_name="Import Client",
+        matter_id=None,
+        current_balance=0.0,
+    )
+    db.session.add(ledger)
+    db.session.commit()
+
+    TrustEngine.post_transaction(
+        {
+            "trust_account_id": account.id,
+            "client_ledger_id": ledger.id,
+            "entry_type": "deposit",
+            "amount": 1000.0,
+            "currency": "ZAR",
+            "created_by": reviewer.id,
+        }
+    )
+    TrustEngine.post_transaction(
+        {
+            "trust_account_id": account.id,
+            "client_ledger_id": ledger.id,
+            "entry_type": "disbursement",
+            "amount": 200.0,
+            "currency": "ZAR",
+            "created_by": reviewer.id,
+        }
+    )
+
+    client = app.test_client()
+    _set_user_session(client, reviewer.id)
+    csv_payload = "\n".join(
+        [
+            "date,description,debit,credit,balance",
+            "2026-01-01,Opening,0,1000,1000",
+            "2026-01-02,Payout,200,0,800",
+        ]
+    )
+    import_resp = client.post(
+        "/trust/statements/import",
+        data={
+            "csrf_token": "test-csrf",
+            "trust_account_id": account.id,
+            "statement_label": "Jan 2026",
+            "statement_file": (io.BytesIO(csv_payload.encode("utf-8")), "statement.csv"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert import_resp.status_code == 302
+    statement = TrustBankStatementImport.query.order_by(TrustBankStatementImport.id.desc()).first()
+    assert statement is not None
+    assert statement.row_count == 2
+
+    recon_resp = client.post(
+        "/trust/reconciliations",
+        data={
+            "csrf_token": "test-csrf",
+            "trust_account_id": account.id,
+            "bank_statement_import_id": statement.id,
+            "period_start": "2026-01-01T00:00:00",
+            "period_end": "2026-12-31T23:59:59",
+        },
+        follow_redirects=False,
+    )
+    assert recon_resp.status_code == 302
+    run = TrustReconciliationRun.query.order_by(TrustReconciliationRun.id.desc()).first()
+    assert run is not None
+    assert run.bank_statement_import_id == statement.id
+    assert run.status == "balanced"
+
+    create_investment = client.post(
+        "/trust/section86",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "create",
+            "trust_account_id": account.id,
+            "client_ledger_id": ledger.id,
+            "investment_ref": "S86-TEST-001",
+            "principal_amount": 36500.0,
+            "annual_rate_percent": 10.0,
+            "opened_on": "2026-01-01",
+            "status": "active",
+        },
+        follow_redirects=False,
+    )
+    assert create_investment.status_code == 302
+    investment = Section86Investment.query.filter_by(investment_ref="S86-TEST-001").first()
+    assert investment is not None
+
+    automate_resp = client.post(
+        "/trust/section86",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "automate",
+            "as_of_date": "2026-01-10",
+            "withholding_percent": "15",
+            "post_to_ledger": "1",
+        },
+        follow_redirects=False,
+    )
+    assert automate_resp.status_code == 302
+    accrual = Section86Accrual.query.filter_by(investment_id=investment.id, accrual_date=dt.date(2026, 1, 10)).first()
+    assert accrual is not None
+    assert float(accrual.net_interest_amount or 0.0) > 0
+
+
+def test_trust_cashbook_and_report_exports(app_ctx):
+    app = app_ctx
+    reviewer = _seed_user("trust-exports@example.com", role="lawyer", mfa_enabled=True)
+    account = TrustAccount(name="Export Trust", currency="ZAR", is_active=True)
+    db.session.add(account)
+    db.session.flush()
+    ledger = TrustClientLedger(
+        trust_account_id=account.id,
+        client_name="Export Client",
+        matter_id=None,
+        current_balance=0.0,
+    )
+    db.session.add(ledger)
+    db.session.commit()
+    TrustEngine.post_transaction(
+        {
+            "trust_account_id": account.id,
+            "client_ledger_id": ledger.id,
+            "entry_type": "deposit",
+            "amount": 600.0,
+            "currency": "ZAR",
+            "created_by": reviewer.id,
+        }
+    )
+
+    client = app.test_client()
+    _set_user_session(client, reviewer.id)
+    cashbook = client.get("/trust/cashbook?format=csv")
+    assert cashbook.status_code == 200
+    assert cashbook.mimetype == "text/csv"
+    assert "trust_account_id,trust_account_name,currency,deposit_total" in cashbook.get_data(as_text=True)
+
+    trial_balance = client.get("/trust/reports/trial-balance?format=csv")
+    assert trial_balance.status_code == 200
+    assert trial_balance.mimetype == "text/csv"
+    assert "trust_account_id,trust_account_name,currency,cashbook_total" in trial_balance.get_data(as_text=True)
+
+    auditor = client.get("/trust/reports/auditor?format=json")
+    assert auditor.status_code == 200
+    assert auditor.mimetype == "application/json"
+    payload = auditor.get_json()
+    assert float(payload["cashbook_total"]) >= 600.0
+
+    section86 = client.get("/trust/section86/report?format=csv")
+    assert section86.status_code == 200
+    assert section86.mimetype == "text/csv"
+    assert "investment_id,investment_ref,trust_account_id" in section86.get_data(as_text=True)
+
+
 def test_billing_engine_uses_matter_client_on_expense_only_invoice(seed_user_matter):
     user = seed_user_matter["user"]
     matter = seed_user_matter["matter"]
@@ -610,6 +785,329 @@ def test_billing_adjustments_and_ar_aging_routes(app_ctx):
     body = aging_resp.get_data(as_text=True)
     assert f"#{invoice.id}" in body
     assert "1050.0" in body
+
+
+def test_billing_tax_invoice_account_statement_and_reports(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("billing-reports@example.com", role="lawyer", mfa_enabled=True)
+    matter = _seed_matter(lawyer, "2026-BILL-REPORTS-1", "Billing Reports Matter", "Billing Reports Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.flush()
+    invoice = Invoice(
+        matter_id=matter.id,
+        client_name=matter.client_name,
+        period_start=dt.date(2026, 1, 1),
+        period_end=dt.date(2026, 1, 31),
+        status="approved",
+        subtotal=800.0,
+        tax_total=120.0,
+        total=920.0,
+        created_by=lawyer.id,
+    )
+    db.session.add(invoice)
+    db.session.flush()
+    db.session.add(PaymentAllocation(invoice_id=invoice.id, amount=200.0, method="eft", created_by=lawyer.id))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, lawyer.id)
+
+    tax_pdf = client.get(f"/billing/invoices/{invoice.id}/tax-invoice")
+    assert tax_pdf.status_code == 200
+    assert tax_pdf.mimetype == "application/pdf"
+    assert tax_pdf.data.startswith(b"%PDF-1.4")
+
+    statement_html = client.get(f"/billing/accounts/{matter.id}/statement")
+    assert statement_html.status_code == 200
+    statement_body = statement_html.get_data(as_text=True)
+    assert f"#{invoice.id}" in statement_body
+
+    statement_csv = client.get(f"/billing/accounts/{matter.id}/statement?format=csv")
+    assert statement_csv.status_code == 200
+    assert statement_csv.mimetype == "text/csv"
+    assert "invoice_id,status,period_start,period_end" in statement_csv.get_data(as_text=True)
+
+    trial_balance_csv = client.get("/billing/reports/trial-balance?format=csv")
+    assert trial_balance_csv.status_code == 200
+    assert trial_balance_csv.mimetype == "text/csv"
+    assert "matter_id,matter_no,matter_title,invoice_count" in trial_balance_csv.get_data(as_text=True)
+
+    auditor_json = client.get("/billing/reports/auditor?format=json")
+    assert auditor_json.status_code == 200
+    assert auditor_json.mimetype == "application/json"
+    payload = auditor_json.get_json()
+    assert int(payload["invoice_count"]) >= 1
+    assert float(payload["billed_total"]) >= 920.0
+
+
+def test_capture_settled_payments_and_pending_settlement_flow(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("billing-payment-capture@example.com", role="lawyer", mfa_enabled=True)
+    matter = _seed_matter(lawyer, "2026-BILL-PAY-1", "Payment Capture Matter", "Payment Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.flush()
+    invoice = Invoice(
+        matter_id=matter.id,
+        client_name=matter.client_name,
+        period_start=dt.date(2026, 3, 1),
+        period_end=dt.date(2026, 3, 31),
+        status="approved",
+        subtotal=1000.0,
+        tax_total=0.0,
+        total=1000.0,
+        created_by=lawyer.id,
+    )
+    db.session.add(invoice)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, lawyer.id)
+
+    pending_resp = client.post(
+        f"/billing/invoices/{invoice.id}/payments",
+        data={
+            "csrf_token": "test-csrf",
+            "amount": "300.00",
+            "method": "EFT",
+            "reference": "PENDING-REF-1",
+            "status": "pending",
+            "processor_note": "Awaiting bank settlement",
+        },
+        follow_redirects=False,
+    )
+    assert pending_resp.status_code == 302
+    payment = PaymentAllocation.query.order_by(PaymentAllocation.id.desc()).first()
+    assert payment is not None
+    assert payment.status == "pending"
+
+    statement_before = client.get(f"/billing/accounts/{matter.id}/statement?format=csv")
+    assert statement_before.status_code == 200
+    rows_before = list(csv.DictReader(io.StringIO(statement_before.get_data(as_text=True))))
+    invoice_row_before = next(row for row in rows_before if row["invoice_id"] == str(invoice.id))
+    assert float(invoice_row_before["outstanding"]) == pytest.approx(1000.0)
+
+    settle_resp = client.post(
+        f"/billing/payments/{payment.id}/settle",
+        data={"csrf_token": "test-csrf", "external_txn_id": "BANK-TXN-0001"},
+        follow_redirects=False,
+    )
+    assert settle_resp.status_code == 302
+    db.session.refresh(payment)
+    assert payment.status == "settled"
+    assert payment.settled_by == lawyer.id
+    assert payment.settled_at is not None
+    assert payment.external_txn_id == "BANK-TXN-0001"
+
+    statement_after = client.get(f"/billing/accounts/{matter.id}/statement?format=csv")
+    rows_after = list(csv.DictReader(io.StringIO(statement_after.get_data(as_text=True))))
+    invoice_row_after = next(row for row in rows_after if row["invoice_id"] == str(invoice.id))
+    assert float(invoice_row_after["paid"]) == pytest.approx(300.0)
+    assert float(invoice_row_after["outstanding"]) == pytest.approx(700.0)
+
+    assert AuditLog.query.filter_by(action="payment_capture", entity_type="PaymentAllocation", entity_id=payment.id).count() >= 1
+    assert AuditLog.query.filter_by(action="payment_settle", entity_type="PaymentAllocation", entity_id=payment.id).count() >= 1
+
+
+def test_per_transaction_billing_and_billing_audit_log_exports(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("billing-transaction-view@example.com", role="lawyer", mfa_enabled=True)
+    matter = _seed_matter(lawyer, "2026-BILL-TXN-1", "Transaction View Matter", "Transaction Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.flush()
+    invoice = Invoice(
+        matter_id=matter.id,
+        client_name=matter.client_name,
+        period_start=dt.date(2026, 4, 1),
+        period_end=dt.date(2026, 4, 30),
+        status="approved",
+        subtotal=0.0,
+        tax_total=0.0,
+        total=0.0,
+        created_by=lawyer.id,
+    )
+    db.session.add(invoice)
+    db.session.flush()
+    line = InvoiceLine(
+        invoice_id=invoice.id,
+        description="Per-transaction line",
+        hours=2.0,
+        rate=500.0,
+        amount=1000.0,
+        tax_amount=150.0,
+    )
+    adjustment = InvoiceAdjustment(
+        invoice_id=invoice.id,
+        adjustment_type="write_down",
+        reason="Courtesy reduction",
+        amount=-100.0,
+        created_by=lawyer.id,
+    )
+    payment = PaymentAllocation(
+        invoice_id=invoice.id,
+        amount=400.0,
+        method="EFT",
+        reference="TXN-REF-001",
+        status="settled",
+        settled_at=dt.datetime.utcnow(),
+        settled_by=lawyer.id,
+        created_by=lawyer.id,
+    )
+    db.session.add_all([line, adjustment, payment])
+    invoice.subtotal = 1000.0
+    invoice.tax_total = 150.0
+    invoice.total = 1150.0
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, lawyer.id)
+
+    transactions_csv = client.get("/billing/transactions?format=csv")
+    assert transactions_csv.status_code == 200
+    assert transactions_csv.mimetype == "text/csv"
+    payload = transactions_csv.get_data(as_text=True)
+    assert "transaction_type,transaction_id,invoice_id" in payload
+    assert "bill_line" in payload
+    assert "adjustment" in payload
+    assert "payment" in payload
+
+    audit_csv = client.get("/billing/audit-log?format=csv")
+    assert audit_csv.status_code == 200
+    assert audit_csv.mimetype == "text/csv"
+    audit_payload = audit_csv.get_data(as_text=True)
+    assert "action,entity_type,entity_id" in audit_payload
+    assert "billing_transactions_export" in audit_payload
+
+
+def test_billing_audit_log_scopes_records_to_visible_matters(app_ctx):
+    app = app_ctx
+    viewer = _seed_user("billing-audit-viewer@example.com", role="lawyer", mfa_enabled=True)
+    peer = _seed_user("billing-audit-peer@example.com", role="lawyer", mfa_enabled=True)
+
+    visible_matter = _seed_matter(viewer, "2026-BILL-AUDIT-01", "Visible Billing Matter", "Visible Client")
+    hidden_matter = _seed_matter(peer, "2026-BILL-AUDIT-02", "Hidden Billing Matter", "Hidden Client")
+    db.session.add_all(
+        [
+            MatterMember(matter_id=visible_matter.id, user_id=viewer.id, role_in_matter="Lead"),
+            MatterMember(matter_id=hidden_matter.id, user_id=peer.id, role_in_matter="Lead"),
+        ]
+    )
+    db.session.flush()
+
+    visible_invoice = Invoice(
+        matter_id=visible_matter.id,
+        client_name=visible_matter.client_name,
+        period_start=dt.date(2026, 5, 1),
+        period_end=dt.date(2026, 5, 31),
+        status="approved",
+        subtotal=1000.0,
+        tax_total=150.0,
+        total=1150.0,
+        created_by=viewer.id,
+    )
+    hidden_invoice = Invoice(
+        matter_id=hidden_matter.id,
+        client_name=hidden_matter.client_name,
+        period_start=dt.date(2026, 5, 1),
+        period_end=dt.date(2026, 5, 31),
+        status="approved",
+        subtotal=2000.0,
+        tax_total=300.0,
+        total=2300.0,
+        created_by=peer.id,
+    )
+    db.session.add_all([visible_invoice, hidden_invoice])
+    db.session.flush()
+
+    now = dt.datetime.utcnow()
+    db.session.add_all(
+        [
+            AuditLog(
+                actor_user_id=viewer.id,
+                action="billing_transactions_view",
+                entity_type="Invoice",
+                entity_id=None,
+                at=now,
+            ),
+            AuditLog(
+                actor_user_id=viewer.id,
+                action="invoice_approve",
+                entity_type="Invoice",
+                entity_id=visible_invoice.id,
+                at=now - dt.timedelta(minutes=1),
+            ),
+            AuditLog(
+                actor_user_id=peer.id,
+                action="invoice_approve",
+                entity_type="Invoice",
+                entity_id=hidden_invoice.id,
+                at=now - dt.timedelta(minutes=2),
+            ),
+            AuditLog(
+                actor_user_id=peer.id,
+                action="billing_rate_create",
+                entity_type="RateCard",
+                entity_id=9999,
+                at=now - dt.timedelta(minutes=3),
+            ),
+        ]
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, viewer.id)
+
+    response = client.get("/billing/audit-log?format=csv")
+    assert response.status_code == 200
+    rows = list(csv.DictReader(io.StringIO(response.get_data(as_text=True))))
+
+    assert any(
+        row["action"] == "invoice_approve"
+        and row["entity_type"] == "Invoice"
+        and row["entity_id"] == str(visible_invoice.id)
+        for row in rows
+    )
+    assert not any(
+        row["action"] == "invoice_approve"
+        and row["entity_type"] == "Invoice"
+        and row["entity_id"] == str(hidden_invoice.id)
+        for row in rows
+    )
+    assert any(row["action"] == "billing_transactions_view" and row["actor_user_id"] == str(viewer.id) for row in rows)
+    assert not any(row["action"] == "billing_rate_create" and row["actor_user_id"] == str(peer.id) for row in rows)
+
+    html_response = client.get("/billing/audit-log")
+    assert html_response.status_code == 200
+    html_body = html_response.get_data(as_text=True)
+    assert "Billing Audit Log" in html_body
+    assert f"Invoice #{visible_invoice.id}" in html_body
+    assert f"Invoice #{hidden_invoice.id}" not in html_body
+
+
+def test_expense_receipt_pdf_route_returns_pdf(app_ctx):
+    app = app_ctx
+    user = _seed_user("expense-receipt-pdf@example.com")
+    matter = _seed_matter(user, "2026-EXP-PDF-1", "Expense PDF Matter", "Expense Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.flush()
+    expense = ExpenseEntry(
+        matter_id=matter.id,
+        user_id=user.id,
+        amount=250.0,
+        currency="ZAR",
+        category="Travel",
+        description="Court travel",
+        incurred_on=dt.date(2026, 2, 2),
+        status="approved",
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/expenses/{expense.id}/receipt/pdf")
+    assert response.status_code == 200
+    assert response.mimetype == "application/pdf"
+    assert response.data.startswith(b"%PDF-1.4")
 
 
 def test_data_residency_policy_blocks_export_when_region_mismatch(app_ctx):
@@ -749,6 +1247,48 @@ def test_matter_dms_ranked_search_filters_to_matching_documents(app_ctx):
     assert response.status_code == 200
     assert "Alpha memo" in body
     assert "Budget sheet" not in body
+
+
+def test_dms_template_generation_creates_document_version(app_ctx):
+    app = app_ctx
+    user = _seed_user("dms-template-gen@example.com")
+    matter = _seed_matter(user, "2026-DMS-GEN-0001", "Generated Document Matter", "Template Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    template = DocumentTemplate(
+        name="Notice Template",
+        template_type="Notice",
+        body="Matter {{matter_no}} for {{client_name}} against {{opponent_name}}.",
+        created_by=user.id,
+    )
+    db.session.add(template)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.post(
+        f"/matters/{matter.id}/dms",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "generate_from_template",
+            "template_id": template.id,
+            "generated_title": "Generated Notice",
+            "custom_fields": "opponent_name=Acme Holdings",
+            "generated_document_type": "Notice",
+            "generated_confidentiality": "Internal",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    doc = DocumentRecord.query.filter_by(matter_id=matter.id, title="Generated Notice").first()
+    assert doc is not None
+    version = DocumentVersion.query.filter_by(document_id=doc.id, version_no=1).first()
+    assert version is not None
+    ocr = DocumentOCRText.query.filter_by(document_version_id=version.id).first()
+    assert ocr is not None
+    assert "2026-DMS-GEN-0001" in ocr.extracted_text
+    assert "Acme Holdings" in ocr.extracted_text
+    assert os.path.isfile(os.path.join(app.config["UPLOAD_DIR"], version.stored_filename))
 
 
 def test_email_capture_attachment_download_is_audited(app_ctx):
@@ -909,6 +1449,111 @@ def test_calendar_matter_post_creates_deadline_and_hearing(app_ctx):
     assert hearing is not None
     assert hearing.event_type == "Hearing"
     assert hearing.is_milestone is True
+
+
+def test_calendar_milestone_report_includes_scoped_summary(app_ctx):
+    app = app_ctx
+    admin = _seed_user("calendar-report-admin@example.com", role="admin", mfa_enabled=True)
+    matter = _seed_matter(admin, "2026-CAL-REPORT-1", "Calendar Report Matter", "Calendar Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=admin.id, role_in_matter="Lead"))
+    today = dt.date.today()
+    db.session.add(
+        MatterTimelineEvent(
+            matter_id=matter.id,
+            event_date=today + dt.timedelta(days=5),
+            event_type="Milestone",
+            title="Evidence exchange",
+            is_milestone=True,
+            created_by=admin.id,
+        )
+    )
+    db.session.add(
+        Deadline(
+            matter_id=matter.id,
+            title="Serve heads of argument",
+            due_at=today - dt.timedelta(days=1),
+            status="open",
+            is_critical=True,
+            created_by=admin.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, admin.id)
+    response = client.get(
+        f"/calendar/milestones/report?scope=team&start={today.isoformat()}&end={(today + dt.timedelta(days=30)).isoformat()}",
+        follow_redirects=False,
+    )
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Milestone Summary Report" in body
+    assert "2026-CAL-REPORT-1" in body
+    assert "Calendar Report Matter" in body
+
+
+def test_time_prompts_return_policy_and_fee_guidance(app_ctx):
+    app = app_ctx
+    user = _seed_user("time-prompts@example.com")
+    matter = _seed_matter(user, "2026-TIME-PROMPT-1", "Prompt Matter", "Prompt Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.add(
+        TimeRoundingPolicy(
+            matter_id=matter.id,
+            increment_hours=0.25,
+            min_narrative_length=30,
+            require_activity_code=True,
+            daily_hour_cap=4.0,
+            is_active=True,
+        )
+    )
+    db.session.add(
+        RateCard(
+            matter_id=matter.id,
+            user_id=user.id,
+            currency="ZAR",
+            rate_per_hour=1500.0,
+            is_active=True,
+        )
+    )
+    db.session.add(
+        TimeEntry(
+            user_id=user.id,
+            matter_id=matter.id,
+            start_at=dt.datetime(2026, 4, 1, 8, 0, 0),
+            end_at=dt.datetime(2026, 4, 1, 10, 30, 0),
+            hours=2.5,
+            rounded_hours=2.5,
+            narrative="Existing entry",
+            status="approved",
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(
+        "/time/prompts",
+        query_string={
+            "matter_id": matter.id,
+            "start_at": "2026-04-01T11:00:00",
+            "end_at": "2026-04-01T13:00:00",
+            "narrative": "Short note",
+            "activity_code": "",
+            "task_code": "",
+            "is_billable": "1",
+        },
+    )
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    codes = {row["code"] for row in payload["prompts"]}
+    assert "missing_activity_code" in codes
+    assert "narrative_too_short" in codes
+    assert "daily_cap_risk" in codes
+    assert "fee_preview" in codes
+    assert payload["fee_preview"]["currency"] == "ZAR"
+    assert float(payload["fee_preview"]["estimated_fee"]) == pytest.approx(3000.0)
 
 
 def test_portal_link_expiry_returns_gone(app_ctx):
@@ -1338,3 +1983,171 @@ def test_sqlite_legal_hold_guard_blocks_matter_delete(seed_user_matter):
     with pytest.raises(Exception):
         db.session.commit()
     db.session.rollback()
+
+
+def test_office365_outlook_feed_contains_deadlines(app_ctx):
+    app = app_ctx
+    user = _seed_user("office365-feed@example.com")
+    matter = _seed_matter(user, "2026-O365-0001", "Office365 Feed Matter", "Office Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.add(
+        Deadline(
+            matter_id=matter.id,
+            title="Exchange witness statements",
+            due_at=dt.date.today() + dt.timedelta(days=3),
+            status="open",
+            is_critical=True,
+            created_by=user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get("/integrations/office365/outlook.ics")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "text/calendar" in (response.content_type or "")
+    assert "BEGIN:VEVENT" in body
+    assert "Exchange witness statements" in body
+    assert "2026-O365-0001" in body
+
+
+def test_office365_admin_settings_persist(app_ctx):
+    app = app_ctx
+    admin = _seed_user("office365-admin@example.com", role="admin", mfa_enabled=True)
+    client = app.test_client()
+    _set_user_session(client, admin.id)
+
+    response = client.post(
+        "/integrations/office365",
+        data={
+            "csrf_token": "test-csrf",
+            "enabled": "1",
+            "tenant_id": "tenant-123",
+            "client_id": "client-456",
+            "domain_hint": "tenant.onmicrosoft.com",
+            "sync_notes": "Nightly sync enabled",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    setting = FirmSetting.query.filter_by(setting_key="office365_integration").first()
+    assert setting is not None
+    payload = json.loads(setting.setting_value_json or "{}")
+    assert payload.get("enabled") is True
+    assert payload.get("tenant_id") == "tenant-123"
+    assert payload.get("client_id") == "client-456"
+
+
+def test_mobile_hub_captures_fee_and_assigns_task(app_ctx):
+    app = app_ctx
+    user = _seed_user("mobile-hub-owner@example.com")
+    teammate = _seed_user("mobile-hub-peer@example.com")
+    matter = _seed_matter(user, "2026-MOBILE-0001", "Mobile Hub Matter", "Mobile Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=teammate.id, role_in_matter="Team"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    fee_response = client.post(
+        "/mobile/hub",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "capture_fee",
+            "matter_id": matter.id,
+            "start_at": "2026-05-01T09:00",
+            "end_at": "2026-05-01T10:30",
+            "narrative": "Mobile fee capture note",
+            "task_code": "L120",
+            "activity_code": "A101",
+            "is_billable": "1",
+        },
+        follow_redirects=False,
+    )
+    assert fee_response.status_code == 302
+    assert TimeEntry.query.filter_by(matter_id=matter.id, user_id=user.id).count() == 1
+
+    task_response = client.post(
+        "/mobile/hub",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "assign_task",
+            "matter_id": matter.id,
+            "title": "Mobile-assigned task",
+            "due_date": "2026-05-03",
+            "priority": "High",
+            "assignee_user_ids": [str(user.id), str(teammate.id)],
+            "description": "Created from mobile hub",
+        },
+        follow_redirects=False,
+    )
+    assert task_response.status_code == 302
+    task = Task.query.filter_by(matter_id=matter.id, title="Mobile-assigned task").first()
+    assert task is not None
+    assignee_count = TaskAssignee.query.filter_by(task_id=task.id).count()
+    assert assignee_count == 2
+
+
+def test_third_party_cost_recovery_import_export_roundtrip(app_ctx):
+    app = app_ctx
+    user = _seed_user("cost-recovery@example.com")
+    matter = _seed_matter(user, "2026-COST-0001", "Cost Recovery Matter", "Recovery Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    csv_payload = (
+        "matter_no,start_at,end_at,narrative,task_code,activity_code,is_billable\n"
+        "2026-COST-0001,2026-06-10T09:00:00,2026-06-10T10:00:00,Imported row,L130,A102,1\n"
+    )
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    import_response = client.post(
+        "/integrations/third-party/import/cost-recovery",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "import_cost_recovery",
+            "file": (io.BytesIO(csv_payload.encode("utf-8")), "cost_recovery.csv"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert import_response.status_code == 302
+    assert TimeEntry.query.filter_by(matter_id=matter.id, user_id=user.id).count() == 1
+
+    export_response = client.get("/integrations/third-party/export/cost-recovery.csv?end=2026-12-31")
+    export_body = export_response.get_data(as_text=True)
+    assert export_response.status_code == 200
+    assert "text/csv" in (export_response.content_type or "")
+    assert "2026-COST-0001" in export_body
+    assert "Imported row" in export_body
+
+
+def test_third_party_conveyancing_import_creates_matter(app_ctx):
+    app = app_ctx
+    admin = _seed_user("conveyancing-admin@example.com", role="admin", mfa_enabled=True)
+    client = app.test_client()
+    _set_user_session(client, admin.id)
+
+    csv_payload = (
+        "matter_no,title,client_name,status,practice_area,case_type,stage,jurisdiction\n"
+        "2026-CONV-0001,Transfer of Erf 221,Property Client,Open,Conveyancing,Property Transfer,Pre-registration,ZA-GP\n"
+    )
+    response = client.post(
+        "/integrations/third-party/import/conveyancing",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "import_conveyancing",
+            "file": (io.BytesIO(csv_payload.encode("utf-8")), "conveyancing.csv"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    matter = Matter.query.filter_by(matter_no="2026-CONV-0001").first()
+    assert matter is not None
+    assert matter.practice_area == "Conveyancing"
+    assert matter.case_type == "Property Transfer"

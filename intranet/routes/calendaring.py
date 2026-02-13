@@ -63,6 +63,16 @@ def _safe_calendar_redirect(default_url: str) -> str:
     return default_url
 
 
+def _parse_date_arg(value: str | None, fallback: dt.date) -> dt.date:
+    raw = (value or "").strip()
+    if not raw:
+        return fallback
+    try:
+        return dt.date.fromisoformat(raw)
+    except ValueError:
+        return fallback
+
+
 def register_calendar_routes(app):
     @app.get("/calendar/my")
     @login_required
@@ -113,6 +123,109 @@ def register_calendar_routes(app):
             deadlines=deadlines,
             active_filter=active_filter,
             stats=stats,
+            today=today,
+        )
+
+    @app.get("/calendar/milestones/report")
+    @login_required
+    def calendar_milestone_report():
+        today = dt.date.today()
+        default_start = today
+        default_end = today + dt.timedelta(days=90)
+        range_start = _parse_date_arg(request.args.get("start"), default_start)
+        range_end = _parse_date_arg(request.args.get("end"), default_end)
+        if range_end < range_start:
+            range_end = range_start
+
+        requested_scope = (request.args.get("scope") or "my").strip().lower()
+        scope = "team" if requested_scope == "team" and current_user.role == "admin" else "my"
+
+        matter_query = Matter.query
+        if scope == "my" or current_user.role != "admin":
+            scoped_ids = visible_matter_ids()
+            if scoped_ids:
+                matter_query = matter_query.filter(Matter.id.in_(scoped_ids))
+            else:
+                matter_query = matter_query.filter(Matter.id == -1)
+        matters = matter_query.order_by(Matter.last_updated_at.desc()).limit(500).all()
+        matter_ids = [matter.id for matter in matters]
+
+        milestones = (
+            MatterTimelineEvent.query.filter(
+                MatterTimelineEvent.matter_id.in_(matter_ids),
+                MatterTimelineEvent.is_milestone.is_(True),
+            ).all()
+            if matter_ids
+            else []
+        )
+        deadlines = (
+            Deadline.query.filter(Deadline.matter_id.in_(matter_ids)).all()
+            if matter_ids
+            else []
+        )
+
+        milestones_by_matter: dict[int, list[MatterTimelineEvent]] = {}
+        for milestone in milestones:
+            milestones_by_matter.setdefault(int(milestone.matter_id), []).append(milestone)
+        deadlines_by_matter: dict[int, list[Deadline]] = {}
+        for deadline in deadlines:
+            deadlines_by_matter.setdefault(int(deadline.matter_id), []).append(deadline)
+
+        summaries: list[dict] = []
+        for matter in matters:
+            matter_milestones = milestones_by_matter.get(matter.id, [])
+            matter_deadlines = deadlines_by_matter.get(matter.id, [])
+
+            in_range_milestones = [
+                row for row in matter_milestones if range_start <= row.event_date <= range_end
+            ]
+            upcoming_milestones = [row for row in matter_milestones if row.event_date >= today]
+            open_deadlines = [row for row in matter_deadlines if row.status != "acknowledged"]
+            overdue_deadlines = [row for row in open_deadlines if row.due_at < today]
+            critical_open = [row for row in open_deadlines if row.is_critical]
+
+            next_candidates = [row.event_date for row in upcoming_milestones]
+            next_candidates.extend(row.due_at for row in open_deadlines if row.due_at >= today)
+            next_key_date = min(next_candidates) if next_candidates else None
+
+            summaries.append(
+                {
+                    "matter": matter,
+                    "milestones_in_range": len(in_range_milestones),
+                    "upcoming_milestones": len(upcoming_milestones),
+                    "open_deadlines": len(open_deadlines),
+                    "overdue_deadlines": len(overdue_deadlines),
+                    "critical_open_deadlines": len(critical_open),
+                    "next_key_date": next_key_date,
+                }
+            )
+
+        summaries.sort(
+            key=lambda row: (
+                -int(row["overdue_deadlines"]),
+                -int(row["critical_open_deadlines"]),
+                row["next_key_date"] or dt.date.max,
+                str(row["matter"].matter_no),
+            )
+        )
+
+        totals = {
+            "matters": len(summaries),
+            "milestones_in_range": sum(int(row["milestones_in_range"]) for row in summaries),
+            "upcoming_milestones": sum(int(row["upcoming_milestones"]) for row in summaries),
+            "open_deadlines": sum(int(row["open_deadlines"]) for row in summaries),
+            "overdue_deadlines": sum(int(row["overdue_deadlines"]) for row in summaries),
+            "critical_open_deadlines": sum(int(row["critical_open_deadlines"]) for row in summaries),
+        }
+
+        return page(
+            "Milestone Report",
+            "calendar/milestone_report.html",
+            summaries=summaries,
+            totals=totals,
+            range_start=range_start,
+            range_end=range_end,
+            scope=scope,
             today=today,
         )
 

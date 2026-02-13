@@ -2,10 +2,20 @@
 {% block content %}
 {% set balanced_count = runs | selectattr('status', 'equalto', 'balanced') | list | length %}
 {% set exception_count = runs | selectattr('status', 'equalto', 'exception') | list | length %}
+{% set import_count = statement_imports | length %}
 
 <div class="card p-3 mb-3">
-  <h3 class="mb-1">Trust Reconciliations</h3>
-  <p class="page-intro mb-0">Run three-way reconciliation and track exception states for trust compliance.</p>
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Trust Reconciliations</h3>
+      <p class="page-intro mb-0">Run three-way reconciliation and track exception states for trust compliance.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_cashbook') }}">Cashbook</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_trial_balance_report') }}">Trial Balance</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_auditor_report') }}">Auditor Report</a>
+    </div>
+  </div>
   <div class="kpi-strip mt-3">
     <div class="kpi-pill">
       <div class="label">Runs</div>
@@ -19,7 +29,41 @@
       <div class="label">Exception</div>
       <div class="value">{{ exception_count }}</div>
     </div>
+    <div class="kpi-pill">
+      <div class="label">Imported Statements</div>
+      <div class="value">{{ import_count }}</div>
+    </div>
   </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Import Bank Statement (CSV)</h4>
+  <form method="post" action="{{ url_for('trust_statement_import') }}" enctype="multipart/form-data" class="row g-3 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-3">
+      <label class="form-label" for="statement-account-id">Trust Account</label>
+      <select class="form-select" id="statement-account-id" name="trust_account_id" required>
+        {% for account in accounts %}
+          <option value="{{ account.id }}">#{{ account.id }} {{ account.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="statement-label">Label</label>
+      <input class="form-control" id="statement-label" name="statement_label" placeholder="April 2026 statement">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="statement-currency">Currency</label>
+      <input class="form-control" id="statement-currency" name="currency" value="ZAR" maxlength="8">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="statement-file">CSV File</label>
+      <input class="form-control" id="statement-file" name="statement_file" type="file" accept=".csv,text/csv" required>
+    </div>
+    <div class="col-12 d-grid d-md-flex justify-content-md-end">
+      <button class="btn btn-light" type="submit" data-submitting-text="Importing...">Import Statement</button>
+    </div>
+  </form>
 </div>
 
 <div class="card p-3 mb-3">
@@ -44,7 +88,18 @@
     </div>
     <div class="col-md-2">
       <label class="form-label" for="recon-bank-closing">Bank Closing</label>
-      <input class="form-control" id="recon-bank-closing" name="bank_closing_balance" type="number" step="0.01" placeholder="0.00" required>
+      <input class="form-control" id="recon-bank-closing" name="bank_closing_balance" type="number" step="0.01" placeholder="0.00">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="recon-import-id">Statement Import (Optional)</label>
+      <select class="form-select" id="recon-import-id" name="bank_statement_import_id">
+        <option value="">None</option>
+        {% for statement in statement_imports %}
+          <option value="{{ statement.id }}">
+            #{{ statement.id }} - acct {{ statement.trust_account_id }} - {{ statement.statement_label or statement.source_filename }}
+          </option>
+        {% endfor %}
+      </select>
     </div>
     <div class="col-12 d-grid d-md-flex justify-content-md-end">
       <button class="btn btn-light" type="submit" data-submitting-text="Running...">Run</button>
@@ -68,25 +123,27 @@
           <th data-sort-index="3" data-sort-type="number">Bank</th>
           <th data-sort-index="4" data-sort-type="number">Ledger</th>
           <th data-sort-index="5" data-sort-type="number">Sub-ledger</th>
-          <th data-sort-index="6">Status</th>
+          <th data-sort-index="6">Statement</th>
+          <th data-sort-index="7">Status</th>
           <th class="text-end">Report</th>
         </tr>
       </thead>
       <tbody>
         {% for run in runs %}
-          <tr data-table-row data-search="{{ run.id }} {{ run.trust_account_id }} {{ run.period_start }} {{ run.period_end }} {{ run.status }} {{ run.bank_closing_balance }} {{ run.ledger_closing_balance }} {{ run.client_subledger_total }}">
+          <tr data-table-row data-search="{{ run.id }} {{ run.trust_account_id }} {{ run.period_start }} {{ run.period_end }} {{ run.status }} {{ run.bank_closing_balance }} {{ run.ledger_closing_balance }} {{ run.client_subledger_total }} {{ run.bank_statement_import_id or '' }}">
             <td>{{ run.id }}</td>
             <td>{{ run.trust_account_id }}</td>
             <td>{{ run.period_start }} to {{ run.period_end }}</td>
             <td>{{ run.bank_closing_balance }}</td>
             <td>{{ run.ledger_closing_balance }}</td>
             <td>{{ run.client_subledger_total }}</td>
+            <td>{{ run.bank_statement_import_id or "-" }}</td>
             <td><span class="badge badge-soft status-badge">{{ run.status }}</span></td>
             <td class="text-end"><a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_reports_monthly', run_id=run.id) }}">JSON</a></td>
           </tr>
         {% endfor %}
         <tr data-table-empty-row class="table-empty-row" {% if runs|length > 0 %}hidden{% endif %}>
-          <td colspan="8" class="muted">No reconciliation runs yet.</td>
+          <td colspan="9" class="muted">No reconciliation runs yet.</td>
         </tr>
       </tbody>
     </table>

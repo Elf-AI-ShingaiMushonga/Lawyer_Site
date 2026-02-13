@@ -76,10 +76,16 @@ Seeded demo logins:
 - `staff@elf-ai-demo.co.za`
 
 Seeded demo content now includes:
-- Three story-pack matters with business impact summaries
+- Matter/case portfolio with stage, risk, parties, notes, and timeline activity
 - Timeline events and activity-feed entries
 - Governance incident/change records
 - Rich sample files (`.pdf`, `.docx`, `.txt`)
+- DMS containers, versions, OCR text, productions, Bates ranges, and email capture
+- Time entries/timers with policy validation events and invoice-ready coding
+- Billing transactions (including settled + pending payments), account statements, and audit data
+- Trust ledger postings, bank-statement imports, reconciliations, and Section 86 investment/accrual records
+- CRM/intake conflict workflows and curated client-portal messages/uploads/invoices
+- Office365 + third-party integration settings and export-ready sample data
 
 Common seed error:
 - `sqlite3.OperationalError: table matter has no column named objective`
@@ -196,6 +202,11 @@ Optional but recommended:
     - `sudo systemctl status law-intranet-scheduler`
     - `sudo systemctl status nginx`
     - `curl http://127.0.0.1/healthz`
+  - Deployment readiness smoke checks:
+    - `curl -I http://127.0.0.1/healthz`
+    - `curl -I http://127.0.0.1/login`
+    - `sudo journalctl -u law-intranet -n 100 --no-pager`
+    - `sudo journalctl -u law-intranet-worker -n 100 --no-pager`
 
 - 1) Install system packages:
   - `sudo apt update -y`

@@ -354,7 +354,7 @@ def register_portal_routes(app):
                 portal_user_id=portal_user.id,
                 amount=amount,
                 currency=(request.form.get("currency") or "ZAR").strip().upper(),
-                status="recorded",
+                status="pending_settlement",
                 reference=(request.form.get("reference") or "").strip() or None,
             )
             db.session.add(receipt)
@@ -366,6 +366,8 @@ def register_portal_routes(app):
                     amount=amount,
                     method="portal_manual",
                     reference=receipt.reference,
+                    status="pending",
+                    processor_note="Captured via client portal; awaiting settlement confirmation.",
                     created_by=None,
                 )
             )

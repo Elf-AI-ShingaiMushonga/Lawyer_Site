@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Business Trial Balance</h3>
+      <p class="page-intro mb-0">Matter-level receivable and cash position as of {{ as_of.isoformat() }}.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_trial_balance', as_of=as_of.isoformat(), format='csv') }}">CSV</a>
+    </div>
+  </div>
+  <form method="get" class="row g-2 mt-2 align-items-end">
+    <div class="col-sm-6 col-lg-3">
+      <label class="form-label" for="trial-balance-as-of">As Of</label>
+      <input class="form-control" id="trial-balance-as-of" type="date" name="as_of" value="{{ as_of.isoformat() }}">
+    </div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <button class="btn btn-light" type="submit">Refresh</button>
+    </div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <a class="btn btn-outline-light" href="{{ url_for('billing_trial_balance') }}">Reset</a>
+    </div>
+  </form>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Matters</div>
+      <div class="value">{{ rows | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Invoices</div>
+      <div class="value">{{ totals.invoice_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Billed</div>
+      <div class="value">{{ "%.2f"|format(totals.billed_total or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Outstanding</div>
+      <div class="value">{{ "%.2f"|format(totals.outstanding_total or 0) }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3">
+  <div class="table-tools" data-table-tools data-table-target="business-trial-balance-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by matter number, title, or totals...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="business-trial-balance-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">Matter ID</th>
+          <th data-sort-index="1">Matter</th>
+          <th class="text-end" data-sort-index="2" data-sort-type="number">Invoices</th>
+          <th class="text-end" data-sort-index="3" data-sort-type="number">Subtotal</th>
+          <th class="text-end" data-sort-index="4" data-sort-type="number">Tax</th>
+          <th class="text-end" data-sort-index="5" data-sort-type="number">Billed</th>
+          <th class="text-end" data-sort-index="6" data-sort-type="number">Paid</th>
+          <th class="text-end" data-sort-index="7" data-sort-type="number">Outstanding</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr data-table-row data-search="{{ row.matter_id }} {{ row.matter_no }} {{ row.matter_title }} {{ row.billed_total }} {{ row.outstanding_total }}">
+            <td>{{ row.matter_id }}</td>
+            <td>
+              <div class="fw-semibold">{{ row.matter_no }}</div>
+              <div class="muted small">{{ row.matter_title }}</div>
+            </td>
+            <td class="text-end cell-num">{{ row.invoice_count }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.subtotal or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.tax_total or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.billed_total or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.paid_total or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.outstanding_total or 0) }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if rows|length > 0 %}hidden{% endif %}>
+          <td colspan="8" class="muted">No balances found for your scope.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

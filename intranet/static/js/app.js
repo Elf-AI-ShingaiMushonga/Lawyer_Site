@@ -254,17 +254,143 @@
 
     items.forEach((item) => {
       item.addEventListener("click", (event) => goToMatter(event, item));
-      item.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") {
-          return;
-        }
-        event.preventDefault();
-        goToMatter(event, item);
-      });
+      if (item.tabIndex >= 0) {
+        item.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") {
+            return;
+          }
+          event.preventDefault();
+          goToMatter(event, item);
+        });
+      }
     });
 
     updateButtons();
     applyFilters();
+  };
+
+  const initTimePrompts = () => {
+    const forms = Array.from(document.querySelectorAll("[data-time-prompt-form]"));
+    if (forms.length === 0) {
+      return;
+    }
+
+    const renderPrompts = (panel, list, prompts) => {
+      if (!panel || !list) {
+        return;
+      }
+      list.innerHTML = "";
+      if (!Array.isArray(prompts) || prompts.length === 0) {
+        panel.hidden = true;
+        return;
+      }
+      prompts.forEach((prompt) => {
+        const item = document.createElement("li");
+        const level = String(prompt.level || "info").toLowerCase();
+        item.className = `time-prompt-item time-prompt-${level}`;
+        item.textContent = String(prompt.message || "").trim();
+        if (item.textContent.length === 0) {
+          return;
+        }
+        list.appendChild(item);
+      });
+      panel.hidden = list.children.length === 0;
+    };
+
+    forms.forEach((form) => {
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+      const panel = form.querySelector("[data-time-prompts]");
+      const list = form.querySelector("[data-time-prompts-list]");
+      if (!(panel instanceof HTMLElement) || !(list instanceof HTMLElement)) {
+        return;
+      }
+
+      const endpoint = form.getAttribute("data-time-prompt-endpoint") || "/time/prompts";
+      let debounceHandle = 0;
+      let sequence = 0;
+
+      const readField = (name) => {
+        const control = form.querySelector(`[name='${name}']`);
+        if (!control) {
+          return { exists: false, value: "" };
+        }
+        if (control instanceof HTMLInputElement && control.type === "checkbox") {
+          return { exists: true, value: control.checked ? "1" : "0" };
+        }
+        if (
+          control instanceof HTMLInputElement ||
+          control instanceof HTMLTextAreaElement ||
+          control instanceof HTMLSelectElement
+        ) {
+          return { exists: true, value: control.value.trim() };
+        }
+        return { exists: true, value: "" };
+      };
+
+      const loadPrompts = async () => {
+        const matter = readField("matter_id");
+        if (!matter.exists || !matter.value) {
+          renderPrompts(panel, list, []);
+          return;
+        }
+
+        const params = new URLSearchParams();
+        params.set("matter_id", matter.value);
+
+        ["start_at", "end_at", "narrative", "activity_code", "task_code", "is_billable"].forEach((name) => {
+          const { exists, value } = readField(name);
+          if (!exists) {
+            return;
+          }
+          params.set(name, value);
+        });
+
+        sequence += 1;
+        const localSequence = sequence;
+        try {
+          const response = await fetch(`${endpoint}?${params.toString()}`, {
+            method: "GET",
+            headers: { Accept: "application/json" },
+          });
+          if (localSequence !== sequence) {
+            return;
+          }
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            const error = String(payload.error || "Unable to load prompts.");
+            renderPrompts(panel, list, [{ level: "warning", message: error }]);
+            return;
+          }
+          renderPrompts(panel, list, payload.prompts || []);
+        } catch (_error) {
+          renderPrompts(panel, list, [{ level: "warning", message: "Prompt service unavailable." }]);
+        }
+      };
+
+      const schedule = () => {
+        if (debounceHandle) {
+          window.clearTimeout(debounceHandle);
+        }
+        debounceHandle = window.setTimeout(loadPrompts, 240);
+      };
+
+      const controls = Array.from(form.querySelectorAll("input, textarea, select"));
+      controls.forEach((control) => {
+        const name = control.getAttribute("name") || "";
+        if (!["matter_id", "start_at", "end_at", "narrative", "activity_code", "task_code", "is_billable"].includes(name)) {
+          return;
+        }
+        const eventName = control instanceof HTMLInputElement && control.type === "checkbox" ? "change" : "input";
+        control.addEventListener(eventName, schedule);
+        if (eventName !== "change") {
+          control.addEventListener("change", schedule);
+        }
+      });
+
+      loadPrompts();
+    });
   };
 
   const parseSortValue = (value, type) => {
@@ -551,6 +677,7 @@
     initPasswordToggles();
     initCommandPalette();
     initMatterQuickFilters();
+    initTimePrompts();
     initTableTools();
     initSubmitState();
   };

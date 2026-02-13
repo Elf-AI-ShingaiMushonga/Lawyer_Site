@@ -105,9 +105,13 @@ from .models import (
     TimekeeperRole,
     TrustAccount,
     TrustApprovalRequest,
+    TrustBankStatementImport,
+    TrustBankStatementLine,
     TrustClientLedger,
     TrustLedgerEntry,
     TrustReconciliationRun,
+    Section86Investment,
+    Section86Accrual,
     TrustThresholdAlert,
     TrustedDevice,
     User,
@@ -126,6 +130,10 @@ def _detect_schema_gaps():
         "matter_timeline_event": {"id", "matter_id", "event_date", "event_type", "title", "created_by"},
         "matter_activity": {"id", "matter_id", "action", "created_at"},
         "governance_incident": {"id", "title", "incident_type", "severity", "status", "summary", "created_by"},
+        "trust_bank_statement_import": {"id", "trust_account_id", "source_filename", "row_count", "imported_by", "imported_at"},
+        "trust_bank_statement_line": {"id", "import_id", "posted_on", "signed_amount"},
+        "section86_investment": {"id", "trust_account_id", "client_ledger_id", "investment_ref", "principal_amount", "annual_rate_percent"},
+        "section86_accrual": {"id", "investment_id", "accrual_date", "net_interest_amount"},
     }
     missing_tables = []
     missing_columns = []
@@ -603,7 +611,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 "jurisdiction": "ZA-WC",
                 "stage": "Closed",
                 "practice_area": "Estates",
-                "case_type": "Estate Administration",
+                "case_type": "Property Transfer (Estate)",
                 "risk_taxonomy": "Probate-Distribution",
                 "archival_status": "ready_for_archive",
                 "archival_due_at": now + dt.timedelta(days=30),
@@ -1458,6 +1466,24 @@ def seed_demo_data(app, password: str, reset: bool = False):
             ("firm_profile", {"name": "Elf AI Demo Attorneys", "jurisdiction_default": "ZA-GP", "timezone": "Africa/Johannesburg"}),
             ("default_tax", {"code": "VAT", "rate_percent": 15.0}),
             ("deadline_policy", {"default_calendar": "South Africa Court Calendar", "business_day_adjust": True}),
+            (
+                "office365_integration",
+                {
+                    "enabled": True,
+                    "tenant_id": "elf-ai-demo-tenant",
+                    "client_id": "elf-ai-demo-office365-client",
+                    "domain_hint": "elf-ai-demo.co.za",
+                    "sync_notes": "Pilot enabled for Outlook calendar and Excel exports.",
+                },
+            ),
+            (
+                "third_party_integration_defaults",
+                {
+                    "cost_recovery_enabled": True,
+                    "conveyancing_enabled": True,
+                    "last_sync_note": "Demo profile with import/export templates preconfigured.",
+                },
+            ),
         ]
         for key, value in firm_settings:
             db.session.add(
@@ -2606,18 +2632,46 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 amount=12000.0,
                 method="EFT",
                 reference="EFT-ACME-2026-02-11",
+                status="settled",
+                settled_at=now - dt.timedelta(hours=2),
+                settled_by=staff_id,
+                external_txn_id="ACQ-TRX-2026-0001",
+                processor_note="Settled via corporate treasury transfer.",
                 allocated_at=now - dt.timedelta(hours=2),
                 created_by=staff_id,
-            )
+            ),
+            PaymentAllocation(
+                invoice_id=corp_invoice.id,
+                amount=1500.0,
+                method="Card",
+                reference="PENDING-CORP-2026-02-12",
+                status="pending",
+                settled_at=None,
+                settled_by=None,
+                external_txn_id="ACQ-TRX-2026-0002",
+                processor_note="Pending settlement confirmation from gateway.",
+                allocated_at=now - dt.timedelta(hours=1, minutes=20),
+                created_by=staff_id,
+            ),
         ]
         db.session.add_all(payment_rows)
         expanded_counts["payment_allocations"] = len(payment_rows)
+
+        settled_total_by_invoice: dict[int, float] = {}
+        for row in payment_rows:
+            if (row.status or "").strip().lower() != "settled":
+                continue
+            invoice_id = int(row.invoice_id)
+            settled_total_by_invoice[invoice_id] = round(
+                float(settled_total_by_invoice.get(invoice_id, 0.0)) + float(row.amount or 0.0),
+                2,
+            )
 
         ar_rows = [
             ARSnapshot(
                 as_of_date=now.date(),
                 invoice_id=lit_invoice.id,
-                outstanding_amount=round(lit_invoice.total - payment_rows[0].amount, 2),
+                outstanding_amount=round(float(lit_invoice.total or 0.0) - float(settled_total_by_invoice.get(lit_invoice.id, 0.0)), 2),
                 aging_bucket="0-30",
                 collection_notes="Payment plan acknowledged by client finance.",
                 created_at=now - dt.timedelta(hours=1),
@@ -2625,7 +2679,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
             ARSnapshot(
                 as_of_date=now.date(),
                 invoice_id=corp_invoice.id,
-                outstanding_amount=corp_invoice.total,
+                outstanding_amount=round(float(corp_invoice.total or 0.0) - float(settled_total_by_invoice.get(corp_invoice.id, 0.0)), 2),
                 aging_bucket="0-30",
                 collection_notes="Draft invoice under internal review.",
                 created_at=now - dt.timedelta(hours=1),
@@ -2740,14 +2794,196 @@ def seed_demo_data(app, password: str, reset: bool = False):
         db.session.add(trust_entry_5)
         db.session.flush()
 
+        section86_investment_rows = [
+            Section86Investment(
+                trust_account_id=trust_account.id,
+                client_ledger_id=trust_ledger_lit.id,
+                matter_id=matter_map["2026-LIT-0142"].id,
+                investment_ref="S86-LIT-2026-001",
+                institution="Standard Bank Trust Desk",
+                principal_amount=60000.0,
+                annual_rate_percent=7.5,
+                opened_on=now.date() - dt.timedelta(days=32),
+                maturity_on=now.date() + dt.timedelta(days=180),
+                status="active",
+                source="import",
+                notes="Imported from monthly Section 86 investment register.",
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=31),
+                closed_on=None,
+            ),
+            Section86Investment(
+                trust_account_id=trust_account.id,
+                client_ledger_id=trust_ledger_reg.id,
+                matter_id=matter_map["2026-REG-0021"].id,
+                investment_ref="S86-REG-2026-004",
+                institution="Nedbank Investment Services",
+                principal_amount=25000.0,
+                annual_rate_percent=6.8,
+                opened_on=now.date() - dt.timedelta(days=20),
+                maturity_on=now.date() + dt.timedelta(days=120),
+                status="active",
+                source="manual",
+                notes="Opened for regulatory reserve optimization.",
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=20),
+                closed_on=None,
+            ),
+        ]
+        db.session.add_all(section86_investment_rows)
+        db.session.flush()
+
+        trust_entry_6 = TrustLedgerEntry(
+            trust_account_id=trust_account.id,
+            client_ledger_id=trust_ledger_reg.id,
+            entry_type="deposit",
+            amount=3.96,
+            currency="ZAR",
+            description="Section 86 net interest accrual 2026-02-12 [S86-REG-2026-004]",
+            supporting_document_id=None,
+            reversal_of_entry_id=None,
+            immutable_ref="TRUST-2026-0006",
+            created_by=partner_id,
+            created_at=now - dt.timedelta(days=1),
+        )
+        db.session.add(trust_entry_6)
+        db.session.flush()
+        trust_ledger_reg.current_balance = round(float(trust_ledger_reg.current_balance or 0.0) + 3.96, 2)
+
+        section86_accrual_rows = [
+            Section86Accrual(
+                investment_id=section86_investment_rows[0].id,
+                accrual_date=now.date() - dt.timedelta(days=2),
+                interest_amount=12.33,
+                withholding_tax_amount=1.85,
+                net_interest_amount=10.48,
+                posted_entry_id=None,
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=2),
+            ),
+            Section86Accrual(
+                investment_id=section86_investment_rows[1].id,
+                accrual_date=now.date() - dt.timedelta(days=1),
+                interest_amount=4.66,
+                withholding_tax_amount=0.70,
+                net_interest_amount=3.96,
+                posted_entry_id=trust_entry_6.id,
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=1),
+            ),
+        ]
+        db.session.add_all(section86_accrual_rows)
+
+        statement_filename = "demo_trust_statement_main_2026_02.csv"
+        statement_payload = "\n".join(
+            [
+                "posted_on,description,reference,debit,credit,signed_amount,running_balance",
+                f"{(now.date() - dt.timedelta(days=20)).isoformat()},Initial litigation trust funding,TRUST-2026-0001,0,120000.00,120000.00,120000.00",
+                f"{(now.date() - dt.timedelta(days=12)).isoformat()},Counsel disbursement,TRUST-2026-0002,25000.00,0,-25000.00,95000.00",
+                f"{(now.date() - dt.timedelta(days=8)).isoformat()},Transfer out to regulatory reserve,TRUST-2026-0003,10000.00,0,-10000.00,85000.00",
+                f"{(now.date() - dt.timedelta(days=8)).isoformat()},Transfer in from litigation reserve,TRUST-2026-0004,0,10000.00,10000.00,95000.00",
+                f"{(now.date() - dt.timedelta(days=7)).isoformat()},Reversal of duplicate disbursement,TRUST-2026-0005,0,25000.00,25000.00,120000.00",
+                f"{(now.date() - dt.timedelta(days=1)).isoformat()},Section 86 net interest accrual,TRUST-2026-0006,0,3.96,3.96,120003.96",
+            ]
+        )
+        (upload_dir / statement_filename).write_text(statement_payload + "\n", encoding="utf-8")
+
+        statement_import = TrustBankStatementImport(
+            trust_account_id=trust_account.id,
+            statement_label="Main Trust Statement - Current Month",
+            source_filename=statement_filename,
+            period_start=now.date() - dt.timedelta(days=30),
+            period_end=now.date(),
+            opening_balance=0.0,
+            closing_balance=120003.96,
+            currency="ZAR",
+            row_count=6,
+            imported_by=admin_id,
+            imported_at=now - dt.timedelta(hours=7),
+            notes="Demo statement import aligned to trust ledger and reconciliation.",
+        )
+        db.session.add(statement_import)
+        db.session.flush()
+
+        statement_line_rows = [
+            TrustBankStatementLine(
+                import_id=statement_import.id,
+                posted_on=now.date() - dt.timedelta(days=20),
+                description="Initial litigation trust funding",
+                reference="TRUST-2026-0001",
+                debit=0.0,
+                credit=120000.0,
+                signed_amount=120000.0,
+                running_balance=120000.0,
+                raw_json=json.dumps({"source": "seed", "type": "deposit"}),
+            ),
+            TrustBankStatementLine(
+                import_id=statement_import.id,
+                posted_on=now.date() - dt.timedelta(days=12),
+                description="Counsel disbursement",
+                reference="TRUST-2026-0002",
+                debit=25000.0,
+                credit=0.0,
+                signed_amount=-25000.0,
+                running_balance=95000.0,
+                raw_json=json.dumps({"source": "seed", "type": "disbursement"}),
+            ),
+            TrustBankStatementLine(
+                import_id=statement_import.id,
+                posted_on=now.date() - dt.timedelta(days=8),
+                description="Transfer out to regulatory reserve",
+                reference="TRUST-2026-0003",
+                debit=10000.0,
+                credit=0.0,
+                signed_amount=-10000.0,
+                running_balance=85000.0,
+                raw_json=json.dumps({"source": "seed", "type": "transfer_out"}),
+            ),
+            TrustBankStatementLine(
+                import_id=statement_import.id,
+                posted_on=now.date() - dt.timedelta(days=8),
+                description="Transfer in from litigation reserve",
+                reference="TRUST-2026-0004",
+                debit=0.0,
+                credit=10000.0,
+                signed_amount=10000.0,
+                running_balance=95000.0,
+                raw_json=json.dumps({"source": "seed", "type": "transfer_in"}),
+            ),
+            TrustBankStatementLine(
+                import_id=statement_import.id,
+                posted_on=now.date() - dt.timedelta(days=7),
+                description="Reversal of duplicate disbursement",
+                reference="TRUST-2026-0005",
+                debit=0.0,
+                credit=25000.0,
+                signed_amount=25000.0,
+                running_balance=120000.0,
+                raw_json=json.dumps({"source": "seed", "type": "reversal"}),
+            ),
+            TrustBankStatementLine(
+                import_id=statement_import.id,
+                posted_on=now.date() - dt.timedelta(days=1),
+                description="Section 86 net interest accrual",
+                reference="TRUST-2026-0006",
+                debit=0.0,
+                credit=3.96,
+                signed_amount=3.96,
+                running_balance=120003.96,
+                raw_json=json.dumps({"source": "seed", "type": "section86_interest"}),
+            ),
+        ]
+        db.session.add_all(statement_line_rows)
+
         trust_recon = TrustReconciliationRun(
             trust_account_id=trust_account.id,
+            bank_statement_import_id=statement_import.id,
             period_start=now - dt.timedelta(days=30),
             period_end=now,
-            bank_closing_balance=120000.0,
-            ledger_closing_balance=120000.0,
-            client_subledger_total=120000.0,
-            status="completed",
+            bank_closing_balance=120003.96,
+            ledger_closing_balance=120003.96,
+            client_subledger_total=120003.96,
+            status="balanced",
             exception_notes=None,
             created_by=admin_id,
             created_at=now - dt.timedelta(hours=6),
@@ -2757,7 +2993,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
         trust_alert = TrustThresholdAlert(
             client_ledger_id=trust_ledger_reg.id,
             threshold_amount=15000.0,
-            current_balance=10000.0,
+            current_balance=float(trust_ledger_reg.current_balance or 0.0),
             status="open",
             created_at=now - dt.timedelta(hours=5),
             resolved_at=None,
@@ -2787,7 +3023,11 @@ def seed_demo_data(app, password: str, reset: bool = False):
         db.session.add(trust_approval)
         expanded_counts["trust_accounts"] = 1
         expanded_counts["trust_client_ledgers"] = 2
-        expanded_counts["trust_ledger_entries"] = 5
+        expanded_counts["trust_ledger_entries"] = 6
+        expanded_counts["trust_bank_statement_imports"] = 1
+        expanded_counts["trust_bank_statement_lines"] = len(statement_line_rows)
+        expanded_counts["section86_investments"] = len(section86_investment_rows)
+        expanded_counts["section86_accruals"] = len(section86_accrual_rows)
         expanded_counts["trust_reconciliations"] = 1
         expanded_counts["trust_threshold_alerts"] = 1
         expanded_counts["trust_approvals"] = 1
@@ -3065,8 +3305,8 @@ def seed_demo_data(app, password: str, reset: bool = False):
             portal_user_id=portal_users[0].id,
             amount=12000.0,
             currency="ZAR",
-            status="recorded",
-            reference="PORTAL-EFT-2026-0212",
+            status="settled",
+            reference="EFT-ACME-2026-02-11",
             created_at=now - dt.timedelta(hours=2),
         )
         db.session.add(portal_receipt)
@@ -3411,7 +3651,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
             )
 
         audit_seed_entries = [
-            ("demo_seed", "System", None, admin_id, {"seeded": True, "version": 4}),
+            ("demo_seed", "System", None, admin_id, {"seeded": True, "version": 5}),
             ("login", "User", admin_id, admin_id, {"channel": "web"}),
             ("matter_summary_update", "Matter", matter_map["2026-LIT-0142"].id, partner_id, {"risk_level": "High"}),
             ("document_upload", "DocumentFile", doc_file_map["acme-hearing-pack.pdf"].id, paralegal_id, {"filename": "acme-hearing-pack.pdf"}),
@@ -3461,6 +3701,26 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 )
             )
             existing_task_assignee_pairs.add(pair)
+
+        multi_assignee_specs = [
+            (task_map[("2026-LIT-0142", "Prepare witness bundle")].id, associate_id, partner_id),
+            (task_map[("2026-COM-0055", "Client operations workshop")].id, partner_id, associate_id),
+            (task_map[("2026-REG-0021", "Regulator response tracker")].id, paralegal_id, partner_id),
+        ]
+        for task_id, user_id, assigned_by in multi_assignee_specs:
+            pair = (int(task_id), int(user_id))
+            if pair in existing_task_assignee_pairs:
+                continue
+            db.session.add(
+                TaskAssignee(
+                    task_id=task_id,
+                    user_id=user_id,
+                    assigned_by=assigned_by,
+                    assigned_at=now - dt.timedelta(hours=6),
+                )
+            )
+            existing_task_assignee_pairs.add(pair)
+        expanded_counts["task_assignees"] = len(existing_task_assignee_pairs)
 
         db.session.commit()
         summary = {
@@ -3575,9 +3835,13 @@ def _reset_demo_dataset(app):
         TimekeeperRole,
         TrustAccount,
         TrustApprovalRequest,
+        TrustBankStatementImport,
+        TrustBankStatementLine,
         TrustClientLedger,
         TrustLedgerEntry,
         TrustReconciliationRun,
+        Section86Investment,
+        Section86Accrual,
         TrustThresholdAlert,
         TrustedDevice,
         User,
@@ -3593,8 +3857,17 @@ def _reset_demo_dataset(app):
             preparer.quote(name)
             for name in sorted({model.__table__.name for model in all_models})
         )
-        db.session.execute(sa.text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
-        db.session.commit()
+        try:
+            # Avoid hanging indefinitely when other app sessions hold locks.
+            db.session.execute(sa.text("SET LOCAL lock_timeout = '8s'"))
+            db.session.execute(sa.text("SET LOCAL statement_timeout = '120s'"))
+            db.session.execute(sa.text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            raise SystemExit(
+                "Database reset timed out waiting for locks. Stop app/worker/scheduler services and retry."
+            ) from exc
     else:
         if bind is not None and bind.dialect.name == "sqlite":
             # Clear hold flags so legal-hold delete guards permit demo reset paths.
@@ -3636,8 +3909,12 @@ def _reset_demo_dataset(app):
             CRMLead,
             TrustApprovalRequest,
             TrustThresholdAlert,
+            Section86Accrual,
             TrustReconciliationRun,
+            TrustBankStatementLine,
+            TrustBankStatementImport,
             TrustLedgerEntry,
+            Section86Investment,
             TrustClientLedger,
             TrustAccount,
             ARSnapshot,

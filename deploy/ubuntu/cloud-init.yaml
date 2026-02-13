@@ -181,8 +181,8 @@ write_files:
       fi
 
       systemctl daemon-reload
-      systemctl enable --now law-intranet
       systemctl enable --now redis-server
+      systemctl enable --now law-intranet
       systemctl enable --now law-intranet-worker
       systemctl enable --now law-intranet-scheduler
 

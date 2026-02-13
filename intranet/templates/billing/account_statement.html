@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Account Statement</h3>
+      <p class="page-intro mb-0">
+        {{ matter.matter_no }} - {{ matter.title }} ({{ matter.client_name }}) as of {{ as_of.isoformat() }}.
+      </p>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_account_statement', matter_id=matter.id, as_of=as_of.isoformat(), format='csv') }}">Export CSV</a>
+  </div>
+  <form method="get" class="row g-2 mt-2 align-items-end">
+    <div class="col-sm-6 col-lg-3">
+      <label class="form-label" for="statement-as-of">As Of</label>
+      <input class="form-control" id="statement-as-of" type="date" name="as_of" value="{{ as_of.isoformat() }}">
+    </div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <button class="btn btn-light" type="submit">Refresh</button>
+    </div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <a class="btn btn-outline-light" href="{{ url_for('billing_account_statement', matter_id=matter.id) }}">Reset</a>
+    </div>
+  </form>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Invoices</div>
+      <div class="value">{{ rows | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Billed</div>
+      <div class="value">{{ "%.2f"|format(totals.total or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Paid</div>
+      <div class="value">{{ "%.2f"|format(totals.paid or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Outstanding</div>
+      <div class="value">{{ "%.2f"|format(totals.outstanding or 0) }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3">
+  <div class="table-tools" data-table-tools data-table-target="account-statement-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by invoice ID, status, or period...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="account-statement-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">Invoice</th>
+          <th data-sort-index="1">Status</th>
+          <th data-sort-index="2">Period</th>
+          <th class="text-end" data-sort-index="3" data-sort-type="number">Subtotal</th>
+          <th class="text-end" data-sort-index="4" data-sort-type="number">Tax</th>
+          <th class="text-end" data-sort-index="5" data-sort-type="number">Total</th>
+          <th class="text-end" data-sort-index="6" data-sort-type="number">Paid</th>
+          <th class="text-end" data-sort-index="7" data-sort-type="number">Outstanding</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr data-table-row data-search="{{ row.invoice_id }} {{ row.status }} {{ row.period_start }} {{ row.period_end }} {{ row.total }} {{ row.outstanding }}">
+            <td>#{{ row.invoice_id }}</td>
+            <td><span class="badge badge-soft status-badge">{{ row.status }}</span></td>
+            <td>{{ row.period_start }} to {{ row.period_end }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.subtotal or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.tax_total or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.total or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.paid or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.outstanding or 0) }}</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_invoice_detail', invoice_id=row.invoice_id) }}">Open</a>
+            </td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if rows|length > 0 %}hidden{% endif %}>
+          <td colspan="9" class="muted">No invoices found for this matter.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

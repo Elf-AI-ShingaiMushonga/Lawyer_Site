@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Billing Audit Log</h3>
+      <p class="page-intro mb-0">Detailed, filterable event trail for billing, invoicing, payment capture, and settlement actions.</p>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_audit_log', action=selected_action, actor_id=selected_actor_id, format='csv') }}">Export CSV</a>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Filters</h4>
+  <form method="get" class="row g-3 align-items-end">
+    <div class="col-md-5">
+      <label class="form-label" for="billing-audit-action">Action</label>
+      <select class="form-select" id="billing-audit-action" name="action">
+        <option value="">All actions</option>
+        {% for action in actions %}
+          <option value="{{ action }}" {% if selected_action == action %}selected{% endif %}>{{ action }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="billing-audit-actor">Actor</label>
+      <select class="form-select" id="billing-audit-actor" name="actor_id">
+        <option value="">All actors</option>
+        {% for actor in actor_options %}
+          <option value="{{ actor.id }}" {% if selected_actor_id == actor.id %}selected{% endif %}>
+            {{ actor.full_name }} ({{ actor.email }})
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2 d-grid">
+      <label class="form-label visually-hidden" for="billing-audit-apply">Apply</label>
+      <button class="btn btn-light" id="billing-audit-apply" type="submit">Apply</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <div class="table-tools" data-table-tools data-table-target="billing-audit-log-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by action, actor, entity, or details...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="billing-audit-log-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">ID</th>
+          <th data-sort-index="1" data-sort-type="date">Timestamp</th>
+          <th data-sort-index="2">Actor</th>
+          <th data-sort-index="3">Action</th>
+          <th data-sort-index="4">Entity</th>
+          <th data-sort-index="5">IP</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+          {% set actor = users_by_id.get(log.actor_user_id) %}
+          <tr data-table-row data-search="{{ log.id }} {{ log.at }} {{ actor.full_name if actor else '' }} {{ actor.email if actor else '' }} {{ log.action }} {{ log.entity_type }} {{ log.entity_id }} {{ log.ip }} {{ log.details_json }}">
+            <td>{{ log.id }}</td>
+            <td>{{ log.at }}</td>
+            <td>
+              {% if actor %}
+                <div class="fw-semibold">{{ actor.full_name }}</div>
+                <div class="muted small">{{ actor.email }}</div>
+                <div class="muted small">#{{ actor.id }}</div>
+              {% else %}
+                <span class="muted">{{ log.actor_user_id or "-" }}</span>
+              {% endif %}
+            </td>
+            <td>{{ log.action }}</td>
+            <td>{{ log.entity_type }} #{{ log.entity_id or "-" }}</td>
+            <td>{{ log.ip or "-" }}</td>
+            <td><div class="code-like audit-json">{{ log.details_json }}</div></td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if logs|length > 0 %}hidden{% endif %}>
+          <td colspan="7" class="muted">No billing audit log entries found.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

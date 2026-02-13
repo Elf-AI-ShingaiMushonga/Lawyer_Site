@@ -139,9 +139,12 @@
             <td><span class="badge badge-soft status-badge">{{ expense.status }}</span></td>
             <td>
               {% if expense.receipt_filename %}
-                <a class="btn btn-sm btn-outline-light" href="{{ url_for('expense_receipt', expense_id=expense.id) }}">Download</a>
+                <div class="d-flex flex-wrap gap-1">
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('expense_receipt', expense_id=expense.id) }}">Download</a>
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('expense_receipt_pdf', expense_id=expense.id) }}">PDF</a>
+                </div>
               {% else %}
-                <span class="muted">-</span>
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('expense_receipt_pdf', expense_id=expense.id) }}">PDF</a>
               {% endif %}
             </td>
             <td class="text-end">

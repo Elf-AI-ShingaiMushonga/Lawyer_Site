@@ -25,6 +25,10 @@
       <div class="value">{{ "%.2f"|format(inv.total or 0) }}</div>
     </div>
     <div class="kpi-pill">
+      <div class="label">Collected (Settled)</div>
+      <div class="value">{{ "%.2f"|format(settled_total or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
       <div class="label">Outstanding</div>
       <div class="value">{{ "%.2f"|format(outstanding or 0) }}</div>
     </div>
@@ -44,7 +48,9 @@
       </form>
     {% endif %}
     <a class="btn btn-outline-light" href="{{ url_for('billing_invoice_pdf', invoice_id=inv.id) }}">Download PDF</a>
+    <a class="btn btn-outline-light" href="{{ url_for('billing_tax_invoice_pdf', invoice_id=inv.id) }}">Tax Invoice PDF</a>
     <a class="btn btn-outline-light" href="{{ url_for('billing_invoice_ledes', invoice_id=inv.id) }}">Export LEDES</a>
+    <a class="btn btn-outline-light" href="{{ url_for('billing_account_statement', matter_id=inv.matter_id) }}">Account Statement</a>
     <a class="btn btn-outline-light" href="{{ url_for('billing_ar_aging') }}">AR Aging</a>
   </div>
 </div>
@@ -148,6 +154,47 @@
 
 <div class="card p-3">
   <h4 class="mb-2">Payments</h4>
+  {% if current_user.role in ["admin", "lawyer"] %}
+    <form method="post" action="{{ url_for('billing_invoice_payment_capture', invoice_id=inv.id) }}" class="row g-3 align-items-end mb-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-2">
+        <label class="form-label" for="payment-amount">Amount</label>
+        <input class="form-control" id="payment-amount" type="number" name="amount" min="0.01" step="0.01" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="payment-method">Method</label>
+        <input class="form-control" id="payment-method" name="method" placeholder="EFT, Card, Cash">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="payment-reference">Reference</label>
+        <input class="form-control" id="payment-reference" name="reference" placeholder="Bank ref">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="payment-status">Status</label>
+        <select class="form-select" id="payment-status" name="status">
+          <option value="settled">settled</option>
+          <option value="pending">pending</option>
+          <option value="failed">failed</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="payment-settled-at">Settled At</label>
+        <input class="form-control" id="payment-settled-at" name="settled_at" type="datetime-local">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label" for="payment-txn">External Txn ID</label>
+        <input class="form-control" id="payment-txn" name="external_txn_id" placeholder="gateway tx id">
+      </div>
+      <div class="col-md-10">
+        <label class="form-label" for="payment-note">Processor Note</label>
+        <input class="form-control" id="payment-note" name="processor_note" placeholder="Settlement notes for audit">
+      </div>
+      <div class="col-md-2 d-grid">
+        <label class="form-label visually-hidden" for="payment-capture-submit">Capture</label>
+        <button class="btn btn-light" id="payment-capture-submit" type="submit" data-submitting-text="Capturing...">Capture Payment</button>
+      </div>
+    </form>
+  {% endif %}
   <div class="table-tools" data-table-tools data-table-target="invoice-payments-table">
     <input class="form-control" type="search" data-table-search placeholder="Filter payments by method or reference...">
     <div class="table-count" data-table-count aria-live="polite"></div>
@@ -159,20 +206,38 @@
           <th data-sort-index="0" data-sort-type="number">Amount</th>
           <th data-sort-index="1">Method</th>
           <th data-sort-index="2">Reference</th>
-          <th data-sort-index="3" data-sort-type="date">Allocated At</th>
+          <th data-sort-index="3">Status</th>
+          <th data-sort-index="4">External Txn</th>
+          <th data-sort-index="5" data-sort-type="date">Allocated At</th>
+          <th data-sort-index="6" data-sort-type="date">Settled At</th>
+          <th class="text-end">Action</th>
         </tr>
       </thead>
       <tbody>
         {% for payment in payments %}
-          <tr data-table-row data-search="{{ payment.amount }} {{ payment.method or '' }} {{ payment.reference or '' }} {{ payment.allocated_at }}">
+          {% set payment_status = (payment.status or 'settled') %}
+          <tr data-table-row data-search="{{ payment.amount }} {{ payment.method or '' }} {{ payment.reference or '' }} {{ payment.allocated_at }} {{ payment_status }} {{ payment.external_txn_id or '' }}">
             <td>{{ "%.2f"|format(payment.amount or 0) }}</td>
             <td>{{ payment.method or "-" }}</td>
             <td>{{ payment.reference or "-" }}</td>
+            <td><span class="badge badge-soft status-badge">{{ payment_status }}</span></td>
+            <td>{{ payment.external_txn_id or "-" }}</td>
             <td>{{ payment.allocated_at }}</td>
+            <td>{{ payment.settled_at or "-" }}</td>
+            <td class="text-end">
+              {% if payment_status != "settled" and current_user.role in ["admin", "lawyer"] %}
+                <form method="post" action="{{ url_for('billing_payment_settle', payment_id=payment.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Settling...">Settle</button>
+                </form>
+              {% else %}
+                <span class="muted small">-</span>
+              {% endif %}
+            </td>
           </tr>
         {% endfor %}
         <tr data-table-empty-row class="table-empty-row" {% if payments|length > 0 %}hidden{% endif %}>
-          <td colspan="4" class="muted">No payments recorded.</td>
+          <td colspan="8" class="muted">No payments recorded.</td>
         </tr>
       </tbody>
     </table>

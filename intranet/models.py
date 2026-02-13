@@ -890,9 +890,17 @@ class PaymentAllocation(db.Model):
     amount = db.Column(db.Float, nullable=False)
     method = db.Column(db.String(40), nullable=True)
     reference = db.Column(db.String(120), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="settled")
+    settled_at = db.Column(db.DateTime, nullable=True)
+    settled_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    external_txn_id = db.Column(db.String(120), nullable=True)
+    processor_note = db.Column(db.Text, nullable=True)
     allocated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-    __table_args__ = (db.Index("ix_payment_allocation_invoice_allocated", "invoice_id", "allocated_at"),)
+    __table_args__ = (
+        db.Index("ix_payment_allocation_invoice_allocated", "invoice_id", "allocated_at"),
+        db.Index("ix_payment_allocation_status_settled", "status", "settled_at"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -973,6 +981,7 @@ class TrustLedgerEntry(db.Model):
 class TrustReconciliationRun(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     trust_account_id = db.Column(db.Integer, db.ForeignKey("trust_account.id"), nullable=False, index=True)
+    bank_statement_import_id = db.Column(db.Integer, db.ForeignKey("trust_bank_statement_import.id"), nullable=True, index=True)
     period_start = db.Column(db.DateTime, nullable=False)
     period_end = db.Column(db.DateTime, nullable=False)
     bank_closing_balance = db.Column(db.Float, nullable=False, default=0.0)
@@ -1007,6 +1016,67 @@ class TrustApprovalRequest(db.Model):
     executed_at = db.Column(db.DateTime, nullable=True)
     executed_entry_id = db.Column(db.Integer, db.ForeignKey("trust_ledger_entry.id"), nullable=True)
     notes = db.Column(db.Text, nullable=True)
+
+
+class TrustBankStatementImport(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    trust_account_id = db.Column(db.Integer, db.ForeignKey("trust_account.id"), nullable=False, index=True)
+    statement_label = db.Column(db.String(180), nullable=True)
+    source_filename = db.Column(db.String(255), nullable=False)
+    period_start = db.Column(db.Date, nullable=True, index=True)
+    period_end = db.Column(db.Date, nullable=True, index=True)
+    opening_balance = db.Column(db.Float, nullable=True)
+    closing_balance = db.Column(db.Float, nullable=True)
+    currency = db.Column(db.String(8), nullable=False, default="ZAR")
+    row_count = db.Column(db.Integer, nullable=False, default=0)
+    imported_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    imported_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    notes = db.Column(db.Text, nullable=True)
+
+
+class TrustBankStatementLine(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    import_id = db.Column(db.Integer, db.ForeignKey("trust_bank_statement_import.id"), nullable=False, index=True)
+    posted_on = db.Column(db.Date, nullable=False, index=True)
+    description = db.Column(db.String(255), nullable=True)
+    reference = db.Column(db.String(180), nullable=True)
+    debit = db.Column(db.Float, nullable=False, default=0.0)
+    credit = db.Column(db.Float, nullable=False, default=0.0)
+    signed_amount = db.Column(db.Float, nullable=False, default=0.0)
+    running_balance = db.Column(db.Float, nullable=True)
+    raw_json = db.Column(db.Text, nullable=True)
+
+
+class Section86Investment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    trust_account_id = db.Column(db.Integer, db.ForeignKey("trust_account.id"), nullable=False, index=True)
+    client_ledger_id = db.Column(db.Integer, db.ForeignKey("trust_client_ledger.id"), nullable=False, index=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True, index=True)
+    investment_ref = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    institution = db.Column(db.String(180), nullable=True)
+    principal_amount = db.Column(db.Float, nullable=False)
+    annual_rate_percent = db.Column(db.Float, nullable=False, default=0.0)
+    opened_on = db.Column(db.Date, nullable=False, index=True)
+    maturity_on = db.Column(db.Date, nullable=True, index=True)
+    status = db.Column(db.String(40), nullable=False, default="active")
+    source = db.Column(db.String(40), nullable=False, default="manual")
+    notes = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    closed_on = db.Column(db.Date, nullable=True)
+
+
+class Section86Accrual(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    investment_id = db.Column(db.Integer, db.ForeignKey("section86_investment.id"), nullable=False, index=True)
+    accrual_date = db.Column(db.Date, nullable=False, index=True)
+    interest_amount = db.Column(db.Float, nullable=False)
+    withholding_tax_amount = db.Column(db.Float, nullable=False, default=0.0)
+    net_interest_amount = db.Column(db.Float, nullable=False)
+    posted_entry_id = db.Column(db.Integer, db.ForeignKey("trust_ledger_entry.id"), nullable=True, index=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("investment_id", "accrual_date", name="uq_section86_accrual_day"),)
 
 
 # ---------------------------------------------------------------------------

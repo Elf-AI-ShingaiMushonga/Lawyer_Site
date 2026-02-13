@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Office365 Integration Hub</h3>
+      <p class="page-intro mb-0">Connect Outlook, Word, and Excel workflows directly to matter, deadline, and billing data.</p>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('integrations_third_party') }}">3rd Party Integrations</a>
+  </div>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Deadlines (30d)</div>
+      <div class="value">{{ stats.deadlines_next_30d }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Time Entries (7d)</div>
+      <div class="value">{{ stats.time_entries_week }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Invoices (Month)</div>
+      <div class="value">{{ stats.invoices_month }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Integration State</div>
+      <div class="value">{{ "Enabled" if config.enabled else "Disabled" }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card p-3">
+      <h4 class="mb-2">Outlook</h4>
+      <p class="form-help mb-2">Subscribe to a live iCalendar feed for legal deadlines and hearing events.</p>
+      <div class="d-grid gap-2">
+        <a class="btn btn-light" href="{{ url_for('integrations_office365_outlook_feed') }}">Download My Outlook Feed (.ics)</a>
+        {% if current_user.role == "admin" %}
+          <a class="btn btn-outline-light" href="{{ url_for('integrations_office365_outlook_feed', scope='team') }}">Download Team Outlook Feed (.ics)</a>
+        {% endif %}
+      </div>
+      <div class="form-help mt-2">You can import this into Outlook Web or Desktop using “Add calendar from internet”.</div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card p-3">
+      <h4 class="mb-2">Excel</h4>
+      <p class="form-help mb-2">Export time and invoice datasets in spreadsheet-ready CSV format.</p>
+      <div class="d-grid gap-2">
+        <a class="btn btn-light" href="{{ url_for('integrations_office365_excel_time_entries') }}">Export Time Entries for Excel</a>
+        <a class="btn btn-outline-light" href="{{ url_for('integrations_office365_excel_invoices') }}">Export Invoices for Excel</a>
+      </div>
+      <div class="form-help mt-2">CSV exports open directly in Excel and can be used in Pivot Tables and Power Query.</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mt-3">
+  <h4 class="mb-2">Word</h4>
+  <p class="form-help mb-2">Download matter summaries as .docx and continue drafting with Word desktop or web.</p>
+  <form method="get" action="{{ url_for('integrations_office365_word_matter_summary_query') }}" class="row g-2">
+    <div class="col-md-4">
+      <label class="form-label" for="office365-word-matter-id">Matter</label>
+      <select class="form-select" id="office365-word-matter-id" name="matter_id" required>
+        <option value="">Select matter</option>
+        {% for matter in matters %}
+          <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4 d-grid">
+      <button class="btn btn-light" type="submit">Download Matter Summary (.docx)</button>
+    </div>
+  </form>
+</div>
+
+{% if current_user.role == "admin" %}
+  <div class="card p-3 mt-3">
+    <h4 class="mb-2">Connection Profile</h4>
+    <p class="form-help mb-2">Store Office365 tenant metadata used by infrastructure and sync jobs.</p>
+    <form method="post" class="row g-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-3">
+        <div class="form-check mt-4">
+          <input class="form-check-input" type="checkbox" name="enabled" value="1" id="office365-enabled" {{ 'checked' if config.enabled else '' }}>
+          <label class="form-check-label" for="office365-enabled">Enabled</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="office365-tenant-id">Tenant ID</label>
+        <input class="form-control" id="office365-tenant-id" name="tenant_id" value="{{ config.tenant_id }}" placeholder="Tenant GUID">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="office365-client-id">Client ID</label>
+        <input class="form-control" id="office365-client-id" name="client_id" value="{{ config.client_id }}" placeholder="App client id">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="office365-domain-hint">Domain Hint</label>
+        <input class="form-control" id="office365-domain-hint" name="domain_hint" value="{{ config.domain_hint }}" placeholder="contoso.onmicrosoft.com">
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="office365-sync-notes">Sync Notes</label>
+        <textarea class="form-control" id="office365-sync-notes" name="sync_notes" rows="2" placeholder="Operational notes for sync jobs">{{ config.sync_notes }}</textarea>
+      </div>
+      <div class="col-12 d-grid d-md-flex justify-content-md-end">
+        <button class="btn btn-light" type="submit">Save Office365 Profile</button>
+      </div>
+    </form>
+  </div>
+{% endif %}
+{% endblock %}

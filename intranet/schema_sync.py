@@ -53,6 +53,16 @@ COLUMN_PATCHES: dict[str, list[str]] = {
         "approved_at DATETIME",
         "locked_at DATETIME",
     ],
+    "trust_reconciliation_run": [
+        "bank_statement_import_id INTEGER",
+    ],
+    "payment_allocation": [
+        "status VARCHAR(20) NOT NULL DEFAULT 'settled'",
+        "settled_at DATETIME",
+        "settled_by INTEGER",
+        "external_txn_id VARCHAR(120)",
+        "processor_note TEXT",
+    ],
 }
 
 

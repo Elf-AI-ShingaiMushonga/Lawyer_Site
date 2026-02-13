@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block content %}
+{% set net_total = rows | sum(attribute='net_total') %}
+
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Trust Cash Books</h3>
+      <p class="page-intro mb-0">Track cashbook movement by trust account and compare against latest imported bank statement balances.</p>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_cashbook', trust_account_id=selected_account_id, start=(start.isoformat() if start else ''), end=(end.isoformat() if end else ''), format='csv') }}">Export CSV</a>
+  </div>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Accounts</div>
+      <div class="value">{{ rows | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Net Total</div>
+      <div class="value">{{ "%.2f"|format(net_total or 0) }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Filters</h4>
+  <form method="get" class="row g-3 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label" for="cashbook-account-id">Trust Account</label>
+      <select class="form-select" id="cashbook-account-id" name="trust_account_id">
+        <option value="">All accounts</option>
+        {% for account in accounts %}
+          <option value="{{ account.id }}" {% if selected_account_id == account.id %}selected{% endif %}>
+            #{{ account.id }} {{ account.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="cashbook-start">Start</label>
+      <input class="form-control" id="cashbook-start" type="date" name="start" value="{{ start.isoformat() if start else '' }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="cashbook-end">End</label>
+      <input class="form-control" id="cashbook-end" type="date" name="end" value="{{ end.isoformat() if end else '' }}">
+    </div>
+    <div class="col-md-2 d-grid">
+      <label class="form-label visually-hidden" for="cashbook-apply">Apply</label>
+      <button class="btn btn-light" id="cashbook-apply" type="submit">Apply</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <div class="table-tools" data-table-tools data-table-target="trust-cashbook-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by account, totals, or deltas...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="trust-cashbook-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">Account ID</th>
+          <th data-sort-index="1">Account</th>
+          <th class="text-end" data-sort-index="2" data-sort-type="number">Deposits</th>
+          <th class="text-end" data-sort-index="3" data-sort-type="number">Disbursements</th>
+          <th class="text-end" data-sort-index="4" data-sort-type="number">Transfers</th>
+          <th class="text-end" data-sort-index="5" data-sort-type="number">Net</th>
+          <th class="text-end" data-sort-index="6" data-sort-type="number">Entries</th>
+          <th class="text-end" data-sort-index="7" data-sort-type="number">Latest Bank</th>
+          <th class="text-end" data-sort-index="8" data-sort-type="number">Delta</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr data-table-row data-search="{{ row.trust_account_id }} {{ row.trust_account_name }} {{ row.deposit_total }} {{ row.disbursement_total }} {{ row.net_total }} {{ row.statement_delta }}">
+            <td>{{ row.trust_account_id }}</td>
+            <td>{{ row.trust_account_name }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.deposit_total or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.disbursement_total or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.transfer_total or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.net_total or 0) }}</td>
+            <td class="text-end cell-num">{{ row.entry_count }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.latest_statement_closing or 0) if row.latest_statement_closing is not none else "-" }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.statement_delta or 0) if row.statement_delta is not none else "-" }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if rows|length > 0 %}hidden{% endif %}>
+          <td colspan="9" class="muted">No cashbook rows for the selected filters.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

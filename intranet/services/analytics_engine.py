@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from ..extensions import db
 from ..types import AnalyticsSnapshot
@@ -28,7 +28,10 @@ class AnalyticsEngine:
         collected_query = (
             db.session.query(func.coalesce(func.sum(PaymentAllocation.amount), 0.0))
             .join(Invoice, Invoice.id == PaymentAllocation.invoice_id)
-            .filter(PaymentAllocation.allocated_at <= time_cutoff)
+            .filter(
+                PaymentAllocation.allocated_at <= time_cutoff,
+                or_(PaymentAllocation.status == "settled", PaymentAllocation.status.is_(None)),
+            )
         )
 
         if matter_scope_ids is not None:

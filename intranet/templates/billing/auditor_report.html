@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Business Auditor Report</h3>
+      <p class="page-intro mb-0">As-of {{ as_of.isoformat() }} summary of billing controls, balances, and adjustment activity.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_auditor_report', as_of=as_of.isoformat(), format='json') }}">JSON</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_auditor_report', as_of=as_of.isoformat(), format='csv') }}">CSV</a>
+    </div>
+  </div>
+  <form method="get" class="row g-2 mt-2 align-items-end">
+    <div class="col-sm-6 col-lg-3">
+      <label class="form-label" for="auditor-report-as-of">As Of</label>
+      <input class="form-control" id="auditor-report-as-of" type="date" name="as_of" value="{{ as_of.isoformat() }}">
+    </div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <button class="btn btn-light" type="submit">Refresh</button>
+    </div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <a class="btn btn-outline-light" href="{{ url_for('billing_auditor_report') }}">Reset</a>
+    </div>
+  </form>
+</div>
+
+<div class="row g-3 mb-3">
+  {% for key, value in payload.items() %}
+    {% if key != 'as_of_date' %}
+      <div class="col-md-4">
+        <div class="card p-3 h-100">
+          <div class="muted text-uppercase small">{{ key.replace('_', ' ') }}</div>
+          <div class="value mt-1 {% if value is number %}cell-num{% endif %}">{{ value }}</div>
+        </div>
+      </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<div class="card p-3">
+  <h4 class="mb-2">Audit Focus Areas</h4>
+  <ul class="mb-0">
+    <li>Review draft invoices that remained unapproved beyond cycle policy.</li>
+    <li>Validate adjustments against signed fee governance approvals.</li>
+    <li>Reconcile 90+ day receivables with collections actions in AR aging.</li>
+    <li>Confirm tax totals tie back to active jurisdiction tax rules.</li>
+  </ul>
+</div>
+{% endblock %}

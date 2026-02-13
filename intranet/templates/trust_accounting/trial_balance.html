@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block content %}
+{% set rows = payload.rows or [] %}
+{% set delta_total = rows | sum(attribute='cashbook_vs_subledger_delta') %}
+
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Trust Trial Balance</h3>
+      <p class="page-intro mb-0">As-of {{ as_of.isoformat() }}. Compare cashbook totals, client sub-ledgers, and latest bank statement balances.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_trial_balance_report', as_of=as_of.isoformat(), format='json') }}">JSON</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_trial_balance_report', as_of=as_of.isoformat(), format='csv') }}">CSV</a>
+    </div>
+  </div>
+  <form method="get" class="row g-2 mt-2 align-items-end">
+    <div class="col-sm-6 col-lg-3">
+      <label class="form-label" for="trust-trial-balance-as-of">As Of</label>
+      <input class="form-control" id="trust-trial-balance-as-of" type="date" name="as_of" value="{{ as_of.isoformat() }}">
+    </div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <button class="btn btn-light" type="submit">Refresh</button>
+    </div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <a class="btn btn-outline-light" href="{{ url_for('trust_trial_balance_report') }}">Reset</a>
+    </div>
+  </form>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Accounts</div>
+      <div class="value">{{ rows | length }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Net Delta</div>
+      <div class="value">{{ "%.2f"|format(delta_total or 0) }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3">
+  <div class="table-tools" data-table-tools data-table-target="trust-trial-balance-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by account, totals, or deltas...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="trust-trial-balance-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="number">Account ID</th>
+          <th data-sort-index="1">Account</th>
+          <th data-sort-index="2">Currency</th>
+          <th class="text-end" data-sort-index="3" data-sort-type="number">Cashbook</th>
+          <th class="text-end" data-sort-index="4" data-sort-type="number">Sub-ledger</th>
+          <th class="text-end" data-sort-index="5" data-sort-type="number">Cashbook vs Sub-ledger</th>
+          <th class="text-end" data-sort-index="6" data-sort-type="number">Latest Bank</th>
+          <th class="text-end" data-sort-index="7" data-sort-type="number">Bank vs Cashbook</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr data-table-row data-search="{{ row.trust_account_id }} {{ row.trust_account_name }} {{ row.currency }} {{ row.cashbook_total }} {{ row.client_subledger_total }} {{ row.bank_vs_cashbook_delta }}">
+            <td>{{ row.trust_account_id }}</td>
+            <td>{{ row.trust_account_name }}</td>
+            <td>{{ row.currency }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.cashbook_total or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.client_subledger_total or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.cashbook_vs_subledger_delta or 0) }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.latest_bank_closing or 0) if row.latest_bank_closing is not none else "-" }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.bank_vs_cashbook_delta or 0) if row.bank_vs_cashbook_delta is not none else "-" }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if rows|length > 0 %}hidden{% endif %}>
+          <td colspan="8" class="muted">No trust accounts available.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

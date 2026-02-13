@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Per-Transaction Billing</h3>
+      <p class="page-intro mb-0">Track every billed line, adjustment, and payment transaction in one ledger-style view.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_transactions', matter_id=selected_matter_id, invoice_id=selected_invoice_id, start=start, end=end, format='csv') }}">Export CSV</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_audit_log') }}">Audit Log</a>
+    </div>
+  </div>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Transactions</div>
+      <div class="value">{{ summary.transaction_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Billed</div>
+      <div class="value">{{ "%.2f"|format(summary.billed_total or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Adjustments</div>
+      <div class="value">{{ "%.2f"|format(summary.adjustment_total or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Settled Collected</div>
+      <div class="value">{{ "%.2f"|format(summary.settled_collected_total or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Pending Collected</div>
+      <div class="value">{{ "%.2f"|format(summary.pending_collected_total or 0) }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Net Outstanding</div>
+      <div class="value">{{ "%.2f"|format(summary.net_outstanding_position or 0) }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Filters</h4>
+  <form method="get" class="row g-3 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label" for="transactions-matter-id">Matter</label>
+      <select class="form-select" id="transactions-matter-id" name="matter_id">
+        <option value="">All matters</option>
+        {% for matter in matters %}
+          <option value="{{ matter.id }}" {% if selected_matter_id == matter.id %}selected{% endif %}>
+            {{ matter.matter_no }} - {{ matter.title }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="transactions-invoice-id">Invoice ID</label>
+      <input class="form-control" id="transactions-invoice-id" type="number" min="1" name="invoice_id" value="{{ selected_invoice_id or '' }}">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="transactions-start">Start</label>
+      <input class="form-control" id="transactions-start" type="date" name="start" value="{{ start or '' }}">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="transactions-end">End</label>
+      <input class="form-control" id="transactions-end" type="date" name="end" value="{{ end or '' }}">
+    </div>
+    <div class="col-md-2 d-grid">
+      <label class="form-label visually-hidden" for="transactions-apply">Apply</label>
+      <button class="btn btn-light" id="transactions-apply" type="submit">Apply</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <div class="table-tools" data-table-tools data-table-target="billing-transactions-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by transaction type, matter, invoice, status, or reference...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="billing-transactions-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0" data-sort-type="date">Occurred</th>
+          <th data-sort-index="1">Type</th>
+          <th data-sort-index="2">Txn ID</th>
+          <th data-sort-index="3" data-sort-type="number">Invoice</th>
+          <th data-sort-index="4">Matter</th>
+          <th data-sort-index="5">Description</th>
+          <th class="text-end" data-sort-index="6" data-sort-type="number">Amount</th>
+          <th class="text-end" data-sort-index="7" data-sort-type="number">Impact</th>
+          <th data-sort-index="8">Status</th>
+          <th data-sort-index="9">Reference</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr data-table-row data-search="{{ row.transaction_type }} {{ row.transaction_id }} {{ row.invoice_id }} {{ row.matter_no }} {{ row.description }} {{ row.status }} {{ row.reference }}">
+            <td>{{ row.occurred_at }}</td>
+            <td><span class="badge badge-soft status-badge">{{ row.transaction_type }}</span></td>
+            <td class="code-like">{{ row.transaction_id }}</td>
+            <td><a href="{{ url_for('billing_invoice_detail', invoice_id=row.invoice_id) }}">#{{ row.invoice_id }}</a></td>
+            <td>{{ row.matter_no }}</td>
+            <td>{{ row.description }}</td>
+            <td class="text-end cell-num">{{ "%.2f"|format(row.amount or 0) }}</td>
+            <td class="text-end cell-num {% if (row.impact_amount or 0) < 0 %}text-danger{% endif %}">{{ "%.2f"|format(row.impact_amount or 0) }}</td>
+            <td><span class="badge badge-soft status-badge">{{ row.status }}</span></td>
+            <td class="code-like">{{ row.reference }}</td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if rows|length > 0 %}hidden{% endif %}>
+          <td colspan="10" class="muted">No transactions for current filters.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

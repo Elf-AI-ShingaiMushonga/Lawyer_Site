@@ -16,6 +16,7 @@
       <div class="form-help mb-2">Create a document container and upload the initial version in one step.</div>
       <form method="post" enctype="multipart/form-data" class="row g-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="upload_document">
         <div class="col-12">
           <label class="form-label" for="dms-title">Document Title</label>
           <input class="form-control" id="dms-title" name="title" placeholder="Document title" required>
@@ -51,6 +52,51 @@
           <input class="form-control" id="dms-file" type="file" name="file" required>
         </div>
         <div class="col-12 d-grid"><button class="btn btn-light">Create Document</button></div>
+      </form>
+    </div>
+
+    <div class="card p-3 mt-3">
+      <h4 class="mb-2">Generate from Template</h4>
+      <div class="form-help mb-2">Build a first draft from precedent templates with merge fields.</div>
+      {% if doc_templates|length == 0 %}
+        <div class="alert alert-warning mb-2">No document templates exist yet. Add templates in Admin Settings first.</div>
+      {% endif %}
+      <form method="post" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="generate_from_template">
+        <div class="col-md-7">
+          <label class="form-label" for="dms-template-id">Template</label>
+          <select class="form-select" id="dms-template-id" name="template_id" required>
+            <option value="">Select template</option>
+            {% for template in doc_templates %}
+              <option value="{{ template.id }}">{{ template.name }} ({{ template.template_type }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label" for="dms-generated-title">Document Title</label>
+          <input class="form-control" id="dms-generated-title" name="generated_title" placeholder="Optional override">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="dms-generated-type">Type</label>
+          <input class="form-control" id="dms-generated-type" name="generated_document_type" placeholder="General">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="dms-generated-confidentiality">Confidentiality</label>
+          <input class="form-control" id="dms-generated-confidentiality" name="generated_confidentiality" value="Internal">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="dms-generated-retention">Retention Category</label>
+          <input class="form-control" id="dms-generated-retention" name="generated_retention_category" placeholder="Optional">
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="dms-generated-custom-fields">Custom merge fields (one per line)</label>
+          <textarea class="form-control" id="dms-generated-custom-fields" name="custom_fields" rows="3" placeholder="opponent_name=Acme Ltd&#10;hearing_date=2026-05-14"></textarea>
+          <div class="form-help">Built-ins include <span class="code-like">{{ "{{matter_no}}" }}</span>, <span class="code-like">{{ "{{matter_title}}" }}</span>, <span class="code-like">{{ "{{client_name}}" }}</span>, <span class="code-like">{{ "{{today}}" }}</span>.</div>
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-outline-light" type="submit" data-submitting-text="Generating..." {{ 'disabled' if doc_templates|length == 0 else '' }}>Generate Draft</button>
+        </div>
       </form>
     </div>
   </div>

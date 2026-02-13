@@ -24,7 +24,7 @@
 
 <div class="card p-3 mb-3">
   <h4 class="mb-2">New Time Entry</h4>
-  <form method="post" class="row g-3">
+  <form method="post" class="row g-3" data-time-prompt-form data-time-prompt-endpoint="{{ url_for('time_prompts') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-md-4">
       <label class="form-label" for="entry-matter-id">Matter</label>
@@ -63,6 +63,12 @@
     <div class="col-12">
       <label class="form-label" for="entry-narrative">Narrative</label>
       <textarea class="form-control" id="entry-narrative" name="narrative" rows="3" placeholder="Describe work completed"></textarea>
+    </div>
+    <div class="col-12">
+      <div class="time-prompts" data-time-prompts hidden>
+        <div class="time-prompts-title">Real-time fee capture prompts</div>
+        <ul class="time-prompts-list mb-0" data-time-prompts-list></ul>
+      </div>
     </div>
     <div class="col-12 d-grid d-md-flex justify-content-md-end">
       <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Entry</button>
