@@ -14,6 +14,7 @@ from ..models import (
     Matter,
     PaymentAllocation,
     Task,
+    TaskAssignee,
     TimeEntry,
     User,
     WorkloadForecast,
@@ -79,9 +80,19 @@ def register_analytics_routes(app):
         hours_7d_by_user: dict[int, float] = {}
 
         if user_ids:
-            task_query = db.session.query(Task.assigned_to, func.count(Task.id)).filter(
+            task_query = (
+                db.session.query(TaskAssignee.user_id, func.count(func.distinct(TaskAssignee.task_id)))
+                .join(Task, Task.id == TaskAssignee.task_id)
+                .filter(
+                    TaskAssignee.user_id.in_(user_ids),
+                    Task.status != "Done",
+                )
+            )
+            legacy_has_assignee = db.session.query(TaskAssignee.id).filter(TaskAssignee.task_id == Task.id).exists()
+            legacy_task_query = db.session.query(Task.assigned_to, func.count(Task.id)).filter(
                 Task.assigned_to.in_(user_ids),
                 Task.status != "Done",
+                ~legacy_has_assignee,
             )
             hours_query = db.session.query(TimeEntry.user_id, func.coalesce(func.sum(TimeEntry.rounded_hours), 0.0)).filter(
                 TimeEntry.user_id.in_(user_ids),
@@ -90,16 +101,21 @@ def register_analytics_routes(app):
             if scope_ids is not None:
                 if scope_ids:
                     task_query = task_query.filter(Task.matter_id.in_(scope_ids))
+                    legacy_task_query = legacy_task_query.filter(Task.matter_id.in_(scope_ids))
                     hours_query = hours_query.filter(TimeEntry.matter_id.in_(scope_ids))
                 else:
                     task_query = task_query.filter(Task.id == -1)
+                    legacy_task_query = legacy_task_query.filter(Task.id == -1)
                     hours_query = hours_query.filter(TimeEntry.id == -1)
 
-            open_tasks_by_user = {
-                int(user_id): int(count)
-                for user_id, count in task_query.group_by(Task.assigned_to).all()
-                if user_id is not None
-            }
+            for user_id, count in task_query.group_by(TaskAssignee.user_id).all():
+                if user_id is None:
+                    continue
+                open_tasks_by_user[int(user_id)] = int(count or 0)
+            for user_id, count in legacy_task_query.group_by(Task.assigned_to).all():
+                if user_id is None:
+                    continue
+                open_tasks_by_user[int(user_id)] = open_tasks_by_user.get(int(user_id), 0) + int(count or 0)
             hours_7d_by_user = {
                 int(user_id): float(hours or 0.0)
                 for user_id, hours in hours_query.group_by(TimeEntry.user_id).all()

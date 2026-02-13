@@ -31,7 +31,7 @@
         </div>
       </div>
 
-      <form method="post" action="{{ url_for('matter_stage_update', matter_id=m.id) }}" class="row g-3 mt-2">
+      <form method="post" action="{{ url_for('matter_stage_update', matter_id=m.id) }}" class="row g-3 mt-2 align-items-end">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="col-md-5">
           <label class="form-label" for="workspace-stage">Next Stage</label>
@@ -43,15 +43,15 @@
         </div>
         <div class="col-md-2 d-grid">
           <label class="form-label visually-hidden" for="workspace-stage-submit">Update</label>
-          <button class="btn btn-outline-light" id="workspace-stage-submit" type="submit" data-submitting-text="Updating...">Update Stage</button>
+          <button class="btn btn-outline-light" id="workspace-stage-submit" type="submit" data-submitting-text="Updating...">Update</button>
         </div>
       </form>
 
       <div class="mt-3 d-flex gap-2 flex-wrap">
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_parties', matter_id=m.id) }}">Parties</a>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_notes', matter_id=m.id) }}">Notes</a>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_matter', matter_id=m.id) }}">Calendar</a>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=m.id) }}">DMS</a>
+        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_parties', matter_id=m.id) }}">Parties</a>
+        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_notes', matter_id=m.id) }}">Notes</a>
+        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('calendar_matter', matter_id=m.id) }}">Calendar</a>
+        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_dms', matter_id=m.id) }}">DMS</a>
       </div>
     </div>
 

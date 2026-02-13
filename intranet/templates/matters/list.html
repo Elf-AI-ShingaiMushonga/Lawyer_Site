@@ -98,7 +98,16 @@
     {% if ms %}
       <div class="list-stack" id="matter-list">
         {% for m in ms %}
-          <div class="list-item" data-matter-item data-status="{{ m.status|lower|replace(' ', '-') }}" data-risk="{{ m.risk_level|lower }}">
+          <div
+            class="list-item is-clickable"
+            data-matter-item
+            data-matter-link="{{ url_for('matter_detail', matter_id=m.id) }}"
+            data-status="{{ m.status|lower|replace(' ', '-') }}"
+            data-risk="{{ m.risk_level|lower }}"
+            role="link"
+            tabindex="0"
+            aria-label="Open matter {{ m.matter_no }} - {{ m.title }}"
+          >
             <div class="list-row">
               <div>
                 <a class="list-title" href="{{ url_for('matter_detail', matter_id=m.id) }}">{{ m.matter_no }} - {{ m.title }}</a>
@@ -111,7 +120,6 @@
               </div>
               <div class="list-actions">
                 <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
-                <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">View</a>
                 <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Tasks</a>
               </div>
             </div>

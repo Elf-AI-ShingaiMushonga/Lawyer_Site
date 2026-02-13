@@ -34,7 +34,7 @@
   <div class="col-lg-5">
     <div class="card p-3 mb-3">
       <h4 class="mb-2">Update Stage</h4>
-      <form method="post" class="row g-3">
+      <form method="post" class="row g-3 align-items-end">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="update">
         <div class="col-md-6">
@@ -77,7 +77,7 @@
 
     <div class="card p-3">
       <h4 class="mb-2">Create Intake / Engagement</h4>
-      <form method="post" class="row g-3 mb-3">
+      <form method="post" class="row g-3 mb-3 align-items-end">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="intake">
         <div class="col-md-8">
@@ -189,7 +189,7 @@
                 </div>
               </div>
               {% if conflict.override_required and conflict.status != 'overridden' %}
-                <form method="post" action="{{ url_for('crm_conflict_override', conflict_id=conflict.id) }}" class="row g-2 mt-2">
+                <form method="post" action="{{ url_for('crm_conflict_override', conflict_id=conflict.id) }}" class="row g-2 mt-2 align-items-end">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <div class="col-md-9">
                     <label class="form-label" for="override-reason-{{ conflict.id }}">Override Reason</label>
@@ -225,7 +225,7 @@
                 </div>
               </div>
               {% if letter.status != 'signed' %}
-                <form method="post" action="{{ url_for('crm_engagement_sign', engagement_id=letter.id) }}" class="row g-2 mt-2">
+                <form method="post" action="{{ url_for('crm_engagement_sign', engagement_id=letter.id) }}" class="row g-2 mt-2 align-items-end">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <div class="col-md-9">
                     <label class="form-label" for="signer-{{ letter.id }}">Signer Name</label>

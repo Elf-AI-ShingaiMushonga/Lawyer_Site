@@ -219,6 +219,29 @@
       });
     });
 
+    const goToMatter = (event, item) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("a, button, input, select, textarea, label, summary")) {
+        return;
+      }
+      const href = item.dataset.matterLink || "";
+      if (!href) {
+        return;
+      }
+      window.location.href = href;
+    };
+
+    items.forEach((item) => {
+      item.addEventListener("click", (event) => goToMatter(event, item));
+      item.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") {
+          return;
+        }
+        event.preventDefault();
+        goToMatter(event, item);
+      });
+    });
+
     updateButtons();
     applyFilters();
   };

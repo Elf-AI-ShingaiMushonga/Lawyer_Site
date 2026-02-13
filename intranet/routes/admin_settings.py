@@ -164,19 +164,28 @@ def register_admin_settings_routes(app):
                 return redirect(url_for("admin_templates_tasks"))
 
             row = TaskTemplate.query.filter_by(name=name).first()
+            matter_type = (request.form.get("matter_type") or "").strip() or None
+            priority = (request.form.get("priority") or "Medium").strip() or "Medium"
+            sla_hours = request.form.get("sla_hours", type=int)
+            recurrence_rule = (request.form.get("recurrence_rule") or "").strip() or None
             if row is None:
                 row = TaskTemplate(
                     name=name,
-                    matter_type=(request.form.get("matter_type") or "").strip() or None,
-                    priority=(request.form.get("priority") or "Medium").strip() or "Medium",
-                    sla_hours=request.form.get("sla_hours", type=int),
-                    recurrence_rule=(request.form.get("recurrence_rule") or "").strip() or None,
+                    matter_type=matter_type,
+                    priority=priority,
+                    sla_hours=sla_hours,
+                    recurrence_rule=recurrence_rule,
                     created_by=current_user.id,
                 )
                 db.session.add(row)
                 db.session.flush()
             else:
-                TaskTemplateItem.query.filter_by(task_template_id=row.id).delete(synchronize_session=False)
+                row.matter_type = matter_type
+                row.priority = priority
+                row.sla_hours = sla_hours
+                row.recurrence_rule = recurrence_rule
+
+            TaskTemplateItem.query.filter_by(task_template_id=row.id).delete(synchronize_session=False)
 
             for i, line in enumerate((request.form.get("items") or "").splitlines(), start=1):
                 item = line.strip()

@@ -38,8 +38,8 @@
     <a class="filter-chip-btn {{ 'is-active' if active_filter == 'today' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='today') }}">Today <span class="code-like">{{ stats.today }}</span></a>
     <a class="filter-chip-btn {{ 'is-active' if active_filter == 'next7' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='next7') }}">Next 7d <span class="code-like">{{ stats.next7 }}</span></a>
     <a class="filter-chip-btn {{ 'is-active' if active_filter == 'critical' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='critical') }}">Critical <span class="code-like">{{ stats.critical }}</span></a>
-    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'open' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='open') }}">Open <span class="code-like">{{ stats.open }}</span></a>
-    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'ack' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='ack') }}">Acknowledged <span class="code-like">{{ stats.ack }}</span></a>
+    <a class="filter-chip-btn calendar-state-filter-chip {{ 'is-active' if active_filter == 'open' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='open') }}">Open <span class="code-like">{{ stats.open }}</span></a>
+    <a class="filter-chip-btn calendar-state-filter-chip {{ 'is-active' if active_filter == 'ack' else '' }}" href="{{ url_for('calendar_matter', matter_id=m.id, filter='ack') }}">Acknowledged <span class="code-like">{{ stats.ack }}</span></a>
   </div>
 </div>
 

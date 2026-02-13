@@ -86,7 +86,7 @@
 
 <div class="card p-3 mb-3">
   <h4 class="mb-2">Write-down / Write-off</h4>
-  <form method="post" action="{{ url_for('billing_invoice_adjust', invoice_id=inv.id) }}" class="row g-3">
+  <form method="post" action="{{ url_for('billing_invoice_adjust', invoice_id=inv.id) }}" class="row g-3 align-items-end">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-md-3">
       <label class="form-label" for="adjustment-type">Type</label>

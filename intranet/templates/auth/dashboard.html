@@ -139,7 +139,7 @@
             <div class="border-top pt-2 mt-2">
               <div class="d-flex justify-content-between">
                 <a class="fw-semibold text-decoration-none" href="{{ url_for('matter_detail', matter_id=m.id) }}">{{ m.matter_no }} - {{ m.title }}</a>
-                <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
+                <span class="badge status-badge dashboard-matter-status status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
               </div>
               <div class="muted small">{{ m.client_name }}</div>
             </div>

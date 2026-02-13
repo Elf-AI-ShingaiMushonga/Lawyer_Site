@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 
 from flask import flash, redirect, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 
 from ..config import is_valid_email
@@ -28,6 +28,7 @@ from ..models import (
     Matter,
     MatterMember,
     Task,
+    TaskAssignee,
     User,
     UserMFABackupCode,
 )
@@ -210,9 +211,14 @@ def register_auth_routes(app):
     def dashboard():
         anns = Announcement.query.order_by(Announcement.created_at.desc()).limit(5).all()
         today = dt.date.today()
+        has_current_user_assignee = db.session.query(TaskAssignee.id).filter(
+            TaskAssignee.task_id == Task.id,
+            TaskAssignee.user_id == current_user.id,
+        ).exists()
+        my_assignment_clause = or_(Task.assigned_to == current_user.id, has_current_user_assignee)
 
         my_tasks = (
-            Task.query.filter(Task.assigned_to == current_user.id)
+            Task.query.filter(my_assignment_clause)
             .order_by(Task.status.asc(), Task.due_date.asc().nullslast(), Task.created_at.desc())
             .limit(8)
             .all()
@@ -250,9 +256,11 @@ def register_auth_routes(app):
             Task.due_date >= today,
             Task.due_date <= (today + dt.timedelta(days=7)),
         )
+        has_any_assignee = db.session.query(TaskAssignee.id).filter(TaskAssignee.task_id == Task.id).exists()
         urgent_unassigned_scope = Task.query.filter(
             Task.status != "Done",
             Task.assigned_to.is_(None),
+            ~has_any_assignee,
             Task.due_date.isnot(None),
             Task.due_date <= (today + dt.timedelta(days=3)),
         )
@@ -291,7 +299,7 @@ def register_auth_routes(app):
 
         stats = {
             "matter_count": matter_scope.count(),
-            "assigned_open_tasks": Task.query.filter(Task.assigned_to == current_user.id, Task.status != "Done").count(),
+            "assigned_open_tasks": Task.query.filter(my_assignment_clause, Task.status != "Done").count(),
             "document_count": document_scope.count(),
             "announcement_count": Announcement.query.count(),
             "overdue_tasks": overdue_task_scope.count(),

@@ -92,6 +92,7 @@ from .models import (
     SuspiciousActivityAlert,
     Task,
     TaskApproval,
+    TaskAssignee,
     TaskChecklistItem,
     TaskDependency,
     TaskTemplate,
@@ -3441,6 +3442,26 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 )
             )
 
+        existing_task_assignee_pairs = {
+            (int(task_id), int(user_id))
+            for task_id, user_id in db.session.query(TaskAssignee.task_id, TaskAssignee.user_id).all()
+            if task_id is not None and user_id is not None
+        }
+        seeded_tasks = Task.query.filter(Task.assigned_to.isnot(None)).all()
+        for seeded_task in seeded_tasks:
+            pair = (int(seeded_task.id), int(seeded_task.assigned_to))
+            if pair in existing_task_assignee_pairs:
+                continue
+            db.session.add(
+                TaskAssignee(
+                    task_id=seeded_task.id,
+                    user_id=seeded_task.assigned_to,
+                    assigned_by=seeded_task.created_by,
+                    assigned_at=seeded_task.created_at or now,
+                )
+            )
+            existing_task_assignee_pairs.add(pair)
+
         db.session.commit()
         summary = {
             "users": len(user_specs),
@@ -3541,6 +3562,7 @@ def _reset_demo_dataset(app):
         SuspiciousActivityAlert,
         Task,
         TaskApproval,
+        TaskAssignee,
         TaskChecklistItem,
         TaskDependency,
         TaskTemplate,
@@ -3643,6 +3665,7 @@ def _reset_demo_dataset(app):
             DocumentVersion,
             DocumentRecord,
             TaskApproval,
+            TaskAssignee,
             TaskChecklistItem,
             TaskDependency,
             Task,

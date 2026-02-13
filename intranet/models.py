@@ -130,6 +130,18 @@ class Task(db.Model):
     )
 
 
+class TaskAssignee(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey("task.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    assigned_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    assigned_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("task_id", "user_id", name="uq_task_assignee_task_user"),
+        db.Index("ix_task_assignee_user_task", "user_id", "task_id"),
+    )
+
+
 class MatterTimelineEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)

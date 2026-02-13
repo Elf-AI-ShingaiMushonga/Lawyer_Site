@@ -38,9 +38,9 @@
     </div>
   </div>
 
-  <form method="post" class="row g-3 mt-1">
+  <form method="post" class="row g-3 mt-1 align-items-end">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-md-5">
+    <div class="col-md-3">
       <label class="form-label" for="invoice-matter-id">Matter</label>
       <select class="form-select" id="invoice-matter-id" name="matter_id" required>
         {% for matter in matters %}
@@ -56,9 +56,9 @@
       <label class="form-label" for="invoice-period-end">Period End</label>
       <input class="form-control" id="invoice-period-end" type="date" name="period_end" required>
     </div>
-    <div class="col-md-1 d-grid">
-      <label class="form-label visually-hidden" for="invoice-generate">Generate</label>
-      <button class="btn btn-light" id="invoice-generate" type="submit" data-submitting-text="Generating...">Generate</button>
+    <div class="col-md-3 d-grid">
+      <label class="form-label" for="invoice-generate">Generate</label>
+      <button class="btn btn-light w-100" id="invoice-generate" type="submit" data-submitting-text="Generating...">Generate</button>
     </div>
   </form>
 </div>

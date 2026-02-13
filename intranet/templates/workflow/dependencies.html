@@ -3,7 +3,7 @@
 <div class="card p-3 mb-3">
   <h3 class="mb-1">Task Dependencies</h3>
   <p class="page-intro mb-0">Task #{{ t.id }}: {{ t.title }}</p>
-  <form method="post" class="row g-3 mt-1">
+  <form method="post" class="row g-3 mt-1 align-items-end">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-md-9">
       <label class="form-label" for="depends-on-task-id">Depends On Task</label>

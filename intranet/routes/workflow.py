@@ -7,7 +7,7 @@ from flask_login import current_user, login_required
 
 from ..extensions import db
 from ..helpers import audit, can_access_matter, matter_activity, normalize_query
-from ..models import Task, TaskApproval, TaskChecklistItem, TaskDependency, TaskTemplate, TaskTemplateItem
+from ..models import Task, TaskApproval, TaskAssignee, TaskChecklistItem, TaskDependency, TaskTemplate, TaskTemplateItem
 from ..templates import page
 
 
@@ -60,17 +60,27 @@ def register_workflow_routes(app):
                 return redirect(url_for("task_templates"))
 
             t = TaskTemplate.query.filter_by(name=name).first()
+            matter_type = (request.form.get("matter_type") or "").strip() or None
+            priority = (request.form.get("priority") or "Medium").strip() or "Medium"
+            sla_hours = request.form.get("sla_hours", type=int)
+            recurrence_rule = (request.form.get("recurrence_rule") or "").strip() or None
             if t is None:
                 t = TaskTemplate(
                     name=name,
-                    matter_type=(request.form.get("matter_type") or "").strip() or None,
-                    priority=(request.form.get("priority") or "Medium").strip() or "Medium",
-                    sla_hours=request.form.get("sla_hours", type=int),
-                    recurrence_rule=(request.form.get("recurrence_rule") or "").strip() or None,
+                    matter_type=matter_type,
+                    priority=priority,
+                    sla_hours=sla_hours,
+                    recurrence_rule=recurrence_rule,
                     created_by=current_user.id,
                 )
                 db.session.add(t)
                 db.session.flush()
+            else:
+                t.matter_type = matter_type
+                t.priority = priority
+                t.sla_hours = sla_hours
+                t.recurrence_rule = recurrence_rule
+
             TaskTemplateItem.query.filter_by(task_template_id=t.id).delete(synchronize_session=False)
             for i, line in enumerate((request.form.get("items") or "").splitlines(), start=1):
                 item = line.strip()
@@ -232,13 +242,26 @@ def register_workflow_routes(app):
         else:
             next_due = t.due_date + dt.timedelta(days=7)
 
+        assignee_ids = [
+            int(user_id)
+            for (user_id,) in (
+                db.session.query(TaskAssignee.user_id)
+                .filter(TaskAssignee.task_id == t.id)
+                .order_by(TaskAssignee.user_id.asc())
+                .all()
+            )
+            if user_id is not None
+        ]
+        if not assignee_ids and t.assigned_to is not None:
+            assignee_ids = [int(t.assigned_to)]
+
         clone = Task(
             matter_id=t.matter_id,
             title=t.title,
             description=t.description,
             status="Todo",
             due_date=next_due,
-            assigned_to=t.assigned_to,
+            assigned_to=assignee_ids[0] if assignee_ids else None,
             created_by=current_user.id,
             priority=t.priority,
             sla_hours=t.sla_hours,
@@ -246,6 +269,9 @@ def register_workflow_routes(app):
             requires_two_person_review=t.requires_two_person_review,
         )
         db.session.add(clone)
+        db.session.flush()
+        for user_id in assignee_ids:
+            db.session.add(TaskAssignee(task_id=clone.id, user_id=user_id, assigned_by=current_user.id))
         db.session.commit()
         audit("task_recur", "Task", clone.id, {"source_task_id": t.id, "next_due": next_due.isoformat()})
         matter_activity(t.matter_id, f"Recurring task created from #{t.id}", f"new task #{clone.id}")
