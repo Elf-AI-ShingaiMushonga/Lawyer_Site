@@ -46,6 +46,8 @@ def create_app() -> Flask:
     rate_limit_strategy = os.environ.get("RATE_LIMIT_STRATEGY", "fixed-window")
     auth_login_rate_limit = os.environ.get("AUTH_LOGIN_RATE_LIMIT", "10/minute")
     auth_register_rate_limit = os.environ.get("AUTH_REGISTER_RATE_LIMIT", "5/hour")
+    portal_login_rate_limit = os.environ.get("PORTAL_LOGIN_RATE_LIMIT", "10/minute")
+    sso_token_rate_limit = os.environ.get("AUTH_SSO_TOKEN_RATE_LIMIT", "60/minute")
 
     if is_production and not secret_key:
         raise RuntimeError("FLASK_SECRET_KEY must be set in production.")
@@ -106,6 +108,8 @@ def create_app() -> Flask:
         RATELIMIT_HEADERS_ENABLED=True,
         AUTH_LOGIN_RATE_LIMIT=auth_login_rate_limit,
         AUTH_REGISTER_RATE_LIMIT=auth_register_rate_limit,
+        PORTAL_LOGIN_RATE_LIMIT=portal_login_rate_limit,
+        AUTH_SSO_TOKEN_RATE_LIMIT=sso_token_rate_limit,
     )
 
     if db_backend != "sqlite":

@@ -9,7 +9,7 @@ from flask import flash, jsonify, redirect, request, session, url_for
 from flask_login import current_user, login_required
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from ..extensions import db
+from ..extensions import db, limiter
 from ..helpers import audit, register_user_session, revoke_trusted_device, revoke_user_session
 from ..mfa import build_otpauth_uri, check_backup_code, generate_backup_codes, generate_totp_secret, hash_backup_code, verify_totp
 from ..models import SSOApplication, SSOAuthorizationCode, SSOToken, TrustedDevice, User, UserMFABackupCode, UserSession
@@ -175,6 +175,7 @@ def register_auth_plus_routes(app):
         return redirect(f"{redirect_uri}?{urlencode(params)}")
 
     @app.post("/auth/sso/token")
+    @limiter.limit(lambda: app.config.get("AUTH_SSO_TOKEN_RATE_LIMIT", "60/minute"), methods=["POST"])
     def auth_sso_token():
         grant_type = (request.form.get("grant_type") or "authorization_code").strip()
         client_id = (request.form.get("client_id") or "").strip()

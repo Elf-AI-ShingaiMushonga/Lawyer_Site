@@ -109,7 +109,8 @@ def register_content_routes(app):
         q = normalize_query(request.args.get("q", ""))
         matters = tasks = docs = articles = contacts = []
         matter_by_id: dict[int, Matter] = {}
-        if q:
+        query_too_short = bool(q) and len(q) < 2
+        if q and not query_too_short:
             like = f"%{q}%"
             m_base = Matter.query
             task_base = Task.query
@@ -161,4 +162,5 @@ def register_content_routes(app):
             articles=articles,
             contacts=contacts,
             matter_by_id=matter_by_id,
+            query_too_short=query_too_short,
         )

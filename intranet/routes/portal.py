@@ -11,7 +11,7 @@ from flask import abort, flash, redirect, request, send_from_directory, session,
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
-from ..extensions import db
+from ..extensions import db, limiter
 from ..helpers import allowed_doc, audit, sha256_file
 from ..mfa import build_otpauth_uri, generate_totp_secret, verify_totp
 from ..models import (
@@ -47,7 +47,11 @@ def _portal_current_user() -> PortalUser | None:
     user_id = session.get(PORTAL_SESSION_KEY)
     if not user_id:
         return None
-    return db.session.get(PortalUser, int(user_id))
+    try:
+        return db.session.get(PortalUser, int(user_id))
+    except (TypeError, ValueError):
+        session.pop(PORTAL_SESSION_KEY, None)
+        return None
 
 
 def _hash_token(raw: str) -> str:
@@ -111,6 +115,7 @@ def _portal_has_matter_access(portal_user_id: int, matter_id: int, *, min_level:
 
 def register_portal_routes(app):
     @app.route("/portal/login", methods=["GET", "POST"])
+    @limiter.limit(lambda: app.config.get("PORTAL_LOGIN_RATE_LIMIT", "10/minute"), methods=["POST"])
     def portal_login():
         if request.method == "POST":
             email = (request.form.get("email") or "").strip().lower()

@@ -15,6 +15,8 @@ def app(tmp_path, monkeypatch):
     monkeypatch.setenv("FLASK_SECRET_KEY", "test-secret")
     monkeypatch.setenv("AUTH_LOGIN_RATE_LIMIT", "10000/minute")
     monkeypatch.setenv("AUTH_REGISTER_RATE_LIMIT", "10000/minute")
+    monkeypatch.setenv("PORTAL_LOGIN_RATE_LIMIT", "10000/minute")
+    monkeypatch.setenv("AUTH_SSO_TOKEN_RATE_LIMIT", "10000/minute")
     app = create_app()
     app.config.update(TESTING=True)
     login_manager.session_protection = None

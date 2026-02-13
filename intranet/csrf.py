@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import secrets
 
 from flask import abort, request, session
@@ -25,5 +26,9 @@ def register_csrf_protection(app):
             return
         sent_token = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
         expected_token = session.get(CSRF_SESSION_KEY)
-        if not sent_token or not expected_token or sent_token != expected_token:
+        if (
+            not sent_token
+            or not expected_token
+            or not hmac.compare_digest(str(sent_token), str(expected_token))
+        ):
             abort(400)

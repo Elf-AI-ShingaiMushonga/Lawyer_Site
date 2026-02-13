@@ -4,7 +4,9 @@ import datetime as dt
 
 from flask_login import login_user, logout_user
 
+from intranet import create_app
 from intranet.extensions import db
+from intranet.helpers import can_access_matter
 from intranet.jobs.worker import _handle_suspicious_activity_scan
 from intranet.models import (
     AuditLog,
@@ -13,6 +15,7 @@ from intranet.models import (
     EthicalWallRule,
     Matter,
     MatterMember,
+    PortalUser,
     SuspiciousActivityAlert,
     User,
 )
@@ -115,3 +118,85 @@ def test_suspicious_scan_creates_alert_for_repeated_denied_access(seed_user_matt
 
     assert "created alerts" in message
     assert alerts
+
+
+def test_can_access_matter_fails_closed_when_policy_evaluator_errors(app_ctx, monkeypatch):
+    app = app_ctx
+    user = User(email="fail-closed@example.com", full_name="Fail Closed", role="lawyer", password_hash="x")
+    user.set_password("StrongPassword123!")
+    db.session.add(user)
+    db.session.flush()
+
+    matter = Matter(
+        matter_no="2026-SEC-0001",
+        title="Policy Error Matter",
+        client_name="Security Client",
+        status="Open",
+        created_by=user.id,
+        opened_at=dt.datetime.utcnow(),
+        last_updated_at=dt.datetime.utcnow(),
+    )
+    db.session.add(matter)
+    db.session.flush()
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Team"))
+    db.session.commit()
+
+    def _raise(_matter_id: int):
+        raise RuntimeError("policy evaluation failed")
+
+    monkeypatch.setattr("intranet.policies.evaluate_matter_access", _raise)
+
+    with app.test_request_context("/matters"):
+        login_user(user)
+        allowed = can_access_matter(matter.id)
+        logout_user()
+
+    assert allowed is False
+
+
+def test_portal_login_rate_limit_enforced(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'portal-rate-limit.db'}")
+    monkeypatch.setenv("FLASK_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("AUTH_LOGIN_RATE_LIMIT", "10000/minute")
+    monkeypatch.setenv("AUTH_REGISTER_RATE_LIMIT", "10000/minute")
+    monkeypatch.setenv("PORTAL_LOGIN_RATE_LIMIT", "2/minute")
+    monkeypatch.setenv("AUTH_SSO_TOKEN_RATE_LIMIT", "10000/minute")
+    app = create_app()
+    app.config.update(TESTING=True)
+
+    with app.app_context():
+        db.create_all()
+        user = PortalUser(
+            email="portal-rate@example.com",
+            full_name="Portal Rate User",
+            password_hash="x",
+            is_active=True,
+        )
+        user.set_password("PortalStrongPassword123!")
+        db.session.add(user)
+        db.session.commit()
+
+    client = app.test_client()
+    client.get("/portal/login")
+    with client.session_transaction() as sess:
+        csrf = sess.get("_csrf_token") or ""
+
+    first = client.post(
+        "/portal/login",
+        data={"csrf_token": csrf, "email": "portal-rate@example.com", "password": "wrong-password"},
+        follow_redirects=False,
+    )
+    second = client.post(
+        "/portal/login",
+        data={"csrf_token": csrf, "email": "portal-rate@example.com", "password": "wrong-password"},
+        follow_redirects=False,
+    )
+    third = client.post(
+        "/portal/login",
+        data={"csrf_token": csrf, "email": "portal-rate@example.com", "password": "wrong-password"},
+        follow_redirects=False,
+    )
+
+    assert first.status_code in {302, 401}
+    assert second.status_code in {302, 401}
+    assert third.status_code == 429

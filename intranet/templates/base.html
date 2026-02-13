@@ -783,6 +783,55 @@
       gap: 12px;
     }
 
+    .context-path {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      border: 1px solid rgba(225, 6, 0, 0.2);
+      border-radius: 12px;
+      padding: 8px 10px;
+      background: #fffafa;
+    }
+
+    .breadcrumb-trail {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+      min-height: 28px;
+    }
+
+    .breadcrumb-link {
+      color: #6f2e2c;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .breadcrumb-link:hover {
+      color: var(--accent-strong);
+      text-decoration: underline;
+    }
+
+    .breadcrumb-sep {
+      color: #9c7d7d;
+      font-size: 12px;
+    }
+
+    .breadcrumb-current {
+      color: #5a3b3b;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .breadcrumb-meta {
+      font-size: 12px;
+      color: #8d7474;
+      letter-spacing: 0.01em;
+    }
+
     .alert-warning {
       border-color: rgba(182, 121, 38, 0.45);
       background: #fff5e7;
@@ -1537,6 +1586,13 @@
       color: #6f1d1a;
     }
 
+    .command-item.is-active {
+      border-color: rgba(225, 6, 0, 0.75);
+      background: rgba(225, 6, 0, 0.12);
+      color: #6f1d1a;
+      box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.14);
+    }
+
     .command-item-title {
       font-weight: 700;
       display: block;
@@ -1845,6 +1901,14 @@
         gap: 10px;
       }
 
+      .context-path {
+        padding: 9px;
+      }
+
+      .breadcrumb-meta {
+        width: 100%;
+      }
+
       .card {
         border-radius: 12px;
         box-shadow: 0 6px 16px rgba(123, 42, 42, 0.08);
@@ -2022,6 +2086,58 @@
   {% set integration_endpoints = ["integrations_office365", "integrations_office365_outlook_feed", "integrations_office365_excel_time_entries", "integrations_office365_excel_invoices", "integrations_office365_word_matter_summary", "integrations_office365_word_matter_summary_query", "integrations_third_party", "integrations_export_cost_recovery", "integrations_export_conveyancing", "integrations_import_cost_recovery", "integrations_import_conveyancing", "mobile_hub"] %}
   {% set analytics_endpoints = ["analytics_utilization", "analytics_realization", "analytics_ehr", "analytics_workload", "analytics_profitability", "analytics_forecast", "analytics_burnout"] %}
   {% set ops_endpoints = ["ops_backup_status", "ops_restore_verify", "ops_dr_targets"] %}
+  {% set section_label = "Dashboard" %}
+  {% set section_meta = "Firm-wide operational snapshot" %}
+  {% set section_href = url_for('dashboard') %}
+  {% if endpoint in matter_endpoints %}
+    {% set section_label = "Matter Management" %}
+    {% set section_meta = "Intake, workspace, parties, notes, and case progression" %}
+    {% set section_href = url_for('matters') %}
+  {% elif endpoint in calendar_endpoints %}
+    {% set section_label = "Calendar and Docketing" %}
+    {% set section_meta = "Deadlines, acknowledgements, and milestone visibility" %}
+    {% set section_href = url_for('calendar_my') %}
+  {% elif endpoint in workflow_endpoints %}
+    {% set section_label = "Workflow Automation" %}
+    {% set section_meta = "Templates, dependencies, approvals, and recurrence" %}
+    {% set section_href = url_for('task_templates') %}
+  {% elif endpoint in dms_endpoints %}
+    {% set section_label = "Document Management" %}
+    {% set section_meta = "Versioning, production sets, OCR, and controls" %}
+    {% set section_href = url_for('dms_home') %}
+  {% elif endpoint in billing_endpoints or endpoint == "expenses" or endpoint in ["trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
+    {% set section_label = "Finance and Trust" %}
+    {% set section_meta = "Billing, expenses, trust accounting, and reconciliations" %}
+    {% set section_href = url_for('billing_invoices') %}
+  {% elif endpoint in crm_endpoints %}
+    {% set section_label = "CRM and Intake" %}
+    {% set section_meta = "Lead conversion, conflict checks, and engagements" %}
+    {% set section_href = url_for('crm_leads') %}
+  {% elif endpoint in portal_endpoints %}
+    {% set section_label = "Client Portal" %}
+    {% set section_meta = "Client-facing matter visibility, messaging, uploads, and invoices" %}
+    {% set section_href = url_for('portal_login') %}
+  {% elif endpoint in integration_endpoints %}
+    {% set section_label = "Integrations and Mobile" %}
+    {% set section_meta = "Office365, third-party sync, and mobile capture flows" %}
+    {% set section_href = url_for('integrations_office365') %}
+  {% elif endpoint in analytics_endpoints %}
+    {% set section_label = "Analytics and Forecasting" %}
+    {% set section_meta = "Utilization, realization, profitability, and burnout signals" %}
+    {% set section_href = url_for('analytics_utilization') %}
+  {% elif endpoint in admin_endpoints or endpoint in ops_endpoints or endpoint in trust_endpoints %}
+    {% set section_label = "Governance and Operations" %}
+    {% set section_meta = "Security policy, auditability, backups, and DR readiness" %}
+    {% set section_href = url_for('admin') if current_user.is_authenticated and current_user.role == "admin" else url_for('trust_security') %}
+  {% elif endpoint in ["search", "contacts", "kb", "kb_view"] %}
+    {% set section_label = "Knowledge and Search" %}
+    {% set section_meta = "Cross-matter retrieval and structured know-how" %}
+    {% set section_href = url_for('search') %}
+  {% elif endpoint == "client_story" %}
+    {% set section_label = "Story Mode" %}
+    {% set section_meta = "Guided narrative across all capabilities" %}
+    {% set section_href = url_for('client_story') %}
+  {% endif %}
   {% set next_path = request.full_path if request.query_string else request.path %}
   {% set story_trust_url = url_for('trust_ledger') if current_user.is_authenticated and current_user.role in ["admin", "lawyer"] else url_for('trust_security') %}
   {% set story_governance_url = url_for('admin_audit') if current_user.is_authenticated and current_user.role == "admin" else url_for('trust_security') %}
@@ -2308,6 +2424,25 @@
   {% endif %}
 
   <main id="main-content" class="main-content" tabindex="-1">
+    {% if current_user.is_authenticated %}
+      <nav class="context-path" aria-label="Breadcrumb">
+        <div class="breadcrumb-trail">
+          <a class="breadcrumb-link" href="{{ url_for('dashboard') }}">Home</a>
+          <span class="breadcrumb-sep">/</span>
+          {% if section_href and endpoint != "dashboard" %}
+            <a class="breadcrumb-link" href="{{ section_href }}">{{ section_label }}</a>
+          {% else %}
+            <span class="breadcrumb-current">{{ section_label }}</span>
+          {% endif %}
+          {% if title and title not in ["Dashboard", section_label] %}
+            <span class="breadcrumb-sep">/</span>
+            <span class="breadcrumb-current">{{ title }}</span>
+          {% endif %}
+        </div>
+        <div class="breadcrumb-meta">{{ section_meta }}</div>
+      </nav>
+    {% endif %}
+
     {% if current_user.is_authenticated and story_mode_enabled %}
       <div class="card p-3 mb-3">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">

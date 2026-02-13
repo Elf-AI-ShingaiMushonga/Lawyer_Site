@@ -18,8 +18,13 @@
       <button class="btn btn-light">Search</button>
     </div>
   </form>
+  <div class="form-help">Tip: use at least 2 characters for broad cross-module search.</div>
 
-  {% if q %}
+  {% if q and query_too_short %}
+    <div class="alert alert-warning mt-3">
+      Search term too short. Enter at least 2 characters to run a platform-wide query.
+    </div>
+  {% elif q %}
     <div class="kpi-strip mt-3">
       <div class="kpi-pill">
         <div class="label">Matters</div>

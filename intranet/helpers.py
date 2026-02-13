@@ -41,16 +41,11 @@ def can_access_matter(matter_id: int) -> bool:
                 )
         return decision.allow
     except Exception:
+        # Fail closed on policy evaluation errors so ethical-wall denies
+        # and scoped access rules cannot be bypassed.
         if is_admin():
             return True
-        if not current_user.is_authenticated:
-            return False
-        return (
-            db.session.query(MatterMember)
-            .filter(MatterMember.matter_id == matter_id, MatterMember.user_id == current_user.id)
-            .first()
-            is not None
-        )
+        return False
 
 
 def has_active_legal_hold(matter_id: int | None) -> bool:

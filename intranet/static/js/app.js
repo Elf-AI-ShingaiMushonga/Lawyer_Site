@@ -60,6 +60,41 @@
     }
 
     const isOpen = () => !palette.hasAttribute("hidden");
+    let activeIndex = -1;
+
+    const visibleItems = () => items.filter((item) => !item.hidden);
+
+    const clearActiveItem = () => {
+      items.forEach((item) => item.classList.remove("is-active"));
+      activeIndex = -1;
+    };
+
+    const setActiveItem = (index) => {
+      const visible = visibleItems();
+      if (visible.length === 0) {
+        clearActiveItem();
+        return null;
+      }
+      const wrappedIndex = ((index % visible.length) + visible.length) % visible.length;
+      clearActiveItem();
+      const item = visible[wrappedIndex];
+      item.classList.add("is-active");
+      activeIndex = wrappedIndex;
+      item.scrollIntoView({ block: "nearest" });
+      return item;
+    };
+
+    const navigateToActiveItem = () => {
+      const visible = visibleItems();
+      if (visible.length === 0) {
+        return;
+      }
+      const target = activeIndex >= 0 ? visible[activeIndex] : visible[0];
+      const href = target.getAttribute("href") || target.href;
+      if (href) {
+        window.location.href = href;
+      }
+    };
 
     const filterItems = () => {
       const query = input.value.trim().toLowerCase();
@@ -84,6 +119,12 @@
           dynamicSearch.setAttribute("href", defaultSearchHref);
         }
       }
+
+      if (visibleCount === 0) {
+        clearActiveItem();
+      } else {
+        setActiveItem(0);
+      }
     };
 
     const openPalette = () => {
@@ -99,6 +140,7 @@
     const closePalette = () => {
       palette.setAttribute("hidden", "");
       document.body.style.overflow = "";
+      clearActiveItem();
     };
 
     openers.forEach((button) => {
@@ -127,13 +169,37 @@
 
     input.addEventListener("input", filterItems);
     input.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter") {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setActiveItem(activeIndex + 1);
         return;
       }
-      const firstVisible = items.find((item) => !item.hidden);
-      if (firstVisible) {
-        window.location.href = firstVisible.getAttribute("href") || firstVisible.href;
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setActiveItem(activeIndex - 1);
+        return;
       }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        navigateToActiveItem();
+      }
+    });
+
+    items.forEach((item) => {
+      item.addEventListener("mouseenter", () => {
+        const visible = visibleItems();
+        const index = visible.indexOf(item);
+        if (index >= 0) {
+          setActiveItem(index);
+        }
+      });
+      item.addEventListener("focus", () => {
+        const visible = visibleItems();
+        const index = visible.indexOf(item);
+        if (index >= 0) {
+          setActiveItem(index);
+        }
+      });
     });
 
     document.addEventListener("keydown", (event) => {
@@ -407,6 +473,31 @@
     return raw.toLowerCase();
   };
 
+  const normalizeCellText = (value) =>
+    String(value || "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const csvEscape = (value) => {
+    const normalized = normalizeCellText(value);
+    if (normalized.includes('"') || normalized.includes(",") || normalized.includes("\n")) {
+      return `"${normalized.replace(/"/g, '""')}"`;
+    }
+    return normalized;
+  };
+
+  const downloadCsv = (filename, csvText) => {
+    const blob = new Blob([`\ufeff${csvText}`], { type: "text/csv;charset=utf-8" });
+    const href = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(href), 1000);
+  };
+
   const initTableTools = () => {
     const buildAutoTableToolbars = () => {
       const explicitTargets = new Set(
@@ -483,6 +574,9 @@
       if (!body) {
         return;
       }
+      const headerLabels = Array.from(table.tHead?.rows.item(0)?.cells || []).map((cell) =>
+        normalizeCellText(cell.textContent)
+      );
 
       let rows = Array.from(body.querySelectorAll("tr[data-table-row]"));
       if (rows.length === 0) {
@@ -497,6 +591,11 @@
         if (!row.dataset.search) {
           row.dataset.search = row.textContent || "";
         }
+        Array.from(row.cells).forEach((cell, index) => {
+          if (!cell.getAttribute("data-label")) {
+            cell.setAttribute("data-label", headerLabels[index] || `Column ${index + 1}`);
+          }
+        });
       });
 
       let emptyRow = body.querySelector("[data-table-empty-row]");
@@ -544,6 +643,15 @@
         clearButton.setAttribute("data-table-clear", "");
         meta.appendChild(clearButton);
       }
+      let exportButton = toolbar.querySelector("[data-table-export]");
+      if (!(exportButton instanceof HTMLButtonElement)) {
+        exportButton = document.createElement("button");
+        exportButton.type = "button";
+        exportButton.className = "btn btn-sm btn-outline-light table-export-btn";
+        exportButton.textContent = "Export CSV";
+        exportButton.setAttribute("data-table-export", "");
+        meta.appendChild(exportButton);
+      }
       const headerCells = Array.from(table.querySelectorAll("thead th"));
       headerCells.forEach((header, index) => {
         if (!(header instanceof HTMLTableCellElement)) {
@@ -571,6 +679,8 @@
         count.textContent = `${visible} of ${rows.length} shown`;
       };
 
+      const visibleRows = () => rows.filter((row) => !row.hidden);
+
       const applySearch = () => {
         const query =
           search && search instanceof HTMLInputElement
@@ -595,6 +705,9 @@
           } else {
             emptyRow.hidden = visible > 0;
           }
+        }
+        if (exportButton) {
+          exportButton.disabled = visible === 0;
         }
         updateCount(visible);
       };
@@ -655,6 +768,32 @@
             search.focus();
           }
           applySearch();
+        });
+      }
+
+      if (exportButton) {
+        exportButton.addEventListener("click", () => {
+          const rowsToExport = visibleRows();
+          if (rowsToExport.length === 0) {
+            return;
+          }
+          const headers = headerLabels.length > 0
+            ? headerLabels
+            : Array.from(rowsToExport[0].cells).map((_, index) => `Column ${index + 1}`);
+          const csvRows = [
+            headers.map((value) => csvEscape(value)).join(","),
+            ...rowsToExport.map((row) =>
+              Array.from(row.cells)
+                .map((cell) => csvEscape(cell.textContent))
+                .join(",")
+            ),
+          ];
+          const baseName = (table.getAttribute("data-export-name") || table.id || "table-export")
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]+/g, "-")
+            .replace(/^-+|-+$/g, "") || "table-export";
+          const dateTag = new Date().toISOString().slice(0, 10);
+          downloadCsv(`${baseName}-${dateTag}.csv`, csvRows.join("\n"));
         });
       }
 
@@ -841,33 +980,40 @@
       const title = invalidControls.length === 1
         ? "Please correct 1 field before submitting."
         : `Please correct ${invalidControls.length} fields before submitting.`;
-      const items = invalidControls
-        .map((control) => {
-          const id = ensureControlId(form, control);
-          const label = getControlLabelText(form, control);
-          return `<li><button type="button" class="form-error-link" data-form-error-target="${id}">${label}</button></li>`;
-        })
-        .join("");
 
-      summary.innerHTML = `
-        <div class="form-error-summary-title">${title}</div>
-        <ul class="form-error-summary-list">${items}</ul>
-      `;
+      summary.replaceChildren();
+      const titleNode = document.createElement("div");
+      titleNode.className = "form-error-summary-title";
+      titleNode.textContent = title;
+      summary.appendChild(titleNode);
 
-      Array.from(summary.querySelectorAll("[data-form-error-target]")).forEach((button) => {
+      const listNode = document.createElement("ul");
+      listNode.className = "form-error-summary-list";
+      invalidControls.forEach((control) => {
+        const id = ensureControlId(form, control);
+        const label = getControlLabelText(form, control);
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "form-error-link";
+        button.setAttribute("data-form-error-target", id);
+        button.textContent = label;
         button.addEventListener("click", () => {
           const target = button.getAttribute("data-form-error-target") || "";
-          const control = target ? form.querySelector(`#${cssEscape(target)}`) : null;
+          const focusedControl = target ? form.querySelector(`#${cssEscape(target)}`) : null;
           if (
-            control instanceof HTMLInputElement ||
-            control instanceof HTMLTextAreaElement ||
-            control instanceof HTMLSelectElement
+            focusedControl instanceof HTMLInputElement ||
+            focusedControl instanceof HTMLTextAreaElement ||
+            focusedControl instanceof HTMLSelectElement
           ) {
-            control.focus();
-            control.scrollIntoView({ block: "center", behavior: "smooth" });
+            focusedControl.focus();
+            focusedControl.scrollIntoView({ block: "center", behavior: "smooth" });
           }
         });
+        item.appendChild(button);
+        listNode.appendChild(item);
       });
+      summary.appendChild(listNode);
 
       summary.focus();
     };
