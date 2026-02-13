@@ -323,6 +323,52 @@
       color: #896f6f;
     }
 
+    .action-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(225, 6, 0, 0.24);
+    }
+
+    .action-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 148px;
+      border: 1px solid rgba(225, 6, 0, 0.36);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      color: #5f2f2d;
+      text-decoration: none;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 780;
+      line-height: 1.2;
+      transition: all .16s ease;
+    }
+
+    .action-chip .code-like {
+      background: rgba(225, 6, 0, 0.08);
+      border-color: rgba(225, 6, 0, 0.24);
+      color: #8d4f4d;
+    }
+
+    .action-chip:hover {
+      color: #ffffff;
+      border-color: rgba(225, 6, 0, 0.86);
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      transform: translateY(-1px);
+    }
+
+    .action-chip:hover .code-like {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.16);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+
     .badge-soft {
       border: 1px solid rgba(225, 6, 0, 0.28);
       background: rgba(225, 6, 0, 0.1);
@@ -1787,6 +1833,21 @@
         background: rgba(225, 6, 0, 0.3);
         border-radius: 999px;
       }
+
+      .action-strip {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 4px;
+      }
+
+      .action-strip::-webkit-scrollbar {
+        height: 7px;
+      }
+
+      .action-strip::-webkit-scrollbar-thumb {
+        background: rgba(225, 6, 0, 0.3);
+        border-radius: 999px;
+      }
     }
 
     @media (max-width: 768px) {
@@ -2321,6 +2382,33 @@
           <span class="quick-chip-meta">Utilization and forecast</span>
         </a>
       </div>
+
+      <div class="action-strip" role="navigation" aria-label="Lawyer Core Actions">
+        <a class="action-chip" href="{{ url_for('matter_create') }}">
+          <span>Open Matter</span>
+          <span class="code-like">New</span>
+        </a>
+        <a class="action-chip" href="{{ url_for('matters') }}">
+          <span>Find Matter</span>
+          <span class="code-like">Hub</span>
+        </a>
+        <a class="action-chip" href="{{ url_for('calendar_my', filter='today') }}">
+          <span>Today Deadlines</span>
+          <span class="code-like">Now</span>
+        </a>
+        <a class="action-chip" href="{{ url_for('time_timers') }}">
+          <span>Start Timer</span>
+          <span class="code-like">Live</span>
+        </a>
+        <a class="action-chip" href="{{ url_for('time_entries') }}">
+          <span>Log Time</span>
+          <span class="code-like">Entry</span>
+        </a>
+        <a class="action-chip" href="{{ url_for('billing_invoices') }}">
+          <span>Generate Invoice</span>
+          <span class="code-like">Billing</span>
+        </a>
+      </div>
     {% endif %}
   </nav>
 
@@ -2352,6 +2440,20 @@
             <span>
               <span class="command-item-title">Create Matter</span>
               <span class="command-item-meta">Open a new engagement</span>
+            </span>
+            <span class="code-like">Action</span>
+          </a>
+          <a class="command-item" href="{{ url_for('time_timers') }}" data-command-item data-keywords="timer start switch live tracking">
+            <span>
+              <span class="command-item-title">Start Timer</span>
+              <span class="command-item-meta">Capture live billable work immediately</span>
+            </span>
+            <span class="code-like">Action</span>
+          </a>
+          <a class="command-item" href="{{ url_for('time_entries') }}" data-command-item data-keywords="time entries log review billable">
+            <span>
+              <span class="command-item-title">Log Time Entry</span>
+              <span class="command-item-meta">Record worked hours with matter coding</span>
             </span>
             <span class="code-like">Action</span>
           </a>

@@ -9,7 +9,7 @@ import uuid
 
 from flask import Response, abort, flash, redirect, request, send_from_directory, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.utils import secure_filename
 
@@ -358,6 +358,9 @@ def register_dms_routes(app):
         q = (request.args.get("q") or "").strip().lower()
         filter_type = (request.args.get("document_type") or "").strip().lower()
         filter_confidentiality = (request.args.get("confidentiality") or "").strip().lower()
+        page_number = request.args.get("page", default=1, type=int) or 1
+        if page_number < 1:
+            page_number = 1
 
         docs_query = DocumentRecord.query.filter(DocumentRecord.matter_id == matter_id)
         if filter_type:
@@ -366,7 +369,52 @@ def register_dms_routes(app):
             docs_query = docs_query.filter(
                 func.lower(func.coalesce(DocumentRecord.confidentiality, "")) == filter_confidentiality
             )
-        docs = docs_query.order_by(DocumentRecord.created_at.desc()).all()
+        if q:
+            like = f"%{q}%"
+            scope_doc_ids_query = docs_query.with_entities(DocumentRecord.id)
+            latest_version_no_subquery = (
+                db.session.query(
+                    DocumentVersion.document_id.label("document_id"),
+                    func.max(DocumentVersion.version_no).label("max_version_no"),
+                )
+                .filter(DocumentVersion.document_id.in_(scope_doc_ids_query))
+                .group_by(DocumentVersion.document_id)
+                .subquery()
+            )
+            latest_version_rows = (
+                db.session.query(DocumentVersion.document_id, DocumentVersion.id, DocumentVersion.notes)
+                .join(
+                    latest_version_no_subquery,
+                    (DocumentVersion.document_id == latest_version_no_subquery.c.document_id)
+                    & (DocumentVersion.version_no == latest_version_no_subquery.c.max_version_no),
+                )
+                .subquery()
+            )
+            ocr_match_doc_ids = (
+                db.session.query(latest_version_rows.c.document_id)
+                .join(DocumentOCRText, DocumentOCRText.document_version_id == latest_version_rows.c.id)
+                .filter(DocumentOCRText.extracted_text.ilike(like))
+            )
+            notes_match_doc_ids = db.session.query(latest_version_rows.c.document_id).filter(
+                latest_version_rows.c.notes.ilike(like)
+            )
+            docs_query = docs_query.filter(
+                or_(
+                    DocumentRecord.title.ilike(like),
+                    DocumentRecord.document_type.ilike(like),
+                    DocumentRecord.confidentiality.ilike(like),
+                    DocumentRecord.privilege_label.ilike(like),
+                    DocumentRecord.id.in_(notes_match_doc_ids),
+                    DocumentRecord.id.in_(ocr_match_doc_ids),
+                )
+            )
+
+        pagination = docs_query.order_by(DocumentRecord.created_at.desc()).paginate(
+            page=page_number,
+            per_page=50,
+            error_out=False,
+        )
+        docs = pagination.items
 
         latest_versions: dict[int, DocumentVersion] = {}
         if docs:
@@ -390,8 +438,9 @@ def register_dms_routes(app):
                 .all()
             )
             latest_versions = {row.document_id: row for row in latest_rows}
+
         search_scores: dict[int, int] = {}
-        if q:
+        if q and docs:
             version_ids = [v.id for v in latest_versions.values() if v is not None]
             ocr_rows = (
                 DocumentOCRText.query.filter(DocumentOCRText.document_version_id.in_(version_ids)).all()
@@ -399,7 +448,6 @@ def register_dms_routes(app):
                 else []
             )
             ocr_by_version = {row.document_version_id: (row.extracted_text or "").lower() for row in ocr_rows}
-            ranked: list[tuple[int, DocumentRecord]] = []
             for doc in docs:
                 score = 0
                 if q in (doc.title or "").lower():
@@ -417,10 +465,7 @@ def register_dms_routes(app):
                     if q in ocr_by_version.get(latest.id, ""):
                         score += 1
                 if score > 0:
-                    ranked.append((score, doc))
                     search_scores[doc.id] = score
-            ranked.sort(key=lambda item: (item[0], item[1].created_at), reverse=True)
-            docs = [item[1] for item in ranked]
 
         doc_templates = DocumentTemplate.query.order_by(DocumentTemplate.created_at.desc()).limit(300).all()
         audit("dms_repository_access", "Matter", matter_id)
@@ -435,6 +480,7 @@ def register_dms_routes(app):
             filter_confidentiality=filter_confidentiality,
             search_scores=search_scores,
             doc_templates=doc_templates,
+            pagination=pagination,
         )
 
     @app.route("/documents/<int:document_id>/versions", methods=["GET", "POST"])
@@ -539,10 +585,18 @@ def register_dms_routes(app):
             flash("Version uploaded.", "info")
             return redirect(url_for("document_versions", document_id=document_id))
 
-        versions = DocumentVersion.query.filter_by(document_id=document_id).order_by(DocumentVersion.version_no.desc()).all()
+        page_number = request.args.get("page", default=1, type=int) or 1
+        if page_number < 1:
+            page_number = 1
+        pagination = (
+            DocumentVersion.query.filter_by(document_id=document_id)
+            .order_by(DocumentVersion.version_no.desc())
+            .paginate(page=page_number, per_page=30, error_out=False)
+        )
+        versions = pagination.items
         locks = DocumentLock.query.filter_by(document_id=document_id).order_by(DocumentLock.locked_at.desc()).limit(10).all()
         audit("dms_version_access", "DocumentRecord", doc.id)
-        return page("Document Versions", "dms/versions.html", doc=doc, versions=versions, locks=locks)
+        return page("Document Versions", "dms/versions.html", doc=doc, versions=versions, locks=locks, pagination=pagination)
 
     @app.post("/documents/<int:document_id>/lock")
     @login_required

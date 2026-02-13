@@ -42,17 +42,17 @@
       <label class="form-label" for="invoice-matter-id">Matter</label>
       <select class="form-select" id="invoice-matter-id" name="matter_id" required>
         {% for matter in matters %}
-          <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+          <option value="{{ matter.id }}" {% if selected_matter_id and matter.id == selected_matter_id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
         {% endfor %}
       </select>
     </div>
     <div class="col-md-3">
       <label class="form-label" for="invoice-period-start">Period Start</label>
-      <input class="form-control" id="invoice-period-start" type="date" name="period_start" required>
+      <input class="form-control" id="invoice-period-start" type="date" name="period_start" value="{{ default_period_start }}" required>
     </div>
     <div class="col-md-3">
       <label class="form-label" for="invoice-period-end">Period End</label>
-      <input class="form-control" id="invoice-period-end" type="date" name="period_end" required>
+      <input class="form-control" id="invoice-period-end" type="date" name="period_end" value="{{ default_period_end }}" required>
     </div>
     <div class="col-md-3 d-grid">
       <label class="form-label" for="invoice-generate">Generate</label>

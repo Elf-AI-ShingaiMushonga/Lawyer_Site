@@ -2,24 +2,42 @@
 {% block content %}
 <div class="card p-3 mb-3">
   <h3 class="mb-1">Matter Notes - {{ m.matter_no }}</h3>
-  <p class="page-intro mb-0">Capture privileged notes and optional ACL restrictions for sensitive collaboration.</p>
-  <form method="post" class="row g-3 mt-1">
+  <p class="page-intro mb-0">Capture privileged notes with optional browser voice-note uploads for faster desk-to-file updates.</p>
+  <form method="post" class="row g-3 mt-1" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-12">
       <label class="form-label" for="matter-note-body">Note Body</label>
-      <textarea class="form-control" id="matter-note-body" name="body" rows="4" placeholder="Note details" required></textarea>
+      <textarea class="form-control" id="matter-note-body" name="body" rows="4" placeholder="Note details (optional if voice note is uploaded)"></textarea>
+      <div class="form-help">Provide text, a voice note, or both.</div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-6">
+      <label class="form-label" for="matter-note-voice">Voice Note (Optional)</label>
+      <input class="form-control" id="matter-note-voice" name="voice_note" type="file" accept="audio/*,.m4a,.mp3,.wav,.ogg,.webm">
+      <div class="d-flex flex-wrap align-items-center gap-2 mt-2" data-voice-recorder data-voice-file-input="matter-note-voice">
+        <button class="btn btn-sm btn-outline-light" type="button" data-voice-start>Record</button>
+        <button class="btn btn-sm btn-outline-light" type="button" data-voice-stop disabled>Stop</button>
+        <button class="btn btn-sm btn-outline-light" type="button" data-voice-clear>Clear</button>
+        <span class="muted small" data-voice-status>Recorder idle.</span>
+      </div>
+      <div class="form-help">Accepted formats: m4a, mp3, wav, ogg, webm.</div>
+    </div>
+    <div class="col-md-3">
       <label class="form-label" for="matter-note-tags">Tags</label>
       <input class="form-control" id="matter-note-tags" name="tags" placeholder="strategy, hearing, evidence">
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
       <label class="form-label" for="matter-note-privilege">Privilege Label</label>
       <input class="form-control" id="matter-note-privilege" name="privilege_label" placeholder="Attorney-Client">
     </div>
     <div class="col-md-4">
       <label class="form-label" for="matter-note-acl">ACL Emails</label>
-      <input class="form-control" id="matter-note-acl" name="acl_emails" placeholder="a@firm.com,b@firm.com">
+      <input class="form-control" id="matter-note-acl" name="acl_emails" list="matter-note-acl-suggestions" placeholder="a@firm.com,b@firm.com">
+      <datalist id="matter-note-acl-suggestions">
+        {% for member in team_users %}
+          <option value="{{ member.email }}">{{ member.full_name }}</option>
+        {% endfor %}
+      </datalist>
+      <div class="form-help">Comma-separated emails. Suggestions include active matter team users.</div>
     </div>
     <div class="col-12 d-grid d-md-flex justify-content-md-end">
       <button class="btn btn-light" type="submit" data-submitting-text="Adding...">Add Note</button>
@@ -30,9 +48,13 @@
 <div class="card p-3">
   <h4 class="mb-2">Notes</h4>
   {% if notes %}
-    <div class="list-stack">
+    <div class="table-tools mb-2" data-list-filter data-list-filter-target="matter-notes-list">
+      <input class="form-control" type="search" data-list-filter-search placeholder="Filter notes by body, tags, privilege, or date...">
+      <div class="table-count" data-list-filter-count aria-live="polite"></div>
+    </div>
+    <div class="list-stack" id="matter-notes-list">
       {% for note in notes %}
-        <div class="list-item">
+        <div class="list-item" data-list-item data-search="{{ note.created_at }} {{ note.tags or '' }} {{ note.privilege_label or '' }} {{ note.body }}">
           <div class="list-row">
             <div class="list-title">{{ note.created_at }}</div>
             <div class="list-meta">
@@ -41,9 +63,28 @@
             </div>
           </div>
           <div class="mt-1">{{ note.body }}</div>
+          {% set voice_rows = voice_notes_by_note_id.get(note.id, []) if voice_notes_by_note_id else [] %}
+          {% if voice_rows %}
+            <div class="mt-2">
+              <div class="small fw-semibold text-uppercase muted mb-1">Voice Notes</div>
+              {% for voice in voice_rows %}
+                <div class="form-section mb-2">
+                  <div class="list-row">
+                    <div class="small muted">{{ voice.original_filename }} • Uploaded {{ voice.uploaded_at }}</div>
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('doc_download', doc_id=voice.id) }}">Download</a>
+                  </div>
+                  <audio class="w-100 mt-2" controls preload="none">
+                    <source src="{{ url_for('doc_download', doc_id=voice.id, inline=1) }}" type="{{ voice.content_type or 'audio/mpeg' }}">
+                    Your browser does not support audio playback.
+                  </audio>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
         </div>
       {% endfor %}
     </div>
+    <div class="empty-state mt-2" data-list-filter-empty hidden>No notes match your filter.</div>
   {% else %}
     <div class="empty-state">No notes yet.</div>
   {% endif %}

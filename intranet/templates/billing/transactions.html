@@ -7,7 +7,7 @@
       <p class="page-intro mb-0">Track every billed line, adjustment, and payment transaction in one ledger-style view.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_transactions', matter_id=selected_matter_id, invoice_id=selected_invoice_id, start=start, end=end, format='csv') }}">Export CSV</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_transactions', matter_id=selected_matter_id, invoice_id=selected_invoice_id, txn_type=selected_txn_type, status=selected_status, start=start, end=end, format='csv') }}">Export CSV</a>
       <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_audit_log') }}">Audit Log</a>
     </div>
   </div>
@@ -36,13 +36,39 @@
       <div class="label">Net Outstanding</div>
       <div class="value">{{ "%.2f"|format(summary.net_outstanding_position or 0) }}</div>
     </div>
+    <div class="kpi-pill">
+      <div class="label">Pending Payments</div>
+      <div class="value">{{ payment_status_counts.get("pending", 0) }}</div>
+    </div>
   </div>
 </div>
 
 <div class="card p-3 mb-3">
   <h4 class="mb-2">Filters</h4>
+  <div class="filter-chip-row mb-3">
+    <a class="filter-chip-btn {% if selected_txn_type == 'all' and selected_status == 'all' %}is-active{% endif %}" href="{{ url_for('billing_transactions', matter_id=selected_matter_id or '', invoice_id=selected_invoice_id or '', start=start or '', end=end or '', txn_type='all', status='all') }}">
+      All
+      <span class="code-like">{{ summary.transaction_count }}</span>
+    </a>
+    <a class="filter-chip-btn {% if selected_txn_type == 'payment' and selected_status == 'all' %}is-active{% endif %}" href="{{ url_for('billing_transactions', matter_id=selected_matter_id or '', invoice_id=selected_invoice_id or '', start=start or '', end=end or '', txn_type='payment', status='all') }}">
+      Payments
+      <span class="code-like">{{ payment_status_counts.get("pending", 0) + payment_status_counts.get("settled", 0) + payment_status_counts.get("failed", 0) }}</span>
+    </a>
+    <a class="filter-chip-btn {% if selected_txn_type == 'payment' and selected_status == 'pending' %}is-active{% endif %}" href="{{ url_for('billing_transactions', matter_id=selected_matter_id or '', invoice_id=selected_invoice_id or '', start=start or '', end=end or '', txn_type='payment', status='pending') }}">
+      Pending
+      <span class="code-like">{{ payment_status_counts.get("pending", 0) }}</span>
+    </a>
+    <a class="filter-chip-btn {% if selected_txn_type == 'payment' and selected_status == 'settled' %}is-active{% endif %}" href="{{ url_for('billing_transactions', matter_id=selected_matter_id or '', invoice_id=selected_invoice_id or '', start=start or '', end=end or '', txn_type='payment', status='settled') }}">
+      Settled
+      <span class="code-like">{{ payment_status_counts.get("settled", 0) }}</span>
+    </a>
+    <a class="filter-chip-btn {% if selected_txn_type == 'payment' and selected_status == 'failed' %}is-active{% endif %}" href="{{ url_for('billing_transactions', matter_id=selected_matter_id or '', invoice_id=selected_invoice_id or '', start=start or '', end=end or '', txn_type='payment', status='failed') }}">
+      Failed
+      <span class="code-like">{{ payment_status_counts.get("failed", 0) }}</span>
+    </a>
+  </div>
   <form method="get" class="row g-3 align-items-end">
-    <div class="col-md-4">
+    <div class="col-lg-4 col-md-6">
       <label class="form-label" for="transactions-matter-id">Matter</label>
       <select class="form-select" id="transactions-matter-id" name="matter_id">
         <option value="">All matters</option>
@@ -53,29 +79,82 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-2">
+    <div class="col-lg-2 col-md-6">
       <label class="form-label" for="transactions-invoice-id">Invoice ID</label>
       <input class="form-control" id="transactions-invoice-id" type="number" min="1" name="invoice_id" value="{{ selected_invoice_id or '' }}">
     </div>
-    <div class="col-md-2">
+    <div class="col-lg-2 col-md-6">
       <label class="form-label" for="transactions-start">Start</label>
       <input class="form-control" id="transactions-start" type="date" name="start" value="{{ start or '' }}">
     </div>
-    <div class="col-md-2">
+    <div class="col-lg-2 col-md-6">
       <label class="form-label" for="transactions-end">End</label>
       <input class="form-control" id="transactions-end" type="date" name="end" value="{{ end or '' }}">
     </div>
-    <div class="col-md-2 d-grid">
+    <div class="col-lg-3 col-md-6">
+      <label class="form-label" for="transactions-type">Type</label>
+      <select class="form-select" id="transactions-type" name="txn_type">
+        <option value="all" {% if selected_txn_type == "all" %}selected{% endif %}>all</option>
+        <option value="bill_line" {% if selected_txn_type == "bill_line" %}selected{% endif %}>bill_line</option>
+        <option value="adjustment" {% if selected_txn_type == "adjustment" %}selected{% endif %}>adjustment</option>
+        <option value="payment" {% if selected_txn_type == "payment" %}selected{% endif %}>payment</option>
+      </select>
+    </div>
+    <div class="col-lg-3 col-md-6">
+      <label class="form-label" for="transactions-status">Status</label>
+      <select class="form-select" id="transactions-status" name="status">
+        <option value="all" {% if selected_status == "all" %}selected{% endif %}>all</option>
+        <option value="pending" {% if selected_status == "pending" %}selected{% endif %}>pending</option>
+        <option value="settled" {% if selected_status == "settled" %}selected{% endif %}>settled</option>
+        <option value="failed" {% if selected_status == "failed" %}selected{% endif %}>failed</option>
+      </select>
+    </div>
+    <div class="col-lg-3 col-md-6 d-grid">
       <label class="form-label visually-hidden" for="transactions-apply">Apply</label>
       <button class="btn btn-light" id="transactions-apply" type="submit">Apply</button>
     </div>
+    <div class="col-lg-3 col-md-6 d-grid">
+      <a class="btn btn-outline-light" href="{{ url_for('billing_transactions') }}">Clear</a>
+    </div>
   </form>
 </div>
+
+{% if pending_payment_rows %}
+  <div class="card p-3 mb-3">
+    <div class="toolbar-row">
+      <div>
+        <h4 class="mb-1">Pending Payment Queue</h4>
+        <div class="muted small">Open invoice records to settle or resolve pending payment requisitions.</div>
+      </div>
+      <span class="badge badge-soft status-badge">{{ pending_payment_rows|length }}</span>
+    </div>
+    <div class="list-stack mt-2">
+      {% for row in pending_payment_rows %}
+        <a class="list-item text-decoration-none" href="{{ url_for('billing_invoice_detail', invoice_id=row.invoice_id) }}">
+          <div class="list-row">
+            <div>
+              <div class="list-title">{{ row.client_name }} • Invoice #{{ row.invoice_id }}</div>
+              <div class="list-meta mt-1">
+                <span>{{ row.matter_no }}</span>
+                <span>Ref {{ row.reference }}</span>
+                <span>{{ row.occurred_at }}</span>
+              </div>
+            </div>
+            <span class="badge status-badge status-on-hold">{{ "%.2f"|format(row.amount or 0) }}</span>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}
 
 <div class="card p-3">
   <div class="table-tools" data-table-tools data-table-target="billing-transactions-table">
     <input class="form-control" type="search" data-table-search placeholder="Filter by transaction type, matter, invoice, status, or reference...">
     <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="muted small mb-2">
+    Showing {{ rows|length }} of {{ summary.transaction_count }} transactions on page {{ page_number }} of {{ total_pages }}.
   </div>
   <div class="table-responsive">
     <table class="table" id="billing-transactions-table">
@@ -114,5 +193,52 @@
       </tbody>
     </table>
   </div>
+  {% if total_pages > 1 %}
+    {% set start_page = page_number - 2 if page_number - 2 > 1 else 1 %}
+    {% set end_page = page_number + 2 if page_number + 2 < total_pages else total_pages %}
+    <nav class="mt-3" aria-label="Billing transaction pages">
+      <ul class="pagination pagination-sm mb-0 flex-wrap">
+        <li class="page-item {{ 'disabled' if not has_prev }}">
+          {% if has_prev %}
+            <a class="page-link" href="{{ url_for('billing_transactions', matter_id=selected_matter_id or '', invoice_id=selected_invoice_id or '', txn_type=selected_txn_type, status=selected_status, start=start or '', end=end or '', page=prev_page) }}">Previous</a>
+          {% else %}
+            <span class="page-link">Previous</span>
+          {% endif %}
+        </li>
+
+        {% if start_page > 1 %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('billing_transactions', matter_id=selected_matter_id or '', invoice_id=selected_invoice_id or '', txn_type=selected_txn_type, status=selected_status, start=start or '', end=end or '', page=1) }}">1</a></li>
+          {% if start_page > 2 %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+        {% endif %}
+
+        {% for page_no in range(start_page, end_page + 1) %}
+          <li class="page-item {{ 'active' if page_no == page_number }}">
+            {% if page_no == page_number %}
+              <span class="page-link">{{ page_no }}</span>
+            {% else %}
+              <a class="page-link" href="{{ url_for('billing_transactions', matter_id=selected_matter_id or '', invoice_id=selected_invoice_id or '', txn_type=selected_txn_type, status=selected_status, start=start or '', end=end or '', page=page_no) }}">{{ page_no }}</a>
+            {% endif %}
+          </li>
+        {% endfor %}
+
+        {% if end_page < total_pages %}
+          {% if end_page < total_pages - 1 %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('billing_transactions', matter_id=selected_matter_id or '', invoice_id=selected_invoice_id or '', txn_type=selected_txn_type, status=selected_status, start=start or '', end=end or '', page=total_pages) }}">{{ total_pages }}</a></li>
+        {% endif %}
+
+        <li class="page-item {{ 'disabled' if not has_next }}">
+          {% if has_next %}
+            <a class="page-link" href="{{ url_for('billing_transactions', matter_id=selected_matter_id or '', invoice_id=selected_invoice_id or '', txn_type=selected_txn_type, status=selected_status, start=start or '', end=end or '', page=next_page) }}">Next</a>
+          {% else %}
+            <span class="page-link">Next</span>
+          {% endif %}
+        </li>
+      </ul>
+    </nav>
+  {% endif %}
 </div>
 {% endblock %}

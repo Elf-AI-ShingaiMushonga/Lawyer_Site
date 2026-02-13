@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
 {% set retained_letters = letters | selectattr('status', 'equalto', 'signed') | list | length %}
+{% set quote_drafts = quote_status_counts.get('draft', 0) if quote_status_counts else 0 %}
+{% set quote_sent = quote_status_counts.get('sent', 0) if quote_status_counts else 0 %}
+{% set quote_accepted = quote_status_counts.get('accepted', 0) if quote_status_counts else 0 %}
 
 <div class="card p-3 mb-3">
   <div class="toolbar-row">
@@ -27,12 +30,46 @@
       <div class="label">Signed Letters</div>
       <div class="value">{{ retained_letters }}</div>
     </div>
+    <div class="kpi-pill">
+      <div class="label">Quote Drafts</div>
+      <div class="value">{{ quote_drafts }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Quotes Sent</div>
+      <div class="value">{{ quote_sent }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Quotes Accepted</div>
+      <div class="value">{{ quote_accepted }}</div>
+    </div>
+  </div>
+  <div class="action-strip mt-3">
+    <a class="action-chip" href="#lead-stage-panel">
+      <span>Stage &amp; Notes</span>
+      <span class="code-like">1</span>
+    </a>
+    <a class="action-chip" href="#lead-follow-up-panel">
+      <span>Follow-up</span>
+      <span class="code-like">2</span>
+    </a>
+    <a class="action-chip" href="#lead-intake-panel">
+      <span>Intake &amp; Engagement</span>
+      <span class="code-like">3</span>
+    </a>
+    <a class="action-chip" href="#lead-quote-panel">
+      <span>Quote Builder</span>
+      <span class="code-like">4</span>
+    </a>
+    <a class="action-chip" href="#lead-conflict-panel">
+      <span>Conflict Results</span>
+      <span class="code-like">5</span>
+    </a>
   </div>
 </div>
 
 <div class="row g-3">
   <div class="col-lg-5">
-    <div class="card p-3 mb-3">
+    <div class="card p-3 mb-3" id="lead-stage-panel">
       <h4 class="mb-2">Update Stage</h4>
       <form method="post" class="row g-3 align-items-end">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -56,14 +93,15 @@
       </form>
     </div>
 
-    <div class="card p-3 mb-3">
+    <div class="card p-3 mb-3" id="lead-follow-up-panel">
       <h4 class="mb-2">Add Follow-up</h4>
       <form method="post" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="follow_up">
         <div class="col-md-6">
-          <label class="form-label" for="follow-up-due">Due At (ISO)</label>
-          <input class="form-control" id="follow-up-due" name="due_at" placeholder="2026-03-01T10:00:00" required>
+          <label class="form-label" for="follow-up-due">Due At</label>
+          <input class="form-control" id="follow-up-due" name="due_at" type="datetime-local" value="{{ followup_default_due_at }}" required>
+          <div class="form-help">Use your local timezone for reminders.</div>
         </div>
         <div class="col-md-6">
           <label class="form-label" for="follow-up-note">Note</label>
@@ -75,16 +113,25 @@
       </form>
     </div>
 
-    <div class="card p-3">
+    <div class="card p-3" id="lead-intake-panel">
       <h4 class="mb-2">Create Intake / Engagement</h4>
       <form method="post" class="row g-3 mb-3 align-items-end">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="intake">
         <div class="col-md-8">
-          <label class="form-label" for="lead-intake-matter">Matter ID (Optional)</label>
-          <input class="form-control" id="lead-intake-matter" name="matter_id" type="number" min="1" placeholder="Existing matter id">
+          <label class="form-label" for="lead-intake-matter-select">Matter (Optional)</label>
+          <select class="form-select" id="lead-intake-matter-select" name="matter_id_select">
+            <option value="">Not linked yet</option>
+            {% for matter in matters %}
+              <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+            {% endfor %}
+          </select>
         </div>
-        <div class="col-md-4 d-grid">
+        <div class="col-md-4">
+          <label class="form-label" for="lead-intake-matter-id">Or Matter ID</label>
+          <input class="form-control" id="lead-intake-matter-id" name="matter_id" type="number" min="1" placeholder="Optional">
+        </div>
+        <div class="col-12 d-grid">
           <label class="form-label visually-hidden" for="lead-intake-create">Create Intake</label>
           <button class="btn btn-outline-light" id="lead-intake-create" type="submit" data-submitting-text="Creating...">Create Intake</button>
         </div>
@@ -93,20 +140,105 @@
       <form method="post" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="engagement">
-        <div class="col-md-3">
-          <label class="form-label" for="engage-matter-id">Matter ID</label>
-          <input class="form-control" id="engage-matter-id" name="matter_id" type="number" min="1" required>
+        <div class="col-md-6">
+          <label class="form-label" for="engage-matter-select">Matter</label>
+          <select class="form-select" id="engage-matter-select" name="matter_id_select">
+            <option value="">Select a matter</option>
+            {% for matter in matters %}
+              <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+            {% endfor %}
+          </select>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
+          <label class="form-label" for="engage-matter-id">Or ID</label>
+          <input class="form-control" id="engage-matter-id" name="matter_id" type="number" min="1" placeholder="ID">
+        </div>
+        <div class="col-md-4">
           <label class="form-label" for="engage-template">Template</label>
           <input class="form-control" id="engage-template" name="template_name" value="default">
         </div>
-        <div class="col-md-6">
+        <div class="col-12">
           <label class="form-label" for="engage-content">Content</label>
-          <input class="form-control" id="engage-content" name="content" placeholder="Engagement terms">
+          <textarea class="form-control" id="engage-content" name="content" rows="2" placeholder="Engagement terms"></textarea>
         </div>
         <div class="col-12 d-grid">
           <button class="btn btn-outline-light" type="submit" data-submitting-text="Creating...">Create Engagement</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card p-3 mt-3" id="lead-quote-panel">
+      <h4 class="mb-2">Quotation Builder</h4>
+      <div class="muted small mb-2">Draft proposal-stage quotes for potential clients (fixed, hourly, or capped models).</div>
+      <form method="post" class="row g-3" data-quote-form>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="quote_create">
+        <div class="col-md-8">
+          <label class="form-label" for="quote-title">Quote Title</label>
+          <input class="form-control" id="quote-title" name="quote_title" placeholder="Commercial recovery phase 1">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="quote-fee-model">Fee Model</label>
+          <select class="form-select" id="quote-fee-model" name="fee_model" data-quote-field="fee-model">
+            {% for fee_model in quote_fee_models %}
+              <option value="{{ fee_model }}">{{ fee_model }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-help" data-quote-fee-hint>Set a proposal structure that matches your pricing strategy.</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="quote-currency">Currency</label>
+          <input class="form-control" id="quote-currency" name="currency" value="ZAR">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="quote-estimated-amount">Estimated Fee</label>
+          <input class="form-control" id="quote-estimated-amount" name="estimated_amount" type="number" min="0" step="0.01" placeholder="0.00" data-quote-field="estimated-amount">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="quote-hours">Estimated Hours</label>
+          <input class="form-control" id="quote-hours" name="estimated_hours" type="number" min="0" step="0.25" placeholder="0.00" data-quote-field="hours">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="quote-rate">Hourly Rate</label>
+          <input class="form-control" id="quote-rate" name="hourly_rate" type="number" min="0" step="0.01" placeholder="0.00" data-quote-field="rate">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="quote-disbursement-estimate">Disbursements</label>
+          <input class="form-control" id="quote-disbursement-estimate" name="disbursement_estimate" type="number" min="0" step="0.01" value="0.00" data-quote-field="disbursements">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="quote-tax-rate">Tax Rate (%)</label>
+          <input class="form-control" id="quote-tax-rate" name="tax_rate" type="number" min="0" step="0.01" value="15.00" data-quote-field="tax-rate">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="quote-valid-until">Valid Until</label>
+          <input class="form-control" id="quote-valid-until" name="valid_until" type="date">
+        </div>
+        <div class="col-12">
+          <div class="form-section">
+            <div class="list-row">
+              <div>
+                <div class="small muted">Live Estimate</div>
+                <div class="list-title">Total <span data-quote-summary-grand-total>0.00</span></div>
+              </div>
+              <div class="list-meta">
+                <span>Base <span data-quote-summary-base>0.00</span></span>
+                <span>Disbursements <span data-quote-summary-disbursements>0.00</span></span>
+                <span>Tax <span data-quote-summary-tax>0.00</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="quote-scope">Scope Summary</label>
+          <textarea class="form-control" id="quote-scope" name="scope_summary" rows="2" placeholder="Scope, deliverables, and assumptions"></textarea>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="quote-assumptions">Assumptions</label>
+          <textarea class="form-control" id="quote-assumptions" name="assumptions" rows="2" placeholder="Dependencies, exclusions, and client responsibilities"></textarea>
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Quote Draft</button>
         </div>
       </form>
     </div>
@@ -145,6 +277,65 @@
     </div>
 
     <div class="card p-3 mb-3">
+      <h4 class="mb-2">Quotations</h4>
+      {% if quotes %}
+        <div class="list-stack">
+          {% for quote in quotes %}
+            {% set totals = quote_financials.get(quote.id, {}) %}
+            <div class="list-item">
+              <div class="list-row">
+                <div>
+                  <div class="list-title">{{ quote.title }}</div>
+                  <div class="list-meta">
+                    <span class="badge badge-soft status-badge">{{ quote.status }}</span>
+                    <span>{{ quote.fee_model }}</span>
+                    <span>{{ quote.currency }} {{ "%.2f"|format(totals.get('grand_total', 0)) }}</span>
+                    <span>valid {{ quote.valid_until or '-' }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="muted small mt-1">
+                Fee {{ "%.2f"|format(totals.get('base', 0)) }}
+                • Disbursements {{ "%.2f"|format(totals.get('disbursements', 0)) }}
+                • Tax {{ "%.2f"|format(totals.get('tax_amount', 0)) }} ({{ "%.2f"|format(totals.get('tax_rate', 0)) }}%)
+              </div>
+              {% if quote.scope_summary %}
+                <div class="mt-1">{{ quote.scope_summary }}</div>
+              {% endif %}
+              {% if quote.assumptions %}
+                <div class="muted small mt-1">Assumptions: {{ quote.assumptions }}</div>
+              {% endif %}
+              {% if quote.status_note %}
+                <div class="muted small mt-1">Status note: {{ quote.status_note }}</div>
+              {% endif %}
+              <form method="post" action="{{ url_for('crm_quote_status', quote_id=quote.id) }}" class="row g-2 mt-2 align-items-end">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-md-4">
+                  <label class="form-label" for="quote-status-{{ quote.id }}">Status</label>
+                  <select class="form-select" id="quote-status-{{ quote.id }}" name="status">
+                    {% for status in quote_statuses %}
+                      <option value="{{ status }}" {% if status == quote.status %}selected{% endif %}>{{ status }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" for="quote-status-note-{{ quote.id }}">Status Note</label>
+                  <input class="form-control" id="quote-status-note-{{ quote.id }}" name="status_note" placeholder="Optional context for status change">
+                </div>
+                <div class="col-md-2 d-grid">
+                  <label class="form-label visually-hidden" for="quote-status-save-{{ quote.id }}">Save</label>
+                  <button class="btn btn-sm btn-outline-light" id="quote-status-save-{{ quote.id }}" type="submit" data-submitting-text="Saving...">Update</button>
+                </div>
+              </form>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">No quotations yet.</div>
+      {% endif %}
+    </div>
+
+    <div class="card p-3 mb-3" id="lead-conflict-panel">
       <h4 class="mb-2">Intake + Conflict</h4>
       {% if intakes %}
         <div class="list-stack">

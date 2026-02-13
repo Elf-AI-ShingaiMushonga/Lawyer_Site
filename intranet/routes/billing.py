@@ -124,9 +124,14 @@ def _is_settled_payment_row(payment: PaymentAllocation) -> bool:
 
 
 def _settled_paid_total_for_invoice(invoice_id: int) -> float:
-    query = PaymentAllocation.query.filter(PaymentAllocation.invoice_id == invoice_id)
-    query = query.filter(_settled_payment_clause())
-    return round(sum(float(p.amount or 0.0) for p in query.all()), 2)
+    total = (
+        db.session.query(func.coalesce(func.sum(PaymentAllocation.amount), 0.0))
+        .filter(PaymentAllocation.invoice_id == invoice_id)
+        .filter(_settled_payment_clause())
+        .scalar()
+        or 0.0
+    )
+    return round(float(total), 2)
 
 
 def _parse_optional_datetime(raw: str | None) -> dt.datetime | None:
@@ -294,6 +299,7 @@ def register_billing_routes(app):
         page_number = request.args.get("page", default=1, type=int) or 1
         if page_number < 1:
             page_number = 1
+        selected_matter_id = request.args.get("matter_id", type=int)
         invoice_query = Invoice.query
         matter_query = Matter.query
         if not is_admin():
@@ -307,14 +313,25 @@ def register_billing_routes(app):
         pagination = invoice_query.order_by(Invoice.created_at.desc()).paginate(page=page_number, per_page=50, error_out=False)
         rows = pagination.items
         matters = matter_query.order_by(Matter.opened_at.desc()).limit(200).all()
-        matter_ids_for_display = {int(row.matter_id) for row in rows if row.matter_id}
         selectable_matter_ids = {matter.id for matter in matters}
+        if selected_matter_id and selected_matter_id not in selectable_matter_ids:
+            selected_matter = db.session.get(Matter, selected_matter_id)
+            if selected_matter and can_access_matter(selected_matter.id):
+                matters = [selected_matter] + matters
+                selectable_matter_ids.add(selected_matter.id)
+            else:
+                selected_matter_id = None
+
+        matter_ids_for_display = {int(row.matter_id) for row in rows if row.matter_id}
         missing_matter_ids = matter_ids_for_display - selectable_matter_ids
         display_matters = list(matters)
         if missing_matter_ids:
             display_matters.extend(Matter.query.filter(Matter.id.in_(missing_matter_ids)).all())
         matter_lookup = {matter.id: matter for matter in display_matters}
 
+        today = dt.date.today()
+        default_period_start = request.args.get("period_start", type=str) or today.replace(day=1).isoformat()
+        default_period_end = request.args.get("period_end", type=str) or today.isoformat()
         total_billed = float(invoice_query.with_entities(func.coalesce(func.sum(Invoice.total), 0.0)).scalar() or 0.0)
         approved_count = invoice_query.filter(Invoice.status == "approved").count()
         draft_count = invoice_query.filter(Invoice.status == "draft").count()
@@ -329,6 +346,9 @@ def register_billing_routes(app):
             approved_count=approved_count,
             draft_count=draft_count,
             total_billed=total_billed,
+            selected_matter_id=selected_matter_id,
+            default_period_start=default_period_start,
+            default_period_end=default_period_end,
         )
 
     @app.get("/billing/invoices/<int:invoice_id>")
@@ -1100,6 +1120,12 @@ def register_billing_routes(app):
         scope_ids = None if is_admin() else visible_matter_ids()
         matter_filter = request.args.get("matter_id", type=int)
         invoice_filter = request.args.get("invoice_id", type=int)
+        txn_type_filter = (request.args.get("txn_type") or "all").strip().lower() or "all"
+        status_filter = (request.args.get("status") or "all").strip().lower() or "all"
+        page_number = request.args.get("page", default=1, type=int) or 1
+        if page_number < 1:
+            page_number = 1
+        per_page = 100
         start_date = None
         end_date = None
         start_raw = (request.args.get("start") or "").strip()
@@ -1132,12 +1158,16 @@ def register_billing_routes(app):
         if end_date:
             invoice_query = invoice_query.filter(Invoice.created_at <= dt.datetime.combine(end_date, dt.time.max))
 
-        invoices = invoice_query.order_by(Invoice.created_at.desc(), Invoice.id.desc()).limit(1000).all()
+        invoices = invoice_query.order_by(Invoice.created_at.desc(), Invoice.id.desc()).limit(800).all()
         invoice_ids = [inv.id for inv in invoices]
         invoice_by_id = {inv.id: inv for inv in invoices}
         matter_ids = sorted({inv.matter_id for inv in invoices})
-        matters = matter_query.order_by(Matter.opened_at.desc()).limit(400).all()
-        matter_by_id = {m.id: m for m in Matter.query.filter(Matter.id.in_(matter_ids)).all()} if matter_ids else {}
+        matters = matter_query.order_by(Matter.opened_at.desc()).limit(250).all()
+        matter_by_id = {m.id: m for m in matters if m.id in matter_ids}
+        missing_matter_ids = [matter_id for matter_id in matter_ids if matter_id not in matter_by_id]
+        if missing_matter_ids:
+            for row in Matter.query.filter(Matter.id.in_(missing_matter_ids)).all():
+                matter_by_id[row.id] = row
 
         rows: list[dict[str, object]] = []
         billed_total = 0.0
@@ -1145,69 +1175,84 @@ def register_billing_routes(app):
         settled_total = 0.0
         pending_total = 0.0
 
+        include_lines = txn_type_filter in {"all", "bill_line"}
+        include_adjustments = txn_type_filter in {"all", "adjustment"}
+        include_payments = txn_type_filter in {"all", "payment"}
+
         if invoice_ids:
-            line_rows = (
-                InvoiceLine.query.filter(InvoiceLine.invoice_id.in_(invoice_ids))
-                .order_by(InvoiceLine.invoice_id.desc(), InvoiceLine.id.desc())
-                .all()
-            )
-            for line in line_rows:
-                inv = invoice_by_id.get(line.invoice_id)
-                if inv is None:
-                    continue
-                matter = matter_by_id.get(inv.matter_id)
-                gross = round(float(line.amount or 0.0) + float(line.tax_amount or 0.0), 2)
-                billed_total += gross
-                rows.append(
-                    {
-                        "occurred_at": inv.created_at,
-                        "transaction_type": "bill_line",
-                        "transaction_id": f"line-{line.id}",
-                        "invoice_id": inv.id,
-                        "matter_id": inv.matter_id,
-                        "matter_no": matter.matter_no if matter else str(inv.matter_id),
-                        "client_name": inv.client_name,
-                        "description": line.description,
-                        "amount": gross,
-                        "impact_amount": gross,
-                        "status": inv.status,
-                        "reference": line.task_code or line.activity_code or "-",
-                    }
+            if include_lines:
+                line_rows = (
+                    InvoiceLine.query.filter(InvoiceLine.invoice_id.in_(invoice_ids))
+                    .order_by(InvoiceLine.invoice_id.desc(), InvoiceLine.id.desc())
+                    .all()
                 )
+                for line in line_rows:
+                    inv = invoice_by_id.get(line.invoice_id)
+                    if inv is None:
+                        continue
+                    matter = matter_by_id.get(inv.matter_id)
+                    gross = round(float(line.amount or 0.0) + float(line.tax_amount or 0.0), 2)
+                    billed_total += gross
+                    rows.append(
+                        {
+                            "occurred_at": inv.created_at,
+                            "transaction_type": "bill_line",
+                            "transaction_id": f"line-{line.id}",
+                            "invoice_id": inv.id,
+                            "matter_id": inv.matter_id,
+                            "matter_no": matter.matter_no if matter else str(inv.matter_id),
+                            "client_name": inv.client_name,
+                            "description": line.description,
+                            "amount": gross,
+                            "impact_amount": gross,
+                            "status": inv.status,
+                            "reference": line.task_code or line.activity_code or "-",
+                        }
+                    )
 
-            adjustment_rows = (
-                InvoiceAdjustment.query.filter(InvoiceAdjustment.invoice_id.in_(invoice_ids))
-                .order_by(InvoiceAdjustment.created_at.desc(), InvoiceAdjustment.id.desc())
-                .all()
-            )
-            for adj in adjustment_rows:
-                inv = invoice_by_id.get(adj.invoice_id)
-                if inv is None:
-                    continue
-                matter = matter_by_id.get(inv.matter_id)
-                amount = round(float(adj.amount or 0.0), 2)
-                adjustment_total += amount
-                rows.append(
-                    {
-                        "occurred_at": adj.created_at,
-                        "transaction_type": "adjustment",
-                        "transaction_id": f"adj-{adj.id}",
-                        "invoice_id": inv.id,
-                        "matter_id": inv.matter_id,
-                        "matter_no": matter.matter_no if matter else str(inv.matter_id),
-                        "client_name": inv.client_name,
-                        "description": adj.reason,
-                        "amount": amount,
-                        "impact_amount": amount,
-                        "status": adj.adjustment_type,
-                        "reference": "-",
-                    }
+            if include_adjustments:
+                adjustment_rows = (
+                    InvoiceAdjustment.query.filter(InvoiceAdjustment.invoice_id.in_(invoice_ids))
+                    .order_by(InvoiceAdjustment.created_at.desc(), InvoiceAdjustment.id.desc())
+                    .all()
                 )
+                for adj in adjustment_rows:
+                    inv = invoice_by_id.get(adj.invoice_id)
+                    if inv is None:
+                        continue
+                    matter = matter_by_id.get(inv.matter_id)
+                    amount = round(float(adj.amount or 0.0), 2)
+                    adjustment_total += amount
+                    rows.append(
+                        {
+                            "occurred_at": adj.created_at,
+                            "transaction_type": "adjustment",
+                            "transaction_id": f"adj-{adj.id}",
+                            "invoice_id": inv.id,
+                            "matter_id": inv.matter_id,
+                            "matter_no": matter.matter_no if matter else str(inv.matter_id),
+                            "client_name": inv.client_name,
+                            "description": adj.reason,
+                            "amount": amount,
+                            "impact_amount": amount,
+                            "status": adj.adjustment_type,
+                            "reference": "-",
+                        }
+                    )
 
+            payment_query = PaymentAllocation.query.filter(PaymentAllocation.invoice_id.in_(invoice_ids))
+            if status_filter == "pending":
+                payment_query = payment_query.filter(PaymentAllocation.status == "pending")
+            elif status_filter == "failed":
+                payment_query = payment_query.filter(PaymentAllocation.status == "failed")
+            elif status_filter == "settled":
+                payment_query = payment_query.filter(
+                    or_(PaymentAllocation.status == "settled", PaymentAllocation.status.is_(None))
+                )
             payment_rows = (
-                PaymentAllocation.query.filter(PaymentAllocation.invoice_id.in_(invoice_ids))
-                .order_by(PaymentAllocation.allocated_at.desc(), PaymentAllocation.id.desc())
-                .all()
+                payment_query.order_by(PaymentAllocation.allocated_at.desc(), PaymentAllocation.id.desc()).all()
+                if include_payments
+                else []
             )
             for pay in payment_rows:
                 inv = invoice_by_id.get(pay.invoice_id)
@@ -1239,8 +1284,39 @@ def register_billing_routes(app):
                 )
 
         rows.sort(key=lambda row: ((row["occurred_at"] or dt.datetime.min), str(row["transaction_id"])), reverse=True)
+        if txn_type_filter != "all":
+            rows = [row for row in rows if str(row.get("transaction_type") or "").strip().lower() == txn_type_filter]
+        if status_filter != "all":
+            rows = [row for row in rows if str(row.get("status") or "").strip().lower() == status_filter]
+
+        payment_status_counts = {"pending": 0, "settled": 0, "failed": 0}
+        if invoice_ids:
+            payment_status_rows = (
+                db.session.query(func.coalesce(PaymentAllocation.status, "settled").label("status"), func.count(PaymentAllocation.id))
+                .filter(PaymentAllocation.invoice_id.in_(invoice_ids))
+                .group_by(func.coalesce(PaymentAllocation.status, "settled"))
+                .all()
+            )
+            for status, count in payment_status_rows:
+                normalized = str(status or "").strip().lower()
+                if normalized in payment_status_counts:
+                    payment_status_counts[normalized] = int(count)
+        pending_payment_rows = [
+            row
+            for row in rows
+            if row.get("transaction_type") == "payment" and str(row.get("status") or "").strip().lower() == "pending"
+        ][:10]
+
+        total_rows = len(rows)
+        total_pages = max(1, (total_rows + per_page - 1) // per_page)
+        if page_number > total_pages:
+            page_number = total_pages
+        start_index = (page_number - 1) * per_page
+        end_index = start_index + per_page
+        rows_for_page = rows[start_index:end_index]
+
         summary = {
-            "transaction_count": len(rows),
+            "transaction_count": total_rows,
             "billed_total": round(billed_total, 2),
             "adjustment_total": round(adjustment_total, 2),
             "settled_collected_total": round(settled_total, 2),
@@ -1256,9 +1332,11 @@ def register_billing_routes(app):
                 {
                     "matter_id": matter_filter,
                     "invoice_id": invoice_filter,
+                    "txn_type": txn_type_filter,
+                    "status": status_filter,
                     "start": start_raw or None,
                     "end": end_raw or None,
-                    "row_count": len(rows),
+                    "row_count": total_rows,
                 },
             )
             csv_rows = [
@@ -1304,21 +1382,34 @@ def register_billing_routes(app):
             {
                 "matter_id": matter_filter,
                 "invoice_id": invoice_filter,
+                "txn_type": txn_type_filter,
+                "status": status_filter,
                 "start": start_raw or None,
                 "end": end_raw or None,
-                "row_count": len(rows),
+                "row_count": total_rows,
             },
         )
         return page(
             "Per-Transaction Billing",
             "billing/transactions.html",
-            rows=rows,
+            rows=rows_for_page,
             summary=summary,
             matters=matters,
             selected_matter_id=matter_filter,
             selected_invoice_id=invoice_filter,
+            selected_txn_type=txn_type_filter,
+            selected_status=status_filter,
             start=start_raw,
             end=end_raw,
+            payment_status_counts=payment_status_counts,
+            pending_payment_rows=pending_payment_rows,
+            page_number=page_number,
+            total_pages=total_pages,
+            has_prev=(page_number > 1),
+            has_next=(page_number < total_pages),
+            prev_page=(page_number - 1),
+            next_page=(page_number + 1),
+            per_page=per_page,
         )
 
     @app.get("/billing/audit-log")

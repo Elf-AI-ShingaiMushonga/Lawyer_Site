@@ -9,7 +9,7 @@ import secrets
 from flask import g, request, session
 from flask_login import current_user
 
-from .config import ALLOWED_DOC_EXT
+from .config import ALLOWED_AUDIO_EXT, ALLOWED_DOC_EXT
 from .extensions import db
 from .models import AuditLog, MatterActivity, MatterMember, TrustedDevice, UserSession
 
@@ -103,6 +103,13 @@ def allowed_doc(filename: str) -> bool:
         return False
     ext = filename.rsplit(".", 1)[1].lower()
     return ext in ALLOWED_DOC_EXT
+
+
+def allowed_audio(filename: str) -> bool:
+    if "." not in filename:
+        return False
+    ext = filename.rsplit(".", 1)[1].lower()
+    return ext in ALLOWED_AUDIO_EXT
 
 
 def sha256_file(path: str) -> str:

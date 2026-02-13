@@ -53,10 +53,10 @@
         <label class="form-label">Assign To (Optional, Multiple)</label>
         <select class="form-select" name="assignee_user_ids" multiple size="5">
           {% for u in users %}
-            <option value="{{ u.id }}">{{ u.full_name }} ({{ u.email }})</option>
+            <option value="{{ u.id }}" {% if u.id == current_user.id %}selected{% endif %}>{{ u.full_name }} ({{ u.email }})</option>
           {% endfor %}
         </select>
-        <div class="form-help">Use Ctrl/Cmd + click to select multiple assignees.</div>
+        <div class="form-help">Use Ctrl/Cmd + click to select multiple assignees. You are preselected for faster assignment.</div>
       </div>
       <div class="col-md-6">
         <label class="form-label">Assign By Email (Compatibility)</label>
@@ -133,7 +133,7 @@
             {% else %}
               {% set next_status = "Todo" %}
             {% endif %}
-            <div class="list-item">
+            <div class="list-item" id="task-{{ t.id }}">
               <div class="list-row">
                 <div>
                   <div class="list-title">{{ t.title }}</div>
@@ -169,6 +169,8 @@
                       {{ t.status }}
                     </button>
                   </form>
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=m.id, task_id=t.id) }}">Log Time</a>
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_timers', matter_id=m.id, task_id=t.id, label=t.title) }}">Start Timer</a>
                 </div>
               </div>
             </div>

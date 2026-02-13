@@ -459,6 +459,322 @@
     });
   };
 
+  const initQuoteAssist = () => {
+    const forms = Array.from(document.querySelectorAll("[data-quote-form]"));
+    if (forms.length === 0) {
+      return;
+    }
+
+    const toNumber = (input) => {
+      if (!(input instanceof HTMLInputElement)) {
+        return null;
+      }
+      const raw = input.value.trim();
+      if (!raw) {
+        return null;
+      }
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const formatAmount = (value) => (Number.isFinite(value) ? value.toFixed(2) : "0.00");
+    const feeHints = {
+      fixed: "Set a single total fee for the scoped work.",
+      hourly: "Estimated fee can be auto-calculated from hours × rate.",
+      capped: "Set a ceiling amount and capture assumptions clearly.",
+    };
+
+    forms.forEach((form) => {
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+
+      const feeModelField = form.querySelector("[data-quote-field='fee-model']");
+      const estimatedAmountField = form.querySelector("[data-quote-field='estimated-amount']");
+      const hoursField = form.querySelector("[data-quote-field='hours']");
+      const rateField = form.querySelector("[data-quote-field='rate']");
+      const disbursementField = form.querySelector("[data-quote-field='disbursements']");
+      const taxRateField = form.querySelector("[data-quote-field='tax-rate']");
+      const feeHint = form.querySelector("[data-quote-fee-hint]");
+      const summaryBase = form.querySelector("[data-quote-summary-base]");
+      const summaryDisbursements = form.querySelector("[data-quote-summary-disbursements]");
+      const summaryTax = form.querySelector("[data-quote-summary-tax]");
+      const summaryGrandTotal = form.querySelector("[data-quote-summary-grand-total]");
+
+      const updateSummary = () => {
+        const manualBase = toNumber(estimatedAmountField);
+        const hours = toNumber(hoursField);
+        const rate = toNumber(rateField);
+        let base = manualBase !== null ? manualBase : 0.0;
+        if (manualBase === null && hours !== null && rate !== null) {
+          base = hours * rate;
+        }
+        const disbursements = Math.max(0, toNumber(disbursementField) || 0);
+        const taxRate = Math.max(0, toNumber(taxRateField) || 0);
+        const subtotal = Math.max(0, base) + disbursements;
+        const taxAmount = subtotal * (taxRate / 100);
+        const grandTotal = subtotal + taxAmount;
+
+        if (summaryBase instanceof HTMLElement) {
+          summaryBase.textContent = formatAmount(Math.max(0, base));
+        }
+        if (summaryDisbursements instanceof HTMLElement) {
+          summaryDisbursements.textContent = formatAmount(disbursements);
+        }
+        if (summaryTax instanceof HTMLElement) {
+          summaryTax.textContent = formatAmount(taxAmount);
+        }
+        if (summaryGrandTotal instanceof HTMLElement) {
+          summaryGrandTotal.textContent = formatAmount(grandTotal);
+        }
+      };
+
+      const applyFeeHint = () => {
+        if (!(feeHint instanceof HTMLElement) || !(feeModelField instanceof HTMLSelectElement)) {
+          return;
+        }
+        const model = feeModelField.value.trim().toLowerCase();
+        feeHint.textContent = feeHints[model] || "Set a proposal structure that matches your pricing strategy.";
+      };
+
+      const maybeAutofillEstimate = () => {
+        if (!(estimatedAmountField instanceof HTMLInputElement)) {
+          return;
+        }
+        if (estimatedAmountField.value.trim().length > 0) {
+          return;
+        }
+        if (!(feeModelField instanceof HTMLSelectElement)) {
+          return;
+        }
+        if (feeModelField.value.trim().toLowerCase() !== "hourly") {
+          return;
+        }
+        const hours = toNumber(hoursField);
+        const rate = toNumber(rateField);
+        if (hours === null || rate === null) {
+          return;
+        }
+        estimatedAmountField.value = formatAmount(Math.max(0, hours * rate));
+      };
+
+      const refresh = () => {
+        applyFeeHint();
+        maybeAutofillEstimate();
+        updateSummary();
+      };
+
+      [
+        feeModelField,
+        estimatedAmountField,
+        hoursField,
+        rateField,
+        disbursementField,
+        taxRateField,
+      ].forEach((field) => {
+        if (
+          field instanceof HTMLInputElement ||
+          field instanceof HTMLTextAreaElement ||
+          field instanceof HTMLSelectElement
+        ) {
+          field.addEventListener("input", refresh);
+          field.addEventListener("change", refresh);
+        }
+      });
+
+      refresh();
+    });
+  };
+
+  const initListFilters = () => {
+    const groups = Array.from(document.querySelectorAll("[data-list-filter]"));
+    groups.forEach((group) => {
+      const targetId = group.getAttribute("data-list-filter-target") || "";
+      if (!targetId) {
+        return;
+      }
+      const list = document.getElementById(targetId);
+      const search = group.querySelector("[data-list-filter-search]");
+      const count = group.querySelector("[data-list-filter-count]");
+      if (!(list instanceof HTMLElement) || !(search instanceof HTMLInputElement)) {
+        return;
+      }
+      const scope = group.parentElement || document;
+      const empty = scope.querySelector("[data-list-filter-empty]");
+      const items = Array.from(list.querySelectorAll("[data-list-item]"));
+
+      const apply = () => {
+        const query = search.value.trim().toLowerCase();
+        let visible = 0;
+        items.forEach((item) => {
+          const haystack = (item.getAttribute("data-search") || item.textContent || "").toLowerCase();
+          const matches = !query || haystack.includes(query);
+          item.hidden = !matches;
+          if (matches) {
+            visible += 1;
+          }
+        });
+
+        if (count instanceof HTMLElement) {
+          count.textContent = `${visible} of ${items.length} shown`;
+        }
+        if (empty instanceof HTMLElement) {
+          empty.hidden = visible > 0;
+        }
+      };
+
+      search.addEventListener("input", apply);
+      search.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || !search.value) {
+          return;
+        }
+        event.preventDefault();
+        search.value = "";
+        apply();
+      });
+      apply();
+    });
+  };
+
+  const initVoiceRecorder = () => {
+    const widgets = Array.from(document.querySelectorAll("[data-voice-recorder]"));
+    widgets.forEach((widget) => {
+      if (!(widget instanceof HTMLElement)) {
+        return;
+      }
+      const inputId = widget.getAttribute("data-voice-file-input") || "";
+      const fileInput = inputId ? document.getElementById(inputId) : null;
+      const startButton = widget.querySelector("[data-voice-start]");
+      const stopButton = widget.querySelector("[data-voice-stop]");
+      const clearButton = widget.querySelector("[data-voice-clear]");
+      const statusNode = widget.querySelector("[data-voice-status]");
+      if (!(fileInput instanceof HTMLInputElement) || fileInput.type !== "file") {
+        return;
+      }
+      if (
+        !(startButton instanceof HTMLButtonElement) ||
+        !(stopButton instanceof HTMLButtonElement) ||
+        !(clearButton instanceof HTMLButtonElement)
+      ) {
+        return;
+      }
+
+      let mediaRecorder = null;
+      let recordingStream = null;
+      let chunks = [];
+
+      const updateStatus = (message) => {
+        if (statusNode instanceof HTMLElement) {
+          statusNode.textContent = message;
+        }
+      };
+
+      const stopStream = () => {
+        if (!recordingStream) {
+          return;
+        }
+        recordingStream.getTracks().forEach((track) => {
+          track.stop();
+        });
+        recordingStream = null;
+      };
+
+      const buildFilename = (mimeType) => {
+        const normalized = String(mimeType || "").toLowerCase();
+        if (normalized.includes("ogg")) {
+          return "voice-note.ogg";
+        }
+        if (normalized.includes("mp4") || normalized.includes("m4a")) {
+          return "voice-note.m4a";
+        }
+        return "voice-note.webm";
+      };
+
+      const attachBlobToFileInput = (blob) => {
+        const file = new File([blob], buildFilename(blob.type), { type: blob.type || "audio/webm" });
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        fileInput.files = transfer.files;
+      };
+
+      if (!navigator.mediaDevices || typeof window.MediaRecorder === "undefined") {
+        startButton.disabled = true;
+        stopButton.disabled = true;
+        updateStatus("In-browser recording is unavailable in this browser. Upload an audio file instead.");
+        return;
+      }
+
+      startButton.addEventListener("click", async () => {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          return;
+        }
+        try {
+          recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(recordingStream);
+        } catch (_error) {
+          updateStatus("Unable to access microphone. Check browser permissions.");
+          stopStream();
+          return;
+        }
+
+        chunks = [];
+        mediaRecorder.addEventListener("dataavailable", (event) => {
+          if (event.data && event.data.size > 0) {
+            chunks.push(event.data);
+          }
+        });
+        mediaRecorder.addEventListener("stop", () => {
+          const recordedBlob = new Blob(chunks, { type: mediaRecorder?.mimeType || "audio/webm" });
+          if (recordedBlob.size > 0) {
+            try {
+              attachBlobToFileInput(recordedBlob);
+              updateStatus(`Recorded ${buildFilename(recordedBlob.type)} and attached to upload.`);
+            } catch (_error) {
+              updateStatus("Recording captured, but this browser cannot attach it automatically.");
+            }
+          } else {
+            updateStatus("No audio captured.");
+          }
+          startButton.disabled = false;
+          stopButton.disabled = true;
+          stopStream();
+          mediaRecorder = null;
+        });
+
+        mediaRecorder.start();
+        startButton.disabled = true;
+        stopButton.disabled = false;
+        updateStatus("Recording... click Stop when finished.");
+      });
+
+      stopButton.addEventListener("click", () => {
+        if (!mediaRecorder || mediaRecorder.state !== "recording") {
+          return;
+        }
+        mediaRecorder.stop();
+        stopButton.disabled = true;
+        updateStatus("Processing recording...");
+      });
+
+      clearButton.addEventListener("click", () => {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+        }
+        fileInput.value = "";
+        startButton.disabled = false;
+        stopButton.disabled = true;
+        updateStatus("Recorder cleared.");
+      });
+
+      fileInput.addEventListener("change", () => {
+        const selected = fileInput.files && fileInput.files.length > 0 ? fileInput.files[0].name : "";
+        if (selected) {
+          updateStatus(`Selected ${selected}.`);
+        }
+      });
+    });
+  };
+
   const parseSortValue = (value, type) => {
     const raw = value.trim();
     if (type === "number") {
@@ -1136,6 +1452,9 @@
     initCommandPalette();
     initMatterQuickFilters();
     initTimePrompts();
+    initQuoteAssist();
+    initListFilters();
+    initVoiceRecorder();
     initTableTools();
     initBackToTop();
     initFormValidationUX();

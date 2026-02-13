@@ -124,6 +124,8 @@
                   </form>
                 {% endif %}
                 <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_matter', matter_id=deadline.matter_id) }}">Open Matter</a>
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=deadline.matter_id) }}">Tasks</a>
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=deadline.matter_id) }}">Log Time</a>
               </div>
             </td>
           </tr>

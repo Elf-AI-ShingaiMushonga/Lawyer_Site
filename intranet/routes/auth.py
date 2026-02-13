@@ -33,6 +33,8 @@ from ..models import (
     PortalMessageThread,
     Task,
     TaskAssignee,
+    TimeEntry,
+    TimeTimer,
     TrustReconciliationRun,
     User,
     UserMFABackupCode,
@@ -267,6 +269,7 @@ def register_auth_routes(app):
             Task.due_date >= today,
             Task.due_date <= (today + dt.timedelta(days=7)),
         )
+        due_today_scope = Task.query.filter(Task.status != "Done", Task.due_date == today)
         has_any_assignee = db.session.query(TaskAssignee.id).filter(TaskAssignee.task_id == Task.id).exists()
         urgent_unassigned_scope = Task.query.filter(
             Task.status != "Done",
@@ -275,15 +278,23 @@ def register_auth_routes(app):
             Task.due_date.isnot(None),
             Task.due_date <= (today + dt.timedelta(days=3)),
         )
+        deadline_scope = Deadline.query.filter(Deadline.status != "acknowledged")
+        invoice_scope = Invoice.query
         if not is_admin():
             if scoped_ids:
                 overdue_task_scope = overdue_task_scope.filter(Task.matter_id.in_(scoped_ids))
                 due_week_scope = due_week_scope.filter(Task.matter_id.in_(scoped_ids))
+                due_today_scope = due_today_scope.filter(Task.matter_id.in_(scoped_ids))
                 urgent_unassigned_scope = urgent_unassigned_scope.filter(Task.matter_id.in_(scoped_ids))
+                deadline_scope = deadline_scope.filter(Deadline.matter_id.in_(scoped_ids))
+                invoice_scope = invoice_scope.filter(Invoice.matter_id.in_(scoped_ids))
             else:
                 overdue_task_scope = overdue_task_scope.filter(Task.id == -1)
                 due_week_scope = due_week_scope.filter(Task.id == -1)
+                due_today_scope = due_today_scope.filter(Task.id == -1)
                 urgent_unassigned_scope = urgent_unassigned_scope.filter(Task.id == -1)
+                deadline_scope = deadline_scope.filter(Deadline.id == -1)
+                invoice_scope = invoice_scope.filter(Invoice.id == -1)
 
         overdue_counts = {
             matter_id: count
@@ -314,8 +325,19 @@ def register_auth_routes(app):
             "document_count": document_scope.count(),
             "announcement_count": Announcement.query.count(),
             "overdue_tasks": overdue_task_scope.count(),
+            "due_today_tasks": due_today_scope.count(),
+            "today_deadlines": deadline_scope.filter(Deadline.due_at == today).count(),
             "due_this_week": due_week_scope.count(),
             "urgent_unassigned": urgent_unassigned_scope.count(),
+            "my_time_needs_review": TimeEntry.query.filter(
+                TimeEntry.user_id == current_user.id,
+                TimeEntry.status.in_(["draft", "needs_review"]),
+            ).count(),
+            "running_timers": TimeTimer.query.filter(
+                TimeTimer.user_id == current_user.id,
+                TimeTimer.status == "running",
+            ).count(),
+            "draft_invoices": invoice_scope.filter(Invoice.status == "draft").count(),
         }
 
         return page(

@@ -96,6 +96,7 @@ REQUIRED_ROUTES = {
     "/crm/conflicts/check",
     "/crm/conflicts/<int:conflict_id>/override",
     "/crm/conflicts/<int:conflict_id>/export",
+    "/crm/quotes/<int:quote_id>/status",
     "/crm/engagements/<int:engagement_id>/sign",
     "/dms/saved-searches",
     "/matters/<int:matter_id>/email-capture",

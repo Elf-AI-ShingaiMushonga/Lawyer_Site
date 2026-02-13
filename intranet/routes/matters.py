@@ -734,6 +734,17 @@ def register_matter_routes(app):
         file_path = os.path.join(app.config["UPLOAD_DIR"], d.stored_filename)
         if not os.path.isfile(file_path):
             abort(404)
+        inline = (request.args.get("inline") or "").strip().lower() in {"1", "true", "yes", "on"}
+        if inline:
+            audit("document_preview", "DocumentFile", d.id, {"matter_id": d.matter_id})
+            matter_activity(d.matter_id, f"Document previewed: {d.original_filename}")
+            return send_from_directory(
+                app.config["UPLOAD_DIR"],
+                d.stored_filename,
+                as_attachment=False,
+                download_name=d.original_filename,
+                mimetype=d.content_type or None,
+            )
         audit("document_download", "DocumentFile", d.id, {"matter_id": d.matter_id})
         matter_activity(d.matter_id, f"Document downloaded: {d.original_filename}")
         return send_from_directory(app.config["UPLOAD_DIR"], d.stored_filename, as_attachment=True, download_name=d.original_filename)

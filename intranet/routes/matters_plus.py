@@ -2,15 +2,28 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
+import uuid
+from collections import defaultdict
 
-from flask import abort, flash, redirect, request, url_for
+from flask import abort, current_app, flash, redirect, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.utils import secure_filename
 
 from ..extensions import db
-from ..helpers import audit, can_access_matter, has_active_legal_hold, matter_activity, normalize_query
+from ..helpers import (
+    allowed_audio,
+    audit,
+    can_access_matter,
+    has_active_legal_hold,
+    matter_activity,
+    normalize_query,
+    sha256_file,
+)
 from ..models import (
     Deadline,
+    DocumentFile,
     DocumentRecord,
     Entity,
     Matter,
@@ -187,12 +200,17 @@ def register_matters_plus_routes(app):
 
         if request.method == "POST":
             body = (request.form.get("body") or "").strip()
-            if not body:
-                flash("Note body required.", "warning")
+            voice_file = request.files.get("voice_note")
+            has_voice_note = bool(voice_file and (voice_file.filename or "").strip())
+            if not body and not has_voice_note:
+                flash("Add note text or upload a voice note.", "warning")
+                return redirect(url_for("matter_notes", matter_id=matter_id))
+            if has_voice_note and not allowed_audio(voice_file.filename or ""):
+                flash("Voice note must be one of: .m4a, .mp3, .wav, .ogg, .webm.", "warning")
                 return redirect(url_for("matter_notes", matter_id=matter_id))
             note = MatterNote(
                 matter_id=matter_id,
-                body=body,
+                body=body or "Voice note captured.",
                 tags=(request.form.get("tags") or "").strip() or None,
                 privilege_label=(request.form.get("privilege_label") or "").strip() or None,
                 created_by=current_user.id,
@@ -206,8 +224,37 @@ def register_matters_plus_routes(app):
                 if user:
                     db.session.add(MatterNoteACL(note_id=note.id, user_id=user.id, can_read=True, can_edit=False))
 
+            if has_voice_note and voice_file:
+                safe_name = secure_filename(voice_file.filename or "")
+                if not safe_name:
+                    flash("Invalid voice note filename.", "warning")
+                    db.session.rollback()
+                    return redirect(url_for("matter_notes", matter_id=matter_id))
+                ext = safe_name.rsplit(".", 1)[-1].lower()
+                stored_name = f"matter{matter_id}_note{note.id}_{dt.datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
+                os.makedirs(current_app.config["UPLOAD_DIR"], exist_ok=True)
+                path = os.path.join(current_app.config["UPLOAD_DIR"], stored_name)
+                voice_file.save(path)
+                db.session.add(
+                    DocumentFile(
+                        matter_id=matter_id,
+                        original_filename=safe_name,
+                        stored_filename=stored_name,
+                        sha256=sha256_file(path),
+                        content_type=(voice_file.mimetype or "").strip() or None,
+                        category="Voice Note",
+                        doc_version="v1",
+                        lifecycle_stage="Recorded",
+                        owner_name=f"note:{note.id}",
+                        is_privileged=bool(note.privilege_label),
+                        uploaded_by=current_user.id,
+                    )
+                )
+
             db.session.commit()
             audit("matter_note_create", "MatterNote", note.id, {"matter_id": matter_id})
+            if has_voice_note:
+                audit("matter_voice_note_upload", "MatterNote", note.id, {"matter_id": matter_id})
             matter_activity(matter_id, "Matter note added")
             flash("Note added.", "info")
             return redirect(url_for("matter_notes", matter_id=matter_id))
@@ -232,7 +279,43 @@ def register_matters_plus_routes(app):
                 or note.created_by == current_user.id
                 or current_user.id in acl_by_note.get(note.id, set())
             ]
-        return page("Matter Notes", "matters_plus/notes.html", m=m, notes=notes)
+
+        voice_notes_by_note_id: dict[int, list[DocumentFile]] = defaultdict(list)
+        note_ids = [note.id for note in notes]
+        if note_ids:
+            owner_tokens = [f"note:{note_id}" for note_id in note_ids]
+            voice_rows = (
+                DocumentFile.query.filter(
+                    DocumentFile.matter_id == matter_id,
+                    DocumentFile.category == "Voice Note",
+                    DocumentFile.owner_name.in_(owner_tokens),
+                )
+                .order_by(DocumentFile.uploaded_at.desc())
+                .all()
+            )
+            for row in voice_rows:
+                token = (row.owner_name or "").strip().lower()
+                if not token.startswith("note:"):
+                    continue
+                try:
+                    note_id = int(token.split(":", 1)[1])
+                except ValueError:
+                    continue
+                voice_notes_by_note_id[note_id].append(row)
+
+        team_user_ids = {current_user.id, m.created_by}
+        member_ids = [int(user_id) for (user_id,) in db.session.query(MatterMember.user_id).filter_by(matter_id=matter_id).all()]
+        team_user_ids.update(member_ids)
+        team_users = User.query.filter(User.id.in_(team_user_ids)).order_by(User.full_name.asc()).all() if team_user_ids else []
+
+        return page(
+            "Matter Notes",
+            "matters_plus/notes.html",
+            m=m,
+            notes=notes,
+            voice_notes_by_note_id=voice_notes_by_note_id,
+            team_users=team_users,
+        )
 
     @app.post("/matters/<int:matter_id>/stage")
     @login_required

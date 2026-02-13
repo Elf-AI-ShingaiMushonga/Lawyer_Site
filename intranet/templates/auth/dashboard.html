@@ -17,6 +17,67 @@
       <div class="why-note mt-3">
         Why this matters: partners can quickly identify delivery risk before it impacts client outcomes.
       </div>
+      <div class="form-section mt-3">
+        <div class="toolbar-row">
+          <div class="small fw-semibold text-uppercase muted">Lawyer Work Queue</div>
+          <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries') }}">Log Time</a>
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_timers') }}">Start Timer</a>
+          </div>
+        </div>
+        <div class="list-stack mt-2">
+          <a class="list-item text-decoration-none" href="{{ url_for('calendar_my', filter='overdue') }}">
+            <div class="list-row">
+              <div>
+                <div class="list-title">Resolve overdue deadlines</div>
+                <div class="list-meta mt-1">Clear critical misses first to reduce delivery risk.</div>
+              </div>
+              <span class="badge status-badge status-on-hold">{{ stats.overdue_tasks }}</span>
+            </div>
+          </a>
+          <a class="list-item text-decoration-none" href="{{ url_for('calendar_my', filter='today') }}">
+            <div class="list-row">
+              <div>
+                <div class="list-title">Handle today&apos;s deadlines</div>
+                <div class="list-meta mt-1">Acknowledge ownership and prepare next actions.</div>
+              </div>
+              <span class="badge status-badge status-open">{{ stats.today_deadlines }}</span>
+            </div>
+          </a>
+          <a class="list-item text-decoration-none" href="#dashboard-my-tasks">
+            <div class="list-row">
+              <div>
+                <div class="list-title">Progress assigned tasks</div>
+                <div class="list-meta mt-1">Keep matter work moving and update statuses continuously.</div>
+              </div>
+              <span class="badge status-badge status-open">{{ stats.assigned_open_tasks }}</span>
+            </div>
+          </a>
+          <a class="list-item text-decoration-none" href="{{ url_for('time_entries') }}">
+            <div class="list-row">
+              <div>
+                <div class="list-title">Submit time needing review</div>
+                <div class="list-meta mt-1">Finalize narratives and coding before billing cutoffs.</div>
+              </div>
+              <span class="badge status-badge status-doing">{{ stats.my_time_needs_review }}</span>
+            </div>
+          </a>
+          <a class="list-item text-decoration-none" href="{{ url_for('billing_invoices') }}">
+            <div class="list-row">
+              <div>
+                <div class="list-title">Advance draft invoices</div>
+                <div class="list-meta mt-1">Convert approved work into client-ready billing packs.</div>
+              </div>
+              <span class="badge status-badge status-doing">{{ stats.draft_invoices }}</span>
+            </div>
+          </a>
+        </div>
+        <div class="list-meta mt-2">
+          <span>Running timers: {{ stats.running_timers }}</span>
+          <span>Due today tasks: {{ stats.due_today_tasks }}</span>
+          <span>Due this week: {{ stats.due_this_week }}</span>
+        </div>
+      </div>
       <div class="metric-grid mt-3">
         <a class="metric-card metric-card-link" href="{{ url_for('matters') }}">
           <div class="metric-label">Accessible Matters</div>
@@ -128,6 +189,10 @@
                 {% endif %}
                 {% if t.due_date %} - due {{ t.due_date }}{% endif %}
                 {% if t.priority %} - priority {{ t.priority }}{% endif %}
+              </div>
+              <div class="table-actions mt-2">
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=t.matter_id, task_id=t.id) }}">Log Time</a>
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=t.matter_id) }}#task-{{ t.id }}">Open Task</a>
               </div>
             </div>
           {% endfor %}

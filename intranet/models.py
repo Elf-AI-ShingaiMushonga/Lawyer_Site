@@ -1109,6 +1109,34 @@ class CRMFollowUp(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
 
 
+class LeadQuote(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    lead_id = db.Column(db.Integer, db.ForeignKey("crm_lead.id"), nullable=False, index=True)
+    title = db.Column(db.String(180), nullable=False)
+    fee_model = db.Column(db.String(40), nullable=False, default="fixed")
+    currency = db.Column(db.String(8), nullable=False, default="ZAR")
+    estimated_amount = db.Column(db.Float, nullable=False, default=0.0)
+    estimated_hours = db.Column(db.Float, nullable=True)
+    hourly_rate = db.Column(db.Float, nullable=True)
+    disbursement_estimate = db.Column(db.Float, nullable=False, default=0.0)
+    tax_rate = db.Column(db.Float, nullable=False, default=15.0)
+    scope_summary = db.Column(db.Text, nullable=True)
+    assumptions = db.Column(db.Text, nullable=True)
+    valid_until = db.Column(db.Date, nullable=True)
+    status = db.Column(db.String(40), nullable=False, default="draft")
+    status_note = db.Column(db.Text, nullable=True)
+    sent_at = db.Column(db.DateTime, nullable=True)
+    decided_at = db.Column(db.DateTime, nullable=True)
+    decided_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (
+        db.Index("ix_lead_quote_lead_created", "lead_id", "created_at"),
+        db.Index("ix_lead_quote_status_valid", "status", "valid_until"),
+    )
+
+
 class IntakeForm(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     lead_id = db.Column(db.Integer, db.ForeignKey("crm_lead.id"), nullable=True, index=True)

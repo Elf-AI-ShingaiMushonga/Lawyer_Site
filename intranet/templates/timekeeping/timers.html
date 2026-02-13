@@ -5,8 +5,16 @@
 {% set elapsed_total = timers | sum(attribute='elapsed_seconds') %}
 
 <div class="card p-3 mb-3">
-  <h3 class="mb-1">Timers</h3>
-  <p class="page-intro mb-0">Track live work and switch focus quickly without losing captured time.</p>
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Timers</h3>
+      <p class="page-intro mb-0">Track live work and switch focus quickly without losing captured time.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries') }}">Log Manual Entry</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_review') }}">Review Entries</a>
+    </div>
+  </div>
   <div class="kpi-strip mt-3">
     <div class="kpi-pill">
       <div class="label">Running</div>
@@ -36,16 +44,21 @@
       >
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="col-md-6">
-          <label class="form-label" for="timer-start-matter">Matter ID</label>
-          <input class="form-control" id="timer-start-matter" name="matter_id" type="number" min="1" placeholder="Optional">
+          <label class="form-label" for="timer-start-matter">Matter</label>
+          <select class="form-select" id="timer-start-matter" name="matter_id">
+            <option value="">General / Unlinked</option>
+            {% for matter in matters %}
+              <option value="{{ matter.id }}" {% if prefill_matter_id and matter.id == prefill_matter_id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="col-md-6">
           <label class="form-label" for="timer-start-task">Task ID</label>
-          <input class="form-control" id="timer-start-task" name="task_id" type="number" min="1" placeholder="Optional">
+          <input class="form-control" id="timer-start-task" name="task_id" type="number" min="1" placeholder="Optional" value="{{ prefill_task_id or '' }}">
         </div>
         <div class="col-12">
           <label class="form-label" for="timer-start-label">Label</label>
-          <input class="form-control" id="timer-start-label" name="label" placeholder="Drafting affidavit">
+          <input class="form-control" id="timer-start-label" name="label" placeholder="Drafting affidavit" value="{{ prefill_label }}">
         </div>
         <div class="col-12">
           <div class="time-prompts" data-time-prompts hidden>
@@ -70,16 +83,21 @@
       >
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="col-md-6">
-          <label class="form-label" for="timer-switch-matter">Matter ID</label>
-          <input class="form-control" id="timer-switch-matter" name="matter_id" type="number" min="1" placeholder="Optional">
+          <label class="form-label" for="timer-switch-matter">Matter</label>
+          <select class="form-select" id="timer-switch-matter" name="matter_id">
+            <option value="">General / Unlinked</option>
+            {% for matter in matters %}
+              <option value="{{ matter.id }}" {% if prefill_matter_id and matter.id == prefill_matter_id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="col-md-6">
           <label class="form-label" for="timer-switch-task">Task ID</label>
-          <input class="form-control" id="timer-switch-task" name="task_id" type="number" min="1" placeholder="Optional">
+          <input class="form-control" id="timer-switch-task" name="task_id" type="number" min="1" placeholder="Optional" value="{{ prefill_task_id or '' }}">
         </div>
         <div class="col-12">
           <label class="form-label" for="timer-switch-label">Label</label>
-          <input class="form-control" id="timer-switch-label" name="label" placeholder="Client review call">
+          <input class="form-control" id="timer-switch-label" name="label" placeholder="Client review call" value="{{ prefill_label }}">
         </div>
         <div class="col-12">
           <div class="time-prompts" data-time-prompts hidden>
@@ -116,21 +134,31 @@
           <tbody>
             {% for timer in timers %}
               <tr data-table-row data-search="{{ timer.id }} {{ timer.matter_id or '' }} {{ timer.task_id or '' }} {{ timer.status }} {{ timer.elapsed_seconds }} {{ timer.label or '' }}">
+                {% set matter = matter_map.get(timer.matter_id) if matter_map else None %}
                 <td>{{ timer.id }}</td>
-                <td>{{ timer.matter_id or '-' }}</td>
+                <td>
+                  {% if matter %}
+                    <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=matter.id) }}">{{ matter.matter_no }} - {{ matter.title }}</a>
+                  {% else %}
+                    {{ timer.matter_id or '-' }}
+                  {% endif %}
+                </td>
                 <td>{{ timer.task_id or '-' }}</td>
                 <td><span class="badge badge-soft status-badge">{{ timer.status }}</span></td>
                 <td>{{ timer.elapsed_seconds }}</td>
                 <td class="text-end">
-                  {% if timer.status == 'running' %}
-                    <form method="post" action="{{ url_for('time_timer_pause') }}">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <input type="hidden" name="timer_id" value="{{ timer.id }}">
-                      <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Pausing...">Pause</button>
-                    </form>
-                  {% else %}
-                    <span class="muted small">-</span>
-                  {% endif %}
+                  <div class="table-actions justify-content-end">
+                    {% if timer.status == 'running' %}
+                      <form method="post" action="{{ url_for('time_timer_pause') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="timer_id" value="{{ timer.id }}">
+                        <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Pausing...">Pause</button>
+                      </form>
+                    {% endif %}
+                    {% if timer.matter_id %}
+                      <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=timer.matter_id, task_id=timer.task_id or '') }}">Log Time</a>
+                    {% endif %}
+                  </div>
                 </td>
               </tr>
             {% endfor %}

@@ -49,6 +49,7 @@ from .models import (
     GovernanceIncident,
     HolidayCalendar,
     IntakeForm,
+    LeadQuote,
     Invoice,
     InvoiceAdjustment,
     InvoiceLine,
@@ -3121,6 +3122,49 @@ def seed_demo_data(app, password: str, reset: bool = False):
         db.session.add_all(follow_ups)
         expanded_counts["crm_followups"] = len(follow_ups)
 
+        lead_quote_rows = [
+            LeadQuote(
+                lead_id=lead_rows[0].id,
+                title="Commercial Recovery Phase 1",
+                fee_model="hourly",
+                currency="ZAR",
+                estimated_amount=54000.0,
+                estimated_hours=30.0,
+                hourly_rate=1800.0,
+                disbursement_estimate=2500.0,
+                tax_rate=15.0,
+                scope_summary="Urgent pleadings, evidence review, and early hearing preparation.",
+                assumptions="Client provides all accounting schedules and witness affidavits within 5 business days.",
+                valid_until=(now + dt.timedelta(days=21)).date(),
+                status="draft",
+                created_by=associate_id,
+                created_at=now - dt.timedelta(days=2, hours=6),
+                updated_at=now - dt.timedelta(days=2, hours=6),
+            ),
+            LeadQuote(
+                lead_id=lead_rows[1].id,
+                title="Regulatory Response Retainer",
+                fee_model="fixed",
+                currency="ZAR",
+                estimated_amount=125000.0,
+                estimated_hours=None,
+                hourly_rate=None,
+                disbursement_estimate=8500.0,
+                tax_rate=15.0,
+                scope_summary="Draft response package, attend regulator meetings, and manage follow-on submissions.",
+                assumptions="Scope excludes litigation escalation and urgent after-hours filings.",
+                valid_until=(now + dt.timedelta(days=14)).date(),
+                status="sent",
+                status_note="Shared with client procurement and awaiting internal sign-off.",
+                sent_at=now - dt.timedelta(days=1, hours=3),
+                created_by=partner_id,
+                created_at=now - dt.timedelta(days=3),
+                updated_at=now - dt.timedelta(days=1, hours=3),
+            ),
+        ]
+        db.session.add_all(lead_quote_rows)
+        expanded_counts["lead_quotes"] = len(lead_quote_rows)
+
         intake_rows = [
             IntakeForm(
                 lead_id=lead_rows[0].id,
@@ -3799,6 +3843,7 @@ def _reset_demo_dataset(app):
         GovernanceIncident,
         HolidayCalendar,
         IntakeForm,
+        LeadQuote,
         Invoice,
         InvoiceAdjustment,
         InvoiceLine,

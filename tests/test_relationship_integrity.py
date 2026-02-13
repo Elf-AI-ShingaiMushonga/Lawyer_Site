@@ -20,6 +20,7 @@ from intranet.models import (
     ConflictSemanticHit,
     DataResidencyPolicy,
     Deadline,
+    DocumentFile,
     DocumentRecord,
     DocumentOCRText,
     DocumentTemplate,
@@ -36,6 +37,7 @@ from intranet.models import (
     InvoiceLine,
     JobQueue,
     LegalHold,
+    LeadQuote,
     PortalLinkToken,
     RetentionPolicy,
     SavedSearch,
@@ -171,6 +173,104 @@ def test_matter_note_acl_filters_note_visibility(app_ctx):
     assert response.status_code == 200
     assert "Visible note" in body
     assert "Hidden note" not in body
+
+
+def test_matter_note_voice_upload_creates_document_file(app_ctx, tmp_path):
+    app = app_ctx
+    owner = _seed_user("voice-owner@example.com")
+    matter = _seed_matter(owner, "2026-VOICE-0001", "Voice Notes Matter", "Voice Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=owner.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    app.config["UPLOAD_DIR"] = str(tmp_path)
+    client = app.test_client()
+    _set_user_session(client, owner.id)
+
+    response = client.post(
+        f"/matters/{matter.id}/notes",
+        data={
+            "csrf_token": "test-csrf",
+            "body": "",
+            "voice_note": (io.BytesIO(b"demo-voice-bytes"), "matter_note.webm"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    note = MatterNote.query.filter_by(matter_id=matter.id).order_by(MatterNote.id.desc()).first()
+    assert note is not None
+    assert "Voice note" in note.body
+
+    voice_doc = DocumentFile.query.filter_by(matter_id=matter.id, category="Voice Note").order_by(DocumentFile.id.desc()).first()
+    assert voice_doc is not None
+    assert voice_doc.owner_name == f"note:{note.id}"
+    assert os.path.isfile(os.path.join(app.config["UPLOAD_DIR"], voice_doc.stored_filename))
+
+
+def test_crm_quote_creation_and_status_flow(app_ctx):
+    app = app_ctx
+    user = _seed_user("quote-owner@example.com", role="lawyer", mfa_enabled=True)
+    lead = CRMLead(
+        full_name="Quote Prospect",
+        organization="Prospect Co",
+        email="prospect@example.com",
+        stage="qualified",
+        created_by=user.id,
+        assigned_to=user.id,
+    )
+    db.session.add(lead)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+
+    create_response = client.post(
+        f"/crm/leads/{lead.id}",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "quote_create",
+            "quote_title": "Initial Litigation Quote",
+            "fee_model": "fixed",
+            "currency": "ZAR",
+            "estimated_amount": "25000",
+            "disbursement_estimate": "1200",
+            "tax_rate": "15",
+            "scope_summary": "Urgent pleadings and case strategy memo.",
+            "assumptions": "Court filing fees billed at cost.",
+            "valid_until": (dt.date.today() + dt.timedelta(days=14)).isoformat(),
+        },
+        follow_redirects=False,
+    )
+    assert create_response.status_code == 302
+
+    db.session.refresh(lead)
+    assert lead.stage == "proposal"
+    quote = LeadQuote.query.filter_by(lead_id=lead.id).first()
+    assert quote is not None
+    assert quote.status == "draft"
+
+    sent_response = client.post(
+        f"/crm/quotes/{quote.id}/status",
+        data={"csrf_token": "test-csrf", "status": "sent"},
+        follow_redirects=False,
+    )
+    assert sent_response.status_code == 302
+    db.session.refresh(quote)
+    assert quote.status == "sent"
+    assert quote.sent_at is not None
+
+    accepted_response = client.post(
+        f"/crm/quotes/{quote.id}/status",
+        data={"csrf_token": "test-csrf", "status": "accepted", "status_note": "Client approved quote terms."},
+        follow_redirects=False,
+    )
+    assert accepted_response.status_code == 302
+    db.session.refresh(quote)
+    db.session.refresh(lead)
+    assert quote.status == "accepted"
+    assert quote.decided_by == user.id
+    assert lead.stage == "retained"
 
 
 def test_billing_invoice_list_respects_visible_matter_scope(app_ctx):
@@ -1070,6 +1170,69 @@ def test_per_transaction_billing_and_billing_audit_log_exports(app_ctx):
     audit_payload = audit_csv.get_data(as_text=True)
     assert "action,entity_type,entity_id" in audit_payload
     assert "billing_transactions_export" in audit_payload
+
+
+def test_per_transaction_billing_filters_and_pending_queue(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("billing-transaction-filter@example.com", role="lawyer", mfa_enabled=True)
+    matter = _seed_matter(lawyer, "2026-BILL-TXN-2", "Transaction Filter Matter", "Filter Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.flush()
+
+    invoice = Invoice(
+        matter_id=matter.id,
+        client_name=matter.client_name,
+        period_start=dt.date(2026, 5, 1),
+        period_end=dt.date(2026, 5, 31),
+        status="approved",
+        subtotal=1500.0,
+        tax_total=225.0,
+        total=1725.0,
+        created_by=lawyer.id,
+    )
+    db.session.add(invoice)
+    db.session.flush()
+
+    db.session.add_all(
+        [
+            PaymentAllocation(
+                invoice_id=invoice.id,
+                amount=300.0,
+                method="Card",
+                reference="PAY-PENDING-001",
+                status="pending",
+                created_by=lawyer.id,
+            ),
+            PaymentAllocation(
+                invoice_id=invoice.id,
+                amount=200.0,
+                method="EFT",
+                reference="PAY-SETTLED-001",
+                status="settled",
+                settled_at=dt.datetime.utcnow(),
+                settled_by=lawyer.id,
+                created_by=lawyer.id,
+            ),
+        ]
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, lawyer.id)
+
+    filtered = client.get("/billing/transactions?txn_type=payment&status=pending")
+    assert filtered.status_code == 200
+    body = filtered.get_data(as_text=True)
+    assert "Pending Payment Queue" in body
+    assert "PAY-PENDING-001" in body
+    assert "PAY-SETTLED-001" not in body
+
+    filtered_csv = client.get("/billing/transactions?txn_type=payment&status=pending&format=csv")
+    assert filtered_csv.status_code == 200
+    rows = list(csv.DictReader(io.StringIO(filtered_csv.get_data(as_text=True))))
+    assert rows
+    assert {row["status"] for row in rows} == {"pending"}
+    assert {row["reference"] for row in rows} == {"PAY-PENDING-001"}
 
 
 def test_billing_audit_log_scopes_records_to_visible_matters(app_ctx):

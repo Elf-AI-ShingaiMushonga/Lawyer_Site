@@ -4,8 +4,16 @@
 {% set review_count = entries | selectattr('status', 'equalto', 'needs_review') | list | length %}
 
 <div class="card p-3 mb-3">
-  <h3 class="mb-1">Time Entries</h3>
-  <p class="page-intro mb-0">Capture work logs with narrative and coding so entries are ready for review and billing.</p>
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Time Entries</h3>
+      <p class="page-intro mb-0">Capture work logs with narrative and coding so entries are ready for review and billing.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-light" href="{{ url_for('time_timers') }}">Start/Manage Timers</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_review') }}">Open Review Queue</a>
+    </div>
+  </div>
   <div class="kpi-strip mt-3">
     <div class="kpi-pill">
       <div class="label">Entries</div>
@@ -30,21 +38,21 @@
       <label class="form-label" for="entry-matter-id">Matter</label>
       <select class="form-select" id="entry-matter-id" name="matter_id" required>
         {% for matter in matters %}
-          <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+          <option value="{{ matter.id }}" {% if prefill_matter_id and matter.id == prefill_matter_id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
         {% endfor %}
       </select>
     </div>
     <div class="col-md-2">
       <label class="form-label" for="entry-task-id">Task ID</label>
-      <input class="form-control" id="entry-task-id" name="task_id" type="number" min="1" placeholder="Optional">
+      <input class="form-control" id="entry-task-id" name="task_id" type="number" min="1" placeholder="Optional" value="{{ prefill_task_id or '' }}">
     </div>
     <div class="col-md-3">
-      <label class="form-label" for="entry-start-at">Start At (ISO)</label>
-      <input class="form-control" id="entry-start-at" name="start_at" placeholder="2026-03-01T09:00:00" required>
+      <label class="form-label" for="entry-start-at">Start At</label>
+      <input class="form-control" id="entry-start-at" name="start_at" type="datetime-local" value="{{ prefill_start_at }}" required>
     </div>
     <div class="col-md-3">
-      <label class="form-label" for="entry-end-at">End At (ISO)</label>
-      <input class="form-control" id="entry-end-at" name="end_at" placeholder="2026-03-01T11:00:00" required>
+      <label class="form-label" for="entry-end-at">End At</label>
+      <input class="form-control" id="entry-end-at" name="end_at" type="datetime-local" value="{{ prefill_end_at }}" required>
     </div>
     <div class="col-md-3">
       <label class="form-label" for="entry-task-code">Task Code</label>
@@ -97,9 +105,16 @@
       </thead>
       <tbody>
         {% for entry in entries %}
+          {% set matter = matter_lookup.get(entry.matter_id) if matter_lookup else None %}
           <tr data-table-row data-search="{{ entry.id }} {{ entry.matter_id }} {{ entry.status }} {{ entry.narrative or '' }} {{ entry.task_code or '' }} {{ entry.activity_code or '' }}">
             <td>{{ entry.id }}</td>
-            <td>{{ entry.matter_id }}</td>
+            <td>
+              {% if matter %}
+                <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=matter.id) }}">{{ matter.matter_no }} - {{ matter.title }}</a>
+              {% else %}
+                {{ entry.matter_id }}
+              {% endif %}
+            </td>
             <td>{{ entry.start_at }}</td>
             <td>{{ entry.end_at }}</td>
             <td>{{ entry.hours }}</td>

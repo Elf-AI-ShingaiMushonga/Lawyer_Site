@@ -11,12 +11,40 @@ from flask_login import current_user, login_required
 from ..extensions import db
 from ..helpers import audit, normalize_query
 from ..reports import export_conflict_report_csv
-from ..models import CRMFollowUp, CRMLead, ConflictCheck, ConflictSemanticHit, EngagementLetter, IntakeForm, Matter
+from ..models import CRMFollowUp, CRMLead, ConflictCheck, ConflictSemanticHit, EngagementLetter, IntakeForm, LeadQuote, Matter
 from ..services.conflict_engine import ConflictEngine
 from ..templates import page
 
 
 LEAD_STAGES = ["new", "contacted", "qualified", "proposal", "retained", "closed_lost"]
+QUOTE_STATUSES = ["draft", "sent", "accepted", "rejected", "expired"]
+QUOTE_FEE_MODELS = ["fixed", "hourly", "capped"]
+
+
+def _safe_float(value, default: float = 0.0) -> float:
+    try:
+        if value is None:
+            return float(default)
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _quote_financials(row: LeadQuote) -> dict[str, float]:
+    base = round(max(0.0, _safe_float(row.estimated_amount)), 2)
+    disbursements = round(max(0.0, _safe_float(row.disbursement_estimate)), 2)
+    tax_rate = round(max(0.0, _safe_float(row.tax_rate, 15.0)), 2)
+    subtotal = round(base + disbursements, 2)
+    tax_amount = round(subtotal * (tax_rate / 100.0), 2)
+    grand_total = round(subtotal + tax_amount, 2)
+    return {
+        "base": base,
+        "disbursements": disbursements,
+        "tax_rate": tax_rate,
+        "tax_amount": tax_amount,
+        "subtotal": subtotal,
+        "grand_total": grand_total,
+    }
 
 
 def register_crm_routes(app):
@@ -82,6 +110,13 @@ def register_crm_routes(app):
         if not lead:
             abort(404)
 
+        def _selected_matter_id() -> int | None:
+            selected = request.form.get("matter_id", type=int)
+            if selected:
+                return selected
+            selected = request.form.get("matter_id_select", type=int)
+            return selected or None
+
         if request.method == "POST":
             action = (request.form.get("action") or "update").strip()
             if action == "update":
@@ -114,7 +149,10 @@ def register_crm_routes(app):
                 flash("Follow-up added.", "info")
 
             elif action == "intake":
-                matter_id = request.form.get("matter_id", type=int)
+                matter_id = _selected_matter_id()
+                if matter_id and not db.session.get(Matter, matter_id):
+                    flash("Selected matter does not exist.", "warning")
+                    return redirect(url_for("crm_lead_detail", lead_id=lead_id))
                 payload = {
                     "client_name": lead.organization or lead.full_name,
                     "lead_name": lead.full_name,
@@ -148,9 +186,12 @@ def register_crm_routes(app):
                     flash("Intake form created.", "info")
 
             elif action == "engagement":
-                matter_id = request.form.get("matter_id", type=int)
+                matter_id = _selected_matter_id()
                 if not matter_id:
-                    flash("Matter id is required for engagement letter.", "warning")
+                    flash("Select a matter for the engagement letter.", "warning")
+                    return redirect(url_for("crm_lead_detail", lead_id=lead_id))
+                if not db.session.get(Matter, matter_id):
+                    flash("Selected matter does not exist.", "warning")
                     return redirect(url_for("crm_lead_detail", lead_id=lead_id))
                 letter = EngagementLetter(
                     matter_id=matter_id,
@@ -164,9 +205,84 @@ def register_crm_routes(app):
                 audit("engagement_create", "EngagementLetter", letter.id)
                 flash("Engagement letter created.", "info")
 
+            elif action == "quote_create":
+                title = normalize_query(request.form.get("quote_title", "")) or f"Quote for {lead.full_name}"
+                fee_model = (request.form.get("fee_model") or "fixed").strip().lower()
+                if fee_model not in QUOTE_FEE_MODELS:
+                    flash("Invalid fee model.", "warning")
+                    return redirect(url_for("crm_lead_detail", lead_id=lead_id))
+
+                estimated_hours = request.form.get("estimated_hours", type=float)
+                hourly_rate = request.form.get("hourly_rate", type=float)
+                estimated_amount = _safe_float(request.form.get("estimated_amount", type=float), 0.0)
+                if estimated_amount <= 0 and estimated_hours and hourly_rate:
+                    estimated_amount = round(float(estimated_hours) * float(hourly_rate), 2)
+
+                disbursement_estimate = _safe_float(request.form.get("disbursement_estimate", type=float), 0.0)
+                tax_rate = _safe_float(request.form.get("tax_rate", type=float), 15.0)
+                if estimated_amount <= 0:
+                    flash("Estimated fee amount must be greater than 0.", "warning")
+                    return redirect(url_for("crm_lead_detail", lead_id=lead_id))
+                if disbursement_estimate < 0:
+                    flash("Disbursement estimate cannot be negative.", "warning")
+                    return redirect(url_for("crm_lead_detail", lead_id=lead_id))
+                if tax_rate < 0:
+                    flash("Tax rate cannot be negative.", "warning")
+                    return redirect(url_for("crm_lead_detail", lead_id=lead_id))
+
+                valid_until_raw = (request.form.get("valid_until") or "").strip()
+                valid_until = None
+                if valid_until_raw:
+                    try:
+                        valid_until = dt.date.fromisoformat(valid_until_raw)
+                    except ValueError:
+                        flash("Invalid quote validity date.", "warning")
+                        return redirect(url_for("crm_lead_detail", lead_id=lead_id))
+
+                now_utc = dt.datetime.utcnow()
+                row = LeadQuote(
+                    lead_id=lead.id,
+                    title=title,
+                    fee_model=fee_model,
+                    currency=(request.form.get("currency") or "ZAR").strip().upper() or "ZAR",
+                    estimated_amount=round(float(estimated_amount), 2),
+                    estimated_hours=round(float(estimated_hours), 2) if estimated_hours and estimated_hours > 0 else None,
+                    hourly_rate=round(float(hourly_rate), 2) if hourly_rate and hourly_rate > 0 else None,
+                    disbursement_estimate=round(float(disbursement_estimate), 2),
+                    tax_rate=round(float(tax_rate), 2),
+                    scope_summary=(request.form.get("scope_summary") or "").strip() or None,
+                    assumptions=(request.form.get("assumptions") or "").strip() or None,
+                    valid_until=valid_until,
+                    status="draft",
+                    created_by=current_user.id,
+                    created_at=now_utc,
+                    updated_at=now_utc,
+                )
+                db.session.add(row)
+
+                lead.updated_at = now_utc
+                if lead.stage in {"new", "contacted", "qualified"}:
+                    lead.stage = "proposal"
+                db.session.commit()
+                totals = _quote_financials(row)
+                audit(
+                    "crm_quote_create",
+                    "LeadQuote",
+                    row.id,
+                    {
+                        "lead_id": lead.id,
+                        "fee_model": row.fee_model,
+                        "status": row.status,
+                        "grand_total": totals["grand_total"],
+                        "currency": row.currency,
+                    },
+                )
+                flash("Quote draft saved.", "info")
+
             return redirect(url_for("crm_lead_detail", lead_id=lead_id))
 
         followups = CRMFollowUp.query.filter_by(lead_id=lead.id).order_by(CRMFollowUp.due_at.asc()).all()
+        quotes = LeadQuote.query.filter_by(lead_id=lead.id).order_by(LeadQuote.created_at.desc(), LeadQuote.id.desc()).all()
         intakes = IntakeForm.query.filter_by(lead_id=lead.id).order_by(IntakeForm.created_at.desc()).all()
         conflicts = (
             ConflictCheck.query.filter(ConflictCheck.intake_form_id.in_([i.id for i in intakes]))
@@ -237,11 +353,24 @@ def register_crm_routes(app):
             for row in Matter.query.filter(Matter.id.in_(missing_matter_ids)).all():
                 matter_lookup[row.id] = row
 
+        quote_financials = {row.id: _quote_financials(row) for row in quotes}
+        quote_status_counts = {status: 0 for status in QUOTE_STATUSES}
+        for row in quotes:
+            normalized = (row.status or "draft").strip().lower()
+            if normalized in quote_status_counts:
+                quote_status_counts[normalized] += 1
+        followup_default_due_at = (dt.datetime.now() + dt.timedelta(days=1)).replace(second=0, microsecond=0)
+
         return page(
             "Lead Detail",
             "crm/lead_detail.html",
             lead=lead,
             followups=followups,
+            quotes=quotes,
+            quote_financials=quote_financials,
+            quote_statuses=QUOTE_STATUSES,
+            quote_fee_models=QUOTE_FEE_MODELS,
+            quote_status_counts=quote_status_counts,
             intakes=intakes,
             conflicts=conflicts,
             conflict_meta=conflict_meta,
@@ -250,7 +379,56 @@ def register_crm_routes(app):
             matter_lookup=matter_lookup,
             letters=letters,
             stages=LEAD_STAGES,
+            followup_default_due_at=followup_default_due_at.strftime("%Y-%m-%dT%H:%M"),
         )
+
+    @app.post("/crm/quotes/<int:quote_id>/status")
+    @login_required
+    def crm_quote_status(quote_id: int):
+        row = db.session.get(LeadQuote, quote_id)
+        if not row:
+            abort(404)
+        lead = db.session.get(CRMLead, row.lead_id)
+        if not lead:
+            abort(404)
+
+        next_status = (request.form.get("status") or "").strip().lower()
+        if next_status not in QUOTE_STATUSES:
+            flash("Invalid quote status.", "warning")
+            return redirect(url_for("crm_lead_detail", lead_id=lead.id))
+
+        note = (request.form.get("status_note") or "").strip() or None
+        now_utc = dt.datetime.utcnow()
+        previous = (row.status or "draft").strip().lower()
+        row.status = next_status
+        row.updated_at = now_utc
+        if note:
+            row.status_note = note
+        if next_status == "sent" and row.sent_at is None:
+            row.sent_at = now_utc
+        if next_status in {"accepted", "rejected", "expired"}:
+            row.decided_at = now_utc
+            row.decided_by = current_user.id
+        if next_status == "accepted" and lead.stage != "retained":
+            lead.stage = "retained"
+        lead.updated_at = now_utc
+        db.session.commit()
+
+        totals = _quote_financials(row)
+        audit(
+            "crm_quote_status_update",
+            "LeadQuote",
+            row.id,
+            {
+                "lead_id": lead.id,
+                "from": previous,
+                "to": next_status,
+                "currency": row.currency,
+                "grand_total": totals["grand_total"],
+            },
+        )
+        flash("Quote status updated.", "info")
+        return redirect(url_for("crm_lead_detail", lead_id=lead.id))
 
     @app.post("/crm/conflicts/check")
     @login_required

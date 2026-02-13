@@ -7,8 +7,9 @@ from flask_login import current_user, login_required
 from sqlalchemy import and_, or_
 
 from ..extensions import db
-from ..helpers import audit, can_access_matter
+from ..helpers import audit, can_access_matter, is_admin
 from ..models import FeeArrangement, Matter, RateCard, TimeEntry, TimeRoundingPolicy, TimeTimer, TimeValidationEvent
+from ..policies import visible_matter_ids
 from ..templates import page
 
 
@@ -31,6 +32,17 @@ def _policy_for_matter(matter_id: int) -> TimeRoundingPolicy | None:
     if policy:
         return policy
     return TimeRoundingPolicy.query.filter_by(client_name=matter.client_name, is_active=True).order_by(TimeRoundingPolicy.id.desc()).first()
+
+
+def _scoped_matters_for_current_user(limit: int = 200) -> list[Matter]:
+    query = Matter.query
+    if not is_admin():
+        scope_ids = visible_matter_ids()
+        if scope_ids:
+            query = query.filter(Matter.id.in_(scope_ids))
+        else:
+            return []
+    return query.order_by(Matter.opened_at.desc()).limit(max(1, int(limit))).all()
 
 
 def _resolve_rate_for_prompt(
@@ -295,7 +307,30 @@ def register_timekeeping_routes(app):
     @login_required
     def time_timers():
         timers = TimeTimer.query.filter_by(user_id=current_user.id).order_by(TimeTimer.updated_at.desc()).limit(50).all()
-        return page("Timers", "timekeeping/timers.html", timers=timers)
+        matters = _scoped_matters_for_current_user(limit=250)
+        matter_map = {matter.id: matter for matter in matters}
+        missing_matter_ids = {int(timer.matter_id) for timer in timers if timer.matter_id and int(timer.matter_id) not in matter_map}
+        if missing_matter_ids:
+            for matter in Matter.query.filter(Matter.id.in_(missing_matter_ids)).all():
+                if is_admin() or can_access_matter(matter.id):
+                    matter_map[matter.id] = matter
+
+        prefill_matter_id = request.args.get("matter_id", type=int)
+        if prefill_matter_id and not can_access_matter(prefill_matter_id):
+            prefill_matter_id = None
+        prefill_task_id = request.args.get("task_id", type=int)
+        prefill_label = (request.args.get("label") or "").strip()
+
+        return page(
+            "Timers",
+            "timekeeping/timers.html",
+            timers=timers,
+            matters=matters,
+            matter_map=matter_map,
+            prefill_matter_id=prefill_matter_id,
+            prefill_task_id=prefill_task_id,
+            prefill_label=prefill_label,
+        )
 
     @app.post("/time/timers/start")
     @login_required
@@ -517,9 +552,49 @@ def register_timekeeping_routes(app):
             return redirect(url_for("time_entries"))
 
         entries = TimeEntry.query.filter_by(user_id=current_user.id).order_by(TimeEntry.start_at.desc()).limit(200).all()
-        validations = TimeValidationEvent.query.order_by(TimeValidationEvent.created_at.desc()).limit(200).all()
-        matters = Matter.query.order_by(Matter.opened_at.desc()).limit(200).all()
-        return page("Time Entries", "timekeeping/entries.html", entries=entries, validations=validations, matters=matters)
+        validations = (
+            TimeValidationEvent.query.join(TimeEntry, TimeEntry.id == TimeValidationEvent.time_entry_id)
+            .filter(TimeEntry.user_id == current_user.id)
+            .order_by(TimeValidationEvent.created_at.desc())
+            .limit(200)
+            .all()
+        )
+        matters = _scoped_matters_for_current_user(limit=250)
+        matter_lookup = {matter.id: matter for matter in matters}
+        missing_matter_ids = {int(entry.matter_id) for entry in entries if entry.matter_id and int(entry.matter_id) not in matter_lookup}
+        if missing_matter_ids:
+            for matter in Matter.query.filter(Matter.id.in_(missing_matter_ids)).all():
+                if is_admin() or can_access_matter(matter.id):
+                    matter_lookup[matter.id] = matter
+
+        prefill_matter_id = request.args.get("matter_id", type=int)
+        if prefill_matter_id and not can_access_matter(prefill_matter_id):
+            prefill_matter_id = None
+        prefill_task_id = request.args.get("task_id", type=int)
+
+        default_end_dt = dt.datetime.utcnow().replace(second=0, microsecond=0)
+        default_start_dt = default_end_dt - dt.timedelta(minutes=30)
+        prefill_start_at_dt, start_error = _parse_iso_datetime(request.args.get("start_at"))
+        prefill_end_at_dt, end_error = _parse_iso_datetime(request.args.get("end_at"))
+        prefill_start_at = (
+            (prefill_start_at_dt if prefill_start_at_dt and not start_error else default_start_dt).isoformat(timespec="minutes")
+        )
+        prefill_end_at = (
+            (prefill_end_at_dt if prefill_end_at_dt and not end_error else default_end_dt).isoformat(timespec="minutes")
+        )
+
+        return page(
+            "Time Entries",
+            "timekeeping/entries.html",
+            entries=entries,
+            validations=validations,
+            matters=matters,
+            matter_lookup=matter_lookup,
+            prefill_matter_id=prefill_matter_id,
+            prefill_task_id=prefill_task_id,
+            prefill_start_at=prefill_start_at,
+            prefill_end_at=prefill_end_at,
+        )
 
     @app.route("/time/review", methods=["GET", "POST"])
     @login_required
