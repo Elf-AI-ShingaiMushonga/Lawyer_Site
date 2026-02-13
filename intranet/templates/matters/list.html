@@ -119,7 +119,15 @@
                 </div>
               </div>
               <div class="list-actions">
-                <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
+                <button
+                  class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }} matter-status-filter-badge"
+                  type="button"
+                  data-matter-status-filter="{{ m.status|lower|replace(' ', '-') }}"
+                  aria-pressed="false"
+                  title="Filter by {{ m.status }} matters"
+                >
+                  {{ m.status }}
+                </button>
                 <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Tasks</a>
               </div>
             </div>

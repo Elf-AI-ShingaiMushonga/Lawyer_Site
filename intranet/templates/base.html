@@ -753,6 +753,27 @@
       color: #6d6161;
     }
 
+    .matter-status-filter-badge {
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+      border-radius: 999px;
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+
+    .matter-status-filter-badge:hover {
+      transform: translateY(-1px);
+    }
+
+    .matter-status-filter-badge.is-active-filter {
+      box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.18);
+    }
+
+    .matter-status-filter-badge:focus-visible {
+      outline: 0;
+      box-shadow: 0 0 0 3px rgba(225, 6, 0, 0.24);
+    }
+
     .task-status-cycler {
       appearance: none;
       -webkit-appearance: none;

@@ -169,6 +169,7 @@
       return;
     }
     const items = Array.from(list.querySelectorAll("[data-matter-item]"));
+    const statusBadges = Array.from(list.querySelectorAll("[data-matter-status-filter]"));
     const empty = document.getElementById("matter-filter-empty");
     const summary = document.getElementById("matter-filter-summary");
     const state = { status: "all", risk: "all" };
@@ -180,6 +181,12 @@
         const isActive = state[group] === value;
         button.classList.toggle("is-active", isActive);
         button.setAttribute("aria-pressed", String(isActive));
+      });
+      statusBadges.forEach((badge) => {
+        const value = badge.getAttribute("data-matter-status-filter") || "";
+        const isActive = value && state.status === value;
+        badge.classList.toggle("is-active-filter", isActive);
+        badge.setAttribute("aria-pressed", String(isActive));
       });
     };
 
@@ -214,6 +221,20 @@
           return;
         }
         state[group] = value;
+        updateButtons();
+        applyFilters();
+      });
+    });
+
+    statusBadges.forEach((badge) => {
+      badge.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const status = badge.getAttribute("data-matter-status-filter") || "";
+        if (!status) {
+          return;
+        }
+        state.status = state.status === status ? "all" : status;
         updateButtons();
         applyFilters();
       });
