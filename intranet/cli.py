@@ -3566,7 +3566,11 @@ def _reset_demo_dataset(app):
 
     bind = db.session.get_bind()
     if bind is not None and bind.dialect.name == "postgresql":
-        table_names = ", ".join(sorted({model.__table__.name for model in all_models}))
+        preparer = bind.dialect.identifier_preparer
+        table_names = ", ".join(
+            preparer.quote(name)
+            for name in sorted({model.__table__.name for model in all_models})
+        )
         db.session.execute(sa.text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
         db.session.commit()
     else:
