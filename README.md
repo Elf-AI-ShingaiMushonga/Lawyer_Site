@@ -6,6 +6,7 @@ This is a functional intranet website for a law firm:
 - Admin user provisioning from the web UI (`/admin/users`)
 - Firm settings and rule administration (`/admin/settings/*`, `/admin/templates/*`, `/admin/rules/*`)
 - Matters with team membership
+- User-personalized matter shortcuts (pin matters + recently viewed history)
 - Matter intake/workspace/parties/notes/stage transitions/closing workflows
 - Matter executive summaries (objective, risk, budget, outcome, latest update)
 - Matter timelines (filings, hearings, milestones, client updates)

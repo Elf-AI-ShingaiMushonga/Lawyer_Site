@@ -30,6 +30,8 @@ from ..models import (
     KnowledgeBase,
     Matter,
     MatterMember,
+    MatterPin,
+    MatterRecentView,
     PortalMessageThread,
     Task,
     TaskAssignee,
@@ -247,6 +249,42 @@ def register_auth_routes(app):
                 matter_scope = matter_scope.filter(Matter.id == -1)
         recent_matters = matter_scope.order_by(Matter.opened_at.desc()).limit(8).all()
 
+        pin_query = (
+            db.session.query(MatterPin, Matter)
+            .join(Matter, Matter.id == MatterPin.matter_id)
+            .filter(MatterPin.user_id == current_user.id)
+        )
+        recent_view_query = (
+            db.session.query(MatterRecentView, Matter)
+            .join(Matter, Matter.id == MatterRecentView.matter_id)
+            .filter(MatterRecentView.user_id == current_user.id)
+        )
+        if not is_admin():
+            if scoped_ids:
+                pin_query = pin_query.filter(Matter.id.in_(scoped_ids))
+                recent_view_query = recent_view_query.filter(Matter.id.in_(scoped_ids))
+            else:
+                pin_query = pin_query.filter(Matter.id == -1)
+                recent_view_query = recent_view_query.filter(Matter.id == -1)
+
+        pinned_pairs = pin_query.order_by(MatterPin.created_at.asc()).limit(8).all()
+        pinned_matters = [matter for _, matter in pinned_pairs]
+        pinned_matter_ids = {matter.id for matter in pinned_matters}
+
+        recent_views = []
+        for view_row, matter in recent_view_query.order_by(MatterRecentView.last_viewed_at.desc()).limit(12).all():
+            if matter.id in pinned_matter_ids:
+                continue
+            recent_views.append(
+                {
+                    "matter": matter,
+                    "last_viewed_at": view_row.last_viewed_at,
+                    "view_count": int(view_row.view_count or 0),
+                }
+            )
+            if len(recent_views) >= 8:
+                break
+
         document_scope = DocumentFile.query
         if not is_admin():
             if scoped_ids:
@@ -338,6 +376,8 @@ def register_auth_routes(app):
                 TimeTimer.status == "running",
             ).count(),
             "draft_invoices": invoice_scope.filter(Invoice.status == "draft").count(),
+            "pinned_matters": len(pinned_matters),
+            "recent_views": len(recent_views),
         }
 
         return page(
@@ -349,6 +389,8 @@ def register_auth_routes(app):
             stats=stats,
             at_risk_matters=at_risk_matters,
             task_matter_map=task_matter_map,
+            pinned_matters=pinned_matters,
+            recent_views=recent_views,
         )
 
     @app.get("/story")

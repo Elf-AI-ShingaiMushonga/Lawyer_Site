@@ -90,6 +90,7 @@
     {% if ms %}
       <div class="list-stack" id="matter-list">
         {% for m in ms %}
+          {% set is_pinned = m.id in pinned_matter_ids %}
           <div
             class="list-item is-clickable"
             data-matter-item
@@ -103,6 +104,7 @@
                 <div class="list-meta mt-1">
                   <span>{{ m.client_name }}</span>
                   <span>Opened {{ m.opened_at.strftime("%Y-%m-%d") }}</span>
+                  {% if is_pinned %}<span class="tag-chip">Pinned</span>{% endif %}
                   <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }}</span>
                   <span>{{ m.budget_status }}</span>
                 </div>
@@ -117,6 +119,11 @@
                 >
                   {{ m.status }}
                 </button>
+                <form method="post" action="{{ url_for('matter_pin_toggle', matter_id=m.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+                  <button class="btn btn-sm btn-outline-light" type="submit">{{ "Unpin" if is_pinned else "Pin" }}</button>
+                </form>
                 <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Tasks</a>
                 <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=m.id) }}">Log Time</a>
               </div>

@@ -10,11 +10,17 @@
           <div class="list-meta mt-1">
             <span>{{ m.client_name }}</span>
             <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
+            {% if is_pinned %}<span class="tag-chip">Pinned</span>{% endif %}
             <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }} risk</span>
             <span>{{ m.budget_status }}</span>
           </div>
         </div>
         <div class="list-actions">
+          <form method="post" action="{{ url_for('matter_pin_toggle', matter_id=m.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <button class="btn btn-sm btn-outline-light" type="submit">{{ "Unpin Matter" if is_pinned else "Pin Matter" }}</button>
+          </form>
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Back to Matters</a>
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Tasks</a>

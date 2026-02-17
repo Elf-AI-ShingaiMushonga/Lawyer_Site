@@ -104,6 +104,30 @@ class MatterMember(db.Model):
     )
 
 
+class MatterPin(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "matter_id", name="uq_matter_pin_user_matter"),
+        db.Index("ix_matter_pin_user_created", "user_id", "created_at"),
+    )
+
+
+class MatterRecentView(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    first_viewed_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    last_viewed_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    view_count = db.Column(db.Integer, nullable=False, default=1)
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "matter_id", name="uq_matter_recent_user_matter"),
+        db.Index("ix_matter_recent_user_last_viewed", "user_id", "last_viewed_at"),
+    )
+
+
 class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)

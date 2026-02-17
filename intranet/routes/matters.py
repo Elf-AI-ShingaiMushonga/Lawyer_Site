@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import os
 import uuid
+from urllib.parse import urlsplit
 
 import sqlalchemy as sa
 from flask import abort, flash, redirect, request, send_from_directory, url_for
@@ -25,6 +26,8 @@ from ..models import (
     Matter,
     MatterActivity,
     MatterMember,
+    MatterPin,
+    MatterRecentView,
     MatterTimelineEvent,
     Task,
     TaskAssignee,
@@ -40,6 +43,41 @@ BUDGET_STATUSES = {"On Track", "Watch", "Over Budget", "Needs Review"}
 TIMELINE_EVENT_TYPES = {"Milestone", "Filing", "Hearing", "Client Update", "Internal Review", "Delivery"}
 DOC_CATEGORIES = {"Pleading", "Evidence", "Contract", "Advisory", "Correspondence", "Court Filing", "General"}
 DOC_LIFECYCLE_STAGES = {"Draft", "For Review", "Final", "Executed"}
+
+
+def _safe_next_path(next_path: str | None, fallback: str) -> str:
+    if not next_path:
+        return fallback
+    parsed = urlsplit(next_path)
+    if parsed.scheme or parsed.netloc:
+        return fallback
+    if not parsed.path.startswith("/"):
+        return fallback
+    return next_path
+
+
+def _record_recent_matter_view(user_id: int, matter_id: int) -> None:
+    now = dt.datetime.utcnow()
+    row = MatterRecentView.query.filter_by(user_id=user_id, matter_id=matter_id).first()
+    if row is None:
+        db.session.add(
+            MatterRecentView(
+                user_id=user_id,
+                matter_id=matter_id,
+                first_viewed_at=now,
+                last_viewed_at=now,
+                view_count=1,
+            )
+        )
+        db.session.commit()
+        return
+
+    if row.last_viewed_at and (now - row.last_viewed_at).total_seconds() < 60:
+        return
+
+    row.last_viewed_at = now
+    row.view_count = int(row.view_count or 0) + 1
+    db.session.commit()
 
 
 def register_matter_routes(app):
@@ -104,6 +142,20 @@ def register_matter_routes(app):
             base = base.filter((Matter.matter_no.ilike(like)) | (Matter.title.ilike(like)) | (Matter.client_name.ilike(like)))
         pagination = base.order_by(*sort_order[sort]).paginate(page=page_number, per_page=50, error_out=False)
         ms = pagination.items
+        pinned_matter_ids: set[int] = set()
+        matter_ids = [matter.id for matter in ms]
+        if matter_ids:
+            pinned_matter_ids = {
+                int(row[0])
+                for row in (
+                    db.session.query(MatterPin.matter_id)
+                    .filter(
+                        MatterPin.user_id == current_user.id,
+                        MatterPin.matter_id.in_(matter_ids),
+                    )
+                    .all()
+                )
+            }
         status_counts = {"Open": 0, "On Hold": 0, "Closed": 0}
         for status, count in base.with_entities(Matter.status, sa.func.count(Matter.id)).group_by(Matter.status).all():
             if status in status_counts:
@@ -117,6 +169,7 @@ def register_matter_routes(app):
             sort_options=sort_options,
             pagination=pagination,
             status_counts=status_counts,
+            pinned_matter_ids=pinned_matter_ids,
         )
 
     @app.route("/matters/new", methods=["GET", "POST"])
@@ -313,6 +366,8 @@ def register_matter_routes(app):
         m = db.session.get(Matter, matter_id)
         if not m:
             abort(404)
+        _record_recent_matter_view(current_user.id, m.id)
+        is_pinned = MatterPin.query.filter_by(user_id=current_user.id, matter_id=m.id).first() is not None
 
         members = (
             db.session.query(User, MatterMember)
@@ -357,7 +412,44 @@ def register_matter_routes(app):
             matter_statuses=sorted(MATTER_STATUSES),
             timeline_event_types=sorted(TIMELINE_EVENT_TYPES),
             today=today.isoformat(),
+            is_pinned=is_pinned,
         )
+
+    @app.post("/matters/<int:matter_id>/pin")
+    @login_required
+    def matter_pin_toggle(matter_id: int):
+        if not can_access_matter(matter_id):
+            abort(403)
+        m = db.session.get(Matter, matter_id)
+        if not m:
+            abort(404)
+
+        row = MatterPin.query.filter_by(user_id=current_user.id, matter_id=matter_id).first()
+        next_path = _safe_next_path(request.form.get("next"), url_for("matter_detail", matter_id=matter_id))
+        if row is None:
+            row = MatterPin(user_id=current_user.id, matter_id=matter_id)
+            db.session.add(row)
+            db.session.commit()
+            audit("matter_pin_add", "Matter", matter_id)
+            flash("Matter pinned to your quick access list.", "info")
+        else:
+            db.session.delete(row)
+            db.session.commit()
+            audit("matter_pin_remove", "Matter", matter_id)
+            flash("Matter removed from your quick access list.", "info")
+        return redirect(next_path)
+
+    @app.post("/matters/recent/clear")
+    @login_required
+    def matter_recent_clear():
+        removed = (
+            MatterRecentView.query.filter_by(user_id=current_user.id).delete(synchronize_session=False)
+        )
+        db.session.commit()
+        audit("matter_recent_clear", "MatterRecentView", details={"removed": removed})
+        flash("Recent matter history cleared.", "info")
+        next_path = _safe_next_path(request.form.get("next"), url_for("dashboard"))
+        return redirect(next_path)
 
     @app.route("/matters/<int:matter_id>/team", methods=["GET", "POST"])
     @login_required
