@@ -4,6 +4,7 @@ import datetime as dt
 import logging
 import os
 import secrets
+import sys
 
 from flask import Flask, session
 from sqlalchemy.engine import make_url
@@ -32,6 +33,14 @@ def load_user(user_id: str):
         return db.session.get(User, int(user_id))
     except (TypeError, ValueError):
         return None
+
+
+def _is_migration_cli_invocation() -> bool:
+    argv = [part.strip().lower() for part in sys.argv[1:] if part.strip()]
+    if "db" in argv:
+        return True
+    executable = os.path.basename((sys.argv[0] or "")).strip().lower()
+    return "alembic" in executable
 
 
 def create_app() -> Flask:
@@ -167,7 +176,10 @@ def create_app() -> Flask:
     register_security_handlers(app)
     register_routes(app)
 
-    if enable_schema_sync:
+    run_schema_sync = enable_schema_sync and not _is_migration_cli_invocation()
+    if enable_schema_sync and not run_schema_sync:
+        app.logger.info("Skipping schema compatibility sync during migration CLI invocation.")
+    if run_schema_sync:
         # Additive schema safety-net for environments without migration tooling.
         with app.app_context():
             sync_schema_compatibility()
