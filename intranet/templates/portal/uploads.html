@@ -17,7 +17,7 @@
           <label class="form-label" for="portal-upload-matter">Matter</label>
           <select class="form-select" id="portal-upload-matter" name="matter_id" required>
             {% for m in matters %}
-              <option value="{{ m.id }}">{{ m.matter_no }} - {{ m.title }}</option>
+              <option value="{{ m.id }}" {% if prefill_matter_id and m.id == prefill_matter_id %}selected{% endif %}>{{ m.matter_no }} - {{ m.title }}</option>
             {% endfor %}
           </select>
         </div>
@@ -35,14 +35,19 @@
 
 <div class="card p-3">
   <h4 class="mb-1">Uploads</h4>
+  <div class="table-tools mt-2" data-table-tools data-table-target="portal-uploads-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by matter, filename, hash, or date...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
   <div class="table-responsive mt-2">
-    <table class="table">
+    <table class="table" id="portal-uploads-table">
       <thead>
         <tr>
           <th>Matter</th>
           <th>Filename</th>
           <th>SHA256</th>
           <th>Uploaded</th>
+          <th>Next Action</th>
         </tr>
       </thead>
       <tbody>
@@ -53,14 +58,20 @@
               {% set upload_matter.label = m.matter_no ~ ' - ' ~ m.title %}
             {% endif %}
           {% endfor %}
-          <tr>
+          <tr data-table-row data-search="{{ upload_matter.label }} {{ u.filename }} {{ u.sha256 }} {{ u.uploaded_at }}">
             <td>{{ upload_matter.label }}</td>
             <td>{{ u.filename }}</td>
             <td><code>{{ u.sha256[:16] }}...</code></td>
             <td>{{ u.uploaded_at }}</td>
+            <td class="table-actions">
+              {% if full_curated_matter_ids and u.matter_id in full_curated_matter_ids %}
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=u.matter_id) }}">Message</a>
+              {% endif %}
+              <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_links', matter_id=u.matter_id) }}">Secure Link</a>
+            </td>
           </tr>
         {% else %}
-          <tr><td colspan="4" class="muted">No uploads.</td></tr>
+          <tr><td colspan="5" class="muted">No uploads.</td></tr>
         {% endfor %}
       </tbody>
     </table>

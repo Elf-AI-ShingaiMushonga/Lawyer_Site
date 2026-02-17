@@ -11,7 +11,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import and_, func, or_
 
 from ..extensions import db
-from ..helpers import audit, can_access_matter, is_admin
+from ..helpers import audit, can_access_matter, get_active_matter_id, is_admin, set_active_matter_context
 from ..models import (
     ARSnapshot,
     AuditLog,
@@ -288,6 +288,7 @@ def register_billing_routes(app):
                 (period_start, period_end),
                 created_by=current_user.id,
             )
+            set_active_matter_context(matter_id)
             if result.invoice_id is None:
                 flash("No approved time/expenses for that period.", "warning")
             else:
@@ -300,6 +301,8 @@ def register_billing_routes(app):
         if page_number < 1:
             page_number = 1
         selected_matter_id = request.args.get("matter_id", type=int)
+        if not selected_matter_id:
+            selected_matter_id = get_active_matter_id()
         invoice_query = Invoice.query
         matter_query = Matter.query
         if not is_admin():
@@ -359,6 +362,7 @@ def register_billing_routes(app):
             abort(404)
         if not can_access_matter(inv.matter_id):
             abort(403)
+        set_active_matter_context(inv.matter_id)
 
         lines = InvoiceLine.query.filter_by(invoice_id=invoice_id).order_by(InvoiceLine.id.asc()).all()
         adjustments = InvoiceAdjustment.query.filter_by(invoice_id=invoice_id).order_by(InvoiceAdjustment.created_at.desc()).all()

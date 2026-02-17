@@ -11,6 +11,7 @@ DEFAULT_PERIODIC_JOBS = [
     ("deadline_sweep", 15),
     ("deadline_escalation_scan", 15),
     ("deadline_digest", 60),
+    ("priority_inbox_digest", 60),
     ("retention_archive_sweep", 24 * 60),
     ("suspicious_activity_scan", 30),
     ("analytics_snapshot", 60),

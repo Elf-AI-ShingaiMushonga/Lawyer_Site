@@ -15,9 +15,9 @@
       <div class="row g-2">
         <div class="col-md-4">
           <label class="form-label" for="portal-message-matter">Matter</label>
-          <select class="form-select" id="portal-message-matter" name="matter_id" required>
+          <select class="form-select" id="portal-message-matter" name="matter_id" data-thread-matter-target required>
             {% for m in matters %}
-              <option value="{{ m.id }}">{{ m.matter_no }} - {{ m.title }}</option>
+              <option value="{{ m.id }}" {% if prefill_matter_id and m.id == prefill_matter_id %}selected{% endif %}>{{ m.matter_no }} - {{ m.title }}</option>
             {% endfor %}
           </select>
         </div>
@@ -26,8 +26,21 @@
           <input class="form-control" id="portal-message-subject" name="subject" placeholder="Subject">
         </div>
         <div class="col-md-4">
-          <label class="form-label" for="portal-message-thread">Existing Thread ID (Optional)</label>
-          <input class="form-control" id="portal-message-thread" name="thread_id" type="number" placeholder="e.g. 24">
+          <label class="form-label" for="portal-message-thread">Reply to Existing Thread (Optional)</label>
+          <select class="form-select" id="portal-message-thread" name="thread_id" data-thread-matter-source>
+            <option value="">Start new thread</option>
+            {% for t in threads %}
+              {% set thread_matter = matter_map.get(t.matter_id) if matter_map else None %}
+              <option
+                value="{{ t.id }}"
+                data-matter-id="{{ t.matter_id }}"
+                {% if prefill_thread_id and t.id == prefill_thread_id %}selected{% endif %}
+              >
+                #{{ t.id }} · {{ thread_matter.matter_no ~ ' - ' ~ thread_matter.title if thread_matter else ('Matter #' ~ t.matter_id) }} · {{ t.subject }}
+              </option>
+            {% endfor %}
+          </select>
+          <div class="form-help" data-thread-matter-hint>Select a thread to lock matter and subject automatically.</div>
         </div>
       </div>
     </div>
@@ -43,32 +56,36 @@
 
 <div class="card p-3 mb-3">
   <h4 class="mb-1">Threads</h4>
+  <div class="table-tools mt-2" data-table-tools data-table-target="portal-threads-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by thread ID, matter, or subject...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
   <div class="table-responsive mt-2">
-    <table class="table">
+    <table class="table" id="portal-threads-table">
       <thead>
         <tr>
           <th>ID</th>
           <th>Matter</th>
           <th>Subject</th>
           <th>Created</th>
+          <th>Action</th>
         </tr>
       </thead>
       <tbody>
         {% for t in threads %}
-          {% set thread_matter = namespace(label='Matter #' ~ t.matter_id) %}
-          {% for m in matters %}
-            {% if m.id == t.matter_id %}
-              {% set thread_matter.label = m.matter_no ~ ' - ' ~ m.title %}
-            {% endif %}
-          {% endfor %}
-          <tr>
+          {% set thread_matter = matter_map.get(t.matter_id) if matter_map else None %}
+          <tr data-table-row data-search="{{ t.id }} {{ thread_matter.matter_no if thread_matter else '' }} {{ thread_matter.title if thread_matter else '' }} {{ t.subject }} {{ t.created_at }}">
             <td>{{ t.id }}</td>
-            <td>{{ thread_matter.label }}</td>
+            <td>{{ thread_matter.matter_no ~ ' - ' ~ thread_matter.title if thread_matter else ('Matter #' ~ t.matter_id) }}</td>
             <td>{{ t.subject }}</td>
             <td>{{ t.created_at }}</td>
+            <td class="table-actions">
+              <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=t.matter_id, thread_id=t.id) }}#portal-message-body">Reply</a>
+              <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_links', matter_id=t.matter_id) }}">Secure Link</a>
+            </td>
           </tr>
         {% else %}
-          <tr><td colspan="4" class="muted">No threads.</td></tr>
+          <tr><td colspan="5" class="muted">No threads.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -79,14 +96,20 @@
   <h4 class="mb-1">Recent Messages</h4>
   {% if messages %}
     {% for m in messages %}
-      {% set message_thread = namespace(subject='Thread #' ~ m.thread_id) %}
+      {% set message_thread = namespace(subject='Thread #' ~ m.thread_id, matter_id=None) %}
       {% for t in threads %}
         {% if t.id == m.thread_id %}
           {% set message_thread.subject = t.subject %}
+          {% set message_thread.matter_id = t.matter_id %}
         {% endif %}
       {% endfor %}
       <div class="activity-item">
-        <div class="fw-semibold">{{ message_thread.subject }} • {{ m.created_at }}</div>
+        <div class="fw-semibold d-flex flex-wrap align-items-center gap-2">
+          <span>{{ message_thread.subject }} • {{ m.created_at }}</span>
+          {% if message_thread.matter_id %}
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=message_thread.matter_id, thread_id=m.thread_id) }}#portal-message-body">Reply</a>
+          {% endif %}
+        </div>
         <div class="mt-1">{{ m.body }}</div>
       </div>
     {% endfor %}

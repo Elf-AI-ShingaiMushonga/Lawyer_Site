@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime as dt
-from urllib.parse import urlsplit
 
 from flask import flash, redirect, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
@@ -12,7 +11,6 @@ from ..config import is_valid_email
 from ..extensions import db, limiter
 from ..helpers import (
     audit,
-    can_access_matter,
     is_admin,
     register_trusted_device,
     register_user_session,
@@ -21,27 +19,21 @@ from ..helpers import (
 from ..mfa import check_backup_code, verify_totp
 from ..models import (
     Announcement,
-    AuditLog,
-    ConflictCheck,
     Deadline,
-    Contact,
     DocumentFile,
     Invoice,
-    KnowledgeBase,
     Matter,
-    MatterMember,
     MatterPin,
     MatterRecentView,
-    PortalMessageThread,
     Task,
     TaskAssignee,
     TimeEntry,
     TimeTimer,
-    TrustReconciliationRun,
     User,
     UserMFABackupCode,
 )
 from ..policies import visible_matter_ids
+from ..services.priority_inbox import build_priority_inbox
 from ..templates import page
 
 MFA_REQUIRED_ROLES = {"admin", "lawyer", "paralegal", "staff"}
@@ -49,17 +41,6 @@ MFA_REQUIRED_ROLES = {"admin", "lawyer", "paralegal", "staff"}
 
 def has_any_users() -> bool:
     return db.session.query(User.id).first() is not None
-
-
-def _safe_next_path(next_path: str | None, fallback: str) -> str:
-    if not next_path:
-        return fallback
-    parsed = urlsplit(next_path)
-    if parsed.scheme or parsed.netloc:
-        return fallback
-    if not parsed.path.startswith("/"):
-        return fallback
-    return next_path
 
 
 def register_auth_routes(app):
@@ -127,7 +108,6 @@ def register_auth_routes(app):
             password = request.form.get("password") or ""
             mfa_code = (request.form.get("mfa_code") or "").strip()
             backup_code = (request.form.get("backup_code") or "").strip().upper()
-            start_live_demo = (request.form.get("start_live_demo") or "").strip().lower() in {"1", "true", "yes", "on"}
             if not is_valid_email(email):
                 flash("Invalid credentials.", "warning")
                 return redirect(url_for("login"))
@@ -188,9 +168,6 @@ def register_auth_routes(app):
             register_user_session(user.id)
             register_trusted_device(user.id)
             audit("login")
-            if start_live_demo:
-                session["client_story_mode"] = True
-                return redirect(url_for("client_story"))
             return redirect(url_for("dashboard"))
 
         return page("Login", "auth/login.html")
@@ -205,15 +182,6 @@ def register_auth_routes(app):
         logout_user()
         flash("Logged out.", "info")
         return redirect(url_for("login"))
-
-    @app.post("/story-mode")
-    @login_required
-    def toggle_story_mode():
-        enabled = (request.form.get("enabled") or "").strip().lower() in {"1", "true", "yes", "on"}
-        session["client_story_mode"] = enabled
-        flash("Client story mode enabled." if enabled else "Client story mode disabled.", "info")
-        next_path = _safe_next_path(request.form.get("next"), url_for("dashboard"))
-        return redirect(next_path)
 
     @app.get("/dashboard")
     @login_required
@@ -357,6 +325,8 @@ def register_auth_routes(app):
             if len(at_risk_matters) >= 8:
                 break
 
+        priority_inbox = build_priority_inbox(current_user, scoped_matter_ids=scoped_ids)
+
         stats = {
             "matter_count": matter_scope.count(),
             "assigned_open_tasks": Task.query.filter(my_assignment_clause, Task.status != "Done").count(),
@@ -378,6 +348,7 @@ def register_auth_routes(app):
             "draft_invoices": invoice_scope.filter(Invoice.status == "draft").count(),
             "pinned_matters": len(pinned_matters),
             "recent_views": len(recent_views),
+            "priority_actions": priority_inbox["total_actions"],
         }
 
         return page(
@@ -391,226 +362,5 @@ def register_auth_routes(app):
             task_matter_map=task_matter_map,
             pinned_matters=pinned_matters,
             recent_views=recent_views,
-        )
-
-    @app.get("/story")
-    @login_required
-    def client_story():
-        matter_scope = Matter.query
-        scoped_ids: list[int] | None = None
-        if not is_admin():
-            scoped_ids = visible_matter_ids()
-            if scoped_ids:
-                matter_scope = matter_scope.filter(Matter.id.in_(scoped_ids))
-            else:
-                matter_scope = matter_scope.filter(Matter.id == -1)
-
-        flagship_matter = matter_scope.filter(Matter.matter_no == "2026-LIT-0142").first()
-        if flagship_matter and not can_access_matter(flagship_matter.id):
-            flagship_matter = None
-        if not flagship_matter:
-            flagship_matter = matter_scope.order_by(Matter.opened_at.desc()).first()
-
-        open_task_scope = Task.query.filter(Task.status != "Done")
-        document_scope = DocumentFile.query
-        invoice_scope = Invoice.query
-        deadline_scope = Deadline.query.filter(
-            Deadline.due_at >= dt.date.today(),
-            Deadline.due_at <= (dt.date.today() + dt.timedelta(days=14)),
-        )
-        if not is_admin():
-            if scoped_ids:
-                open_task_scope = open_task_scope.filter(Task.matter_id.in_(scoped_ids))
-                document_scope = document_scope.filter(DocumentFile.matter_id.in_(scoped_ids))
-                invoice_scope = invoice_scope.filter(Invoice.matter_id.in_(scoped_ids))
-                deadline_scope = deadline_scope.filter(Deadline.matter_id.in_(scoped_ids))
-            else:
-                open_task_scope = open_task_scope.filter(Task.id == -1)
-                document_scope = document_scope.filter(DocumentFile.id == -1)
-                invoice_scope = invoice_scope.filter(Invoice.id == -1)
-                deadline_scope = deadline_scope.filter(Deadline.id == -1)
-
-        trust_visible = current_user.role in {"admin", "lawyer"}
-        ops_visible = current_user.role == "admin"
-        crm_conflict_count = ConflictCheck.query.count() if trust_visible else None
-        portal_thread_count = PortalMessageThread.query.count() if is_admin() else None
-        integration_event_count = (
-            AuditLog.query.filter(
-                or_(
-                    AuditLog.action.like("office365_%"),
-                    AuditLog.action.like("third_party_%"),
-                    AuditLog.action.like("mobile_%"),
-                )
-            ).count()
-            if is_admin()
-            else None
-        )
-
-        story_stats = {
-            "matter_count": matter_scope.count(),
-            "open_task_count": open_task_scope.count(),
-            "document_count": document_scope.count(),
-            "deadline_next_14_count": deadline_scope.count(),
-            "invoice_count": invoice_scope.count(),
-            "contact_count": Contact.query.count(),
-            "knowledge_count": KnowledgeBase.query.count(),
-            "announcement_count": Announcement.query.count(),
-            "conflict_count": crm_conflict_count,
-            "trust_reconciliation_count": TrustReconciliationRun.query.count() if trust_visible else None,
-            "portal_thread_count": portal_thread_count,
-            "integration_event_count": integration_event_count,
-            "audit_count": AuditLog.query.count() if is_admin() else None,
-        }
-
-        flagship_metrics = {
-            "task_count": Task.query.filter(Task.matter_id == flagship_matter.id).count() if flagship_matter else 0,
-            "document_count": DocumentFile.query.filter(DocumentFile.matter_id == flagship_matter.id).count()
-            if flagship_matter
-            else 0,
-            "team_count": MatterMember.query.filter(MatterMember.matter_id == flagship_matter.id).count() if flagship_matter else 0,
-        }
-
-        story_links = {
-            "dashboard": url_for("dashboard"),
-            "matters": url_for("matters", q=(flagship_matter.matter_no if flagship_matter else "")),
-            "matter_detail": url_for("matter_detail", matter_id=flagship_matter.id) if flagship_matter else url_for("matters"),
-            "tasks": url_for("matter_tasks", matter_id=flagship_matter.id) if flagship_matter else url_for("matters"),
-            "documents": url_for("matter_documents", matter_id=flagship_matter.id) if flagship_matter else url_for("matters"),
-            "calendar": url_for("calendar_my"),
-            "workflow": url_for("task_templates"),
-            "dms": url_for("matter_dms", matter_id=flagship_matter.id) if flagship_matter else url_for("dms_home"),
-            "billing": url_for("billing_invoices"),
-            "trust": url_for("trust_ledger") if trust_visible else url_for("trust_security"),
-            "crm": url_for("crm_leads"),
-            "portal": url_for("portal_login"),
-            "integrations": url_for("integrations_office365"),
-            "mobile": url_for("mobile_hub"),
-            "analytics": url_for("analytics_utilization"),
-            "ops": url_for("ops_backup_status") if ops_visible else url_for("trust_security"),
-            "knowledge": url_for("kb"),
-            "search": url_for("search", q="POPIA"),
-            "audit": url_for("admin_audit") if is_admin() else url_for("trust_security"),
-        }
-
-        story_sequence = [
-            {
-                "title": "Executive snapshot",
-                "description": "Frame current workload, open risks, and overdue pressure at firm level.",
-                "href": story_links["dashboard"],
-            },
-            {
-                "title": "Matter workspace and stage control",
-                "description": "Open a flagship matter and show stage, risk, parties, and internal notes in one workspace.",
-                "href": story_links["matter_detail"],
-            },
-            {
-                "title": "Calendar and deadline execution",
-                "description": "Show critical deadlines, acknowledgements, and team-level milestone visibility.",
-                "href": story_links["calendar"],
-            },
-            {
-                "title": "Task workflow automation",
-                "description": "Demonstrate templates, dependencies, checklists, and multi-assignee execution.",
-                "href": story_links["workflow"],
-            },
-            {
-                "title": "Document lifecycle and productions",
-                "description": "Walk through DMS versioning, lock controls, OCR discovery, and production sets.",
-                "href": story_links["dms"],
-            },
-            {
-                "title": "Time capture, billing, and collections",
-                "description": "Review per-transaction billing, statements, tax invoices, and settled payment records.",
-                "href": story_links["billing"],
-            },
-            {
-                "title": "Trust accounting and compliance",
-                "description": "Show bank statement imports, cashbook/trial balance views, and Section 86 automation.",
-                "href": story_links["trust"],
-            },
-            {
-                "title": "CRM intake and client portal",
-                "description": "Show lead-to-conflict workflows, engagement progress, and curated client collaboration.",
-                "href": story_links["crm"],
-            },
-            {
-                "title": "Integrations and mobile operations",
-                "description": "Show Office365 exports, third-party import/export, and mobile fee/task capture.",
-                "href": story_links["integrations"],
-            },
-            {
-                "title": "Analytics and governance closeout",
-                "description": "Finish with utilization/profitability indicators and auditable operational controls.",
-                "href": story_links["audit"],
-            },
-        ]
-
-        story_pack_nos = ["2026-LIT-0142", "2026-CORP-0033", "2026-EMP-0071"]
-        story_pack_rows = (
-            matter_scope.filter(Matter.matter_no.in_(story_pack_nos))
-            .order_by(Matter.opened_at.desc())
-            .limit(3)
-            .all()
-        )
-        if not story_pack_rows:
-            story_pack_rows = matter_scope.order_by(Matter.opened_at.desc()).limit(3).all()
-
-        role_guides = {
-            "admin": {
-                "title": "Governance-first narrative",
-                "focus": [
-                    "Platform-wide control posture and auditability",
-                    "Operational KPIs, integration telemetry, and adoption metrics",
-                    "Backup/restore controls, trust compliance, and incident oversight",
-                ],
-            },
-            "partner": {
-                "title": "Partner narrative",
-                "focus": [
-                    "Portfolio-level risk posture and business impact",
-                    "Financial confidence across billing, trust, and reconciliations",
-                    "Client readiness across flagship matters and portal touchpoints",
-                ],
-            },
-            "associate": {
-                "title": "Associate narrative",
-                "focus": [
-                    "Execution detail across tasks, evidence, deadlines, and stage transitions",
-                    "Matter-level accountability and delivery velocity",
-                    "Knowledge reuse, DMS versioning, and reduced drafting cycle time",
-                ],
-            },
-            "paralegal": {
-                "title": "Delivery-efficiency narrative",
-                "focus": [
-                    "Document readiness, filing timelines, and production controls",
-                    "Evidence integrity with OCR retrieval and lock discipline",
-                    "Calendar/task execution consistency across matters",
-                ],
-            },
-            "staff": {
-                "title": "Operations-consistency narrative",
-                "focus": [
-                    "Intake quality, lead progression, and communication consistency",
-                    "Cross-team visibility of priorities plus mobile quick-capture workflows",
-                    "Governed process handoffs into billing, portal, and analytics views",
-                ],
-            },
-        }
-        role_key = current_user.role
-        if current_user.role == "lawyer":
-            role_key = "partner" if current_user.email.startswith("partner@") else "associate"
-        role_story = role_guides.get(role_key, role_guides["associate"])
-
-        return page(
-            "Client Story",
-            "auth/story.html",
-            story_stats=story_stats,
-            flagship_matter=flagship_matter,
-            flagship_metrics=flagship_metrics,
-            story_links=story_links,
-            is_admin_user=is_admin(),
-            role_story=role_story,
-            story_sequence=story_sequence,
-            story_pack_matters=story_pack_rows,
+            priority_inbox=priority_inbox,
         )

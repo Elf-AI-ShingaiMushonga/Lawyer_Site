@@ -6,7 +6,8 @@ import os
 import secrets
 import sys
 
-from flask import Flask, session
+from flask import Flask, request, session
+from flask_login import current_user
 from sqlalchemy.engine import make_url
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -21,6 +22,7 @@ from .extensions import (
     login_manager,
     migrate,
 )
+from .helpers import ACTIVE_MATTER_SESSION_KEY, resolve_active_matter, set_active_matter_context
 from .models import User
 from .routes import register_routes
 from .schema_sync import sync_schema_compatibility
@@ -160,9 +162,37 @@ def create_app() -> Flask:
         # Bind request-scoped identity context for PostgreSQL RLS policies.
         apply_request_db_context()
 
+    @app.before_request
+    def _capture_active_matter_context():
+        if not current_user.is_authenticated:
+            session.pop(ACTIVE_MATTER_SESSION_KEY, None)
+            return
+
+        candidates: list[int] = []
+        view_args = request.view_args or {}
+        for key in ("matter_id",):
+            if key in view_args:
+                try:
+                    candidates.append(int(view_args.get(key)))
+                except (TypeError, ValueError):
+                    continue
+        for key in ("matter_id", "matter_id_select"):
+            if key not in request.values:
+                continue
+            try:
+                candidates.append(int(request.values.get(key)))
+            except (TypeError, ValueError):
+                continue
+
+        for matter_id in candidates:
+            if set_active_matter_context(matter_id):
+                break
+
     @app.context_processor
     def inject_ui_state():
-        return {"story_mode_enabled": bool(session.get("client_story_mode", False))}
+        return {
+            "active_matter": resolve_active_matter(),
+        }
 
     db.init_app(app)
     migrate.init_app(app, db, directory=os.path.join(BASE_DIR, "migrations"))

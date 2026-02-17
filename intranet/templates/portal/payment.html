@@ -4,7 +4,7 @@
   <div class="toolbar-row">
     <div>
       <h3 class="section-title">Invoice #{{ invoice.id }} Payment</h3>
-      <div class="page-intro mt-1">Total {{ invoice.total }} • Status {{ invoice.status }}</div>
+      <div class="page-intro mt-1">Total {{ invoice.total }} • Outstanding {{ "%.2f"|format(outstanding_amount or 0.0) }} • Status {{ invoice.status }}</div>
     </div>
     <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_invoices') }}">Back to Invoices</a>
   </div>
@@ -15,11 +15,15 @@
       <div class="row g-2">
         <div class="col-md-4">
           <label class="form-label" for="portal-payment-amount">Amount</label>
-          <input class="form-control" id="portal-payment-amount" name="amount" type="number" step="0.01" placeholder="Amount" required>
+          <input class="form-control" id="portal-payment-amount" name="amount" type="number" step="0.01" value="{{ "%.2f"|format(prefill_amount or 0.0) }}" placeholder="Amount" required>
+          <div class="table-actions mt-2">
+            <button class="btn btn-sm btn-outline-light" type="button" data-fill-target="portal-payment-amount" data-fill-value="{{ '%.2f'|format(outstanding_amount or 0.0) }}">Use Outstanding</button>
+            <button class="btn btn-sm btn-outline-light" type="button" data-fill-target="portal-payment-amount" data-fill-value="{{ '%.2f'|format(invoice.total or 0.0) }}">Use Invoice Total</button>
+          </div>
         </div>
         <div class="col-md-3">
           <label class="form-label" for="portal-payment-currency">Currency</label>
-          <input class="form-control" id="portal-payment-currency" name="currency" value="ZAR">
+          <input class="form-control" id="portal-payment-currency" name="currency" value="{{ prefill_currency or 'ZAR' }}">
         </div>
         <div class="col-md-3">
           <label class="form-label" for="portal-payment-reference">Reference</label>
@@ -35,8 +39,12 @@
 
 <div class="card p-3">
   <h4 class="mb-1">Receipts</h4>
+  <div class="table-tools mt-2" data-table-tools data-table-target="portal-receipts-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by amount, status, reference, or date...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
   <div class="table-responsive mt-2">
-    <table class="table">
+    <table class="table" id="portal-receipts-table">
       <thead>
         <tr>
           <th>Amount</th>
@@ -48,7 +56,7 @@
       </thead>
       <tbody>
         {% for r in receipts %}
-          <tr>
+          <tr data-table-row data-search="{{ r.amount }} {{ r.currency }} {{ r.status }} {{ r.reference or '' }} {{ r.created_at }}">
             <td>{{ r.amount }}</td>
             <td>{{ r.currency }}</td>
             <td>{{ r.status }}</td>

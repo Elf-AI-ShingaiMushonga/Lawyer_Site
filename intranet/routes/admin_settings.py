@@ -19,10 +19,15 @@ from ..models import (
     PracticeArea,
     RateCard,
     RetentionPolicy,
+    ScheduledJob,
     TaskTemplate,
     TaskTemplateItem,
     TrustAccount,
     TrustThresholdAlert,
+)
+from ..services.priority_inbox import (
+    load_priority_inbox_config,
+    save_priority_inbox_config,
 )
 from ..templates import page
 
@@ -32,12 +37,83 @@ def _admin_required() -> None:
         abort(403)
 
 
+def _sync_priority_digest_schedule(config: dict) -> None:
+    now = dt.datetime.utcnow()
+    interval = int(config.get("digest_interval_minutes") or 60)
+    enabled = bool(config.get("digest_enabled"))
+    row = ScheduledJob.query.filter_by(job_type="priority_inbox_digest").first()
+    if row is None:
+        row = ScheduledJob(
+            job_type="priority_inbox_digest",
+            default_payload={},
+            interval_minutes=interval,
+            next_run_at=now + dt.timedelta(minutes=interval),
+            is_active=enabled,
+        )
+        db.session.add(row)
+    else:
+        row.interval_minutes = interval
+        row.is_active = enabled
+        if row.next_run_at is None or row.next_run_at <= now:
+            row.next_run_at = now + dt.timedelta(minutes=interval)
+    db.session.commit()
+
+
 def register_admin_settings_routes(app):
     @app.route("/admin/settings/firm", methods=["GET", "POST"])
     @login_required
     def admin_settings_firm():
         _admin_required()
         if request.method == "POST":
+            action = (request.form.get("action") or "generic").strip()
+            if action == "priority_inbox":
+                portal_response_sla_hours = request.form.get("portal_response_sla_hours", type=int)
+                followup_horizon_hours = request.form.get("followup_horizon_hours", type=int)
+                billing_capture_sla_hours = request.form.get("billing_capture_sla_hours", type=int)
+                digest_interval_minutes = request.form.get("digest_interval_minutes", type=int)
+                digest_enabled = (request.form.get("digest_enabled") or "").strip().lower() in {
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                }
+
+                if portal_response_sla_hours is None or not 1 <= portal_response_sla_hours <= 168:
+                    flash("Client response SLA must be between 1 and 168 hours.", "warning")
+                    return redirect(url_for("admin_settings_firm"))
+                if followup_horizon_hours is None or not 1 <= followup_horizon_hours <= 168:
+                    flash("Follow-up horizon must be between 1 and 168 hours.", "warning")
+                    return redirect(url_for("admin_settings_firm"))
+                if billing_capture_sla_hours is None or not 1 <= billing_capture_sla_hours <= 336:
+                    flash("Billing capture SLA must be between 1 and 336 hours.", "warning")
+                    return redirect(url_for("admin_settings_firm"))
+                if digest_interval_minutes is None or not 15 <= digest_interval_minutes <= 1440:
+                    flash("Digest interval must be between 15 and 1440 minutes.", "warning")
+                    return redirect(url_for("admin_settings_firm"))
+
+                payload = save_priority_inbox_config(
+                    {
+                        "portal_response_sla_hours": portal_response_sla_hours,
+                        "followup_horizon_hours": followup_horizon_hours,
+                        "billing_capture_sla_hours": billing_capture_sla_hours,
+                        "digest_enabled": digest_enabled,
+                        "digest_interval_minutes": digest_interval_minutes,
+                    },
+                    updated_by=current_user.id,
+                )
+                _sync_priority_digest_schedule(payload)
+                audit(
+                    "priority_inbox_config_update",
+                    "FirmSetting",
+                    None,
+                    {
+                        "digest_enabled": payload["digest_enabled"],
+                        "digest_interval_minutes": payload["digest_interval_minutes"],
+                    },
+                )
+                flash("Priority Inbox settings updated.", "info")
+                return redirect(url_for("admin_settings_firm"))
+
             setting_key = (request.form.get("setting_key") or "").strip()
             setting_value = (request.form.get("setting_value") or "").strip()
             if not setting_key:
@@ -55,7 +131,13 @@ def register_admin_settings_routes(app):
             return redirect(url_for("admin_settings_firm"))
 
         rows = FirmSetting.query.order_by(FirmSetting.setting_key.asc()).all()
-        return page("Firm Settings", "admin_settings/firm.html", settings=rows)
+        priority_inbox_config = load_priority_inbox_config()
+        return page(
+            "Firm Settings",
+            "admin_settings/firm.html",
+            settings=rows,
+            priority_inbox_config=priority_inbox_config,
+        )
 
     @app.route("/admin/settings/offices", methods=["GET", "POST"])
     @login_required

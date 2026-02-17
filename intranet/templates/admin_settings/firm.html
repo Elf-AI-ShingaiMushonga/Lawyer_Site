@@ -2,12 +2,46 @@
 {% block content %}
 <div class="row g-3">
   <div class="col-lg-4">
+    <div class="card p-3 mb-3">
+      <h3 class="mb-1">Priority Inbox</h3>
+      <div class="page-intro">Configure SLA thresholds and reminder cadence for daily triage.</div>
+
+      <form method="post" class="mt-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="priority_inbox">
+        <div class="form-section">
+          <label class="form-label" for="priority-portal-sla">Client response SLA (hours)</label>
+          <input class="form-control" id="priority-portal-sla" name="portal_response_sla_hours" type="number" min="1" max="168" value="{{ priority_inbox_config.portal_response_sla_hours }}" required>
+        </div>
+        <div class="form-section mt-2">
+          <label class="form-label" for="priority-followup-horizon">Follow-up horizon (hours)</label>
+          <input class="form-control" id="priority-followup-horizon" name="followup_horizon_hours" type="number" min="1" max="168" value="{{ priority_inbox_config.followup_horizon_hours }}" required>
+        </div>
+        <div class="form-section mt-2">
+          <label class="form-label" for="priority-billing-sla">Billing capture SLA (hours)</label>
+          <input class="form-control" id="priority-billing-sla" name="billing_capture_sla_hours" type="number" min="1" max="336" value="{{ priority_inbox_config.billing_capture_sla_hours }}" required>
+        </div>
+        <div class="form-section mt-2">
+          <div class="form-check">
+            <input class="form-check-input" id="priority-digest-enabled" name="digest_enabled" type="checkbox" value="1" {% if priority_inbox_config.digest_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="priority-digest-enabled">Enable reminder digest notifications</label>
+          </div>
+        </div>
+        <div class="form-section mt-2">
+          <label class="form-label" for="priority-digest-interval">Digest interval (minutes)</label>
+          <input class="form-control" id="priority-digest-interval" name="digest_interval_minutes" type="number" min="15" max="1440" value="{{ priority_inbox_config.digest_interval_minutes }}" required>
+        </div>
+        <div class="d-grid mt-2"><button class="btn btn-light">Save Priority Settings</button></div>
+      </form>
+    </div>
+
     <div class="card p-3">
       <h3 class="mb-1">Firm Setting</h3>
       <div class="page-intro">Add or update firm-level configuration values.</div>
 
       <form method="post" class="mt-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="generic">
         <div class="form-section">
           <label class="form-label" for="firm-setting-key">Setting Key</label>
           <input class="form-control" id="firm-setting-key" name="setting_key" placeholder="setting.key" required>

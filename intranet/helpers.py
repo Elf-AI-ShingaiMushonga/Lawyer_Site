@@ -13,9 +13,57 @@ from .config import ALLOWED_AUDIO_EXT, ALLOWED_DOC_EXT
 from .extensions import db
 from .models import AuditLog, MatterActivity, MatterMember, TrustedDevice, UserSession
 
+ACTIVE_MATTER_SESSION_KEY = "active_matter_id"
+
 
 def is_admin() -> bool:
     return getattr(current_user, "role", None) == "admin"
+
+
+def _coerce_positive_int(value) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def get_active_matter_id() -> int | None:
+    if not current_user.is_authenticated:
+        return None
+    matter_id = _coerce_positive_int(session.get(ACTIVE_MATTER_SESSION_KEY))
+    if not matter_id:
+        session.pop(ACTIVE_MATTER_SESSION_KEY, None)
+        return None
+    if not can_access_matter(matter_id):
+        session.pop(ACTIVE_MATTER_SESSION_KEY, None)
+        return None
+    return matter_id
+
+
+def set_active_matter_context(matter_id: int | None) -> int | None:
+    if not current_user.is_authenticated:
+        return None
+    parsed_id = _coerce_positive_int(matter_id)
+    if not parsed_id:
+        return None
+    if not can_access_matter(parsed_id):
+        return None
+    session[ACTIVE_MATTER_SESSION_KEY] = parsed_id
+    return parsed_id
+
+
+def resolve_active_matter():
+    matter_id = get_active_matter_id()
+    if not matter_id:
+        return None
+    from .models import Matter
+
+    row = db.session.get(Matter, matter_id)
+    if row is None:
+        session.pop(ACTIVE_MATTER_SESSION_KEY, None)
+        return None
+    return row
 
 
 def can_access_matter(matter_id: int) -> bool:

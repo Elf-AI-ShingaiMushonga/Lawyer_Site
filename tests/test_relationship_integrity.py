@@ -50,6 +50,7 @@ from intranet.models import (
     PaymentAllocation,
     PortalMatterAccess,
     PortalMessage,
+    PortalMessageThread,
     PortalUser,
     RateCard,
     Section86Accrual,
@@ -396,6 +397,175 @@ def test_portal_visibility_levels_are_enforced(app_ctx):
     )
     assert allowed_messages.status_code == 302
     assert PortalMessage.query.count() == 1
+
+
+def test_internal_active_matter_prefills_cross_module_forms(app_ctx):
+    app = app_ctx
+    user = _seed_user("active-matter-user@example.com", role="partner")
+    matter = _seed_matter(user, "2026-ACTIVE-0001", "Active Context Matter", "Context Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    lead = CRMLead(
+        full_name="Context Lead",
+        organization="Context Org",
+        email="context-lead@example.com",
+        stage="new",
+        created_by=user.id,
+        assigned_to=user.id,
+    )
+    db.session.add(lead)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+
+    detail = client.get(f"/time/timers?matter_id={matter.id}")
+    assert detail.status_code == 200
+    with client.session_transaction() as sess:
+        assert sess.get("active_matter_id") == matter.id
+
+    for route in ["/time/timers", "/time/entries", "/billing/invoices", f"/crm/leads/{lead.id}"]:
+        response = client.get(route)
+        assert response.status_code == 200
+        body = response.get_data(as_text=True)
+        assert f'value="{matter.id}" selected' in body
+
+    crm_body = client.get(f"/crm/leads/{lead.id}").get_data(as_text=True)
+    assert "lead-intake-matter-id" not in crm_body
+    assert "engage-matter-id" not in crm_body
+
+
+def test_portal_message_thread_reply_uses_thread_matter_context(app_ctx):
+    app = app_ctx
+    admin = _seed_user("portal-thread-admin@example.com", role="admin")
+    matter = _seed_matter(admin, "2026-PORTAL-THREAD-1", "Thread Context Matter", "Portal Thread Client")
+    other = _seed_matter(admin, "2026-PORTAL-THREAD-2", "Thread Context Other", "Portal Thread Client")
+    portal_user = PortalUser(email="portal-thread-user@example.com", full_name="Thread Portal User", password_hash="x", is_active=True)
+    portal_user.set_password("PortalPassword123!")
+    db.session.add(portal_user)
+    db.session.flush()
+    db.session.add(
+        PortalMatterAccess(
+            portal_user_id=portal_user.id,
+            matter_id=matter.id,
+            visibility_level="full_curated",
+            granted_by=admin.id,
+        )
+    )
+    db.session.add(
+        PortalMatterAccess(
+            portal_user_id=portal_user.id,
+            matter_id=other.id,
+            visibility_level="full_curated",
+            granted_by=admin.id,
+        )
+    )
+    thread = PortalMessageThread(matter_id=matter.id, subject="Initial Thread", created_by_portal_user_id=portal_user.id)
+    db.session.add(thread)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_portal_session(client, portal_user.id)
+
+    reply = client.post(
+        "/portal/messages",
+        data={
+            "csrf_token": "test-csrf",
+            "thread_id": thread.id,
+            "body": "Reply without matter id.",
+        },
+        follow_redirects=False,
+    )
+    assert reply.status_code == 302
+    created = PortalMessage.query.order_by(PortalMessage.id.desc()).first()
+    assert created is not None
+    assert created.thread_id == thread.id
+    with client.session_transaction() as sess:
+        assert sess.get("portal_active_matter_id") == matter.id
+
+    mismatch = client.post(
+        "/portal/messages",
+        data={
+            "csrf_token": "test-csrf",
+            "matter_id": other.id,
+            "thread_id": thread.id,
+            "body": "This should not be accepted.",
+        },
+        follow_redirects=False,
+    )
+    assert mismatch.status_code == 302
+    assert PortalMessage.query.count() == 1
+
+
+def test_portal_active_matter_prefills_message_upload_and_link_forms(app_ctx):
+    app = app_ctx
+    admin = _seed_user("portal-prefill-admin@example.com", role="admin")
+    matter = _seed_matter(admin, "2026-PORTAL-PREFILL-1", "Portal Prefill Matter", "Portal Prefill Client")
+    portal_user = PortalUser(email="portal-prefill-user@example.com", full_name="Portal Prefill User", password_hash="x", is_active=True)
+    portal_user.set_password("PortalPassword123!")
+    db.session.add(portal_user)
+    db.session.flush()
+    db.session.add(
+        PortalMatterAccess(
+            portal_user_id=portal_user.id,
+            matter_id=matter.id,
+            visibility_level="full_curated",
+            granted_by=admin.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    _set_portal_session(client, portal_user.id)
+    detail = client.get(f"/portal/matters/{matter.id}")
+    assert detail.status_code == 200
+
+    for route in ["/portal/messages", "/portal/uploads", "/portal/links"]:
+        response = client.get(route)
+        assert response.status_code == 200
+        body = response.get_data(as_text=True)
+        assert f'value="{matter.id}" selected' in body
+
+
+def test_portal_payment_prefills_outstanding_amount(app_ctx):
+    app = app_ctx
+    admin = _seed_user("portal-pay-admin@example.com", role="admin")
+    matter = _seed_matter(admin, "2026-PORTAL-PAY-1", "Portal Payment Matter", "Portal Payment Client")
+    portal_user = PortalUser(email="portal-pay-user@example.com", full_name="Portal Payment User", password_hash="x", is_active=True)
+    portal_user.set_password("PortalPassword123!")
+    db.session.add(portal_user)
+    db.session.flush()
+    db.session.add(
+        PortalMatterAccess(
+            portal_user_id=portal_user.id,
+            matter_id=matter.id,
+            visibility_level="full_curated",
+            granted_by=admin.id,
+        )
+    )
+    invoice = Invoice(
+        matter_id=matter.id,
+        client_name=matter.client_name,
+        period_start=dt.date(2026, 1, 1),
+        period_end=dt.date(2026, 1, 31),
+        status="approved",
+        subtotal=500.0,
+        tax_total=75.0,
+        total=575.0,
+        created_by=admin.id,
+    )
+    db.session.add(invoice)
+    db.session.flush()
+    db.session.add(PaymentAllocation(invoice_id=invoice.id, amount=175.0, status="settled", created_by=admin.id))
+    db.session.add(PaymentAllocation(invoice_id=invoice.id, amount=50.0, status="pending", created_by=admin.id))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_portal_session(client, portal_user.id)
+    response = client.get(f"/portal/payments/{invoice.id}")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Outstanding 400.00" in body
+    assert 'id="portal-payment-amount" name="amount" type="number" step="0.01" value="400.00"' in body
 
 
 def test_portal_login_enforces_optional_mfa_when_enabled(app_ctx):

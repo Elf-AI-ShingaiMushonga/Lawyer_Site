@@ -95,6 +95,7 @@ REQUIRED_ROUTES = {
     "/trust/reports/auditor",
     "/crm/leads",
     "/crm/leads/<int:lead_id>",
+    "/crm/followups/<int:followup_id>/status",
     "/crm/conflicts/check",
     "/crm/conflicts/<int:conflict_id>/override",
     "/crm/conflicts/<int:conflict_id>/export",

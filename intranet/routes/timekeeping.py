@@ -7,7 +7,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import and_, or_
 
 from ..extensions import db
-from ..helpers import audit, can_access_matter, is_admin
+from ..helpers import audit, can_access_matter, get_active_matter_id, is_admin, set_active_matter_context
 from ..models import FeeArrangement, Matter, RateCard, TimeEntry, TimeRoundingPolicy, TimeTimer, TimeValidationEvent
 from ..policies import visible_matter_ids
 from ..templates import page
@@ -316,8 +316,15 @@ def register_timekeeping_routes(app):
                     matter_map[matter.id] = matter
 
         prefill_matter_id = request.args.get("matter_id", type=int)
+        if not prefill_matter_id:
+            prefill_matter_id = get_active_matter_id()
         if prefill_matter_id and not can_access_matter(prefill_matter_id):
             prefill_matter_id = None
+        if prefill_matter_id and prefill_matter_id not in {matter.id for matter in matters}:
+            selected = db.session.get(Matter, prefill_matter_id)
+            if selected and can_access_matter(selected.id):
+                matters = [selected] + matters
+                matter_map[selected.id] = selected
         prefill_task_id = request.args.get("task_id", type=int)
         prefill_label = (request.args.get("label") or "").strip()
 
@@ -354,6 +361,8 @@ def register_timekeeping_routes(app):
         )
         db.session.add(timer)
         db.session.commit()
+        if matter_id:
+            set_active_matter_context(matter_id)
         audit("timer_start", "TimeTimer", timer.id)
         flash("Timer started.", "info")
         return redirect(url_for("time_timers"))
@@ -401,6 +410,8 @@ def register_timekeeping_routes(app):
         )
         db.session.add(timer)
         db.session.commit()
+        if matter_id:
+            set_active_matter_context(matter_id)
         audit("timer_switch", "TimeTimer", timer.id)
         flash("Timer switched.", "info")
         return redirect(url_for("time_timers"))
@@ -547,6 +558,7 @@ def register_timekeeping_routes(app):
             if issues:
                 entry.status = "needs_review"
             db.session.commit()
+            set_active_matter_context(matter_id)
             audit("time_entry_create", "TimeEntry", entry.id, {"issues": issues})
             flash("Time entry saved." if not issues else "Time entry saved with validation issues.", "info")
             return redirect(url_for("time_entries"))
@@ -568,8 +580,15 @@ def register_timekeeping_routes(app):
                     matter_lookup[matter.id] = matter
 
         prefill_matter_id = request.args.get("matter_id", type=int)
+        if not prefill_matter_id:
+            prefill_matter_id = get_active_matter_id()
         if prefill_matter_id and not can_access_matter(prefill_matter_id):
             prefill_matter_id = None
+        if prefill_matter_id and prefill_matter_id not in {matter.id for matter in matters}:
+            selected = db.session.get(Matter, prefill_matter_id)
+            if selected and can_access_matter(selected.id):
+                matters = [selected] + matters
+                matter_lookup[selected.id] = selected
         prefill_task_id = request.args.get("task_id", type=int)
 
         default_end_dt = dt.datetime.utcnow().replace(second=0, microsecond=0)
@@ -618,6 +637,7 @@ def register_timekeeping_routes(app):
                 entry.approved_by = current_user.id
                 entry.approved_at = dt.datetime.utcnow()
             db.session.commit()
+            set_active_matter_context(entry.matter_id)
             audit("time_entry_review", "TimeEntry", entry.id, {"state": state})
             flash("Review saved.", "info")
             return redirect(url_for("time_review"))
@@ -640,6 +660,7 @@ def register_timekeeping_routes(app):
 
         entry.locked_at = dt.datetime.utcnow()
         db.session.commit()
+        set_active_matter_context(entry.matter_id)
         audit("time_entry_lock", "TimeEntry", entry.id)
         flash("Time entry locked.", "info")
         return redirect(url_for("time_review"))

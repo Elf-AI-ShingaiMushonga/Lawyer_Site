@@ -29,20 +29,26 @@ Use this checklist for each Ubuntu/EC2 production release.
 ## 3. Database and Seed Controls
 
 - [ ] Run migrations:
-  - `python app.py migrate`
+  - `flask --app app.py db upgrade -d migrations`
 - [ ] (Optional demo environments only) reseed:
   - `python app.py seed-demo --reset --password "<strong-password>"`
 - [ ] Validate schema state:
-  - `python app.py db-current`
+  - `flask --app app.py db current -d migrations`
 
 ## 4. Service Restart
 
 - [ ] Restart application service:
   - `sudo systemctl restart law-intranet`
+- [ ] Restart background worker service:
+  - `sudo systemctl restart law-intranet-worker`
+- [ ] Restart scheduler service:
+  - `sudo systemctl restart law-intranet-scheduler`
 - [ ] Restart/reload reverse proxy:
   - `sudo systemctl reload nginx`
 - [ ] Confirm required services are healthy:
   - `sudo systemctl status law-intranet --no-pager`
+  - `sudo systemctl status law-intranet-worker --no-pager`
+  - `sudo systemctl status law-intranet-scheduler --no-pager`
   - `sudo systemctl status nginx --no-pager`
   - `sudo systemctl status redis-server --no-pager`
 

@@ -118,18 +118,14 @@
       <form method="post" class="row g-3 mb-3 align-items-end">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="intake">
-        <div class="col-md-8">
+        <div class="col-md-12">
           <label class="form-label" for="lead-intake-matter-select">Matter (Optional)</label>
-          <select class="form-select" id="lead-intake-matter-select" name="matter_id_select">
+          <select class="form-select" id="lead-intake-matter-select" name="matter_id_select" data-lead-matter-select="intake">
             <option value="">Not linked yet</option>
             {% for matter in matters %}
-              <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+              <option value="{{ matter.id }}" {% if selected_matter_id and matter.id == selected_matter_id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
             {% endfor %}
           </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label" for="lead-intake-matter-id">Or Matter ID</label>
-          <input class="form-control" id="lead-intake-matter-id" name="matter_id" type="number" min="1" placeholder="Optional">
         </div>
         <div class="col-12 d-grid">
           <label class="form-label visually-hidden" for="lead-intake-create">Create Intake</label>
@@ -137,21 +133,24 @@
         </div>
       </form>
 
+      <div class="form-section mb-3">
+        <div class="form-check">
+          <input class="form-check-input" id="lead-matter-sync-toggle" type="checkbox" data-lead-matter-sync-toggle checked>
+          <label class="form-check-label" for="lead-matter-sync-toggle">Keep intake and engagement matter in sync</label>
+        </div>
+      </div>
+
       <form method="post" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="engagement">
-        <div class="col-md-6">
+        <div class="col-md-8">
           <label class="form-label" for="engage-matter-select">Matter</label>
-          <select class="form-select" id="engage-matter-select" name="matter_id_select">
+          <select class="form-select" id="engage-matter-select" name="matter_id_select" data-lead-matter-select="engagement">
             <option value="">Select a matter</option>
             {% for matter in matters %}
-              <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+              <option value="{{ matter.id }}" {% if selected_matter_id and matter.id == selected_matter_id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
             {% endfor %}
           </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label" for="engage-matter-id">Or ID</label>
-          <input class="form-control" id="engage-matter-id" name="matter_id" type="number" min="1" placeholder="ID">
         </div>
         <div class="col-md-4">
           <label class="form-label" for="engage-template">Template</label>
@@ -258,6 +257,7 @@
               <th data-sort-index="0" data-sort-type="date">Due</th>
               <th data-sort-index="1">Note</th>
               <th data-sort-index="2">Status</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -266,10 +266,18 @@
                 <td>{{ followup.due_at }}</td>
                 <td>{{ followup.note }}</td>
                 <td><span class="badge badge-soft status-badge">{{ followup.status }}</span></td>
+                <td class="table-actions">
+                  <form method="post" action="{{ url_for('crm_followup_status', followup_id=followup.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="status" value="{{ 'open' if followup.status == 'done' else 'done' }}">
+                    <input type="hidden" name="next" value="{{ request.path }}#lead-followups-table">
+                    <button class="btn btn-sm btn-outline-light" type="submit">{{ 'Reopen' if followup.status == 'done' else 'Mark Done' }}</button>
+                  </form>
+                </td>
               </tr>
             {% endfor %}
             <tr data-table-empty-row class="table-empty-row" {% if followups|length > 0 %}hidden{% endif %}>
-              <td colspan="3" class="muted">No follow-ups yet.</td>
+              <td colspan="4" class="muted">No follow-ups yet.</td>
             </tr>
           </tbody>
         </table>

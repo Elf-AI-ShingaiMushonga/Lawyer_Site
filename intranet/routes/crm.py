@@ -3,13 +3,14 @@ from __future__ import annotations
 import datetime as dt
 import json
 from collections import defaultdict
+from urllib.parse import urlsplit
 
 import sqlalchemy as sa
 from flask import Response, abort, current_app, flash, redirect, request, url_for
 from flask_login import current_user, login_required
 
 from ..extensions import db
-from ..helpers import audit, normalize_query
+from ..helpers import audit, get_active_matter_id, normalize_query, set_active_matter_context
 from ..reports import export_conflict_report_csv
 from ..models import CRMFollowUp, CRMLead, ConflictCheck, ConflictSemanticHit, EngagementLetter, IntakeForm, LeadQuote, Matter
 from ..services.conflict_engine import ConflictEngine
@@ -19,6 +20,17 @@ from ..templates import page
 LEAD_STAGES = ["new", "contacted", "qualified", "proposal", "retained", "closed_lost"]
 QUOTE_STATUSES = ["draft", "sent", "accepted", "rejected", "expired"]
 QUOTE_FEE_MODELS = ["fixed", "hourly", "capped"]
+
+
+def _safe_next_path(next_path: str | None, fallback: str) -> str:
+    if not next_path:
+        return fallback
+    parsed = urlsplit(next_path)
+    if parsed.scheme or parsed.netloc:
+        return fallback
+    if not parsed.path.startswith("/"):
+        return fallback
+    return next_path
 
 
 def _safe_float(value, default: float = 0.0) -> float:
@@ -110,12 +122,16 @@ def register_crm_routes(app):
         if not lead:
             abort(404)
 
-        def _selected_matter_id() -> int | None:
+        def _selected_matter_id(*, fallback_to_active: bool = False) -> int | None:
             selected = request.form.get("matter_id", type=int)
             if selected:
                 return selected
             selected = request.form.get("matter_id_select", type=int)
-            return selected or None
+            if selected:
+                return selected
+            if fallback_to_active:
+                return get_active_matter_id()
+            return None
 
         if request.method == "POST":
             action = (request.form.get("action") or "update").strip()
@@ -149,7 +165,7 @@ def register_crm_routes(app):
                 flash("Follow-up added.", "info")
 
             elif action == "intake":
-                matter_id = _selected_matter_id()
+                matter_id = _selected_matter_id(fallback_to_active=True)
                 if matter_id and not db.session.get(Matter, matter_id):
                     flash("Selected matter does not exist.", "warning")
                     return redirect(url_for("crm_lead_detail", lead_id=lead_id))
@@ -167,6 +183,8 @@ def register_crm_routes(app):
                 )
                 db.session.add(intake)
                 db.session.commit()
+                if matter_id:
+                    set_active_matter_context(matter_id)
                 audit("intake_create", "IntakeForm", intake.id)
                 queued_check_id = None
                 try:
@@ -186,7 +204,7 @@ def register_crm_routes(app):
                     flash("Intake form created.", "info")
 
             elif action == "engagement":
-                matter_id = _selected_matter_id()
+                matter_id = _selected_matter_id(fallback_to_active=True)
                 if not matter_id:
                     flash("Select a matter for the engagement letter.", "warning")
                     return redirect(url_for("crm_lead_detail", lead_id=lead_id))
@@ -202,6 +220,7 @@ def register_crm_routes(app):
                 )
                 db.session.add(letter)
                 db.session.commit()
+                set_active_matter_context(matter_id)
                 audit("engagement_create", "EngagementLetter", letter.id)
                 flash("Engagement letter created.", "info")
 
@@ -360,6 +379,12 @@ def register_crm_routes(app):
             if normalized in quote_status_counts:
                 quote_status_counts[normalized] += 1
         followup_default_due_at = (dt.datetime.now() + dt.timedelta(days=1)).replace(second=0, microsecond=0)
+        selected_matter_id = get_active_matter_id()
+        if selected_matter_id and selected_matter_id not in {matter.id for matter in matters}:
+            selected_matter = db.session.get(Matter, selected_matter_id)
+            if selected_matter is not None:
+                matters = [selected_matter] + matters
+                matter_lookup[selected_matter.id] = selected_matter
 
         return page(
             "Lead Detail",
@@ -380,7 +405,47 @@ def register_crm_routes(app):
             letters=letters,
             stages=LEAD_STAGES,
             followup_default_due_at=followup_default_due_at.strftime("%Y-%m-%dT%H:%M"),
+            selected_matter_id=selected_matter_id,
         )
+
+    @app.post("/crm/followups/<int:followup_id>/status")
+    @login_required
+    def crm_followup_status(followup_id: int):
+        followup = db.session.get(CRMFollowUp, followup_id)
+        if not followup:
+            abort(404)
+        lead = db.session.get(CRMLead, followup.lead_id)
+        if not lead:
+            abort(404)
+
+        next_status = (request.form.get("status") or "").strip().lower()
+        allowed_statuses = {"open", "done", "cancelled"}
+        if next_status not in allowed_statuses:
+            flash("Invalid follow-up status.", "warning")
+            return redirect(url_for("crm_lead_detail", lead_id=lead.id))
+
+        due_raw = (request.form.get("due_at") or "").strip()
+        due_at = followup.due_at
+        if due_raw:
+            try:
+                due_at = dt.datetime.fromisoformat(due_raw)
+            except ValueError:
+                flash("Invalid follow-up due date.", "warning")
+                return redirect(url_for("crm_lead_detail", lead_id=lead.id))
+
+        followup.status = next_status
+        followup.due_at = due_at
+        lead.updated_at = dt.datetime.utcnow()
+        db.session.commit()
+        audit(
+            "crm_followup_status_update",
+            "CRMFollowUp",
+            followup.id,
+            {"status": followup.status, "lead_id": lead.id},
+        )
+        flash("Follow-up updated.", "info")
+        next_path = _safe_next_path(request.form.get("next"), url_for("crm_lead_detail", lead_id=lead.id))
+        return redirect(next_path)
 
     @app.post("/crm/quotes/<int:quote_id>/status")
     @login_required

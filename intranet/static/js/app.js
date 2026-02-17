@@ -335,6 +335,38 @@
     applyFilters();
   };
 
+  const initNavMenus = () => {
+    const menus = Array.from(document.querySelectorAll("[data-nav-menu]")).filter(
+      (menu) => menu instanceof HTMLDetailsElement
+    );
+    if (menus.length === 0) {
+      return;
+    }
+
+    const closeAll = () => {
+      menus.forEach((menu) => {
+        menu.open = false;
+      });
+    };
+
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      const clickedInMenu = menus.some((menu) => menu.contains(target));
+      if (!clickedInMenu) {
+        closeAll();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeAll();
+      }
+    });
+  };
+
   const initTimePrompts = () => {
     const forms = Array.from(document.querySelectorAll("[data-time-prompt-form]"));
     if (forms.length === 0) {
@@ -584,6 +616,273 @@
 
       refresh();
     });
+  };
+
+  const initPortalMessageComposer = () => {
+    const matterSelect = document.getElementById("portal-message-matter");
+    const threadSelect = document.getElementById("portal-message-thread");
+    const subjectInput = document.getElementById("portal-message-subject");
+    const hint = document.querySelector("[data-thread-matter-hint]");
+    if (!(matterSelect instanceof HTMLSelectElement) || !(threadSelect instanceof HTMLSelectElement)) {
+      return;
+    }
+
+    const threadOptions = Array.from(threadSelect.options);
+
+    const setHint = (text) => {
+      if (hint instanceof HTMLElement) {
+        hint.textContent = text;
+      }
+    };
+
+    const setSubjectState = () => {
+      const hasSelectedThread = threadSelect.value.trim().length > 0;
+      if (subjectInput instanceof HTMLInputElement) {
+        subjectInput.disabled = hasSelectedThread;
+        subjectInput.placeholder = hasSelectedThread ? "Subject locked to selected thread" : "Subject";
+      }
+      if (hasSelectedThread) {
+        setHint("Replying in selected thread. Subject is locked.");
+      }
+    };
+
+    const filterThreadsByMatter = () => {
+      const selectedMatterId = matterSelect.value.trim();
+      let visibleCount = 0;
+
+      threadOptions.forEach((option, index) => {
+        if (index === 0) {
+          option.hidden = false;
+          return;
+        }
+        const optionMatterId = option.getAttribute("data-matter-id") || "";
+        const matchesMatter = !selectedMatterId || !optionMatterId || optionMatterId === selectedMatterId;
+        option.hidden = !matchesMatter;
+        if (matchesMatter) {
+          visibleCount += 1;
+        }
+      });
+
+      const selectedOption = threadSelect.selectedOptions.item(0);
+      if (selectedOption && selectedOption.hidden) {
+        threadSelect.value = "";
+      }
+
+      if (threadSelect.value.trim().length > 0) {
+        setHint("Replying in selected thread. Subject is locked.");
+        return;
+      }
+      if (!selectedMatterId) {
+        setHint("Select a thread to lock matter and subject automatically.");
+        return;
+      }
+      if (visibleCount === 0) {
+        setHint("No existing threads for this matter. Start a new one.");
+        return;
+      }
+      const suffix = visibleCount === 1 ? "" : "s";
+      setHint(`${visibleCount} existing thread${suffix} for this matter.`);
+    };
+
+    const syncMatterFromThread = () => {
+      const hasSelectedThread = threadSelect.value.trim().length > 0;
+      if (hasSelectedThread) {
+        const selectedOption = threadSelect.selectedOptions.item(0);
+        const matterId = selectedOption ? selectedOption.getAttribute("data-matter-id") || "" : "";
+        if (matterId) {
+          const match = Array.from(matterSelect.options).find((option) => option.value === matterId);
+          if (match) {
+            matterSelect.value = matterId;
+          }
+        }
+      }
+
+      filterThreadsByMatter();
+      setSubjectState();
+    };
+
+    matterSelect.addEventListener("change", () => {
+      filterThreadsByMatter();
+      setSubjectState();
+    });
+    threadSelect.addEventListener("change", syncMatterFromThread);
+    filterThreadsByMatter();
+    setSubjectState();
+  };
+
+  const initLeadMatterSync = () => {
+    const intakeMatterSelect = document.querySelector("[data-lead-matter-select='intake']");
+    const engagementMatterSelect = document.querySelector("[data-lead-matter-select='engagement']");
+    const syncToggle = document.querySelector("[data-lead-matter-sync-toggle]");
+    if (
+      !(intakeMatterSelect instanceof HTMLSelectElement) ||
+      !(engagementMatterSelect instanceof HTMLSelectElement)
+    ) {
+      return;
+    }
+
+    const isSyncEnabled = () =>
+      !(syncToggle instanceof HTMLInputElement) || syncToggle.type !== "checkbox" || syncToggle.checked;
+
+    const syncMatter = (source, target) => {
+      if (!isSyncEnabled()) {
+        return;
+      }
+      const nextValue = source.value;
+      if (target.value !== nextValue) {
+        target.value = nextValue;
+      }
+    };
+
+    const alignOnEnable = () => {
+      if (!isSyncEnabled()) {
+        return;
+      }
+      if (intakeMatterSelect.value) {
+        engagementMatterSelect.value = intakeMatterSelect.value;
+        return;
+      }
+      if (engagementMatterSelect.value) {
+        intakeMatterSelect.value = engagementMatterSelect.value;
+      }
+    };
+
+    intakeMatterSelect.addEventListener("change", () => syncMatter(intakeMatterSelect, engagementMatterSelect));
+    engagementMatterSelect.addEventListener("change", () => syncMatter(engagementMatterSelect, intakeMatterSelect));
+    if (syncToggle instanceof HTMLInputElement && syncToggle.type === "checkbox") {
+      syncToggle.addEventListener("change", alignOnEnable);
+    }
+
+    alignOnEnable();
+  };
+
+  const initQuickFillButtons = () => {
+    const buttons = Array.from(document.querySelectorAll("[data-fill-target][data-fill-value]"));
+    buttons.forEach((button) => {
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      button.addEventListener("click", () => {
+        const targetId = button.getAttribute("data-fill-target") || "";
+        const value = button.getAttribute("data-fill-value") || "";
+        const target = targetId ? document.getElementById(targetId) : null;
+        if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+          return;
+        }
+
+        target.value = value;
+        target.dispatchEvent(new Event("input", { bubbles: true }));
+        target.dispatchEvent(new Event("change", { bubbles: true }));
+        target.focus();
+        target.select();
+      });
+    });
+  };
+
+  const initCopyActions = () => {
+    const buttons = Array.from(document.querySelectorAll("[data-copy-target]"));
+    if (buttons.length === 0) {
+      return;
+    }
+
+    const setFeedback = (targetId, text) => {
+      const feedbackNode = Array.from(document.querySelectorAll("[data-copy-feedback-for]")).find(
+        (node) => node.getAttribute("data-copy-feedback-for") === targetId
+      );
+      if (feedbackNode instanceof HTMLElement) {
+        feedbackNode.textContent = text;
+      }
+    };
+
+    const legacyCopy = (text) => {
+      const helper = document.createElement("textarea");
+      helper.value = text;
+      helper.setAttribute("readonly", "");
+      helper.style.position = "fixed";
+      helper.style.opacity = "0";
+      document.body.appendChild(helper);
+      helper.focus();
+      helper.select();
+      let copied = false;
+      try {
+        copied = document.execCommand("copy");
+      } catch (error) {
+        copied = false;
+      }
+      document.body.removeChild(helper);
+      return copied;
+    };
+
+    buttons.forEach((button) => {
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      button.addEventListener("click", async () => {
+        const targetId = button.getAttribute("data-copy-target") || "";
+        const successText = button.getAttribute("data-copy-success-text") || "Copied";
+        const source = targetId ? document.getElementById(targetId) : null;
+        if (!(source instanceof HTMLInputElement || source instanceof HTMLTextAreaElement)) {
+          return;
+        }
+        const text = source.value.trim();
+        if (!text) {
+          setFeedback(targetId, "Nothing to copy yet.");
+          return;
+        }
+
+        let copied = false;
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          try {
+            await navigator.clipboard.writeText(text);
+            copied = true;
+          } catch (error) {
+            copied = false;
+          }
+        }
+        if (!copied) {
+          copied = legacyCopy(text);
+        }
+
+        if (copied) {
+          const original = button.textContent || "Copy";
+          button.textContent = successText;
+          window.setTimeout(() => {
+            button.textContent = original;
+          }, 1300);
+          setFeedback(targetId, "Copied to clipboard.");
+        } else {
+          setFeedback(targetId, "Unable to copy automatically. Copy manually.");
+        }
+      });
+    });
+  };
+
+  const initPortalLinkMatterFilter = () => {
+    const matterSelect = document.getElementById("portal-link-matter");
+    const documentSelect = document.getElementById("portal-link-document");
+    if (!(matterSelect instanceof HTMLSelectElement) || !(documentSelect instanceof HTMLSelectElement)) {
+      return;
+    }
+
+    const options = Array.from(documentSelect.options);
+    const applyMatterFilter = () => {
+      const selectedMatterId = matterSelect.value.trim();
+      options.forEach((option, index) => {
+        if (index === 0) {
+          option.hidden = false;
+          return;
+        }
+        const optionMatterId = option.getAttribute("data-matter-id") || "";
+        const matchesMatter = !selectedMatterId || !optionMatterId || optionMatterId === selectedMatterId;
+        option.hidden = !matchesMatter;
+        if (!matchesMatter && option.selected) {
+          documentSelect.value = "";
+        }
+      });
+    };
+
+    matterSelect.addEventListener("change", applyMatterFilter);
+    applyMatterFilter();
   };
 
   const initListFilters = () => {
@@ -1450,9 +1749,15 @@
     initFlashDismiss();
     initPasswordToggles();
     initCommandPalette();
+    initNavMenus();
     initMatterQuickFilters();
     initTimePrompts();
     initQuoteAssist();
+    initPortalMessageComposer();
+    initLeadMatterSync();
+    initPortalLinkMatterFilter();
+    initQuickFillButtons();
+    initCopyActions();
     initListFilters();
     initVoiceRecorder();
     initTableTools();

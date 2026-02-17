@@ -9,6 +9,7 @@ from functools import wraps
 
 from flask import abort, flash, redirect, request, send_from_directory, session, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import func, or_
 from werkzeug.utils import secure_filename
 
 from ..extensions import db, limiter
@@ -35,6 +36,7 @@ from ..templates import page
 
 
 PORTAL_SESSION_KEY = "portal_user_id"
+PORTAL_ACTIVE_MATTER_SESSION_KEY = "portal_active_matter_id"
 VISIBILITY_LEVEL_RANK = {
     "hidden": 0,
     "summary_only": 1,
@@ -113,6 +115,43 @@ def _portal_has_matter_access(portal_user_id: int, matter_id: int, *, min_level:
     return _visibility_rank(row[0]) >= _visibility_rank(min_level)
 
 
+def _portal_set_active_matter(
+    portal_user_id: int,
+    matter_id: int | None,
+    *,
+    min_level: str = "summary_only",
+) -> int | None:
+    try:
+        parsed = int(matter_id) if matter_id else None
+    except (TypeError, ValueError):
+        return None
+    if not parsed or parsed <= 0:
+        return None
+    if not _portal_has_matter_access(portal_user_id, parsed, min_level=min_level):
+        return None
+    session[PORTAL_ACTIVE_MATTER_SESSION_KEY] = parsed
+    return parsed
+
+
+def _portal_get_active_matter_id(
+    portal_user_id: int,
+    *,
+    min_level: str = "summary_only",
+) -> int | None:
+    raw_id = session.get(PORTAL_ACTIVE_MATTER_SESSION_KEY)
+    try:
+        parsed = int(raw_id) if raw_id else None
+    except (TypeError, ValueError):
+        parsed = None
+    if not parsed or parsed <= 0:
+        session.pop(PORTAL_ACTIVE_MATTER_SESSION_KEY, None)
+        return None
+    if not _portal_has_matter_access(portal_user_id, parsed, min_level=min_level):
+        session.pop(PORTAL_ACTIVE_MATTER_SESSION_KEY, None)
+        return None
+    return parsed
+
+
 def register_portal_routes(app):
     @app.route("/portal/login", methods=["GET", "POST"])
     @limiter.limit(lambda: app.config.get("PORTAL_LOGIN_RATE_LIMIT", "10/minute"), methods=["POST"])
@@ -130,6 +169,7 @@ def register_portal_routes(app):
                     flash("Invalid portal MFA code.", "warning")
                     return redirect(url_for("portal_login"))
             session[PORTAL_SESSION_KEY] = user.id
+            session.pop(PORTAL_ACTIVE_MATTER_SESSION_KEY, None)
             user.last_login_at = dt.datetime.utcnow()
             db.session.commit()
             audit("portal_login", "PortalUser", user.id)
@@ -142,6 +182,7 @@ def register_portal_routes(app):
     def portal_logout():
         user = _portal_current_user()
         session.pop(PORTAL_SESSION_KEY, None)
+        session.pop(PORTAL_ACTIVE_MATTER_SESSION_KEY, None)
         if user:
             audit("portal_logout", "PortalUser", user.id)
         flash("Logged out of client portal.", "info")
@@ -164,6 +205,7 @@ def register_portal_routes(app):
         access = _portal_matter_access(portal_user.id, matter_id)
         if not access or _visibility_rank(access.visibility_level) < _visibility_rank("summary_only"):
             abort(403)
+        _portal_set_active_matter(portal_user.id, matter_id, min_level="summary_only")
 
         matter = db.session.get(Matter, matter_id)
         if not matter:
@@ -201,17 +243,28 @@ def register_portal_routes(app):
         assert portal_user is not None
 
         if request.method == "POST":
-            matter_id = request.form.get("matter_id", type=int)
-            if not matter_id or not _portal_has_matter_access(portal_user.id, matter_id, min_level="full_curated"):
-                abort(403)
-
             thread_id = request.form.get("thread_id", type=int)
+            matter_id = request.form.get("matter_id", type=int)
             body = (request.form.get("body") or "").strip()
             if not body:
                 flash("Message body required.", "warning")
                 return redirect(url_for("portal_messages"))
 
+            thread = db.session.get(PortalMessageThread, thread_id) if thread_id else None
+            if thread_id and thread is None:
+                flash("Selected thread was not found.", "warning")
+                return redirect(url_for("portal_messages"))
+            if thread is not None:
+                if not _portal_has_matter_access(portal_user.id, thread.matter_id, min_level="full_curated"):
+                    abort(403)
+                if matter_id and int(matter_id) != int(thread.matter_id):
+                    flash("Selected thread belongs to a different matter.", "warning")
+                    return redirect(url_for("portal_messages"))
+                matter_id = int(thread.matter_id)
+
             if not thread_id:
+                if not matter_id or not _portal_has_matter_access(portal_user.id, matter_id, min_level="full_curated"):
+                    abort(403)
                 thread = PortalMessageThread(
                     matter_id=matter_id,
                     subject=(request.form.get("subject") or "General update").strip() or "General update",
@@ -224,6 +277,7 @@ def register_portal_routes(app):
             message = PortalMessage(thread_id=thread_id, body=body, from_portal_user_id=portal_user.id)
             db.session.add(message)
             db.session.commit()
+            _portal_set_active_matter(portal_user.id, matter_id, min_level="full_curated")
             NotificationEngine.enqueue("portal_message_created", None, f"portal_message:{message.id}")
             audit("portal_message_create", "PortalMessage", message.id)
             flash("Message sent.", "info")
@@ -247,6 +301,17 @@ def register_portal_routes(app):
             else []
         )
         matters = Matter.query.filter(Matter.id.in_(accessible_ids)).order_by(Matter.opened_at.desc()).all() if accessible_ids else []
+        matter_map = {matter.id: matter for matter in matters}
+        prefill_matter_id = request.args.get("matter_id", type=int)
+        if prefill_matter_id and not _portal_has_matter_access(portal_user.id, prefill_matter_id, min_level="full_curated"):
+            prefill_matter_id = None
+        if not prefill_matter_id:
+            prefill_matter_id = _portal_get_active_matter_id(portal_user.id, min_level="full_curated")
+        if not prefill_matter_id and matters:
+            prefill_matter_id = matters[0].id
+        prefill_thread_id = request.args.get("thread_id", type=int)
+        if prefill_thread_id and prefill_thread_id not in {thread.id for thread in threads}:
+            prefill_thread_id = None
         return page(
             "Portal Messages",
             "portal/messages.html",
@@ -254,6 +319,9 @@ def register_portal_routes(app):
             threads=threads,
             messages=messages,
             matters=matters,
+            matter_map=matter_map,
+            prefill_matter_id=prefill_matter_id,
+            prefill_thread_id=prefill_thread_id,
         )
 
     @app.route("/portal/uploads", methods=["GET", "POST"])
@@ -290,15 +358,32 @@ def register_portal_routes(app):
             )
             db.session.add(row)
             db.session.commit()
+            _portal_set_active_matter(portal_user.id, matter_id, min_level="shared_docs")
             NotificationEngine.enqueue("portal_upload_created", None, f"portal_upload:{row.id}")
             audit("portal_upload", "PortalUpload", row.id)
             flash("Upload complete.", "info")
             return redirect(url_for("portal_uploads"))
 
         ids = _portal_accessible_matter_ids(portal_user.id, min_level="shared_docs")
+        full_curated_matter_ids = set(_portal_accessible_matter_ids(portal_user.id, min_level="full_curated"))
         uploads = PortalUpload.query.filter(PortalUpload.matter_id.in_(ids)).order_by(PortalUpload.uploaded_at.desc()).all() if ids else []
         matters = Matter.query.filter(Matter.id.in_(ids)).order_by(Matter.opened_at.desc()).all() if ids else []
-        return page("Portal Uploads", "portal/uploads.html", portal_user=portal_user, uploads=uploads, matters=matters)
+        prefill_matter_id = request.args.get("matter_id", type=int)
+        if prefill_matter_id and not _portal_has_matter_access(portal_user.id, prefill_matter_id, min_level="shared_docs"):
+            prefill_matter_id = None
+        if not prefill_matter_id:
+            prefill_matter_id = _portal_get_active_matter_id(portal_user.id, min_level="shared_docs")
+        if not prefill_matter_id and matters:
+            prefill_matter_id = matters[0].id
+        return page(
+            "Portal Uploads",
+            "portal/uploads.html",
+            portal_user=portal_user,
+            uploads=uploads,
+            matters=matters,
+            full_curated_matter_ids=full_curated_matter_ids,
+            prefill_matter_id=prefill_matter_id,
+        )
 
     @app.get("/portal/invoices")
     @portal_login_required
@@ -347,6 +432,7 @@ def register_portal_routes(app):
             abort(404)
         if not _portal_has_matter_access(portal_user.id, invoice.matter_id, min_level="full_curated"):
             abort(403)
+        _portal_set_active_matter(portal_user.id, invoice.matter_id, min_level="full_curated")
 
         if request.method == "POST":
             amount = request.form.get("amount", type=float)
@@ -377,6 +463,7 @@ def register_portal_routes(app):
                 )
             )
             db.session.commit()
+            _portal_set_active_matter(portal_user.id, invoice.matter_id, min_level="full_curated")
             NotificationEngine.enqueue("portal_payment_recorded", None, f"portal_payment:{receipt.id}")
             audit("portal_payment_record", "PortalPaymentReceipt", receipt.id)
             flash("Payment receipt recorded.", "info")
@@ -385,7 +472,29 @@ def register_portal_routes(app):
         receipts = PortalPaymentReceipt.query.filter_by(invoice_id=invoice.id, portal_user_id=portal_user.id).order_by(
             PortalPaymentReceipt.created_at.desc()
         ).all()
-        return page("Portal Payment", "portal/payment.html", portal_user=portal_user, invoice=invoice, receipts=receipts)
+        settled_total = (
+            db.session.query(func.coalesce(func.sum(PaymentAllocation.amount), 0.0))
+            .filter(
+                PaymentAllocation.invoice_id == invoice.id,
+                or_(PaymentAllocation.status == "settled", PaymentAllocation.status.is_(None)),
+            )
+            .scalar()
+            or 0.0
+        )
+        outstanding_amount = max(0.0, round(float(invoice.total or 0.0) - float(settled_total), 2))
+        default_amount = outstanding_amount if outstanding_amount > 0 else round(float(invoice.total or 0.0), 2)
+        latest_currency = receipts[0].currency if receipts else None
+        prefill_currency = (latest_currency or "ZAR").strip().upper()
+        return page(
+            "Portal Payment",
+            "portal/payment.html",
+            portal_user=portal_user,
+            invoice=invoice,
+            receipts=receipts,
+            outstanding_amount=outstanding_amount,
+            prefill_amount=default_amount,
+            prefill_currency=prefill_currency,
+        )
 
     @app.route("/portal/links", methods=["GET", "POST"])
     @portal_login_required
@@ -421,8 +530,9 @@ def register_portal_routes(app):
             )
             db.session.add(token)
             db.session.commit()
+            _portal_set_active_matter(portal_user.id, matter_id, min_level="shared_docs")
             audit("portal_link_create", "PortalLinkToken", token.id)
-            session["portal_last_link_url"] = url_for("portal_link_access", token=token_raw, _external=False)
+            session["portal_last_link_url"] = url_for("portal_link_access", token=token_raw, _external=True)
             flash("Time-limited link created.", "info")
             return redirect(url_for("portal_links"))
 
@@ -447,6 +557,13 @@ def register_portal_routes(app):
             .all()
         )
         last_link_url = session.pop("portal_last_link_url", None)
+        prefill_matter_id = request.args.get("matter_id", type=int)
+        if prefill_matter_id and not _portal_has_matter_access(portal_user.id, prefill_matter_id, min_level="shared_docs"):
+            prefill_matter_id = None
+        if not prefill_matter_id:
+            prefill_matter_id = _portal_get_active_matter_id(portal_user.id, min_level="shared_docs")
+        if not prefill_matter_id and matters:
+            prefill_matter_id = matters[0].id
         return page(
             "Portal Links",
             "portal/links.html",
@@ -457,6 +574,7 @@ def register_portal_routes(app):
             version_map=version_map,
             tokens=tokens,
             last_link_url=last_link_url,
+            prefill_matter_id=prefill_matter_id,
         )
 
     @app.get("/portal/link/<token>")
@@ -495,6 +613,7 @@ def register_portal_routes(app):
                 abort(404)
             row.used_at = dt.datetime.utcnow()
             db.session.commit()
+            _portal_set_active_matter(portal_user.id, record.matter_id, min_level="shared_docs")
             audit(
                 "portal_link_document_access",
                 "DocumentVersion",
@@ -514,6 +633,7 @@ def register_portal_routes(app):
             abort(403)
         row.used_at = dt.datetime.utcnow()
         db.session.commit()
+        _portal_set_active_matter(portal_user.id, row.matter_id, min_level="summary_only")
         audit("portal_link_matter_access", "Matter", row.matter_id, {"portal_user_id": portal_user.id})
         return redirect(url_for("portal_matter_detail", matter_id=row.matter_id))
 

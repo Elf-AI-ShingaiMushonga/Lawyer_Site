@@ -12,6 +12,7 @@ This is a functional intranet website for a law firm:
 - Matter timelines (filings, hearings, milestones, client updates)
 - Human-readable matter activity feed
 - Docketing and calendaring (`/calendar/*`, `/deadlines/*`)
+- SLA-driven Priority Inbox (client response lag, intake follow-up due, and unbilled approved time leakage) with admin-configurable thresholds
 - Tasks per matter (Todo/Doing/Done)
 - Task templates, dependencies, checklists, approvals, recurrence
 - Document upload/download with metadata (category, version, stage, owner, privilege) and SHA-256 integrity hash
@@ -21,6 +22,8 @@ This is a functional intranet website for a law firm:
 - Expenses with receipt handling and approvals
 - Trust accounting (ledgers, deposits, disbursements, transfers, reconciliations)
 - CRM/intake (leads, conflict checks, engagement workflows)
+- CRM follow-up quick actions (mark done/reopen directly from lead and dashboard workflow queues)
+- Scheduled Priority Inbox reminder digests (background jobs for active role-based triage notifications)
 - Curated client portal (auth, scoped matter views, messages, uploads, invoices, payments)
 - Analytics dashboards (utilization, realization, EHR, workload, profitability, forecast, burnout)
 - Ops controls (backup status/run, restore verification, DR targets)
@@ -96,15 +99,6 @@ Common seed error:
   - `flask --app app.py db upgrade -d migrations`
   - re-run `python app.py seed-demo --reset --password "ClientDemo2026!"`
   - if you intentionally use SQLite and want a clean reset: `rm -f intranet.db && flask --app app.py db upgrade -d migrations`
-
-## Client story mode
-
-After signing in, click `Story Mode Off` in the top navigation to enable guided demo mode.
-
-- `Story Mode On` adds a contextual walkthrough banner across pages.
-- Use the `Story` nav tab for a full step-by-step playbook (`/story`).
-- Disable it anytime with the same navbar toggle.
-- On the login page, `Start Live Demo` signs in, enables story mode, and opens `/story` in one click.
 
 ## GitHub upload checklist
 

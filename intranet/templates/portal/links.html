@@ -10,7 +10,19 @@
   </div>
 
   {% if last_link_url %}
-    <div class="alert alert-info mt-3">New link: <code>{{ last_link_url }}</code></div>
+    <div class="form-section mt-3">
+      <div class="form-label mb-1">New link ready to share</div>
+      <div class="row g-2 align-items-center">
+        <div class="col-md-8">
+          <input class="form-control" id="portal-last-link" type="text" value="{{ last_link_url }}" readonly data-copy-source>
+        </div>
+        <div class="col-md-4 table-actions">
+          <button class="btn btn-outline-light" type="button" data-copy-target="portal-last-link" data-copy-success-text="Copied">Copy Link</button>
+          <a class="btn btn-outline-light" href="{{ last_link_url }}" target="_blank" rel="noopener">Open</a>
+        </div>
+      </div>
+      <div class="form-help mt-1" data-copy-feedback-for="portal-last-link">Copy before creating another link.</div>
+    </div>
   {% endif %}
 
   <form method="post" class="mt-3">
@@ -21,7 +33,7 @@
           <label class="form-label" for="portal-link-matter">Matter</label>
           <select class="form-select" id="portal-link-matter" name="matter_id" required>
             {% for m in matters %}
-              <option value="{{ m.id }}">{{ m.matter_no }} - {{ m.title }}</option>
+              <option value="{{ m.id }}" {% if prefill_matter_id and m.id == prefill_matter_id %}selected{% endif %}>{{ m.matter_no }} - {{ m.title }}</option>
             {% endfor %}
           </select>
         </div>
@@ -32,7 +44,7 @@
             {% for pair in versions %}
               {% set v = pair[0] %}
               {% set d = pair[1] %}
-              <option value="{{ v.id }}">Doc {{ d.id }} • v{{ v.version_no }} • {{ v.original_filename }}</option>
+              <option value="{{ v.id }}" data-matter-id="{{ d.matter_id }}">Doc {{ d.id }} • v{{ v.version_no }} • {{ v.original_filename }}</option>
             {% endfor %}
           </select>
         </div>
@@ -50,8 +62,12 @@
 
 <div class="card p-3">
   <h4 class="mb-1">Recent Links</h4>
+  <div class="table-tools mt-2" data-table-tools data-table-target="portal-links-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by matter, document, or expiry...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
   <div class="table-responsive mt-2">
-    <table class="table">
+    <table class="table" id="portal-links-table">
       <thead>
         <tr>
           <th>ID</th>
@@ -72,7 +88,7 @@
             {% set version_pair = version_map[t.document_version_id] %}
             {% set version_label = 'Doc ' ~ version_pair[1].id ~ ' • v' ~ version_pair[0].version_no ~ ' • ' ~ version_pair[0].original_filename %}
           {% endif %}
-          <tr>
+          <tr data-table-row data-search="{{ t.id }} {{ matter_label }} {{ version_label }} {{ t.expires_at }} {{ t.used_at or '' }}">
             <td>{{ t.id }}</td>
             <td>{{ matter_label }}</td>
             <td>{{ version_label }}</td>

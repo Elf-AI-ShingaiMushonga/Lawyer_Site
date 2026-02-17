@@ -121,6 +121,96 @@ def _handle_deadline_digest(payload: dict) -> str:
     return f"queued digests: {queued}"
 
 
+def _digest_window_start(now_utc: dt.datetime, interval_minutes: int) -> dt.datetime:
+    interval = max(1, int(interval_minutes))
+    stamp = now_utc.replace(second=0, microsecond=0)
+    minutes_since_midnight = (stamp.hour * 60) + stamp.minute
+    bucket_minutes = minutes_since_midnight - (minutes_since_midnight % interval)
+    return stamp.replace(hour=0, minute=0) + dt.timedelta(minutes=bucket_minutes)
+
+
+def _handle_priority_inbox_digest(payload: dict) -> str:
+    from ..models import MatterMember, Notification, User
+    from ..services.notification_engine import NotificationEngine
+    from ..services.priority_inbox import build_priority_inbox, load_priority_inbox_config
+
+    config = load_priority_inbox_config()
+    if not bool(config.get("digest_enabled")):
+        return "priority inbox digest disabled"
+
+    now_utc = dt.datetime.utcnow()
+    eligible_roles = {"admin", "lawyer", "paralegal", "staff"}
+    raw_roles = payload.get("roles")
+    selected_roles = sorted(eligible_roles)
+    if isinstance(raw_roles, list):
+        requested = {
+            str(item).strip().lower()
+            for item in raw_roles
+            if isinstance(item, (str, int, float)) and str(item).strip()
+        }
+        filtered = sorted(requested & eligible_roles)
+        if filtered:
+            selected_roles = filtered
+
+    users = (
+        User.query.filter(
+            User.is_active.is_(True),
+            User.role.in_(selected_roles),
+        )
+        .order_by(User.id.asc())
+        .all()
+    )
+    if not users:
+        return "queued digests: 0"
+
+    non_admin_user_ids = [int(user.id) for user in users if user.role != "admin"]
+    matter_scope_by_user: dict[int, list[int]] = {}
+    if non_admin_user_ids:
+        rows = (
+            db.session.query(MatterMember.user_id, MatterMember.matter_id)
+            .filter(MatterMember.user_id.in_(non_admin_user_ids))
+            .all()
+        )
+        for user_id, matter_id in rows:
+            uid = int(user_id)
+            matter_scope_by_user.setdefault(uid, []).append(int(matter_id))
+
+    interval_minutes = max(15, int(config.get("digest_interval_minutes") or 60))
+    window_start = _digest_window_start(now_utc, interval_minutes)
+    queued = 0
+    for user in users:
+        matter_scope = None if user.role == "admin" else matter_scope_by_user.get(int(user.id), [])
+        priority_inbox = build_priority_inbox(
+            user,
+            now_utc=now_utc,
+            scoped_matter_ids=matter_scope,
+            limit=8,
+            config=config,
+        )
+        total_actions = int(priority_inbox.get("total_actions") or 0)
+        if total_actions <= 0:
+            continue
+
+        portal_count = len(priority_inbox.get("portal_response_watchlist") or [])
+        followup_count = len(priority_inbox.get("crm_followup_watchlist") or [])
+        unbilled_count = len(priority_inbox.get("unbilled_time_watchlist") or [])
+        subject_ref = (
+            f"priority_inbox_digest:user:{int(user.id)}:"
+            f"window:{window_start.isoformat()}:"
+            f"total:{total_actions}:"
+            f"portal:{portal_count}:"
+            f"followups:{followup_count}:"
+            f"unbilled:{unbilled_count}"
+        )
+        already = Notification.query.filter_by(event_type="priority_inbox_digest", subject_ref=subject_ref).first()
+        if already is not None:
+            continue
+        NotificationEngine.enqueue("priority_inbox_digest", int(user.id), subject_ref)
+        queued += 1
+
+    return f"queued digests: {queued}"
+
+
 def _handle_retention_archive_sweep(payload: dict) -> str:
     from ..models import LegalHold, Matter, RetentionPolicy
 
@@ -429,6 +519,7 @@ HANDLERS = {
     "deadline_sweep": _handle_deadline_sweep,
     "deadline_escalation_scan": _handle_deadline_escalation_scan,
     "deadline_digest": _handle_deadline_digest,
+    "priority_inbox_digest": _handle_priority_inbox_digest,
     "retention_archive_sweep": _handle_retention_archive_sweep,
     "analytics_snapshot": _handle_analytics_snapshot,
     "workload_forecast": _handle_workload_forecast,

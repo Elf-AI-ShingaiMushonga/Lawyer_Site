@@ -26,6 +26,15 @@
           </div>
         </div>
         <div class="list-stack mt-2">
+          <a class="list-item text-decoration-none" href="#dashboard-priority-inbox">
+            <div class="list-row">
+              <div>
+                <div class="list-title">Triage priority inbox</div>
+                <div class="list-meta mt-1">Clear client-response, intake, and billing leakage actions first.</div>
+              </div>
+              <span class="badge status-badge status-critical">{{ stats.priority_actions }}</span>
+            </div>
+          </a>
           <a class="list-item text-decoration-none" href="{{ url_for('calendar_my', filter='overdue') }}">
             <div class="list-row">
               <div>
@@ -150,6 +159,97 @@
         {% else %}
           <div class="muted">No at-risk matters currently detected.</div>
         {% endif %}
+      </div>
+    </div>
+
+    <div class="card p-3 mb-3" id="dashboard-priority-inbox">
+      <div class="d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">Priority Inbox</h4>
+        <span class="badge status-badge status-critical">{{ priority_inbox.total_actions }}</span>
+      </div>
+      <div class="list-meta mt-2">
+        <span>Client response SLA: {{ priority_inbox.portal_response_sla_hours }}h</span>
+        <span>Follow-up horizon: {{ priority_inbox.followup_horizon_hours }}h</span>
+        <span>Billing capture SLA: {{ priority_inbox.billing_capture_sla_hours }}h</span>
+      </div>
+      <div class="row g-3 mt-1">
+        <div class="col-lg-4">
+          <div class="form-section">
+            <div class="small fw-semibold text-uppercase muted">Client Response</div>
+            <div class="entry-scroll mt-2">
+              {% if priority_inbox.portal_response_watchlist %}
+                {% for row in priority_inbox.portal_response_watchlist %}
+                  <div class="activity-item">
+                    <div class="d-flex justify-content-between">
+                      <a class="fw-semibold text-decoration-none" href="{{ url_for('portal_messages', matter_id=row.matter_id, thread_id=row.thread_id) }}#portal-message-body">#{{ row.thread_id }} • {{ row.subject }}</a>
+                      <span class="badge status-badge status-critical">{{ row.wait_hours }}h</span>
+                    </div>
+                    <div class="muted small">{{ row.matter_no }} - {{ row.matter_title }}</div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="muted">No delayed client replies.</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="form-section">
+            <div class="small fw-semibold text-uppercase muted">Intake Follow-ups</div>
+            <div class="entry-scroll mt-2">
+              {% if priority_inbox.crm_followup_watchlist %}
+                {% for row in priority_inbox.crm_followup_watchlist %}
+                  <div class="activity-item">
+                    <div class="d-flex justify-content-between">
+                      <a class="fw-semibold text-decoration-none" href="{{ url_for('crm_lead_detail', lead_id=row.lead_id) }}#lead-follow-up-panel">{{ row.lead_name }}</a>
+                      <span class="badge status-badge {{ 'status-critical' if row.is_overdue else 'status-on-hold' }}">{{ "Overdue" if row.is_overdue else "Due" }}</span>
+                    </div>
+                    <div class="muted small">{{ row.lead_stage }} • {{ row.due_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
+                    <div class="table-actions mt-2">
+                      <form method="post" action="{{ url_for('crm_followup_status', followup_id=row.followup_id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="status" value="done">
+                        <input type="hidden" name="next" value="{{ request.path }}#dashboard-priority-inbox">
+                        <button class="btn btn-sm btn-outline-light" type="submit">Mark Done</button>
+                      </form>
+                      <a class="btn btn-sm btn-outline-light" href="{{ url_for('crm_lead_detail', lead_id=row.lead_id) }}#lead-follow-up-panel">Open Lead</a>
+                    </div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="muted">No follow-ups due in the next day.</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="form-section">
+            <div class="small fw-semibold text-uppercase muted">Billing Leakage</div>
+            <div class="list-meta mt-1">
+              <span>Unbilled hours: {{ priority_inbox.unbilled_total_hours }}</span>
+            </div>
+            <div class="entry-scroll mt-2">
+              {% if priority_inbox.unbilled_time_watchlist %}
+                {% for row in priority_inbox.unbilled_time_watchlist %}
+                  <div class="activity-item">
+                    <div class="d-flex justify-content-between">
+                      <a class="fw-semibold text-decoration-none" href="{{ url_for('time_entries', matter_id=row.matter_id) }}">Entry #{{ row.time_entry_id }}</a>
+                      <span class="badge status-badge status-on-hold">{{ row.hours }}h</span>
+                    </div>
+                    <div class="muted small">{{ row.matter_no }} - {{ row.matter_title }}</div>
+                    <div class="muted small">{{ row.timekeeper_name }} • {{ row.captured_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
+                    <div class="table-actions mt-2">
+                      <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_invoices', matter_id=row.matter_id) }}">Invoice Matter</a>
+                      <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=row.matter_id) }}">Open Time</a>
+                    </div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="muted">No aged approved time waiting for invoice capture.</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

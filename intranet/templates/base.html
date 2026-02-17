@@ -273,6 +273,159 @@
       color: var(--accent-strong);
     }
 
+    .nav-menu {
+      position: relative;
+      display: inline-block;
+    }
+
+    .nav-menu > summary {
+      list-style: none;
+      cursor: pointer;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-menu > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .nav-menu[open] > summary {
+      border-color: rgba(225, 6, 0, 0.9);
+      background: rgba(225, 6, 0, 0.14);
+      color: var(--accent-strong);
+    }
+
+    .nav-menu-panel {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      min-width: 360px;
+      max-width: min(92vw, 540px);
+      padding: 10px;
+      border-radius: 14px;
+      border: 1px solid rgba(225, 6, 0, 0.3);
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 14px 30px rgba(95, 29, 29, 0.18);
+      z-index: 40;
+    }
+
+    .nav-menu-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .nav-menu-section {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding: 6px;
+      border: 1px solid rgba(225, 6, 0, 0.14);
+      border-radius: 10px;
+      background: rgba(255, 250, 250, 0.9);
+    }
+
+    .nav-menu-label {
+      font-size: 10px;
+      line-height: 1.1;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #9a6765;
+    }
+
+    .nav-menu-item {
+      font-size: 12px;
+      line-height: 1.2;
+      text-decoration: none;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      color: #6b3b3a;
+      padding: 5px 6px;
+      background: rgba(255, 255, 255, 0.8);
+      transition: all 0.15s ease;
+    }
+
+    .nav-menu-item:hover {
+      color: var(--accent-strong);
+      border-color: rgba(225, 6, 0, 0.34);
+      background: rgba(225, 6, 0, 0.08);
+    }
+
+    .nav-menu-item.is-active {
+      color: var(--accent-strong);
+      border-color: rgba(225, 6, 0, 0.62);
+      background: rgba(225, 6, 0, 0.12);
+      font-weight: 700;
+    }
+
+    .context-rail {
+      margin-top: 10px;
+      padding: 9px 10px;
+      border: 1px solid rgba(225, 6, 0, 0.26);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.92);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .context-rail-head {
+      min-width: 200px;
+      flex: 1 1 280px;
+    }
+
+    .context-rail-title {
+      font-size: 12px;
+      line-height: 1.15;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #8a5b59;
+    }
+
+    .context-rail-meta {
+      font-size: 13px;
+      line-height: 1.25;
+      color: #5f3534;
+      margin-top: 2px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .context-rail-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+      flex: 1 1 320px;
+    }
+
+    .context-rail-chip {
+      border: 1px solid rgba(225, 6, 0, 0.33);
+      border-radius: 999px;
+      text-decoration: none;
+      color: #6f3f3d;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+      transition: all 0.15s ease;
+    }
+
+    .context-rail-chip:hover {
+      color: var(--accent-strong);
+      border-color: rgba(225, 6, 0, 0.72);
+      background: rgba(225, 6, 0, 0.09);
+    }
+
     .quick-strip {
       display: flex;
       flex-wrap: wrap;
@@ -1103,58 +1256,6 @@
       box-shadow: 0 0 0 3px rgba(225, 6, 0, 0.2);
     }
 
-    .story-inline {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
-    }
-
-    .story-chip {
-      border: 1px solid rgba(225, 6, 0, 0.32);
-      border-radius: 999px;
-      padding: 6px 11px;
-      font-size: 12px;
-      color: #6f3533;
-      background: rgba(225, 6, 0, 0.08);
-      text-decoration: none;
-    }
-
-    .story-chip:hover {
-      color: #ffffff;
-      border-color: rgba(225, 6, 0, 0.82);
-      background: var(--accent);
-    }
-
-    .story-chip-next {
-      border-color: rgba(225, 6, 0, 0.9);
-      background: rgba(225, 6, 0, 0.14);
-      color: #6c1815;
-      box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.16);
-      animation: story-pulse 1.5s ease-in-out infinite;
-    }
-
-    .story-step {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      border-top: 1px solid rgba(225, 6, 0, 0.18);
-      padding-top: 10px;
-      margin-top: 10px;
-    }
-
-    .story-step-title {
-      font-weight: 700;
-    }
-
-    .story-step-next {
-      border-top-color: rgba(225, 6, 0, 0.4);
-      background: rgba(225, 6, 0, 0.08);
-      border-radius: 10px;
-      padding: 10px;
-    }
-
     .toolbar-row {
       display: flex;
       flex-wrap: wrap;
@@ -1542,23 +1643,6 @@
       gap: 10px;
     }
 
-    .next-step-callout {
-      border: 1px solid rgba(225, 6, 0, 0.44);
-      border-radius: 12px;
-      background: rgba(225, 6, 0, 0.08);
-      padding: 10px 12px;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .next-step-btn {
-      box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.24);
-      animation: story-pulse 1.5s ease-in-out infinite;
-    }
-
     .audit-json {
       margin-top: 6px;
       white-space: pre-wrap;
@@ -1779,12 +1863,6 @@
       to { transform: rotate(360deg); }
     }
 
-    @keyframes story-pulse {
-      0% { box-shadow: 0 0 0 0 rgba(225, 6, 0, 0.28); }
-      70% { box-shadow: 0 0 0 8px rgba(225, 6, 0, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(225, 6, 0, 0); }
-    }
-
     @media (max-width: 992px) {
       .brand-sub {
         display: none;
@@ -1817,6 +1895,26 @@
       .nav-actions::-webkit-scrollbar-thumb {
         background: rgba(225, 6, 0, 0.3);
         border-radius: 999px;
+      }
+
+      .nav-menu-panel {
+        position: static;
+        min-width: 0;
+        max-width: none;
+        width: 100%;
+        margin-top: 8px;
+      }
+
+      .nav-menu-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .context-rail {
+        align-items: stretch;
+      }
+
+      .context-rail-actions {
+        justify-content: flex-start;
       }
 
       .quick-strip {
@@ -2174,13 +2272,29 @@
   {% set calendar_endpoints = ["calendar_my", "calendar_team", "calendar_matter", "calendar_milestone_report"] %}
   {% set workflow_endpoints = ["task_templates", "task_dependencies", "task_checklist", "task_approve", "task_recur"] %}
   {% set dms_endpoints = ["dms_home", "matter_dms", "document_versions", "document_lock", "document_unlock", "document_state", "productions", "production_export", "bates_ranges", "email_capture", "email_capture_attachment"] %}
+  {% set time_endpoints = ["time_timers", "time_entries", "time_review", "time_prompts"] %}
   {% set finance_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "billing_tax_invoice_pdf", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses", "trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
   {% set portal_endpoints = ["portal_login", "portal_matters", "portal_matter_detail", "portal_messages", "portal_uploads", "portal_invoices", "portal_payments", "admin_portal_users", "portal_links"] %}
   {% set billing_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "billing_tax_invoice_pdf", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses"] %}
   {% set crm_endpoints = ["crm_leads", "crm_lead_detail"] %}
+  {% set knowledge_endpoints = ["contacts", "kb", "kb_view", "search"] %}
   {% set integration_endpoints = ["integrations_office365", "integrations_office365_outlook_feed", "integrations_office365_excel_time_entries", "integrations_office365_excel_invoices", "integrations_office365_word_matter_summary", "integrations_office365_word_matter_summary_query", "integrations_third_party", "integrations_export_cost_recovery", "integrations_export_conveyancing", "integrations_import_cost_recovery", "integrations_import_conveyancing", "mobile_hub"] %}
   {% set analytics_endpoints = ["analytics_utilization", "analytics_realization", "analytics_ehr", "analytics_workload", "analytics_profitability", "analytics_forecast", "analytics_burnout"] %}
   {% set ops_endpoints = ["ops_backup_status", "ops_restore_verify", "ops_dr_targets"] %}
+  {% set trust_account_endpoints = ["trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
+  {% set billing_ops_endpoints = ["billing_rates", "billing_ar_aging", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses"] %}
+  {% set more_endpoints = workflow_endpoints + crm_endpoints + portal_endpoints + integration_endpoints + analytics_endpoints + trust_endpoints + ops_endpoints + admin_endpoints + knowledge_endpoints + trust_account_endpoints + billing_ops_endpoints %}
+  {% set role = current_user.role if current_user.is_authenticated else "" %}
+  {% set is_admin_role = role == "admin" %}
+  {% set is_lawyer_role = role in ["admin", "lawyer", "partner"] %}
+  {% set is_case_role = role in ["admin", "lawyer", "partner", "paralegal"] %}
+  {% set is_support_role = role in ["paralegal", "staff"] %}
+  {% set matter_workspace_href = url_for('matter_workspace', matter_id=active_matter.id) if active_matter else url_for('matters') %}
+  {% set matter_dms_href = url_for('matter_dms', matter_id=active_matter.id) if active_matter else url_for('dms_home') %}
+  {% set matter_deadlines_href = url_for('calendar_matter', matter_id=active_matter.id) if active_matter else url_for('calendar_my', filter='today') %}
+  {% set timer_action_href = url_for('time_timers', matter_id=active_matter.id) if active_matter else url_for('time_timers') %}
+  {% set time_entry_action_href = url_for('time_entries', matter_id=active_matter.id) if active_matter else url_for('time_entries') %}
+  {% set billing_action_href = url_for('billing_invoices', matter_id=active_matter.id) if active_matter else url_for('billing_invoices') %}
   {% set section_label = "Dashboard" %}
   {% set section_meta = "Firm-wide operational snapshot" %}
   {% set section_href = url_for('dashboard') %}
@@ -2224,60 +2338,10 @@
     {% set section_label = "Governance and Operations" %}
     {% set section_meta = "Security policy, auditability, backups, and DR readiness" %}
     {% set section_href = url_for('admin') if current_user.is_authenticated and current_user.role == "admin" else url_for('trust_security') %}
-  {% elif endpoint in ["search", "contacts", "kb", "kb_view"] %}
+  {% elif endpoint in knowledge_endpoints %}
     {% set section_label = "Knowledge and Search" %}
     {% set section_meta = "Cross-matter retrieval and structured know-how" %}
     {% set section_href = url_for('search') %}
-  {% elif endpoint == "client_story" %}
-    {% set section_label = "Story Mode" %}
-    {% set section_meta = "Guided narrative across all capabilities" %}
-    {% set section_href = url_for('client_story') %}
-  {% endif %}
-  {% set next_path = request.full_path if request.query_string else request.path %}
-  {% set story_trust_url = url_for('trust_ledger') if current_user.is_authenticated and current_user.role in ["admin", "lawyer"] else url_for('trust_security') %}
-  {% set story_governance_url = url_for('admin_audit') if current_user.is_authenticated and current_user.role == "admin" else url_for('trust_security') %}
-  {% set next_story_url = url_for('dashboard') %}
-  {% set next_story_label = "1. Executive snapshot" %}
-  {% if endpoint == "dashboard" %}
-    {% set next_story_url = url_for('matters', q='2026-LIT-0142') %}
-    {% set next_story_label = "2. Open flagship matter" %}
-  {% elif endpoint in matter_endpoints %}
-    {% set next_story_url = url_for('calendar_my') %}
-    {% set next_story_label = "3. Show calendar and deadlines" %}
-  {% elif endpoint in calendar_endpoints %}
-    {% set next_story_url = url_for('task_templates') %}
-    {% set next_story_label = "4. Show workflow automation" %}
-  {% elif endpoint in workflow_endpoints %}
-    {% if request.view_args and request.view_args.get("matter_id") %}
-      {% set next_story_url = url_for('matter_dms', matter_id=request.view_args.get("matter_id")) %}
-    {% else %}
-      {% set next_story_url = url_for('dms_home') %}
-    {% endif %}
-    {% set next_story_label = "5. Show document lifecycle controls" %}
-  {% elif endpoint in dms_endpoints %}
-    {% set next_story_url = url_for('billing_invoices') %}
-    {% set next_story_label = "6. Show billing and transactions" %}
-  {% elif endpoint in billing_endpoints or endpoint == "expenses" %}
-    {% set next_story_url = story_trust_url %}
-    {% set next_story_label = "7. Show trust accounting controls" %}
-  {% elif endpoint in ["trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
-    {% set next_story_url = url_for('crm_leads') %}
-    {% set next_story_label = "8. Show CRM and intake flow" %}
-  {% elif endpoint in crm_endpoints %}
-    {% set next_story_url = url_for('portal_login') %}
-    {% set next_story_label = "9. Show client portal" %}
-  {% elif endpoint in portal_endpoints %}
-    {% set next_story_url = url_for('integrations_office365') %}
-    {% set next_story_label = "10. Show integrations and mobile" %}
-  {% elif endpoint in integration_endpoints %}
-    {% set next_story_url = url_for('analytics_utilization') %}
-    {% set next_story_label = "11. Show analytics and forecast" %}
-  {% elif endpoint in analytics_endpoints %}
-    {% set next_story_url = story_governance_url %}
-    {% set next_story_label = "12. Close on governance and auditability" %}
-  {% elif endpoint in ["admin_audit", "trust_policy", "trust_security", "trust_incidents", "ops_backup_status", "ops_restore_verify", "ops_dr_targets"] %}
-    {% set next_story_url = url_for('client_story') %}
-    {% set next_story_label = "Replay story checklist" %}
   {% endif %}
   <nav class="navbar px-3 py-2 mb-3">
     <div class="nav-head">
@@ -2309,14 +2373,6 @@
 
         <div class="nav-auth">
           {% if current_user.is_authenticated %}
-            <form method="post" action="{{ url_for('toggle_story_mode') }}" class="d-inline">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="enabled" value="{{ '0' if story_mode_enabled else '1' }}">
-              <input type="hidden" name="next" value="{{ next_path }}">
-              <button class="nav-pill {{ 'is-active' if story_mode_enabled else '' }}" type="submit">
-                {{ "Story Mode On" if story_mode_enabled else "Story Mode Off" }}
-              </button>
-            </form>
             <form method="post" action="{{ url_for('logout') }}" class="d-inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm btn-light" type="submit">Logout</button>
@@ -2330,84 +2386,252 @@
 
     {% if current_user.is_authenticated %}
       <div class="nav-actions" role="navigation" aria-label="Primary">
+        <a class="nav-pill {{ 'is-active' if endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">Dashboard</a>
         <a class="nav-pill {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">Matters</a>
         <a class="nav-pill {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my') }}">Calendar</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in workflow_endpoints else '' }}" href="{{ url_for('task_templates') }}">Workflow</a>
         <a class="nav-pill {{ 'is-active' if endpoint in dms_endpoints else '' }}" href="{{ url_for('dms_home') }}">DMS</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in ['billing_invoices', 'billing_invoice_detail', 'billing_rates', 'billing_ar_aging', 'billing_tax_invoice_pdf', 'billing_account_statement', 'billing_trial_balance', 'billing_auditor_report', 'billing_transactions', 'billing_audit_log'] else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
-        <a class="nav-pill {{ 'is-active' if endpoint == 'expenses' else '' }}" href="{{ url_for('expenses') }}">Expenses</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in ['trust_ledger', 'trust_reconciliations', 'trust_cashbook', 'trust_section86', 'trust_reports_monthly', 'trust_trial_balance_report', 'trust_auditor_report'] else '' }}" href="{{ url_for('trust_ledger') }}">Trust Acct</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM</a>
-        <a class="nav-pill {{ 'is-active' if endpoint == 'contacts' else '' }}" href="{{ url_for('contacts') }}">Contacts</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in ['kb', 'kb_view'] else '' }}" href="{{ url_for('kb') }}">Knowledge</a>
-        <a class="nav-pill {{ 'is-active' if endpoint == 'search' else '' }}" href="{{ url_for('search') }}">Search</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_utilization') }}">Analytics</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in trust_endpoints else '' }}" href="{{ url_for('trust_policy') }}">Trust</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in portal_endpoints else '' }}" href="{{ url_for('portal_login') }}">Portal</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in integration_endpoints else '' }}" href="{{ url_for('integrations_office365') }}">Integrations</a>
-        <a class="nav-pill {{ 'is-active' if endpoint == 'client_story' else '' }}" href="{{ url_for('client_story') }}">Story</a>
-        {% if current_user.role == "admin" %}
-          <a class="nav-pill {{ 'is-active' if endpoint in admin_endpoints else '' }}" href="{{ url_for('admin') }}">Admin</a>
-          <a class="nav-pill {{ 'is-active' if endpoint in ops_endpoints else '' }}" href="{{ url_for('ops_backup_status') }}">Ops</a>
+        {% if is_case_role %}
+          <a class="nav-pill {{ 'is-active' if endpoint in time_endpoints else '' }}" href="{{ url_for('time_timers') }}">Time</a>
         {% endif %}
+        {% if is_lawyer_role %}
+          <a class="nav-pill {{ 'is-active' if endpoint in billing_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
+        {% endif %}
+        {% if is_support_role or is_admin_role %}
+          <a class="nav-pill {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM</a>
+        {% endif %}
+        {% if is_support_role %}
+          <a class="nav-pill {{ 'is-active' if endpoint in workflow_endpoints else '' }}" href="{{ url_for('task_templates') }}">Workflow</a>
+        {% endif %}
+        <details class="nav-menu" data-nav-menu>
+          <summary class="nav-pill {{ 'is-active' if endpoint in more_endpoints and not (is_support_role and endpoint in workflow_endpoints) else '' }}">
+            More
+            <span class="code-like">Menu</span>
+          </summary>
+          <div class="nav-menu-panel">
+            <div class="nav-menu-grid">
+              <div class="nav-menu-section">
+                <span class="nav-menu-label">Case Tools</span>
+                {% if not is_support_role %}
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in workflow_endpoints else '' }}" href="{{ url_for('task_templates') }}">Workflow Templates</a>
+                {% endif %}
+                <a class="nav-menu-item {{ 'is-active' if endpoint == 'search' else '' }}" href="{{ url_for('search') }}">Global Search</a>
+                <a class="nav-menu-item {{ 'is-active' if endpoint == 'contacts' else '' }}" href="{{ url_for('contacts') }}">Contacts</a>
+                <a class="nav-menu-item {{ 'is-active' if endpoint in ['kb', 'kb_view'] else '' }}" href="{{ url_for('kb') }}">Knowledge Base</a>
+                {% if not (is_support_role or is_admin_role) %}
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM Intake</a>
+                {% endif %}
+              </div>
+              <div class="nav-menu-section">
+                <span class="nav-menu-label">Finance</span>
+                <a class="nav-menu-item {{ 'is-active' if endpoint == 'expenses' else '' }}" href="{{ url_for('expenses') }}">Expenses</a>
+                {% if is_lawyer_role %}
+                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_rates' else '' }}" href="{{ url_for('billing_rates') }}">Rate Cards</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_ar_aging' else '' }}" href="{{ url_for('billing_ar_aging') }}">AR Aging</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_transactions' else '' }}" href="{{ url_for('billing_transactions') }}">Transactions</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_audit_log' else '' }}" href="{{ url_for('billing_audit_log') }}">Billing Audit</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in trust_account_endpoints else '' }}" href="{{ url_for('trust_ledger') }}">Trust Accounting</a>
+                {% endif %}
+              </div>
+              <div class="nav-menu-section">
+                <span class="nav-menu-label">Client & Intake</span>
+                <a class="nav-menu-item {{ 'is-active' if endpoint in portal_endpoints and endpoint == 'portal_messages' else '' }}" href="{{ url_for('portal_messages') }}">Portal Messages</a>
+                <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_uploads' else '' }}" href="{{ url_for('portal_uploads') }}">Portal Uploads</a>
+                <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_invoices' else '' }}" href="{{ url_for('portal_invoices') }}">Portal Invoices</a>
+                <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_links' else '' }}" href="{{ url_for('portal_links') }}">Secure Links</a>
+                {% if not is_support_role %}
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in portal_endpoints and endpoint not in ['portal_messages', 'portal_uploads', 'portal_invoices', 'portal_links'] else '' }}" href="{{ url_for('portal_login') }}">Portal Home</a>
+                {% endif %}
+              </div>
+              <div class="nav-menu-section">
+                <span class="nav-menu-label">Insights & Platform</span>
+                {% if is_lawyer_role %}
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_utilization') }}">Analytics</a>
+                {% endif %}
+                <a class="nav-menu-item {{ 'is-active' if endpoint in integration_endpoints else '' }}" href="{{ url_for('integrations_office365') }}">Integrations</a>
+                <a class="nav-menu-item {{ 'is-active' if endpoint == 'mobile_hub' else '' }}" href="{{ url_for('mobile_hub') }}">Mobile Hub</a>
+                <a class="nav-menu-item {{ 'is-active' if endpoint in trust_endpoints else '' }}" href="{{ url_for('trust_policy') }}">Trust & Security</a>
+                {% if is_admin_role %}
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in admin_endpoints else '' }}" href="{{ url_for('admin') }}">Admin Console</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in ops_endpoints else '' }}" href="{{ url_for('ops_backup_status') }}">Operations</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'admin_portal_users' else '' }}" href="{{ url_for('admin_portal_users') }}">Portal User Admin</a>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </details>
       </div>
 
-      <div class="quick-strip" role="navigation" aria-label="Quick Access">
+      {% if active_matter %}
+        <div class="context-rail" role="navigation" aria-label="Active matter shortcuts">
+          <div class="context-rail-head">
+            <div class="context-rail-title">Active Matter</div>
+            <div class="context-rail-meta">
+              <strong>{{ active_matter.matter_no }}</strong>
+              <span>•</span>
+              <span>{{ active_matter.title }}</span>
+            </div>
+          </div>
+          <div class="context-rail-actions">
+            <a class="context-rail-chip" href="{{ matter_workspace_href }}">Workspace</a>
+            <a class="context-rail-chip" href="{{ matter_dms_href }}">Documents</a>
+            <a class="context-rail-chip" href="{{ matter_deadlines_href }}">Deadlines</a>
+            {% if is_case_role %}
+              <a class="context-rail-chip" href="{{ url_for('time_timers', matter_id=active_matter.id) }}">Timer</a>
+              <a class="context-rail-chip" href="{{ url_for('time_entries', matter_id=active_matter.id) }}">Time Entry</a>
+            {% endif %}
+            {% if is_lawyer_role %}
+              <a class="context-rail-chip" href="{{ url_for('billing_invoices', matter_id=active_matter.id) }}">Billing</a>
+            {% endif %}
+            <a class="context-rail-chip" href="{{ url_for('matters') }}">Switch Matter</a>
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="quick-strip" role="navigation" aria-label="Daily Focus">
         <a class="quick-chip {{ 'is-active' if endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">
           <span class="quick-chip-label">Dashboard</span>
-          <span class="quick-chip-meta">Operational snapshot</span>
+          <span class="quick-chip-meta">My day snapshot</span>
         </a>
         <a class="quick-chip {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">
           <span class="quick-chip-label">Matter Hub</span>
-          <span class="quick-chip-meta">Open, triage, collaborate</span>
+          <span class="quick-chip-meta">Find and progress files</span>
         </a>
-        <a class="quick-chip {{ 'is-active' if endpoint in finance_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">
-          <span class="quick-chip-label">Finance</span>
-          <span class="quick-chip-meta">Billing, trust, AR</span>
+        {% if active_matter %}
+          <a class="quick-chip" href="{{ url_for('matter_workspace', matter_id=active_matter.id) }}">
+            <span class="quick-chip-label">Resume {{ active_matter.matter_no }}</span>
+            <span class="quick-chip-meta">{{ active_matter.title }}</span>
+          </a>
+        {% endif %}
+        <a class="quick-chip {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my', filter='today') }}">
+          <span class="quick-chip-label">Today</span>
+          <span class="quick-chip-meta">Deadlines and hearings</span>
         </a>
-        <a class="quick-chip {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">
-          <span class="quick-chip-label">Intake</span>
-          <span class="quick-chip-meta">Leads and conflicts</span>
-        </a>
-        <a class="quick-chip {{ 'is-active' if endpoint in portal_endpoints else '' }}" href="{{ url_for('portal_login') }}">
-          <span class="quick-chip-label">Client Portal</span>
-          <span class="quick-chip-meta">Messages and uploads</span>
-        </a>
-        <a class="quick-chip {{ 'is-active' if endpoint in integration_endpoints else '' }}" href="{{ url_for('integrations_office365') }}">
-          <span class="quick-chip-label">Integrations</span>
-          <span class="quick-chip-meta">Office365 and imports</span>
-        </a>
-        <a class="quick-chip {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_utilization') }}">
-          <span class="quick-chip-label">Analytics</span>
-          <span class="quick-chip-meta">Utilization and forecast</span>
+        {% if is_case_role %}
+          <a class="quick-chip {{ 'is-active' if endpoint in time_endpoints else '' }}" href="{{ url_for('time_entries', matter_id=active_matter.id) if active_matter else url_for('time_entries') }}">
+            <span class="quick-chip-label">Time Capture</span>
+            <span class="quick-chip-meta">Enter and review work</span>
+          </a>
+        {% endif %}
+        {% if is_lawyer_role %}
+          <a class="quick-chip {{ 'is-active' if endpoint in billing_endpoints else '' }}" href="{{ url_for('billing_invoices', matter_id=active_matter.id) if active_matter else url_for('billing_invoices') }}">
+            <span class="quick-chip-label">Billing Queue</span>
+            <span class="quick-chip-meta">Generate and follow up invoices</span>
+          </a>
+        {% elif is_support_role or is_admin_role %}
+          <a class="quick-chip {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">
+            <span class="quick-chip-label">Intake Queue</span>
+            <span class="quick-chip-meta">Leads, follow-ups, conflicts</span>
+          </a>
+        {% endif %}
+        <a class="quick-chip {{ 'is-active' if endpoint == 'search' else '' }}" href="{{ url_for('search') }}">
+          <span class="quick-chip-label">Search</span>
+          <span class="quick-chip-meta">Jump to any record</span>
         </a>
       </div>
 
-      <div class="action-strip" role="navigation" aria-label="Lawyer Core Actions">
-        <a class="action-chip" href="{{ url_for('matter_create') }}">
-          <span>Open Matter</span>
-          <span class="code-like">New</span>
-        </a>
-        <a class="action-chip" href="{{ url_for('matters') }}">
-          <span>Find Matter</span>
-          <span class="code-like">Hub</span>
-        </a>
-        <a class="action-chip" href="{{ url_for('calendar_my', filter='today') }}">
-          <span>Today Deadlines</span>
-          <span class="code-like">Now</span>
-        </a>
-        <a class="action-chip" href="{{ url_for('time_timers') }}">
-          <span>Start Timer</span>
-          <span class="code-like">Live</span>
-        </a>
-        <a class="action-chip" href="{{ url_for('time_entries') }}">
-          <span>Log Time</span>
-          <span class="code-like">Entry</span>
-        </a>
-        <a class="action-chip" href="{{ url_for('billing_invoices') }}">
-          <span>Generate Invoice</span>
-          <span class="code-like">Billing</span>
-        </a>
+      <div class="action-strip" role="navigation" aria-label="Daily Actions">
+        {% if is_support_role %}
+          <a class="action-chip" href="{{ url_for('matters') }}">
+            <span>Find Matter</span>
+            <span class="code-like">Hub</span>
+          </a>
+          {% if active_matter %}
+            <a class="action-chip" href="{{ url_for('matter_workspace', matter_id=active_matter.id) }}">
+              <span>Resume Matter</span>
+              <span class="code-like">{{ active_matter.matter_no }}</span>
+            </a>
+          {% endif %}
+          <a class="action-chip" href="{{ url_for('calendar_my', filter='today') }}">
+            <span>Today Calendar</span>
+            <span class="code-like">Now</span>
+          </a>
+          <a class="action-chip" href="{{ url_for('task_templates') }}">
+            <span>Workflow Queue</span>
+            <span class="code-like">Tasks</span>
+          </a>
+          <a class="action-chip" href="{{ url_for('dms_home') }}">
+            <span>DMS Workspace</span>
+            <span class="code-like">Docs</span>
+          </a>
+          <a class="action-chip" href="{{ url_for('crm_leads') }}">
+            <span>CRM Follow-ups</span>
+            <span class="code-like">Intake</span>
+          </a>
+          <a class="action-chip" href="{{ url_for('portal_login') }}">
+            <span>Portal Exchange</span>
+            <span class="code-like">Client</span>
+          </a>
+        {% elif is_admin_role %}
+          <a class="action-chip" href="{{ url_for('matter_create') }}">
+            <span>Open Matter</span>
+            <span class="code-like">New</span>
+          </a>
+          <a class="action-chip" href="{{ url_for('matters') }}">
+            <span>Find Matter</span>
+            <span class="code-like">Hub</span>
+          </a>
+          {% if active_matter %}
+            <a class="action-chip" href="{{ url_for('matter_workspace', matter_id=active_matter.id) }}">
+              <span>Resume Matter</span>
+              <span class="code-like">{{ active_matter.matter_no }}</span>
+            </a>
+          {% endif %}
+          <a class="action-chip" href="{{ url_for('calendar_my', filter='today') }}">
+            <span>Today Deadlines</span>
+            <span class="code-like">Now</span>
+          </a>
+          <a class="action-chip" href="{{ billing_action_href }}">
+            <span>Billing Queue</span>
+            <span class="code-like">AR</span>
+          </a>
+          <a class="action-chip" href="{{ url_for('crm_leads') }}">
+            <span>Intake Board</span>
+            <span class="code-like">CRM</span>
+          </a>
+          <a class="action-chip" href="{{ url_for('admin') }}">
+            <span>Admin Console</span>
+            <span class="code-like">Ops</span>
+          </a>
+          <a class="action-chip" href="{{ url_for('ops_backup_status') }}">
+            <span>Backup Status</span>
+            <span class="code-like">DR</span>
+          </a>
+        {% else %}
+          <a class="action-chip" href="{{ url_for('matter_create') }}">
+            <span>Open Matter</span>
+            <span class="code-like">New</span>
+          </a>
+          <a class="action-chip" href="{{ url_for('matters') }}">
+            <span>Find Matter</span>
+            <span class="code-like">Hub</span>
+          </a>
+          {% if active_matter %}
+            <a class="action-chip" href="{{ url_for('matter_workspace', matter_id=active_matter.id) }}">
+              <span>Resume Matter</span>
+              <span class="code-like">{{ active_matter.matter_no }}</span>
+            </a>
+          {% endif %}
+          <a class="action-chip" href="{{ url_for('calendar_my', filter='today') }}">
+            <span>Today Deadlines</span>
+            <span class="code-like">Now</span>
+          </a>
+          <a class="action-chip" href="{{ timer_action_href }}">
+            <span>Start Timer</span>
+            <span class="code-like">Live</span>
+          </a>
+          <a class="action-chip" href="{{ time_entry_action_href }}">
+            <span>Log Time</span>
+            <span class="code-like">Entry</span>
+          </a>
+          <a class="action-chip" href="{{ billing_action_href }}">
+            <span>Generate Invoice</span>
+            <span class="code-like">Billing</span>
+          </a>
+          <a class="action-chip" href="{{ url_for('task_templates') }}">
+            <span>Workflow Board</span>
+            <span class="code-like">Tasks</span>
+          </a>
+        {% endif %}
       </div>
     {% endif %}
   </nav>
@@ -2436,27 +2660,31 @@
             </span>
             <span class="code-like">Go</span>
           </a>
-          <a class="command-item" href="{{ url_for('matter_create') }}" data-command-item data-keywords="new matter create intake">
-            <span>
-              <span class="command-item-title">Create Matter</span>
-              <span class="command-item-meta">Open a new engagement</span>
-            </span>
-            <span class="code-like">Action</span>
-          </a>
-          <a class="command-item" href="{{ url_for('time_timers') }}" data-command-item data-keywords="timer start switch live tracking">
-            <span>
-              <span class="command-item-title">Start Timer</span>
-              <span class="command-item-meta">Capture live billable work immediately</span>
-            </span>
-            <span class="code-like">Action</span>
-          </a>
-          <a class="command-item" href="{{ url_for('time_entries') }}" data-command-item data-keywords="time entries log review billable">
-            <span>
-              <span class="command-item-title">Log Time Entry</span>
-              <span class="command-item-meta">Record worked hours with matter coding</span>
-            </span>
-            <span class="code-like">Action</span>
-          </a>
+          {% if is_lawyer_role %}
+            <a class="command-item" href="{{ url_for('matter_create') }}" data-command-item data-keywords="new matter create intake">
+              <span>
+                <span class="command-item-title">Create Matter</span>
+                <span class="command-item-meta">Open a new engagement</span>
+              </span>
+              <span class="code-like">Action</span>
+            </a>
+          {% endif %}
+          {% if is_case_role %}
+            <a class="command-item" href="{{ timer_action_href }}" data-command-item data-keywords="timer start switch live tracking">
+              <span>
+                <span class="command-item-title">Start Timer</span>
+                <span class="command-item-meta">Capture live billable work immediately</span>
+              </span>
+              <span class="code-like">Action</span>
+            </a>
+            <a class="command-item" href="{{ time_entry_action_href }}" data-command-item data-keywords="time entries log review billable">
+              <span>
+                <span class="command-item-title">Log Time Entry</span>
+                <span class="command-item-meta">Record worked hours with matter coding</span>
+              </span>
+              <span class="code-like">Action</span>
+            </a>
+          {% endif %}
           <a class="command-item" href="{{ url_for('calendar_my') }}" data-command-item data-keywords="calendar deadlines docket">
             <span>
               <span class="command-item-title">My Calendar</span>
@@ -2464,13 +2692,15 @@
             </span>
             <span class="code-like">Go</span>
           </a>
-          <a class="command-item" href="{{ url_for('task_templates') }}" data-command-item data-keywords="workflow templates dependencies approvals">
-            <span>
-              <span class="command-item-title">Workflow Console</span>
-              <span class="command-item-meta">Task templates, dependencies, approvals</span>
-            </span>
-            <span class="code-like">Go</span>
-          </a>
+          {% if is_case_role or is_support_role %}
+            <a class="command-item" href="{{ url_for('task_templates') }}" data-command-item data-keywords="workflow templates dependencies approvals">
+              <span>
+                <span class="command-item-title">Workflow Console</span>
+                <span class="command-item-meta">Task templates, dependencies, approvals</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+          {% endif %}
           <a class="command-item" href="{{ url_for('dms_home') }}" data-command-item data-keywords="dms documents versions productions bates ocr">
             <span>
               <span class="command-item-title">DMS Workspace</span>
@@ -2486,35 +2716,75 @@
             <span class="code-like">/</span>
           </a>
 
+          {% if active_matter %}
+            <div class="command-section">Active Matter</div>
+            <a class="command-item" href="{{ matter_workspace_href }}" data-command-item data-keywords="active matter workspace current case resume">
+              <span>
+                <span class="command-item-title">Workspace: {{ active_matter.matter_no }}</span>
+                <span class="command-item-meta">{{ active_matter.title }}</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+            <a class="command-item" href="{{ matter_dms_href }}" data-command-item data-keywords="active matter documents dms">
+              <span>
+                <span class="command-item-title">Matter Documents</span>
+                <span class="command-item-meta">Open DMS directly in this matter</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+            <a class="command-item" href="{{ matter_deadlines_href }}" data-command-item data-keywords="matter deadlines hearings filings calendar">
+              <span>
+                <span class="command-item-title">Matter Deadlines</span>
+                <span class="command-item-meta">Calendar focused on this matter</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+            {% if is_lawyer_role %}
+              <a class="command-item" href="{{ billing_action_href }}" data-command-item data-keywords="matter billing invoices collections">
+                <span>
+                  <span class="command-item-title">Matter Billing</span>
+                  <span class="command-item-meta">Invoices and follow-up for this matter</span>
+                </span>
+                <span class="code-like">Go</span>
+              </a>
+            {% endif %}
+          {% endif %}
+
           <div class="command-section">Finance and Risk</div>
-          <a class="command-item" href="{{ url_for('billing_invoices') }}" data-command-item data-keywords="billing invoices finance collections">
-            <span>
-              <span class="command-item-title">Invoices</span>
-              <span class="command-item-meta">Generate, approve, and export invoices</span>
-            </span>
-            <span class="code-like">Go</span>
-          </a>
-          <a class="command-item" href="{{ url_for('trust_ledger') }}" data-command-item data-keywords="trust ledger reconciliation accounting">
-            <span>
-              <span class="command-item-title">Trust Ledger</span>
-              <span class="command-item-meta">Deposits, disbursements, and controls</span>
-            </span>
-            <span class="code-like">Go</span>
-          </a>
-          <a class="command-item" href="{{ url_for('crm_leads') }}" data-command-item data-keywords="crm leads intake conflict">
-            <span>
-              <span class="command-item-title">CRM and Intake</span>
-              <span class="command-item-meta">Lead pipeline, conflict checks, engagements</span>
-            </span>
-            <span class="code-like">Go</span>
-          </a>
-          <a class="command-item" href="{{ url_for('analytics_utilization') }}" data-command-item data-keywords="analytics utilization realization profitability forecast">
-            <span>
-              <span class="command-item-title">Analytics</span>
-              <span class="command-item-meta">Utilization, realization, workload, burnout</span>
-            </span>
-            <span class="code-like">Go</span>
-          </a>
+          {% if is_lawyer_role %}
+            <a class="command-item" href="{{ url_for('billing_invoices') }}" data-command-item data-keywords="billing invoices finance collections">
+              <span>
+                <span class="command-item-title">Invoices</span>
+                <span class="command-item-meta">Generate, approve, and export invoices</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+            <a class="command-item" href="{{ url_for('trust_ledger') }}" data-command-item data-keywords="trust ledger reconciliation accounting">
+              <span>
+                <span class="command-item-title">Trust Ledger</span>
+                <span class="command-item-meta">Deposits, disbursements, and controls</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+          {% endif %}
+          {% if is_support_role or is_admin_role or is_lawyer_role %}
+            <a class="command-item" href="{{ url_for('crm_leads') }}" data-command-item data-keywords="crm leads intake conflict">
+              <span>
+                <span class="command-item-title">CRM and Intake</span>
+                <span class="command-item-meta">Lead pipeline, conflict checks, engagements</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+          {% endif %}
+          {% if is_lawyer_role %}
+            <a class="command-item" href="{{ url_for('analytics_utilization') }}" data-command-item data-keywords="analytics utilization realization profitability forecast">
+              <span>
+                <span class="command-item-title">Analytics</span>
+                <span class="command-item-meta">Utilization, realization, workload, burnout</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+          {% endif %}
           <a class="command-item" href="{{ url_for('portal_login') }}" data-command-item data-keywords="portal client messages uploads invoices">
             <span>
               <span class="command-item-title">Client Portal</span>
@@ -2579,48 +2849,6 @@
       </nav>
     {% endif %}
 
-    {% if current_user.is_authenticated and story_mode_enabled %}
-      <div class="card p-3 mb-3">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-          <div>
-            <div class="code-like">CLIENT STORY MODE ENABLED</div>
-            <div class="muted small">Use the guided sequence to present value quickly and consistently.</div>
-          </div>
-          <a class="btn btn-sm btn-light" href="{{ url_for('client_story') }}">Open story playbook</a>
-        </div>
-        <div class="next-step-callout mt-2">
-          <div class="small">Next recommended click: <span class="fw-semibold">{{ next_story_label }}</span></div>
-          <a class="btn btn-sm btn-light next-step-btn" href="{{ next_story_url }}">Go to next step</a>
-        </div>
-        <div class="story-inline">
-          {% set chip_dashboard = url_for('dashboard') %}
-          {% set chip_matters = url_for('matters', q='2026-LIT-0142') %}
-          {% set chip_calendar = url_for('calendar_my') %}
-          {% set chip_workflow = url_for('task_templates') %}
-          {% set chip_dms = url_for('dms_home') %}
-          {% set chip_billing = url_for('billing_invoices') %}
-          {% set chip_trust = story_trust_url %}
-          {% set chip_crm = url_for('crm_leads') %}
-          {% set chip_portal = url_for('portal_login') %}
-          {% set chip_integrations = url_for('integrations_office365') %}
-          {% set chip_analytics = url_for('analytics_utilization') %}
-          {% set chip_governance = story_governance_url %}
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_dashboard else '' }}" href="{{ chip_dashboard }}">1. Snapshot</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_matters else '' }}" href="{{ chip_matters }}">2. Matter</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_calendar else '' }}" href="{{ chip_calendar }}">3. Calendar</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_workflow else '' }}" href="{{ chip_workflow }}">4. Workflow</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_dms else '' }}" href="{{ chip_dms }}">5. DMS</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_billing else '' }}" href="{{ chip_billing }}">6. Billing</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_trust else '' }}" href="{{ chip_trust }}">7. Trust</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_crm else '' }}" href="{{ chip_crm }}">8. CRM</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_portal else '' }}" href="{{ chip_portal }}">9. Portal</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_integrations else '' }}" href="{{ chip_integrations }}">10. Integrations</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_analytics else '' }}" href="{{ chip_analytics }}">11. Analytics</a>
-          <a class="story-chip {{ 'story-chip-next' if next_story_url == chip_governance else '' }}" href="{{ chip_governance }}">12. Governance</a>
-        </div>
-      </div>
-    {% endif %}
-
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         <div class="flash-stack" aria-live="polite">
@@ -2647,8 +2875,14 @@
   <div class="mobile-dock" role="navigation" aria-label="Mobile shortcuts">
     <a class="mobile-dock-link {{ 'is-active' if endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">Home</a>
     <a class="mobile-dock-link {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">Matters</a>
-    <a class="mobile-dock-link {{ 'is-active' if endpoint in finance_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">Finance</a>
-    <a class="mobile-dock-link {{ 'is-active' if endpoint in integration_endpoints else '' }}" href="{{ url_for('mobile_hub') }}">Mobile</a>
+    <a class="mobile-dock-link {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my', filter='today') }}">Today</a>
+    {% if is_lawyer_role %}
+      <a class="mobile-dock-link {{ 'is-active' if endpoint in billing_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
+    {% elif is_support_role or is_admin_role %}
+      <a class="mobile-dock-link {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM</a>
+    {% else %}
+      <a class="mobile-dock-link {{ 'is-active' if endpoint in time_endpoints else '' }}" href="{{ url_for('time_timers') }}">Time</a>
+    {% endif %}
     <button class="mobile-dock-link" type="button" data-command-open>Jump</button>
   </div>
 {% endif %}

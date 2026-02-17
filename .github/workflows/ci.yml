@@ -20,29 +20,39 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Compile sources
         run: python -m compileall app.py intranet
 
+      - name: Run test suite
+        env:
+          PYTHONPATH: .
+        run: pytest -q
+
       - name: Migration upgrade smoke test
         env:
-          FLASK_ENV: production
-          FLASK_SECRET_KEY: ci-test-secret
+          FLASK_ENV: development
+          FLASK_SECRET_KEY: ci-dev-secret
           DATABASE_URL: sqlite:///ci.db
         run: flask --app app.py db upgrade -d migrations
 
       - name: Import app (production mode)
         env:
           FLASK_ENV: production
-          FLASK_SECRET_KEY: ci-test-secret
-          DATABASE_URL: sqlite:///:memory:
+          FLASK_SECRET_KEY: ci-prod-secret
+          BACKUP_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+          DATABASE_URL: postgresql+psycopg://user:pass@localhost:5432/testdb
+          GUNICORN_WORKERS: "1"
         run: python -c "import app; print('app import ok')"
 
       - name: Health endpoint smoke test
         env:
           FLASK_ENV: production
-          FLASK_SECRET_KEY: ci-test-secret
-          DATABASE_URL: sqlite:///:memory:
+          FLASK_SECRET_KEY: ci-prod-secret
+          BACKUP_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+          DATABASE_URL: postgresql+psycopg://user:pass@localhost:5432/testdb
+          GUNICORN_WORKERS: "1"
         run: |
           python - <<'PY'
           import app
