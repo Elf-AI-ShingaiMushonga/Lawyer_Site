@@ -44,6 +44,173 @@
     });
   };
 
+  const initGlobalOmnibox = () => {
+    const form = document.getElementById("global-omnibox-form");
+    const input = document.getElementById("global-nav-search");
+    const datalist = document.getElementById("global-omnibox-options");
+    if (!(form instanceof HTMLFormElement) || !(input instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const normalize = (value) =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const tokenize = (value) =>
+      normalize(value)
+        .split(/[^a-z0-9/_-]+/g)
+        .filter((token) => token.length > 0);
+
+    const unique = (values) => {
+      const seen = new Set();
+      return values.filter((value) => {
+        if (seen.has(value)) {
+          return false;
+        }
+        seen.add(value);
+        return true;
+      });
+    };
+
+    const parseRoutes = () =>
+      Array.from(document.querySelectorAll("[data-command-item]"))
+        .map((item) => {
+          if (!(item instanceof HTMLAnchorElement)) {
+            return null;
+          }
+          const href = item.getAttribute("href") || "";
+          if (!href) {
+            return null;
+          }
+          const titleNode = item.querySelector(".command-item-title");
+          const title = (titleNode ? titleNode.textContent : item.textContent || "")
+            .replace(/\s+/g, " ")
+            .trim();
+          const keywords = (item.getAttribute("data-keywords") || "")
+            .replace(/\s+/g, " ")
+            .trim();
+          if (!title) {
+            return null;
+          }
+
+          return {
+            href,
+            title,
+            normalizedTitle: normalize(title),
+            aliases: unique(tokenize(`${title} ${keywords}`)),
+            searchable: normalize(`${title} ${keywords}`),
+          };
+        })
+        .filter((item) => item && item.title);
+
+    let routes = parseRoutes();
+
+    const getRoutes = () => {
+      if (routes.length === 0) {
+        routes = parseRoutes();
+      }
+      return routes;
+    };
+
+    const populateDatalist = () => {
+      if (!(datalist instanceof HTMLDataListElement)) {
+        return;
+      }
+      const existing = new Set(
+        Array.from(datalist.querySelectorAll("option"))
+          .map((option) => option.value.trim().toLowerCase())
+          .filter((value) => value.length > 0)
+      );
+      getRoutes()
+        .slice(0, 24)
+        .forEach((route) => {
+          const key = route.title.toLowerCase();
+          if (existing.has(key)) {
+            return;
+          }
+          const option = document.createElement("option");
+          option.value = route.title;
+          datalist.appendChild(option);
+          existing.add(key);
+        });
+    };
+
+    const findBestRoute = (rawQuery) => {
+      const query = normalize(rawQuery);
+      if (!query) {
+        return null;
+      }
+      const list = getRoutes();
+      if (list.length === 0) {
+        return null;
+      }
+
+      const tokens = tokenize(query);
+      const exact =
+        list.find((route) => route.normalizedTitle === query || route.aliases.includes(query)) || null;
+      if (exact) {
+        return exact;
+      }
+
+      const titlePrefix = list.find((route) => route.normalizedTitle.startsWith(query)) || null;
+      if (titlePrefix) {
+        return titlePrefix;
+      }
+
+      const tokenPrefix =
+        list.find(
+          (route) =>
+            tokens.length > 0 &&
+            tokens.every((token) => route.aliases.some((alias) => alias.startsWith(token)))
+        ) || null;
+      if (tokenPrefix) {
+        return tokenPrefix;
+      }
+
+      return list.find((route) => route.searchable.includes(query)) || null;
+    };
+
+    form.addEventListener("submit", (event) => {
+      const query = input.value.trim();
+      if (!query) {
+        return;
+      }
+
+      const forcedSearch =
+        query.startsWith("?")
+          ? query.slice(1).trim()
+          : query.toLowerCase().startsWith("search ")
+            ? query.slice(7).trim()
+            : null;
+      if (forcedSearch !== null) {
+        input.value = forcedSearch;
+        return;
+      }
+
+      if (/^\/[a-z0-9/_-]*$/i.test(query)) {
+        event.preventDefault();
+        window.location.href = query;
+        return;
+      }
+
+      const route = findBestRoute(query);
+      if (route) {
+        event.preventDefault();
+        window.location.href = route.href;
+      }
+    });
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && input.value.trim().length > 0) {
+        input.value = "";
+      }
+    });
+
+    populateDatalist();
+  };
+
   const initCommandPalette = () => {
     const palette = document.getElementById("command-palette");
     const openers = document.querySelectorAll("[data-command-open]");
@@ -1748,6 +1915,7 @@
   const run = () => {
     initFlashDismiss();
     initPasswordToggles();
+    initGlobalOmnibox();
     initCommandPalette();
     initNavMenus();
     initMatterQuickFilters();

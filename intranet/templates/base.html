@@ -203,29 +203,64 @@
 
     .nav-utility {
       display: flex;
-      align-items: center;
-      gap: 8px;
+      align-items: flex-start;
+      gap: 10px;
       flex-wrap: wrap;
       justify-content: flex-end;
-      max-width: 760px;
+      flex: 1 1 520px;
+      max-width: 860px;
     }
 
-    .nav-search {
-      min-width: 240px;
-      max-width: 340px;
-      flex: 1 1 280px;
+    .nav-omnibox {
+      min-width: 280px;
+      flex: 1 1 420px;
     }
 
-    .nav-search .form-control {
-      font-size: 13px;
-      padding: 8px 12px;
+    .nav-omnibox-shell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 6px 4px 11px;
       border-radius: 999px;
-      border-color: rgba(225, 6, 0, 0.32);
-      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(225, 6, 0, 0.32);
+      background: rgba(255, 255, 255, 0.94);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
-    .nav-search .form-control:focus {
+    .nav-omnibox-shell:focus-within {
+      border-color: rgba(225, 6, 0, 0.75);
+      box-shadow: 0 0 0 .2rem var(--focus-ring);
       background: #ffffff;
+    }
+
+    .nav-omnibox-icon {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: #8d5d5b;
+      white-space: nowrap;
+    }
+
+    .nav-omnibox .form-control {
+      border: 0;
+      box-shadow: none;
+      background: transparent;
+      border-radius: 0;
+      font-size: 13px;
+      padding: 7px 0;
+      min-height: auto;
+    }
+
+    .nav-omnibox .form-control:focus {
+      box-shadow: none;
+      background: transparent;
+    }
+
+    .nav-omnibox-submit {
+      min-height: 32px;
+      padding: 5px 10px;
+      font-size: 12px;
+      flex: 0 0 auto;
     }
 
     .command-launch {
@@ -426,102 +461,6 @@
       background: rgba(225, 6, 0, 0.09);
     }
 
-    .quick-strip {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px dashed rgba(225, 6, 0, 0.3);
-    }
-
-    .quick-chip {
-      border: 1px solid rgba(225, 6, 0, 0.26);
-      border-radius: 12px;
-      text-decoration: none;
-      background: rgba(255, 255, 255, 0.92);
-      color: #5f3939;
-      padding: 8px 11px;
-      min-width: 120px;
-      transition: all .16s ease;
-    }
-
-    .quick-chip:hover {
-      border-color: rgba(225, 6, 0, 0.75);
-      color: var(--accent-strong);
-      transform: translateY(-1px);
-      background: rgba(225, 6, 0, 0.06);
-    }
-
-    .quick-chip.is-active {
-      border-color: rgba(225, 6, 0, 0.85);
-      background: rgba(225, 6, 0, 0.14);
-      color: #6b1916;
-      box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.12);
-    }
-
-    .quick-chip-label {
-      display: block;
-      font-size: 12px;
-      line-height: 1.1;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-weight: 800;
-    }
-
-    .quick-chip-meta {
-      display: block;
-      margin-top: 2px;
-      font-size: 12px;
-      color: #896f6f;
-    }
-
-    .action-strip {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px dashed rgba(225, 6, 0, 0.24);
-    }
-
-    .action-chip {
-      display: inline-flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      min-width: 148px;
-      border: 1px solid rgba(225, 6, 0, 0.36);
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.95);
-      color: #5f2f2d;
-      text-decoration: none;
-      padding: 7px 10px;
-      font-size: 12px;
-      font-weight: 780;
-      line-height: 1.2;
-      transition: all .16s ease;
-    }
-
-    .action-chip .code-like {
-      background: rgba(225, 6, 0, 0.08);
-      border-color: rgba(225, 6, 0, 0.24);
-      color: #8d4f4d;
-    }
-
-    .action-chip:hover {
-      color: #ffffff;
-      border-color: rgba(225, 6, 0, 0.86);
-      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-      transform: translateY(-1px);
-    }
-
-    .action-chip:hover .code-like {
-      color: #ffffff;
-      background: rgba(255, 255, 255, 0.16);
-      border-color: rgba(255, 255, 255, 0.4);
-    }
-
     .badge-soft {
       border: 1px solid rgba(225, 6, 0, 0.28);
       background: rgba(225, 6, 0, 0.1);
@@ -599,6 +538,13 @@
     }
 
     .form-help {
+      display: none;
+    }
+
+    .form-help[data-copy-feedback-for],
+    .form-help[data-thread-matter-hint],
+    .form-help[data-quote-fee-hint] {
+      display: block;
       margin-top: 4px;
       font-size: 12px;
       color: #8d7d7d;
@@ -1057,12 +1003,6 @@
       color: #5a3b3b;
       font-weight: 700;
       font-size: 13px;
-    }
-
-    .breadcrumb-meta {
-      font-size: 12px;
-      color: #8d7474;
-      letter-spacing: 0.01em;
     }
 
     .alert-warning {
@@ -1764,10 +1704,7 @@
     }
 
     .command-item-meta {
-      font-size: 12px;
-      color: #8c7070;
-      display: block;
-      margin-top: 2px;
+      display: none;
     }
 
     .command-empty {
@@ -1873,13 +1810,14 @@
         justify-content: stretch;
       }
 
-      .nav-search {
+      .nav-omnibox {
         max-width: none;
         flex: 1 1 100%;
       }
 
       .nav-auth {
-        width: 100%;
+        width: auto;
+        margin-left: auto;
       }
 
       .nav-actions {
@@ -1917,35 +1855,6 @@
         justify-content: flex-start;
       }
 
-      .quick-strip {
-        overflow-x: auto;
-        flex-wrap: nowrap;
-        padding-bottom: 4px;
-      }
-
-      .quick-strip::-webkit-scrollbar {
-        height: 7px;
-      }
-
-      .quick-strip::-webkit-scrollbar-thumb {
-        background: rgba(225, 6, 0, 0.3);
-        border-radius: 999px;
-      }
-
-      .action-strip {
-        overflow-x: auto;
-        flex-wrap: nowrap;
-        padding-bottom: 4px;
-      }
-
-      .action-strip::-webkit-scrollbar {
-        height: 7px;
-      }
-
-      .action-strip::-webkit-scrollbar-thumb {
-        background: rgba(225, 6, 0, 0.3);
-        border-radius: 999px;
-      }
     }
 
     @media (max-width: 768px) {
@@ -2063,6 +1972,19 @@
         display: none;
       }
 
+      .nav-omnibox {
+        min-width: 100%;
+      }
+
+      .nav-omnibox-shell {
+        padding-right: 4px;
+      }
+
+      .nav-omnibox-submit {
+        min-height: var(--touch-target-min-height);
+        padding: 6px 12px;
+      }
+
       .nav-auth {
         width: 100%;
         justify-content: space-between;
@@ -2096,10 +2018,6 @@
 
       .context-path {
         padding: 9px;
-      }
-
-      .breadcrumb-meta {
-        width: 100%;
       }
 
       .card {
@@ -2343,6 +2261,10 @@
     {% set section_meta = "Cross-matter retrieval and structured know-how" %}
     {% set section_href = url_for('search') %}
   {% endif %}
+  {% set more_active = endpoint in more_endpoints
+    and not (is_support_role and endpoint in workflow_endpoints)
+    and not (is_lawyer_role and endpoint in billing_endpoints)
+    and not ((is_support_role or is_admin_role) and endpoint in crm_endpoints) %}
   <nav class="navbar px-3 py-2 mb-3">
     <div class="nav-head">
       <div class="d-flex align-items-center gap-3 flex-wrap">
@@ -2361,12 +2283,40 @@
 
       <div class="nav-utility">
         {% if current_user.is_authenticated %}
-          <form class="nav-search" method="get" action="{{ url_for('search') }}" role="search">
-            <label class="visually-hidden" for="global-nav-search">Search</label>
-            <input class="form-control" id="global-nav-search" type="search" name="q" placeholder="Search matters, docs, contacts, notes..." value="{{ request.args.get('q','') if endpoint == 'search' else '' }}">
+          <form class="nav-omnibox" id="global-omnibox-form" method="get" action="{{ url_for('search') }}" role="search">
+            <label class="visually-hidden" for="global-nav-search">Navigate or search</label>
+            <div class="nav-omnibox-shell">
+              <span class="nav-omnibox-icon" aria-hidden="true">Go</span>
+              <input class="form-control" id="global-nav-search" type="search" name="q" list="global-omnibox-options" placeholder="Go to page or search" value="{{ request.args.get('q','') if endpoint == 'search' else '' }}">
+              <button class="nav-pill nav-omnibox-submit" type="submit">Open</button>
+            </div>
+            <datalist id="global-omnibox-options">
+              <option value="Dashboard">
+              <option value="Matter Directory">
+              <option value="My Calendar">
+              <option value="DMS Workspace">
+              {% if is_case_role %}
+                <option value="Start Timer">
+                <option value="Log Time Entry">
+              {% endif %}
+              {% if is_lawyer_role %}
+                <option value="Billing Invoices">
+                <option value="Trust Ledger">
+              {% endif %}
+              {% if is_support_role or is_admin_role %}
+                <option value="CRM and Intake">
+              {% endif %}
+              <option value="Global Search">
+              <option value="Knowledge Base">
+              <option value="Contacts">
+              <option value="Portal Messages">
+              <option value="Workflow Console">
+              <option value="/matters">
+              <option value="/search">
+            </datalist>
           </form>
           <button class="nav-pill command-launch" type="button" data-command-open aria-haspopup="dialog" aria-controls="command-palette">
-            Quick Jump
+            All Tools
             <span class="code-like">Ctrl+K</span>
           </button>
         {% endif %}
@@ -2388,24 +2338,19 @@
       <div class="nav-actions" role="navigation" aria-label="Primary">
         <a class="nav-pill {{ 'is-active' if endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">Dashboard</a>
         <a class="nav-pill {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">Matters</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my') }}">Calendar</a>
+        <a class="nav-pill {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my', filter='today') }}">Today</a>
         <a class="nav-pill {{ 'is-active' if endpoint in dms_endpoints else '' }}" href="{{ url_for('dms_home') }}">DMS</a>
-        {% if is_case_role %}
-          <a class="nav-pill {{ 'is-active' if endpoint in time_endpoints else '' }}" href="{{ url_for('time_timers') }}">Time</a>
-        {% endif %}
         {% if is_lawyer_role %}
           <a class="nav-pill {{ 'is-active' if endpoint in billing_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
-        {% endif %}
-        {% if is_support_role or is_admin_role %}
+        {% elif is_support_role or is_admin_role %}
           <a class="nav-pill {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM</a>
-        {% endif %}
-        {% if is_support_role %}
-          <a class="nav-pill {{ 'is-active' if endpoint in workflow_endpoints else '' }}" href="{{ url_for('task_templates') }}">Workflow</a>
+        {% elif is_case_role %}
+          <a class="nav-pill {{ 'is-active' if endpoint in time_endpoints else '' }}" href="{{ url_for('time_timers') }}">Time</a>
         {% endif %}
         <details class="nav-menu" data-nav-menu>
-          <summary class="nav-pill {{ 'is-active' if endpoint in more_endpoints and not (is_support_role and endpoint in workflow_endpoints) else '' }}">
+          <summary class="nav-pill {{ 'is-active' if more_active else '' }}">
             More
-            <span class="code-like">Menu</span>
+            <span class="code-like">All</span>
           </summary>
           <div class="nav-menu-panel">
             <div class="nav-menu-grid">
@@ -2486,153 +2431,6 @@
           </div>
         </div>
       {% endif %}
-
-      <div class="quick-strip" role="navigation" aria-label="Daily Focus">
-        <a class="quick-chip {{ 'is-active' if endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">
-          <span class="quick-chip-label">Dashboard</span>
-          <span class="quick-chip-meta">My day snapshot</span>
-        </a>
-        <a class="quick-chip {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">
-          <span class="quick-chip-label">Matter Hub</span>
-          <span class="quick-chip-meta">Find and progress files</span>
-        </a>
-        {% if active_matter %}
-          <a class="quick-chip" href="{{ url_for('matter_workspace', matter_id=active_matter.id) }}">
-            <span class="quick-chip-label">Resume {{ active_matter.matter_no }}</span>
-            <span class="quick-chip-meta">{{ active_matter.title }}</span>
-          </a>
-        {% endif %}
-        <a class="quick-chip {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my', filter='today') }}">
-          <span class="quick-chip-label">Today</span>
-          <span class="quick-chip-meta">Deadlines and hearings</span>
-        </a>
-        {% if is_case_role %}
-          <a class="quick-chip {{ 'is-active' if endpoint in time_endpoints else '' }}" href="{{ url_for('time_entries', matter_id=active_matter.id) if active_matter else url_for('time_entries') }}">
-            <span class="quick-chip-label">Time Capture</span>
-            <span class="quick-chip-meta">Enter and review work</span>
-          </a>
-        {% endif %}
-        {% if is_lawyer_role %}
-          <a class="quick-chip {{ 'is-active' if endpoint in billing_endpoints else '' }}" href="{{ url_for('billing_invoices', matter_id=active_matter.id) if active_matter else url_for('billing_invoices') }}">
-            <span class="quick-chip-label">Billing Queue</span>
-            <span class="quick-chip-meta">Generate and follow up invoices</span>
-          </a>
-        {% elif is_support_role or is_admin_role %}
-          <a class="quick-chip {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">
-            <span class="quick-chip-label">Intake Queue</span>
-            <span class="quick-chip-meta">Leads, follow-ups, conflicts</span>
-          </a>
-        {% endif %}
-        <a class="quick-chip {{ 'is-active' if endpoint == 'search' else '' }}" href="{{ url_for('search') }}">
-          <span class="quick-chip-label">Search</span>
-          <span class="quick-chip-meta">Jump to any record</span>
-        </a>
-      </div>
-
-      <div class="action-strip" role="navigation" aria-label="Daily Actions">
-        {% if is_support_role %}
-          <a class="action-chip" href="{{ url_for('matters') }}">
-            <span>Find Matter</span>
-            <span class="code-like">Hub</span>
-          </a>
-          {% if active_matter %}
-            <a class="action-chip" href="{{ url_for('matter_workspace', matter_id=active_matter.id) }}">
-              <span>Resume Matter</span>
-              <span class="code-like">{{ active_matter.matter_no }}</span>
-            </a>
-          {% endif %}
-          <a class="action-chip" href="{{ url_for('calendar_my', filter='today') }}">
-            <span>Today Calendar</span>
-            <span class="code-like">Now</span>
-          </a>
-          <a class="action-chip" href="{{ url_for('task_templates') }}">
-            <span>Workflow Queue</span>
-            <span class="code-like">Tasks</span>
-          </a>
-          <a class="action-chip" href="{{ url_for('dms_home') }}">
-            <span>DMS Workspace</span>
-            <span class="code-like">Docs</span>
-          </a>
-          <a class="action-chip" href="{{ url_for('crm_leads') }}">
-            <span>CRM Follow-ups</span>
-            <span class="code-like">Intake</span>
-          </a>
-          <a class="action-chip" href="{{ url_for('portal_login') }}">
-            <span>Portal Exchange</span>
-            <span class="code-like">Client</span>
-          </a>
-        {% elif is_admin_role %}
-          <a class="action-chip" href="{{ url_for('matter_create') }}">
-            <span>Open Matter</span>
-            <span class="code-like">New</span>
-          </a>
-          <a class="action-chip" href="{{ url_for('matters') }}">
-            <span>Find Matter</span>
-            <span class="code-like">Hub</span>
-          </a>
-          {% if active_matter %}
-            <a class="action-chip" href="{{ url_for('matter_workspace', matter_id=active_matter.id) }}">
-              <span>Resume Matter</span>
-              <span class="code-like">{{ active_matter.matter_no }}</span>
-            </a>
-          {% endif %}
-          <a class="action-chip" href="{{ url_for('calendar_my', filter='today') }}">
-            <span>Today Deadlines</span>
-            <span class="code-like">Now</span>
-          </a>
-          <a class="action-chip" href="{{ billing_action_href }}">
-            <span>Billing Queue</span>
-            <span class="code-like">AR</span>
-          </a>
-          <a class="action-chip" href="{{ url_for('crm_leads') }}">
-            <span>Intake Board</span>
-            <span class="code-like">CRM</span>
-          </a>
-          <a class="action-chip" href="{{ url_for('admin') }}">
-            <span>Admin Console</span>
-            <span class="code-like">Ops</span>
-          </a>
-          <a class="action-chip" href="{{ url_for('ops_backup_status') }}">
-            <span>Backup Status</span>
-            <span class="code-like">DR</span>
-          </a>
-        {% else %}
-          <a class="action-chip" href="{{ url_for('matter_create') }}">
-            <span>Open Matter</span>
-            <span class="code-like">New</span>
-          </a>
-          <a class="action-chip" href="{{ url_for('matters') }}">
-            <span>Find Matter</span>
-            <span class="code-like">Hub</span>
-          </a>
-          {% if active_matter %}
-            <a class="action-chip" href="{{ url_for('matter_workspace', matter_id=active_matter.id) }}">
-              <span>Resume Matter</span>
-              <span class="code-like">{{ active_matter.matter_no }}</span>
-            </a>
-          {% endif %}
-          <a class="action-chip" href="{{ url_for('calendar_my', filter='today') }}">
-            <span>Today Deadlines</span>
-            <span class="code-like">Now</span>
-          </a>
-          <a class="action-chip" href="{{ timer_action_href }}">
-            <span>Start Timer</span>
-            <span class="code-like">Live</span>
-          </a>
-          <a class="action-chip" href="{{ time_entry_action_href }}">
-            <span>Log Time</span>
-            <span class="code-like">Entry</span>
-          </a>
-          <a class="action-chip" href="{{ billing_action_href }}">
-            <span>Generate Invoice</span>
-            <span class="code-like">Billing</span>
-          </a>
-          <a class="action-chip" href="{{ url_for('task_templates') }}">
-            <span>Workflow Board</span>
-            <span class="code-like">Tasks</span>
-          </a>
-        {% endif %}
-      </div>
     {% endif %}
   </nav>
 
@@ -2641,7 +2439,7 @@
       <div class="command-backdrop" data-command-close></div>
       <div class="command-dialog" role="dialog" aria-modal="true" aria-label="Quick jump">
         <div class="command-head">
-          <input class="form-control" id="command-search" type="search" placeholder="Type to filter navigation...">
+          <input class="form-control" id="command-search" type="search" placeholder="Filter tools...">
           <button class="nav-pill" type="button" data-command-close>Esc</button>
         </div>
         <div class="command-list" id="command-list">
@@ -2823,7 +2621,7 @@
               <span class="code-like">Go</span>
             </a>
           {% endif %}
-          <div class="command-empty" id="command-empty" hidden>No matching actions. Refine your search.</div>
+          <div class="command-empty" id="command-empty" hidden>No matches.</div>
         </div>
       </div>
     </div>
@@ -2845,7 +2643,6 @@
             <span class="breadcrumb-current">{{ title }}</span>
           {% endif %}
         </div>
-        <div class="breadcrumb-meta">{{ section_meta }}</div>
       </nav>
     {% endif %}
 
