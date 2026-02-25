@@ -99,11 +99,33 @@
     }
 
     .nav-head {
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: center;
       gap: 10px;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
       flex-wrap: wrap;
+    }
+
+    .nav-brand-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .nav-brand-meta .muted {
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .brand {
@@ -186,34 +208,34 @@
 
     .nav-actions {
       display: flex;
+      align-items: center;
       gap: 8px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       justify-content: flex-start;
-      margin-top: 11px;
-      padding-top: 11px;
-      border-top: 1px solid rgba(225, 6, 0, 0.2);
+      min-width: 0;
+      padding: 2px 0;
     }
 
     .nav-auth {
       display: flex;
       gap: 8px;
       align-items: center;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
     }
 
     .nav-utility {
       display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: nowrap;
       justify-content: flex-end;
-      flex: 1 1 520px;
-      max-width: 860px;
+      min-width: 0;
     }
 
     .nav-omnibox {
-      min-width: 280px;
-      flex: 1 1 420px;
+      width: min(340px, 100%);
+      min-width: 220px;
+      flex: 0 1 340px;
     }
 
     .nav-omnibox-shell {
@@ -284,7 +306,7 @@
       border-radius: 999px;
       border: 1px solid rgba(225, 6, 0, 0.3);
       color: #5f3a3a;
-      padding: 6px 12px;
+      padding: 5px 11px;
       text-decoration: none;
       transition: all .15s ease;
       background: rgba(255, 255, 255, 0.8);
@@ -397,8 +419,8 @@
     }
 
     .context-rail {
-      margin-top: 10px;
-      padding: 9px 10px;
+      margin-top: 8px;
+      padding: 7px 9px;
       border: 1px solid rgba(225, 6, 0, 0.26);
       border-radius: 12px;
       background: rgba(255, 255, 255, 0.92);
@@ -406,7 +428,7 @@
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 6px;
     }
 
     .context-rail-head {
@@ -1805,13 +1827,29 @@
         display: none;
       }
 
+      .nav-head {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+
+      .nav-brand {
+        justify-content: space-between;
+      }
+
+      .nav-brand-meta .muted {
+        display: none;
+      }
+
       .nav-utility {
+        order: 3;
         width: 100%;
         justify-content: stretch;
+        flex-wrap: wrap;
       }
 
       .nav-omnibox {
         max-width: none;
+        min-width: 0;
         flex: 1 1 100%;
       }
 
@@ -1821,9 +1859,10 @@
       }
 
       .nav-actions {
+        order: 2;
         overflow-x: auto;
         flex-wrap: nowrap;
-        padding-bottom: 4px;
+        padding-bottom: 2px;
       }
 
       .nav-actions::-webkit-scrollbar {
@@ -1950,7 +1989,15 @@
       }
 
       .nav-head {
+        gap: 6px;
+      }
+
+      .nav-brand {
         gap: 8px;
+      }
+
+      .nav-brand-meta {
+        display: none;
       }
 
       .brand {
@@ -1986,30 +2033,33 @@
       }
 
       .nav-auth {
-        width: 100%;
-        justify-content: space-between;
+        width: auto;
+        justify-content: flex-end;
       }
 
       .nav-auth .btn,
       .nav-auth .nav-pill {
-        flex: 1 1 auto;
+        flex: 0 0 auto;
         text-align: center;
+      }
+
+      .command-launch {
+        display: none;
       }
 
       .nav-pill {
         font-size: 12px;
-        padding: 6px 10px;
+        padding: 5px 10px;
       }
 
       .nav-actions {
-        margin-top: 8px;
-        padding-top: 8px;
+        display: none;
         gap: 6px;
       }
 
       .nav-actions .nav-pill {
         font-size: 12px;
-        padding: 6px 10px;
+        padding: 5px 10px;
       }
 
       .main-content {
@@ -2267,7 +2317,7 @@
     and not ((is_support_role or is_admin_role) and endpoint in crm_endpoints) %}
   <nav class="navbar px-3 py-2 mb-3">
     <div class="nav-head">
-      <div class="d-flex align-items-center gap-3 flex-wrap">
+      <div class="nav-brand">
         <a class="brand" href="{{ url_for('dashboard') }}">
           <span class="brand-mark">LF</span>
           <span>
@@ -2276,10 +2326,84 @@
           </span>
         </a>
         {% if current_user.is_authenticated %}
-          <span class="badge badge-soft">{{ current_user.role }}</span>
-          <span class="muted small">{{ current_user.email }}</span>
+          <div class="nav-brand-meta">
+            <span class="badge badge-soft">{{ current_user.role }}</span>
+            <span class="muted small">{{ current_user.email }}</span>
+          </div>
         {% endif %}
       </div>
+
+      {% if current_user.is_authenticated %}
+        <div class="nav-actions" role="navigation" aria-label="Primary">
+          <a class="nav-pill {{ 'is-active' if endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a class="nav-pill {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">Matters</a>
+          <a class="nav-pill {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my', filter='today') }}">Today</a>
+          <a class="nav-pill {{ 'is-active' if endpoint in dms_endpoints else '' }}" href="{{ url_for('dms_home') }}">DMS</a>
+          {% if is_lawyer_role %}
+            <a class="nav-pill {{ 'is-active' if endpoint in billing_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
+          {% elif is_support_role or is_admin_role %}
+            <a class="nav-pill {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM</a>
+          {% elif is_case_role %}
+            <a class="nav-pill {{ 'is-active' if endpoint in time_endpoints else '' }}" href="{{ url_for('time_timers') }}">Time</a>
+          {% endif %}
+          <details class="nav-menu" data-nav-menu>
+            <summary class="nav-pill {{ 'is-active' if more_active else '' }}">
+              More
+            </summary>
+            <div class="nav-menu-panel">
+              <div class="nav-menu-grid">
+                <div class="nav-menu-section">
+                  <span class="nav-menu-label">Case Tools</span>
+                  {% if not is_support_role %}
+                    <a class="nav-menu-item {{ 'is-active' if endpoint in workflow_endpoints else '' }}" href="{{ url_for('task_templates') }}">Workflow Templates</a>
+                  {% endif %}
+                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'search' else '' }}" href="{{ url_for('search') }}">Global Search</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'contacts' else '' }}" href="{{ url_for('contacts') }}">Contacts</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in ['kb', 'kb_view'] else '' }}" href="{{ url_for('kb') }}">Knowledge Base</a>
+                  {% if not (is_support_role or is_admin_role) %}
+                    <a class="nav-menu-item {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM Intake</a>
+                  {% endif %}
+                </div>
+                <div class="nav-menu-section">
+                  <span class="nav-menu-label">Finance</span>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'expenses' else '' }}" href="{{ url_for('expenses') }}">Expenses</a>
+                  {% if is_lawyer_role %}
+                    <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_rates' else '' }}" href="{{ url_for('billing_rates') }}">Rate Cards</a>
+                    <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_ar_aging' else '' }}" href="{{ url_for('billing_ar_aging') }}">AR Aging</a>
+                    <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_transactions' else '' }}" href="{{ url_for('billing_transactions') }}">Transactions</a>
+                    <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_audit_log' else '' }}" href="{{ url_for('billing_audit_log') }}">Billing Audit</a>
+                    <a class="nav-menu-item {{ 'is-active' if endpoint in trust_account_endpoints else '' }}" href="{{ url_for('trust_ledger') }}">Trust Accounting</a>
+                  {% endif %}
+                </div>
+                <div class="nav-menu-section">
+                  <span class="nav-menu-label">Client & Intake</span>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in portal_endpoints and endpoint == 'portal_messages' else '' }}" href="{{ url_for('portal_messages') }}">Portal Messages</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_uploads' else '' }}" href="{{ url_for('portal_uploads') }}">Portal Uploads</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_invoices' else '' }}" href="{{ url_for('portal_invoices') }}">Portal Invoices</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_links' else '' }}" href="{{ url_for('portal_links') }}">Secure Links</a>
+                  {% if not is_support_role %}
+                    <a class="nav-menu-item {{ 'is-active' if endpoint in portal_endpoints and endpoint not in ['portal_messages', 'portal_uploads', 'portal_invoices', 'portal_links'] else '' }}" href="{{ url_for('portal_login') }}">Portal Home</a>
+                  {% endif %}
+                </div>
+                <div class="nav-menu-section">
+                  <span class="nav-menu-label">Insights & Platform</span>
+                  {% if is_lawyer_role %}
+                    <a class="nav-menu-item {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_utilization') }}">Analytics</a>
+                  {% endif %}
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in integration_endpoints else '' }}" href="{{ url_for('integrations_office365') }}">Integrations</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'mobile_hub' else '' }}" href="{{ url_for('mobile_hub') }}">Mobile Hub</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in trust_endpoints else '' }}" href="{{ url_for('trust_policy') }}">Trust & Security</a>
+                  {% if is_admin_role %}
+                    <a class="nav-menu-item {{ 'is-active' if endpoint in admin_endpoints else '' }}" href="{{ url_for('admin') }}">Admin Console</a>
+                    <a class="nav-menu-item {{ 'is-active' if endpoint in ops_endpoints else '' }}" href="{{ url_for('ops_backup_status') }}">Operations</a>
+                    <a class="nav-menu-item {{ 'is-active' if endpoint == 'admin_portal_users' else '' }}" href="{{ url_for('admin_portal_users') }}">Portal User Admin</a>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+      {% endif %}
 
       <div class="nav-utility">
         {% if current_user.is_authenticated %}
@@ -2334,103 +2458,30 @@
       </div>
     </div>
 
-    {% if current_user.is_authenticated %}
-      <div class="nav-actions" role="navigation" aria-label="Primary">
-        <a class="nav-pill {{ 'is-active' if endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">Dashboard</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">Matters</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my', filter='today') }}">Today</a>
-        <a class="nav-pill {{ 'is-active' if endpoint in dms_endpoints else '' }}" href="{{ url_for('dms_home') }}">DMS</a>
-        {% if is_lawyer_role %}
-          <a class="nav-pill {{ 'is-active' if endpoint in billing_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
-        {% elif is_support_role or is_admin_role %}
-          <a class="nav-pill {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM</a>
-        {% elif is_case_role %}
-          <a class="nav-pill {{ 'is-active' if endpoint in time_endpoints else '' }}" href="{{ url_for('time_timers') }}">Time</a>
-        {% endif %}
-        <details class="nav-menu" data-nav-menu>
-          <summary class="nav-pill {{ 'is-active' if more_active else '' }}">
-            More
-            <span class="code-like">All</span>
-          </summary>
-          <div class="nav-menu-panel">
-            <div class="nav-menu-grid">
-              <div class="nav-menu-section">
-                <span class="nav-menu-label">Case Tools</span>
-                {% if not is_support_role %}
-                  <a class="nav-menu-item {{ 'is-active' if endpoint in workflow_endpoints else '' }}" href="{{ url_for('task_templates') }}">Workflow Templates</a>
-                {% endif %}
-                <a class="nav-menu-item {{ 'is-active' if endpoint == 'search' else '' }}" href="{{ url_for('search') }}">Global Search</a>
-                <a class="nav-menu-item {{ 'is-active' if endpoint == 'contacts' else '' }}" href="{{ url_for('contacts') }}">Contacts</a>
-                <a class="nav-menu-item {{ 'is-active' if endpoint in ['kb', 'kb_view'] else '' }}" href="{{ url_for('kb') }}">Knowledge Base</a>
-                {% if not (is_support_role or is_admin_role) %}
-                  <a class="nav-menu-item {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM Intake</a>
-                {% endif %}
-              </div>
-              <div class="nav-menu-section">
-                <span class="nav-menu-label">Finance</span>
-                <a class="nav-menu-item {{ 'is-active' if endpoint == 'expenses' else '' }}" href="{{ url_for('expenses') }}">Expenses</a>
-                {% if is_lawyer_role %}
-                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_rates' else '' }}" href="{{ url_for('billing_rates') }}">Rate Cards</a>
-                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_ar_aging' else '' }}" href="{{ url_for('billing_ar_aging') }}">AR Aging</a>
-                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_transactions' else '' }}" href="{{ url_for('billing_transactions') }}">Transactions</a>
-                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_audit_log' else '' }}" href="{{ url_for('billing_audit_log') }}">Billing Audit</a>
-                  <a class="nav-menu-item {{ 'is-active' if endpoint in trust_account_endpoints else '' }}" href="{{ url_for('trust_ledger') }}">Trust Accounting</a>
-                {% endif %}
-              </div>
-              <div class="nav-menu-section">
-                <span class="nav-menu-label">Client & Intake</span>
-                <a class="nav-menu-item {{ 'is-active' if endpoint in portal_endpoints and endpoint == 'portal_messages' else '' }}" href="{{ url_for('portal_messages') }}">Portal Messages</a>
-                <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_uploads' else '' }}" href="{{ url_for('portal_uploads') }}">Portal Uploads</a>
-                <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_invoices' else '' }}" href="{{ url_for('portal_invoices') }}">Portal Invoices</a>
-                <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_links' else '' }}" href="{{ url_for('portal_links') }}">Secure Links</a>
-                {% if not is_support_role %}
-                  <a class="nav-menu-item {{ 'is-active' if endpoint in portal_endpoints and endpoint not in ['portal_messages', 'portal_uploads', 'portal_invoices', 'portal_links'] else '' }}" href="{{ url_for('portal_login') }}">Portal Home</a>
-                {% endif %}
-              </div>
-              <div class="nav-menu-section">
-                <span class="nav-menu-label">Insights & Platform</span>
-                {% if is_lawyer_role %}
-                  <a class="nav-menu-item {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_utilization') }}">Analytics</a>
-                {% endif %}
-                <a class="nav-menu-item {{ 'is-active' if endpoint in integration_endpoints else '' }}" href="{{ url_for('integrations_office365') }}">Integrations</a>
-                <a class="nav-menu-item {{ 'is-active' if endpoint == 'mobile_hub' else '' }}" href="{{ url_for('mobile_hub') }}">Mobile Hub</a>
-                <a class="nav-menu-item {{ 'is-active' if endpoint in trust_endpoints else '' }}" href="{{ url_for('trust_policy') }}">Trust & Security</a>
-                {% if is_admin_role %}
-                  <a class="nav-menu-item {{ 'is-active' if endpoint in admin_endpoints else '' }}" href="{{ url_for('admin') }}">Admin Console</a>
-                  <a class="nav-menu-item {{ 'is-active' if endpoint in ops_endpoints else '' }}" href="{{ url_for('ops_backup_status') }}">Operations</a>
-                  <a class="nav-menu-item {{ 'is-active' if endpoint == 'admin_portal_users' else '' }}" href="{{ url_for('admin_portal_users') }}">Portal User Admin</a>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        </details>
-      </div>
-
-      {% if active_matter %}
-        <div class="context-rail" role="navigation" aria-label="Active matter shortcuts">
-          <div class="context-rail-head">
-            <div class="context-rail-title">Active Matter</div>
-            <div class="context-rail-meta">
-              <strong>{{ active_matter.matter_no }}</strong>
-              <span>•</span>
-              <span>{{ active_matter.title }}</span>
-            </div>
-          </div>
-          <div class="context-rail-actions">
-            <a class="context-rail-chip" href="{{ matter_workspace_href }}">Workspace</a>
-            <a class="context-rail-chip" href="{{ matter_dms_href }}">Documents</a>
-            <a class="context-rail-chip" href="{{ matter_deadlines_href }}">Deadlines</a>
-            {% if is_case_role %}
-              <a class="context-rail-chip" href="{{ url_for('time_timers', matter_id=active_matter.id) }}">Timer</a>
-              <a class="context-rail-chip" href="{{ url_for('time_entries', matter_id=active_matter.id) }}">Time Entry</a>
-            {% endif %}
-            {% if is_lawyer_role %}
-              <a class="context-rail-chip" href="{{ url_for('billing_invoices', matter_id=active_matter.id) }}">Billing</a>
-            {% endif %}
-            <a class="context-rail-chip" href="{{ url_for('matters') }}">Switch Matter</a>
+    {% if current_user.is_authenticated and active_matter %}
+      <div class="context-rail" role="navigation" aria-label="Active matter shortcuts">
+        <div class="context-rail-head">
+          <div class="context-rail-title">Active Matter</div>
+          <div class="context-rail-meta">
+            <strong>{{ active_matter.matter_no }}</strong>
+            <span>•</span>
+            <span>{{ active_matter.title }}</span>
           </div>
         </div>
-      {% endif %}
+        <div class="context-rail-actions">
+          <a class="context-rail-chip" href="{{ matter_workspace_href }}">Workspace</a>
+          <a class="context-rail-chip" href="{{ matter_dms_href }}">Documents</a>
+          <a class="context-rail-chip" href="{{ matter_deadlines_href }}">Deadlines</a>
+          {% if is_case_role %}
+            <a class="context-rail-chip" href="{{ url_for('time_timers', matter_id=active_matter.id) }}">Timer</a>
+            <a class="context-rail-chip" href="{{ url_for('time_entries', matter_id=active_matter.id) }}">Time Entry</a>
+          {% endif %}
+          {% if is_lawyer_role %}
+            <a class="context-rail-chip" href="{{ url_for('billing_invoices', matter_id=active_matter.id) }}">Billing</a>
+          {% endif %}
+          <a class="context-rail-chip" href="{{ url_for('matters') }}">Switch Matter</a>
+        </div>
+      </div>
     {% endif %}
   </nav>
 
