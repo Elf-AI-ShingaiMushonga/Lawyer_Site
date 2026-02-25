@@ -100,12 +100,17 @@
 
     .nav-head {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "brand utility"
+        "actions actions";
       align-items: center;
-      gap: 10px;
+      column-gap: 10px;
+      row-gap: 8px;
     }
 
     .nav-brand {
+      grid-area: brand;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -207,13 +212,15 @@
     }
 
     .nav-actions {
+      grid-area: actions;
       display: flex;
       align-items: center;
       gap: 8px;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
       justify-content: flex-start;
       min-width: 0;
-      padding: 2px 0;
+      padding: 8px 0 0;
+      border-top: 1px solid rgba(225, 6, 0, 0.2);
     }
 
     .nav-auth {
@@ -224,10 +231,11 @@
     }
 
     .nav-utility {
+      grid-area: utility;
       display: flex;
       align-items: center;
       gap: 8px;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
       justify-content: flex-end;
       min-width: 0;
     }
@@ -1519,15 +1527,6 @@
       }
     }
 
-    .why-note {
-      border-left: 3px solid rgba(225, 6, 0, 0.8);
-      padding: 7px 10px;
-      border-radius: 8px;
-      background: rgba(225, 6, 0, 0.08);
-      color: #6b3331;
-      font-size: 13px;
-    }
-
     .timeline-list {
       display: flex;
       flex-direction: column;
@@ -1822,13 +1821,17 @@
       to { transform: rotate(360deg); }
     }
 
-    @media (max-width: 992px) {
+    @media (max-width: 1200px) {
       .brand-sub {
         display: none;
       }
 
       .nav-head {
         grid-template-columns: 1fr;
+        grid-template-areas:
+          "brand"
+          "actions"
+          "utility";
         align-items: stretch;
       }
 
@@ -1859,7 +1862,6 @@
       }
 
       .nav-actions {
-        order: 2;
         overflow-x: auto;
         flex-wrap: nowrap;
         padding-bottom: 2px;

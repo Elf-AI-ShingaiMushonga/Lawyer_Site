@@ -58,7 +58,7 @@ def test_dashboard_renders_priority_inbox(app_ctx):
     response = client.get("/dashboard")
     assert response.status_code == 200
     assert b"Priority Inbox" in response.data
-    assert b"Triage priority inbox" in response.data
+    assert b"Client Response" in response.data
 
 
 def test_dashboard_uses_configured_priority_inbox_sla_values(app_ctx):

@@ -658,6 +658,129 @@
     });
   };
 
+  const initTimerPresenceGuard = () => {
+    const root = document.querySelector("[data-timer-presence-root]");
+    if (!(root instanceof HTMLElement)) {
+      return;
+    }
+
+    const warning = root.querySelector("[data-timer-idle-warning]");
+    const message = root.querySelector("[data-timer-idle-message]");
+    const keepRunning = root.querySelector("[data-timer-still-here]");
+    const pauseNow = root.querySelector("[data-timer-pause-now]");
+    const autoPauseForm = root.querySelector("[data-timer-auto-pause-form]");
+    if (!(autoPauseForm instanceof HTMLFormElement)) {
+      return;
+    }
+
+    const parsePositiveInt = (value, fallback) => {
+      const parsed = Number.parseInt(String(value || ""), 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return fallback;
+      }
+      return parsed;
+    };
+
+    const idlePromptSeconds = parsePositiveInt(root.dataset.idlePromptSeconds, 45 * 60);
+    const idleGraceSeconds = parsePositiveInt(root.dataset.idleGraceSeconds, 60);
+    let lastActivityAt = Date.now();
+    let warningShown = false;
+    let countdown = idleGraceSeconds;
+    let submitted = false;
+
+    const renderCountdown = () => {
+      if (!(message instanceof HTMLElement)) {
+        return;
+      }
+      message.textContent = `No activity detected. Auto-pausing in ${countdown}s unless you confirm you're still working.`;
+    };
+
+    const hideWarning = () => {
+      warningShown = false;
+      countdown = idleGraceSeconds;
+      if (warning instanceof HTMLElement) {
+        warning.hidden = true;
+      }
+    };
+
+    const showWarning = () => {
+      warningShown = true;
+      countdown = idleGraceSeconds;
+      if (warning instanceof HTMLElement) {
+        warning.hidden = false;
+      }
+      renderCountdown();
+    };
+
+    const markActivity = () => {
+      if (submitted) {
+        return;
+      }
+      lastActivityAt = Date.now();
+      if (warningShown) {
+        hideWarning();
+      }
+    };
+
+    const submitPause = (reason) => {
+      if (submitted) {
+        return;
+      }
+      submitted = true;
+
+      let reasonInput = autoPauseForm.querySelector("input[name='pause_reason']");
+      if (!(reasonInput instanceof HTMLInputElement)) {
+        reasonInput = document.createElement("input");
+        reasonInput.type = "hidden";
+        reasonInput.name = "pause_reason";
+        autoPauseForm.appendChild(reasonInput);
+      }
+      reasonInput.value = reason;
+      autoPauseForm.submit();
+    };
+
+    if (keepRunning instanceof HTMLButtonElement) {
+      keepRunning.addEventListener("click", () => {
+        markActivity();
+      });
+    }
+    if (pauseNow instanceof HTMLButtonElement) {
+      pauseNow.addEventListener("click", () => {
+        submitPause("idle_timeout");
+      });
+    }
+
+    ["mousedown", "mousemove", "touchstart", "scroll"].forEach((eventName) => {
+      window.addEventListener(eventName, markActivity, { passive: true });
+    });
+    window.addEventListener("keydown", markActivity);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        markActivity();
+      }
+    });
+
+    window.setInterval(() => {
+      if (submitted) {
+        return;
+      }
+      const idleSeconds = Math.floor((Date.now() - lastActivityAt) / 1000);
+      if (!warningShown && idleSeconds >= idlePromptSeconds) {
+        showWarning();
+        return;
+      }
+      if (!warningShown) {
+        return;
+      }
+
+      countdown = Math.max(0, countdown - 1);
+      renderCountdown();
+      if (countdown === 0) {
+        submitPause("idle_timeout");
+      }
+    }, 1000);
+  };
+
   const initQuoteAssist = () => {
     const forms = Array.from(document.querySelectorAll("[data-quote-form]"));
     if (forms.length === 0) {
@@ -1920,6 +2043,7 @@
     initNavMenus();
     initMatterQuickFilters();
     initTimePrompts();
+    initTimerPresenceGuard();
     initQuoteAssist();
     initPortalMessageComposer();
     initLeadMatterSync();

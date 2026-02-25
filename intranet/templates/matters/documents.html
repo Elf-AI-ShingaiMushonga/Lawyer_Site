@@ -10,9 +10,6 @@
       <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Back</a>
     </div>
 
-    <div class="why-note mt-3">
-      Why this matters: metadata and privilege tagging make retrieval faster and governance safer.
-    </div>
 
     <form method="post" enctype="multipart/form-data" class="row g-2 mt-2">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -94,6 +94,9 @@ def create_app() -> Flask:
     allow_in_memory_ratelimit = env_bool("ALLOW_IN_MEMORY_RATELIMIT", False)
     trusted_proxy_hops = max(1, env_int("TRUSTED_PROXY_HOPS", 1))
     secure_cookie = is_production or force_secure_cookie
+    timer_single_cap_minutes = max(5, env_int("TIMER_SINGLE_CAP_MINUTES", 4 * 60))
+    timer_idle_prompt_seconds = max(5 * 60, env_int("TIMER_IDLE_PROMPT_SECONDS", 45 * 60))
+    timer_idle_grace_seconds = max(30, env_int("TIMER_IDLE_GRACE_SECONDS", 60))
 
     app.config.update(
         SECRET_KEY=secret_key,
@@ -121,6 +124,9 @@ def create_app() -> Flask:
         AUTH_REGISTER_RATE_LIMIT=auth_register_rate_limit,
         PORTAL_LOGIN_RATE_LIMIT=portal_login_rate_limit,
         AUTH_SSO_TOKEN_RATE_LIMIT=sso_token_rate_limit,
+        TIMER_SINGLE_CAP_MINUTES=timer_single_cap_minutes,
+        TIMER_IDLE_PROMPT_SECONDS=timer_idle_prompt_seconds,
+        TIMER_IDLE_GRACE_SECONDS=timer_idle_grace_seconds,
     )
 
     if db_backend != "sqlite":

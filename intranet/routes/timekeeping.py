@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from flask import abort, flash, jsonify, redirect, request, url_for
+from flask import abort, current_app, flash, jsonify, redirect, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import and_, or_
 
@@ -15,6 +15,42 @@ from ..templates import page
 
 def _active_timer_for_user(user_id: int) -> TimeTimer | None:
     return TimeTimer.query.filter_by(user_id=user_id, status="running").order_by(TimeTimer.started_at.desc()).first()
+
+
+def _single_timer_cap_seconds() -> int:
+    cap_minutes = int(current_app.config.get("TIMER_SINGLE_CAP_MINUTES", 4 * 60) or 4 * 60)
+    return max(5 * 60, cap_minutes * 60)
+
+
+def _elapsed_seconds_for_timer(timer: TimeTimer, *, as_of: dt.datetime | None = None) -> int:
+    total = max(0, int(timer.elapsed_seconds or 0))
+    if timer.status == "running" and timer.started_at:
+        now = as_of or dt.datetime.utcnow()
+        total += max(0, int((now - timer.started_at).total_seconds()))
+    return total
+
+
+def _pause_timer(
+    timer: TimeTimer, *, as_of: dt.datetime | None = None, cap_seconds: int | None = None
+) -> tuple[int, bool]:
+    total = _elapsed_seconds_for_timer(timer, as_of=as_of)
+    capped = False
+    if cap_seconds is not None and total > cap_seconds:
+        total = int(cap_seconds)
+        capped = True
+    timer.elapsed_seconds = max(0, int(total))
+    timer.status = "paused"
+    timer.paused_at = as_of or dt.datetime.utcnow()
+    return timer.elapsed_seconds, capped
+
+
+def _request_prefers_html() -> bool:
+    if request.path.startswith("/static/"):
+        return False
+    best = request.accept_mimetypes.best
+    if best is None:
+        return True
+    return best in {"text/html", "application/xhtml+xml", "*/*"}
 
 
 def _round_hours(hours: float, increment: float) -> float:
@@ -135,6 +171,39 @@ def _validate_time_entry(entry: TimeEntry, policy: TimeRoundingPolicy | None) ->
 
 
 def register_timekeeping_routes(app):
+    @app.before_request
+    def timekeeping_timer_cap_guard():
+        if not current_user.is_authenticated:
+            return
+        if request.endpoint == "static" or request.path.startswith("/static/"):
+            return
+
+        running = _active_timer_for_user(current_user.id)
+        if running is None:
+            return
+
+        cap_seconds = _single_timer_cap_seconds()
+        if _elapsed_seconds_for_timer(running) < cap_seconds:
+            return
+
+        _pause_timer(running, cap_seconds=cap_seconds)
+        db.session.commit()
+        audit(
+            "timer_auto_pause_cap",
+            "TimeTimer",
+            running.id,
+            {
+                "reason": "single_timer_cap",
+                "cap_seconds": cap_seconds,
+                "elapsed_seconds": running.elapsed_seconds,
+            },
+        )
+        if _request_prefers_html():
+            flash(
+                f"Running timer auto-paused at {cap_seconds // 60} minutes to prevent accidental overrun.",
+                "warning",
+            )
+
     @app.get("/time/prompts")
     @login_required
     def time_prompts():
@@ -327,6 +396,11 @@ def register_timekeeping_routes(app):
                 matter_map[selected.id] = selected
         prefill_task_id = request.args.get("task_id", type=int)
         prefill_label = (request.args.get("label") or "").strip()
+        timer_cap_minutes = max(5, int(app.config.get("TIMER_SINGLE_CAP_MINUTES", 4 * 60) or 4 * 60))
+        timer_idle_prompt_seconds = max(
+            5 * 60, int(app.config.get("TIMER_IDLE_PROMPT_SECONDS", 45 * 60) or 45 * 60)
+        )
+        timer_idle_grace_seconds = max(30, int(app.config.get("TIMER_IDLE_GRACE_SECONDS", 60) or 60))
 
         return page(
             "Timers",
@@ -337,6 +411,9 @@ def register_timekeeping_routes(app):
             prefill_matter_id=prefill_matter_id,
             prefill_task_id=prefill_task_id,
             prefill_label=prefill_label,
+            timer_cap_minutes=timer_cap_minutes,
+            timer_idle_prompt_seconds=timer_idle_prompt_seconds,
+            timer_idle_grace_seconds=timer_idle_grace_seconds,
         )
 
     @app.post("/time/timers/start")
@@ -346,10 +423,11 @@ def register_timekeeping_routes(app):
         if matter_id and not can_access_matter(matter_id):
             abort(403)
 
+        cap_seconds = _single_timer_cap_seconds()
         running = _active_timer_for_user(current_user.id)
+        previous_timer_capped = False
         if running:
-            running.status = "paused"
-            running.paused_at = dt.datetime.utcnow()
+            _, previous_timer_capped = _pause_timer(running, cap_seconds=cap_seconds)
 
         timer = TimeTimer(
             user_id=current_user.id,
@@ -364,6 +442,11 @@ def register_timekeeping_routes(app):
         if matter_id:
             set_active_matter_context(matter_id)
         audit("timer_start", "TimeTimer", timer.id)
+        if previous_timer_capped:
+            flash(
+                f"Previous timer was capped at {cap_seconds // 60} minutes and auto-paused.",
+                "warning",
+            )
         flash("Timer started.", "info")
         return redirect(url_for("time_timers"))
 
@@ -376,14 +459,34 @@ def register_timekeeping_routes(app):
             flash("Timer not found.", "warning")
             return redirect(url_for("time_timers"))
 
-        if timer.status == "running" and timer.started_at:
-            elapsed = int((dt.datetime.utcnow() - timer.started_at).total_seconds())
-            timer.elapsed_seconds = int(timer.elapsed_seconds or 0) + max(0, elapsed)
-        timer.status = "paused"
-        timer.paused_at = dt.datetime.utcnow()
+        pause_reason = (request.form.get("pause_reason") or "").strip().lower()
+        cap_seconds = _single_timer_cap_seconds()
+        capped = False
+        if timer.status == "running":
+            _, capped = _pause_timer(timer, cap_seconds=cap_seconds)
+        else:
+            timer.status = "paused"
+            timer.paused_at = dt.datetime.utcnow()
         db.session.commit()
-        audit("timer_pause", "TimeTimer", timer.id)
-        flash("Timer paused.", "info")
+        audit(
+            "timer_pause",
+            "TimeTimer",
+            timer.id,
+            {
+                "reason": pause_reason or "manual",
+                "capped": bool(capped),
+                "elapsed_seconds": int(timer.elapsed_seconds or 0),
+            },
+        )
+        if pause_reason == "idle_timeout":
+            flash("Timer auto-paused after inactivity. Resume it when you return.", "warning")
+        elif pause_reason == "cap_reached" or capped:
+            flash(
+                f"Timer reached the single-session cap ({cap_seconds // 60} minutes) and was paused.",
+                "warning",
+            )
+        else:
+            flash("Timer paused.", "info")
         return redirect(url_for("time_timers"))
 
     @app.post("/time/timers/switch")
@@ -393,12 +496,11 @@ def register_timekeeping_routes(app):
         if matter_id and not can_access_matter(matter_id):
             abort(403)
 
+        cap_seconds = _single_timer_cap_seconds()
         running = _active_timer_for_user(current_user.id)
-        if running and running.started_at:
-            elapsed = int((dt.datetime.utcnow() - running.started_at).total_seconds())
-            running.elapsed_seconds = int(running.elapsed_seconds or 0) + max(0, elapsed)
-            running.status = "paused"
-            running.paused_at = dt.datetime.utcnow()
+        previous_timer_capped = False
+        if running:
+            _, previous_timer_capped = _pause_timer(running, cap_seconds=cap_seconds)
 
         timer = TimeTimer(
             user_id=current_user.id,
@@ -413,6 +515,11 @@ def register_timekeeping_routes(app):
         if matter_id:
             set_active_matter_context(matter_id)
         audit("timer_switch", "TimeTimer", timer.id)
+        if previous_timer_capped:
+            flash(
+                f"Previous timer was capped at {cap_seconds // 60} minutes and auto-paused.",
+                "warning",
+            )
         flash("Timer switched.", "info")
         return redirect(url_for("time_timers"))
 

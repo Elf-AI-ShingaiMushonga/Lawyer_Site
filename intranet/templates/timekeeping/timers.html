@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
-{% set running_count = timers | selectattr('status', 'equalto', 'running') | list | length %}
+{% set running_timers = timers | selectattr('status', 'equalto', 'running') | list %}
+{% set running_count = running_timers | length %}
 {% set paused_count = timers | selectattr('status', 'equalto', 'paused') | list | length %}
 {% set elapsed_total = timers | sum(attribute='elapsed_seconds') %}
 
@@ -29,6 +30,29 @@
       <div class="value">{{ elapsed_total }}</div>
     </div>
   </div>
+  {% if running_count > 0 %}
+    {% set guard_timer = running_timers[0] %}
+    <div
+      class="alert alert-warning mt-3 mb-0"
+      data-timer-presence-root
+      data-timer-id="{{ guard_timer.id }}"
+      data-idle-prompt-seconds="{{ timer_idle_prompt_seconds }}"
+      data-idle-grace-seconds="{{ timer_idle_grace_seconds }}"
+      data-cap-minutes="{{ timer_cap_minutes }}"
+    >
+      <div><strong>Timer safeguard enabled.</strong> Timers cap at {{ timer_cap_minutes }} minutes per run.</div>
+      <div class="mt-2 d-flex align-items-center gap-2 flex-wrap" data-timer-idle-warning hidden>
+        <span data-timer-idle-message>Still working on this task?</span>
+        <button class="btn btn-sm btn-light" type="button" data-timer-still-here>Yes, keep running</button>
+        <button class="btn btn-sm btn-outline-danger" type="button" data-timer-pause-now>Pause now</button>
+      </div>
+      <form method="post" action="{{ url_for('time_timer_pause') }}" data-timer-auto-pause-form hidden>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="timer_id" value="{{ guard_timer.id }}">
+        <input type="hidden" name="pause_reason" value="idle_timeout">
+      </form>
+    </div>
+  {% endif %}
 </div>
 
 <div class="row g-3">

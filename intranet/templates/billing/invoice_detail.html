@@ -34,12 +34,6 @@
     </div>
   </div>
 
-  {% if outstanding > 0 %}
-    <div class="why-note mt-3">
-      Outstanding balance remains on this invoice. Use adjustments only for approved write-down/off policy.
-    </div>
-  {% endif %}
-
   <div class="d-flex flex-wrap gap-2 mt-3">
     {% if inv.status != "approved" %}
       <form method="post" action="{{ url_for('billing_invoice_approve', invoice_id=inv.id) }}">

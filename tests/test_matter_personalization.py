@@ -77,7 +77,7 @@ def test_recent_history_clear_removes_rows(seed_user_matter, app):
     assert MatterRecentView.query.filter_by(user_id=user.id).count() == 0
 
 
-def test_dashboard_surfaces_pinned_and_recent_sections(seed_user_matter, app):
+def test_dashboard_hides_pinned_and_recent_sections(seed_user_matter, app):
     user = seed_user_matter["user"]
     matter = seed_user_matter["matter"]
     _enable_mfa(user)
@@ -93,6 +93,5 @@ def test_dashboard_surfaces_pinned_and_recent_sections(seed_user_matter, app):
     response = client.get("/dashboard")
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "Pinned Matters" in body
-    assert "Recently Viewed Matters" in body
-    assert matter.matter_no in body
+    assert "Pinned Matters" not in body
+    assert "Recently Viewed Matters" not in body
