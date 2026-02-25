@@ -128,7 +128,7 @@ Common seed error:
 
 ## User documentation
 
-- Lawyer user guide: `docs/lawyer_user_guide.md`
+- Lawyer user guide: `docs/lawyer_user_guide.ipynb`
 
 ## Required production env vars
 
