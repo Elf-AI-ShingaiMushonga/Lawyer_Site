@@ -658,6 +658,211 @@
     });
   };
 
+  const initTimeCodeAssist = () => {
+    const forms = Array.from(document.querySelectorAll("form[data-time-code-assist]"));
+    if (forms.length === 0) {
+      return;
+    }
+
+    const normalize = (value) => String(value || "").trim();
+    const uniqueStrings = (values, limit = 12) => {
+      const seen = new Set();
+      const output = [];
+      values.forEach((value) => {
+        const candidate = normalize(value);
+        if (!candidate || seen.has(candidate)) {
+          return;
+        }
+        seen.add(candidate);
+        output.push(candidate);
+      });
+      return output.slice(0, Math.max(1, limit));
+    };
+    const toCodes = (bucket, key) => {
+      if (!bucket || typeof bucket !== "object" || !Array.isArray(bucket[key])) {
+        return [];
+      }
+      return bucket[key];
+    };
+    const toPairs = (bucket) => {
+      if (!bucket || typeof bucket !== "object" || !Array.isArray(bucket.pairs)) {
+        return [];
+      }
+      return bucket.pairs
+        .map((pair) => ({
+          task_code: normalize(pair && pair.task_code),
+          activity_code: normalize(pair && pair.activity_code),
+          label: normalize(pair && pair.label),
+        }))
+        .filter((pair) => pair.task_code || pair.activity_code);
+    };
+    const pairKey = (taskCode, activityCode) => `${normalize(taskCode)}\u241f${normalize(activityCode)}`;
+    const dispatchFieldUpdate = (field) => {
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+
+    forms.forEach((form) => {
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+
+      const rawPayload = form.getAttribute("data-time-code-assist") || "";
+      if (!rawPayload) {
+        return;
+      }
+
+      let payload = {};
+      try {
+        payload = JSON.parse(rawPayload);
+      } catch (_error) {
+        return;
+      }
+
+      const globalBucket =
+        payload && typeof payload === "object" && payload.global && typeof payload.global === "object"
+          ? payload.global
+          : {};
+      const byMatter =
+        payload && typeof payload === "object" && payload.by_matter && typeof payload.by_matter === "object"
+          ? payload.by_matter
+          : {};
+
+      const matterSelect = form.querySelector("[name='matter_id']");
+      const taskInput = form.querySelector("[name='task_code']");
+      const activityInput = form.querySelector("[name='activity_code']");
+      const pairSelect = form.querySelector("[data-time-code-pair]");
+      if (
+        !(matterSelect instanceof HTMLSelectElement) ||
+        !(taskInput instanceof HTMLInputElement) ||
+        !(activityInput instanceof HTMLInputElement)
+      ) {
+        return;
+      }
+
+      const taskListId = taskInput.getAttribute("list") || "";
+      const activityListId = activityInput.getAttribute("list") || "";
+      const taskDatalist = taskListId ? document.getElementById(taskListId) : null;
+      const activityDatalist = activityListId ? document.getElementById(activityListId) : null;
+
+      const renderDatalist = (target, values) => {
+        if (!(target instanceof HTMLDataListElement)) {
+          return;
+        }
+        target.innerHTML = "";
+        values.forEach((value) => {
+          const option = document.createElement("option");
+          option.value = value;
+          target.appendChild(option);
+        });
+      };
+
+      const resolveMatterBucket = () => {
+        const matterKey = normalize(matterSelect.value);
+        if (!matterKey) {
+          return null;
+        }
+        const bucket = byMatter[matterKey];
+        if (!bucket || typeof bucket !== "object") {
+          return null;
+        }
+        return bucket;
+      };
+
+      const pairLookup = new Map();
+
+      const applyPair = (pair) => {
+        const taskCode = normalize(pair && pair.task_code);
+        const activityCode = normalize(pair && pair.activity_code);
+
+        if (taskInput.value !== taskCode) {
+          taskInput.value = taskCode;
+          dispatchFieldUpdate(taskInput);
+        }
+        if (activityInput.value !== activityCode) {
+          activityInput.value = activityCode;
+          dispatchFieldUpdate(activityInput);
+        }
+      };
+
+      const refresh = () => {
+        const matterBucket = resolveMatterBucket();
+        const taskCodes = uniqueStrings([...toCodes(matterBucket, "task_codes"), ...toCodes(globalBucket, "task_codes")], 12);
+        const activityCodes = uniqueStrings(
+          [...toCodes(matterBucket, "activity_codes"), ...toCodes(globalBucket, "activity_codes")],
+          12
+        );
+        renderDatalist(taskDatalist, taskCodes);
+        renderDatalist(activityDatalist, activityCodes);
+
+        if (!(pairSelect instanceof HTMLSelectElement)) {
+          return;
+        }
+
+        pairLookup.clear();
+        pairSelect.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Select recent pair...";
+        pairSelect.appendChild(placeholder);
+
+        const candidatePairs = [];
+        const latestPair =
+          matterBucket && matterBucket.latest_pair && typeof matterBucket.latest_pair === "object"
+            ? {
+                task_code: normalize(matterBucket.latest_pair.task_code),
+                activity_code: normalize(matterBucket.latest_pair.activity_code),
+                label: normalize(matterBucket.latest_pair.label),
+              }
+            : null;
+        if (latestPair && (latestPair.task_code || latestPair.activity_code)) {
+          candidatePairs.push(latestPair);
+        }
+        candidatePairs.push(...toPairs(matterBucket), ...toPairs(globalBucket));
+
+        candidatePairs.forEach((pair) => {
+          const taskCode = normalize(pair.task_code);
+          const activityCode = normalize(pair.activity_code);
+          if (!taskCode && !activityCode) {
+            return;
+          }
+          const key = pairKey(taskCode, activityCode);
+          if (pairLookup.has(key)) {
+            return;
+          }
+          const option = document.createElement("option");
+          option.value = key;
+          option.textContent = normalize(pair.label) || [taskCode, activityCode].filter(Boolean).join(" / ");
+          pairSelect.appendChild(option);
+          pairLookup.set(key, {
+            task_code: taskCode,
+            activity_code: activityCode,
+          });
+        });
+
+        pairSelect.value = "";
+        pairSelect.disabled = pairLookup.size === 0;
+      };
+
+      matterSelect.addEventListener("change", refresh);
+      if (pairSelect instanceof HTMLSelectElement) {
+        pairSelect.addEventListener("change", () => {
+          const key = normalize(pairSelect.value);
+          if (!key) {
+            return;
+          }
+          const pair = pairLookup.get(key);
+          if (!pair) {
+            return;
+          }
+          applyPair(pair);
+        });
+      }
+
+      refresh();
+    });
+  };
+
   const initTimerPresenceGuard = () => {
     const root = document.querySelector("[data-timer-presence-root]");
     if (!(root instanceof HTMLElement)) {
@@ -1738,6 +1943,66 @@
     });
   };
 
+  const initCollapsibleNav = () => {
+    const nav = document.querySelector("[data-collapsible-nav]");
+    if (!(nav instanceof HTMLElement)) {
+      return;
+    }
+
+    const minDelta = 8;
+    let lastY = window.scrollY;
+    let isCollapsed = false;
+    let ticking = false;
+
+    const collapseStart = () => Math.max(72, nav.offsetHeight + 18);
+
+    const setCollapsed = (nextState) => {
+      if (isCollapsed === nextState) {
+        return;
+      }
+      isCollapsed = nextState;
+      nav.classList.toggle("is-collapsed", nextState);
+    };
+
+    const update = () => {
+      const y = Math.max(0, window.scrollY);
+      const delta = y - lastY;
+
+      if (y <= 10 || nav.contains(document.activeElement)) {
+        setCollapsed(false);
+      } else if (delta > minDelta && y > collapseStart()) {
+        setCollapsed(true);
+      } else if (delta < -minDelta) {
+        setCollapsed(false);
+      }
+
+      lastY = y;
+      ticking = false;
+    };
+
+    const onScroll = () => {
+      if (ticking) {
+        return;
+      }
+      ticking = true;
+      window.requestAnimationFrame(update);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", () => {
+      if (window.scrollY <= collapseStart()) {
+        setCollapsed(false);
+      }
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Tab") {
+        setCollapsed(false);
+      }
+    });
+
+    update();
+  };
+
   const initFormValidationUX = () => {
     const forms = Array.from(document.querySelectorAll("form"));
     if (forms.length === 0) {
@@ -2043,6 +2308,7 @@
     initNavMenus();
     initMatterQuickFilters();
     initTimePrompts();
+    initTimeCodeAssist();
     initTimerPresenceGuard();
     initQuoteAssist();
     initPortalMessageComposer();
@@ -2053,6 +2319,7 @@
     initListFilters();
     initVoiceRecorder();
     initTableTools();
+    initCollapsibleNav();
     initBackToTop();
     initFormValidationUX();
     initSubmitState();

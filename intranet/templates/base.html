@@ -87,6 +87,8 @@
     }
 
     .navbar {
+      display: block;
+      width: 100%;
       background: rgba(255, 255, 255, 0.92);
       border: 1px solid var(--panel-border);
       border-top: 3px solid var(--accent);
@@ -96,6 +98,14 @@
       z-index: 20;
       backdrop-filter: blur(6px);
       box-shadow: 0 12px 30px rgba(115, 28, 28, 0.12);
+      transform: translateY(0);
+      transition: transform 0.22s ease, box-shadow 0.22s ease, opacity 0.22s ease;
+    }
+
+    .navbar.is-collapsed {
+      transform: translateY(calc(-100% - 14px));
+      box-shadow: none;
+      opacity: 0.98;
     }
 
     .nav-head {
@@ -2317,7 +2327,7 @@
     and not (is_support_role and endpoint in workflow_endpoints)
     and not (is_lawyer_role and endpoint in billing_endpoints)
     and not ((is_support_role or is_admin_role) and endpoint in crm_endpoints) %}
-  <nav class="navbar px-3 py-2 mb-3">
+  <nav class="navbar px-3 py-2 mb-3" data-collapsible-nav>
     <div class="nav-head">
       <div class="nav-brand">
         <a class="brand" href="{{ url_for('dashboard') }}">

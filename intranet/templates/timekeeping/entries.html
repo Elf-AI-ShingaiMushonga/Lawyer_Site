@@ -32,7 +32,13 @@
 
 <div class="card p-3 mb-3">
   <h4 class="mb-2">New Time Entry</h4>
-  <form method="post" class="row g-3" data-time-prompt-form data-time-prompt-endpoint="{{ url_for('time_prompts') }}">
+  <form
+    method="post"
+    class="row g-3"
+    data-time-prompt-form
+    data-time-prompt-endpoint="{{ url_for('time_prompts') }}"
+    data-time-code-assist="{{ time_code_assist | tojson | forceescape }}"
+  >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-md-4">
       <label class="form-label" for="entry-matter-id">Matter</label>
@@ -54,15 +60,37 @@
       <label class="form-label" for="entry-end-at">End At</label>
       <input class="form-control" id="entry-end-at" name="end_at" type="datetime-local" value="{{ prefill_end_at }}" required>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-4">
       <label class="form-label" for="entry-task-code">Task Code</label>
-      <input class="form-control" id="entry-task-code" name="task_code" placeholder="L100">
+      <input
+        class="form-control"
+        id="entry-task-code"
+        name="task_code"
+        list="entry-task-code-options"
+        placeholder="Task code"
+        autocomplete="off"
+      >
+      <datalist id="entry-task-code-options"></datalist>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-4">
       <label class="form-label" for="entry-activity-code">Activity Code</label>
-      <input class="form-control" id="entry-activity-code" name="activity_code" placeholder="A101">
+      <input
+        class="form-control"
+        id="entry-activity-code"
+        name="activity_code"
+        list="entry-activity-code-options"
+        placeholder="Activity code"
+        autocomplete="off"
+      >
+      <datalist id="entry-activity-code-options"></datalist>
     </div>
-    <div class="col-md-3 d-flex align-items-end">
+    <div class="col-md-4">
+      <label class="form-label" for="entry-code-pair">Recent Code Pair</label>
+      <select class="form-select" id="entry-code-pair" data-time-code-pair>
+        <option value="">Select recent pair...</option>
+      </select>
+    </div>
+    <div class="col-12">
       <div class="form-check">
         <input class="form-check-input" id="entry-billable" type="checkbox" name="is_billable" value="1" checked>
         <label class="form-check-label" for="entry-billable">Billable</label>

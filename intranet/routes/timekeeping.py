@@ -170,6 +170,127 @@ def _validate_time_entry(entry: TimeEntry, policy: TimeRoundingPolicy | None) ->
     return issues
 
 
+def _time_code_pair_label(task_code: str, activity_code: str) -> str:
+    if task_code and activity_code:
+        return f"{task_code} / {activity_code}"
+    return task_code or activity_code
+
+
+def _add_unique_string(target: list[str], seen: set[str], value: str, limit: int) -> None:
+    if not value or value in seen:
+        return
+    target.append(value)
+    seen.add(value)
+    if len(target) > limit:
+        removed = target.pop()
+        seen.discard(removed)
+
+
+def _add_unique_pair(
+    target: list[dict[str, str]],
+    seen: set[tuple[str, str]],
+    *,
+    task_code: str,
+    activity_code: str,
+    limit: int,
+) -> dict[str, str] | None:
+    if not task_code and not activity_code:
+        return None
+    pair_key = (task_code, activity_code)
+    if pair_key in seen:
+        return None
+
+    pair = {
+        "task_code": task_code,
+        "activity_code": activity_code,
+        "label": _time_code_pair_label(task_code, activity_code),
+    }
+    target.append(pair)
+    seen.add(pair_key)
+    if len(target) > limit:
+        removed = target.pop()
+        seen.discard((removed.get("task_code", ""), removed.get("activity_code", "")))
+    return pair
+
+
+def _build_time_code_assist(entries: list[TimeEntry]) -> dict[str, object]:
+    max_codes = 12
+    max_pairs = 10
+
+    global_task_codes: list[str] = []
+    global_activity_codes: list[str] = []
+    global_pairs: list[dict[str, str]] = []
+    global_task_seen: set[str] = set()
+    global_activity_seen: set[str] = set()
+    global_pair_seen: set[tuple[str, str]] = set()
+
+    by_matter: dict[str, dict[str, object]] = {}
+    per_matter_seen: dict[str, dict[str, set]] = {}
+
+    for entry in entries:
+        task_code = (entry.task_code or "").strip()
+        activity_code = (entry.activity_code or "").strip()
+        if not task_code and not activity_code:
+            continue
+
+        _add_unique_string(global_task_codes, global_task_seen, task_code, max_codes)
+        _add_unique_string(global_activity_codes, global_activity_seen, activity_code, max_codes)
+        _add_unique_pair(
+            global_pairs,
+            global_pair_seen,
+            task_code=task_code,
+            activity_code=activity_code,
+            limit=max_pairs,
+        )
+
+        matter_key = str(entry.matter_id) if entry.matter_id is not None else ""
+        if not matter_key:
+            continue
+
+        matter_bucket = by_matter.get(matter_key)
+        if matter_bucket is None:
+            matter_bucket = {
+                "task_codes": [],
+                "activity_codes": [],
+                "pairs": [],
+                "latest_pair": None,
+            }
+            by_matter[matter_key] = matter_bucket
+            per_matter_seen[matter_key] = {
+                "task_codes": set(),
+                "activity_codes": set(),
+                "pairs": set(),
+            }
+
+        matter_seen = per_matter_seen[matter_key]
+        matter_task_codes = matter_bucket["task_codes"]
+        matter_activity_codes = matter_bucket["activity_codes"]
+        matter_pairs = matter_bucket["pairs"]
+        _add_unique_string(matter_task_codes, matter_seen["task_codes"], task_code, max_codes)
+        _add_unique_string(matter_activity_codes, matter_seen["activity_codes"], activity_code, max_codes)
+        created_pair = _add_unique_pair(
+            matter_pairs,
+            matter_seen["pairs"],
+            task_code=task_code,
+            activity_code=activity_code,
+            limit=max_pairs,
+        )
+        if matter_bucket["latest_pair"] is None:
+            if created_pair is not None:
+                matter_bucket["latest_pair"] = created_pair
+            elif matter_pairs:
+                matter_bucket["latest_pair"] = matter_pairs[0]
+
+    return {
+        "global": {
+            "task_codes": global_task_codes,
+            "activity_codes": global_activity_codes,
+            "pairs": global_pairs,
+        },
+        "by_matter": by_matter,
+    }
+
+
 def register_timekeeping_routes(app):
     @app.before_request
     def timekeeping_timer_cap_guard():
@@ -671,6 +792,7 @@ def register_timekeeping_routes(app):
             return redirect(url_for("time_entries"))
 
         entries = TimeEntry.query.filter_by(user_id=current_user.id).order_by(TimeEntry.start_at.desc()).limit(200).all()
+        time_code_assist = _build_time_code_assist(entries)
         validations = (
             TimeValidationEvent.query.join(TimeEntry, TimeEntry.id == TimeValidationEvent.time_entry_id)
             .filter(TimeEntry.user_id == current_user.id)
@@ -720,6 +842,7 @@ def register_timekeeping_routes(app):
             prefill_task_id=prefill_task_id,
             prefill_start_at=prefill_start_at,
             prefill_end_at=prefill_end_at,
+            time_code_assist=time_code_assist,
         )
 
     @app.route("/time/review", methods=["GET", "POST"])
