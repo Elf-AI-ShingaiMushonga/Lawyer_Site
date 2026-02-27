@@ -18,11 +18,13 @@ from .portal import register_portal_routes
 from .timekeeping import register_timekeeping_routes
 from .trust import register_trust_routes
 from .trust_accounting import register_trust_accounting_routes
+from .ufc import register_ufc_routes
 from .workflow import register_workflow_routes
 
 
 def register_routes(app):
     register_ops_routes(app)
+    register_ufc_routes(app)
     register_auth_routes(app)
     register_auth_plus_routes(app)
     register_matter_routes(app)

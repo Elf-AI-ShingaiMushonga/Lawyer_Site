@@ -27,7 +27,6 @@ from .models import User
 from .routes import register_routes
 from .schema_sync import sync_schema_compatibility
 from .security import register_security_handlers
-from .ufc_mount import configure_ufc_mount
 
 
 @login_manager.user_loader
@@ -128,6 +127,7 @@ def create_app() -> Flask:
         TIMER_SINGLE_CAP_MINUTES=timer_single_cap_minutes,
         TIMER_IDLE_PROMPT_SECONDS=timer_idle_prompt_seconds,
         TIMER_IDLE_GRACE_SECONDS=timer_idle_grace_seconds,
+        UFC_STRICT_INIT=env_bool("UFC_STRICT_INIT", False),
     )
 
     if db_backend != "sqlite":
@@ -212,7 +212,6 @@ def create_app() -> Flask:
     register_csrf_protection(app)
     register_security_handlers(app)
     register_routes(app)
-    configure_ufc_mount(app)
 
     run_schema_sync = enable_schema_sync and not _is_migration_cli_invocation()
     if enable_schema_sync and not run_schema_sync:

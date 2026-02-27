@@ -24,6 +24,8 @@ def register_csrf_protection(app):
     def enforce_csrf():
         if request.method in {"GET", "HEAD", "OPTIONS", "TRACE"}:
             return
+        if request.path.startswith("/ufc/api/"):
+            return
         sent_token = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
         expected_token = session.get(CSRF_SESSION_KEY)
         if (

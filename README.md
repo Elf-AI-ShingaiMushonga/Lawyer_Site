@@ -56,7 +56,8 @@ Open: http://127.0.0.1:5000
 Demo routing:
 - `/` is the demo hub landing page.
 - `Law Firm Intranet` routes to `/login`.
-- `UFC Prediction` routes to `/ufc/` and mounts `UFC_Elf/app.py` inside this app.
+- `UFC Prediction` routes to `/ufc/` as a first-party route module inside this app.
+- UFC dependencies are installed from this root `requirements.txt` (no second virtualenv required).
 
 ## Demo data seed (recommended for client walkthroughs)
 
@@ -165,8 +166,14 @@ Optional but recommended:
 - `GUNICORN_WORKERS=3`
 - `GUNICORN_THREADS=2`
 - `GUNICORN_TIMEOUT=60`
+- `UFC_STRICT_INIT=true` (fail fast at startup if UFC module/dependencies fail to load)
+- `GUNICORN_TIMEOUT=900` when using UFC `Update Data` / `Retrain Models` actions in-request
 - `WORKER_LOOP_SLEEP_SECONDS=3`
 - `SCHEDULER_LOOP_SLEEP_SECONDS=30`
+
+UFC production notes:
+- Install only once from root `requirements.txt`; do not create/use a separate `UFC_Elf/venv`.
+- Ensure outbound internet egress is allowed for `Update Data` (scraper hits UFCStats).
 
 ## Database migrations
 
