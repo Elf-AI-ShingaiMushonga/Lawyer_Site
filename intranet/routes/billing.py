@@ -26,10 +26,14 @@ from ..models import (
     RateCard,
     User,
 )
-from ..policies import enforce_data_residency, visible_matter_ids
+from ..policies import enforce_data_residency, enforce_permission, visible_matter_ids
 from ..reports.ledes import generate_ledes_1998b
 from ..services.billing_engine import BillingEngine
 from ..services.notification_engine import NotificationEngine
+from ..services.workflow_automation import (
+    reconcile_invoice_payment_status,
+    schedule_invoice_collection_followups,
+)
 from ..templates import page
 
 
@@ -273,6 +277,7 @@ def register_billing_routes(app):
     @login_required
     def billing_invoices():
         if request.method == "POST":
+            enforce_permission("billing", "generate")
             matter_id = request.form.get("matter_id", type=int)
             if not matter_id or not can_access_matter(matter_id):
                 abort(403)
@@ -336,7 +341,7 @@ def register_billing_routes(app):
         default_period_start = request.args.get("period_start", type=str) or today.replace(day=1).isoformat()
         default_period_end = request.args.get("period_end", type=str) or today.isoformat()
         total_billed = float(invoice_query.with_entities(func.coalesce(func.sum(Invoice.total), 0.0)).scalar() or 0.0)
-        approved_count = invoice_query.filter(Invoice.status == "approved").count()
+        approved_count = invoice_query.filter(Invoice.status.in_(["approved", "part_paid", "paid"])).count()
         draft_count = invoice_query.filter(Invoice.status == "draft").count()
         return page(
             "Invoices",
@@ -384,32 +389,41 @@ def register_billing_routes(app):
     @app.post("/billing/invoices/<int:invoice_id>/approve")
     @login_required
     def billing_invoice_approve(invoice_id: int):
+        enforce_permission("billing", "approve")
         inv = db.session.get(Invoice, invoice_id)
         if not inv:
             abort(404)
         if not can_access_matter(inv.matter_id):
-            abort(403)
-        if current_user.role not in {"admin", "lawyer"}:
             abort(403)
 
         inv.status = "approved"
         inv.approved_by = current_user.id
         inv.approved_at = dt.datetime.utcnow()
+        followup_task_ids = schedule_invoice_collection_followups(
+            inv.id,
+            actor_user_id=current_user.id,
+        )
         db.session.commit()
         NotificationEngine.enqueue("invoice_approved", current_user.id, f"invoice:{inv.id}")
-        audit("invoice_approve", "Invoice", inv.id)
-        flash("Invoice approved.", "info")
+        NotificationEngine.enqueue("invoice_sent", current_user.id, f"invoice:{inv.id}")
+        audit("invoice_approve", "Invoice", inv.id, {"followup_task_ids": followup_task_ids})
+        if followup_task_ids:
+            flash(
+                f"Invoice approved. Collection follow-up task(s) created: {', '.join(f'#{task_id}' for task_id in followup_task_ids)}.",
+                "info",
+            )
+        else:
+            flash("Invoice approved.", "info")
         return redirect(url_for("billing_invoice_detail", invoice_id=inv.id))
 
     @app.post("/billing/invoices/<int:invoice_id>/payments")
     @login_required
     def billing_invoice_payment_capture(invoice_id: int):
+        enforce_permission("billing", "capture_payment")
         inv = db.session.get(Invoice, invoice_id)
         if not inv:
             abort(404)
         if not can_access_matter(inv.matter_id):
-            abort(403)
-        if current_user.role not in {"admin", "lawyer"}:
             abort(403)
 
         amount = request.form.get("amount", type=float)
@@ -452,11 +466,9 @@ def register_billing_routes(app):
                 {"status": "settled"},
                 synchronize_session=False,
             )
+        reconciled_status, outstanding_after = reconcile_invoice_payment_status(inv.id)
         db.session.commit()
 
-        outstanding_after = outstanding_before
-        if status == "settled":
-            outstanding_after = max(0.0, round(outstanding_before - float(row.amount or 0.0), 2))
         audit(
             "payment_capture",
             "PaymentAllocation",
@@ -471,15 +483,20 @@ def register_billing_routes(app):
                 "external_txn_id": row.external_txn_id,
                 "outstanding_before": outstanding_before,
                 "outstanding_after": outstanding_after,
+                "invoice_status_after": reconciled_status,
             },
         )
         NotificationEngine.enqueue("payment_recorded", current_user.id, f"payment:{row.id}")
-        flash("Payment captured.", "info")
+        if reconciled_status == "paid":
+            flash("Payment captured. Invoice is now fully settled.", "info")
+        else:
+            flash("Payment captured.", "info")
         return redirect(url_for("billing_invoice_detail", invoice_id=invoice_id))
 
     @app.post("/billing/payments/<int:payment_id>/settle")
     @login_required
     def billing_payment_settle(payment_id: int):
+        enforce_permission("billing", "settle_payment")
         payment = db.session.get(PaymentAllocation, payment_id)
         if not payment:
             abort(404)
@@ -487,8 +504,6 @@ def register_billing_routes(app):
         if not inv:
             abort(404)
         if not can_access_matter(inv.matter_id):
-            abort(403)
-        if current_user.role not in {"admin", "lawyer"}:
             abort(403)
 
         if _is_settled_payment_row(payment):
@@ -517,9 +532,9 @@ def register_billing_routes(app):
                 {"status": "settled"},
                 synchronize_session=False,
             )
+        reconciled_status, outstanding_after = reconcile_invoice_payment_status(inv.id)
         db.session.commit()
 
-        outstanding_after = max(0.0, round(outstanding_before - amount, 2))
         audit(
             "payment_settle",
             "PaymentAllocation",
@@ -533,10 +548,14 @@ def register_billing_routes(app):
                 "external_txn_id": payment.external_txn_id,
                 "outstanding_before": outstanding_before,
                 "outstanding_after": outstanding_after,
+                "invoice_status_after": reconciled_status,
             },
         )
         NotificationEngine.enqueue("payment_settled", current_user.id, f"payment:{payment.id}")
-        flash("Payment marked as settled.", "info")
+        if reconciled_status == "paid":
+            flash("Payment marked as settled. Invoice is now fully paid.", "info")
+        else:
+            flash("Payment marked as settled.", "info")
         return redirect(url_for("billing_invoice_detail", invoice_id=inv.id))
 
     @app.get("/billing/invoices/<int:invoice_id>/pdf")
@@ -607,12 +626,11 @@ def register_billing_routes(app):
     @app.post("/billing/invoices/<int:invoice_id>/adjust")
     @login_required
     def billing_invoice_adjust(invoice_id: int):
+        enforce_permission("billing", "adjust")
         inv = db.session.get(Invoice, invoice_id)
         if not inv:
             abort(404)
         if not can_access_matter(inv.matter_id):
-            abort(403)
-        if current_user.role not in {"admin", "lawyer"}:
             abort(403)
 
         adjustment_type = (request.form.get("adjustment_type") or "").strip().lower()
@@ -665,8 +683,7 @@ def register_billing_routes(app):
     @app.route("/billing/ar-aging", methods=["GET", "POST"])
     @login_required
     def billing_ar_aging():
-        if current_user.role not in {"admin", "lawyer"}:
-            abort(403)
+        enforce_permission("billing", "report")
 
         as_of = dt.date.today()
         if request.method == "POST":
@@ -876,8 +893,7 @@ def register_billing_routes(app):
     @app.get("/billing/reports/trial-balance")
     @login_required
     def billing_trial_balance():
-        if current_user.role not in {"admin", "lawyer"}:
-            abort(403)
+        enforce_permission("billing", "report")
         as_of = _parse_as_of(request.args.get("as_of"), dt.date.today())
         fmt = (request.args.get("format") or "html").strip().lower()
         cutoff = dt.datetime.combine(as_of, dt.time.max)
@@ -1016,8 +1032,7 @@ def register_billing_routes(app):
     @app.get("/billing/reports/auditor")
     @login_required
     def billing_auditor_report():
-        if current_user.role not in {"admin", "lawyer"}:
-            abort(403)
+        enforce_permission("billing", "report")
         as_of = _parse_as_of(request.args.get("as_of"), dt.date.today())
         fmt = (request.args.get("format") or "html").strip().lower()
         cutoff = dt.datetime.combine(as_of, dt.time.max)
@@ -1063,7 +1078,7 @@ def register_billing_routes(app):
         subtotal_total = round(sum(float(inv.subtotal or 0.0) for inv in invoices), 2)
         tax_total = round(sum(float(inv.tax_total or 0.0) for inv in invoices), 2)
         billed_total = round(sum(float(inv.total or 0.0) for inv in invoices), 2)
-        approved_count = sum(1 for inv in invoices if (inv.status or "").lower() == "approved")
+        approved_count = sum(1 for inv in invoices if (inv.status or "").lower() in {"approved", "part_paid", "paid"})
         draft_count = sum(1 for inv in invoices if (inv.status or "").lower() == "draft")
         outstanding_total = round(max(0.0, billed_total - payments_total), 2)
         payload = {
@@ -1118,8 +1133,7 @@ def register_billing_routes(app):
     @app.get("/billing/transactions")
     @login_required
     def billing_transactions():
-        if current_user.role not in {"admin", "lawyer"}:
-            abort(403)
+        enforce_permission("billing", "report")
 
         scope_ids = None if is_admin() else visible_matter_ids()
         matter_filter = request.args.get("matter_id", type=int)
@@ -1419,8 +1433,7 @@ def register_billing_routes(app):
     @app.get("/billing/audit-log")
     @login_required
     def billing_audit_log():
-        if current_user.role not in {"admin", "lawyer"}:
-            abort(403)
+        enforce_permission("billing", "audit")
 
         action_filter = (request.args.get("action") or "").strip()
         actor_filter = request.args.get("actor_id", type=int)

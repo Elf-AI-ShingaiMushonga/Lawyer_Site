@@ -68,6 +68,7 @@
         name="task_code"
         list="entry-task-code-options"
         placeholder="Task code"
+        value="{{ prefill_task_code or '' }}"
         autocomplete="off"
       >
       <datalist id="entry-task-code-options"></datalist>
@@ -80,6 +81,7 @@
         name="activity_code"
         list="entry-activity-code-options"
         placeholder="Activity code"
+        value="{{ prefill_activity_code or '' }}"
         autocomplete="off"
       >
       <datalist id="entry-activity-code-options"></datalist>
@@ -92,13 +94,13 @@
     </div>
     <div class="col-12">
       <div class="form-check">
-        <input class="form-check-input" id="entry-billable" type="checkbox" name="is_billable" value="1" checked>
+        <input class="form-check-input" id="entry-billable" type="checkbox" name="is_billable" value="1" {% if prefill_is_billable %}checked{% endif %}>
         <label class="form-check-label" for="entry-billable">Billable</label>
       </div>
     </div>
     <div class="col-12">
       <label class="form-label" for="entry-narrative">Narrative</label>
-      <textarea class="form-control" id="entry-narrative" name="narrative" rows="3" placeholder="Describe work completed"></textarea>
+      <textarea class="form-control" id="entry-narrative" name="narrative" rows="3" placeholder="Describe work completed">{{ prefill_narrative or '' }}</textarea>
     </div>
     <div class="col-12">
       <div class="time-prompts" data-time-prompts hidden>

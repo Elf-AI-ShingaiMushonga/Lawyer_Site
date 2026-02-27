@@ -35,7 +35,8 @@ from ..models import (
     TaskTemplateItem,
     User,
 )
-from ..policies import enforce_data_residency, visible_matter_ids
+from ..policies import enforce_data_residency, enforce_permission, visible_matter_ids
+from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..templates import page
 
 RISK_LEVELS = {"Low", "Medium", "High", "Critical"}
@@ -175,6 +176,7 @@ def register_matter_routes(app):
     @app.route("/matters/new", methods=["GET", "POST"])
     @login_required
     def matter_create():
+        enforce_permission("matter", "create")
         if request.method == "POST":
             matter_no = normalize_query(request.form.get("matter_no", "")).upper()
             title = normalize_query(request.form.get("title", ""))
@@ -287,8 +289,16 @@ def register_matter_routes(app):
         m.last_update_note = last_update_note or None
         m.outcome_summary = outcome_summary or None
         m.last_updated_at = dt.datetime.utcnow()
+        auto_pause_summary = {"paused": 0, "captured_entries": 0}
+        open_task_count_on_close = 0
         if previous_status != "Closed" and status == "Closed":
             m.closed_at = m.last_updated_at
+            auto_pause_summary = auto_pause_running_timers_for_matter(
+                m.id,
+                actor_user_id=current_user.id,
+                pause_reason="matter_closed",
+            )
+            open_task_count_on_close = Task.query.filter(Task.matter_id == m.id, Task.status != "Done").count()
         if previous_status == "Closed" and status != "Closed":
             m.closed_at = None
         db.session.commit()
@@ -304,6 +314,19 @@ def register_matter_routes(app):
             "Executive summary updated",
             f"Status {m.status}, risk {m.risk_level}, budget {m.budget_status}",
         )
+        if status == "Closed" and auto_pause_summary.get("paused", 0) > 0:
+            flash(
+                (
+                    f"Auto-paused {auto_pause_summary.get('paused', 0)} running timer(s) "
+                    f"and captured {auto_pause_summary.get('captured_entries', 0)} draft entry(ies)."
+                ),
+                "info",
+            )
+        if status == "Closed" and open_task_count_on_close > 0:
+            flash(
+                f"Matter closed with {open_task_count_on_close} open task(s). Review outstanding tasks before archiving.",
+                "warning",
+            )
         flash("Matter summary updated.", "info")
         return redirect(url_for("matter_detail", matter_id=m.id))
 
@@ -461,6 +484,7 @@ def register_matter_routes(app):
             abort(404)
 
         if request.method == "POST":
+            enforce_permission("matter_team", "manage")
             email = normalize_query(request.form.get("email", "")).lower()
             role_in_matter = normalize_query(request.form.get("role_in_matter", "")) or "Team"
             if not is_valid_email(email):
@@ -490,173 +514,8 @@ def register_matter_routes(app):
 
         return page("Matter Team", "matters/team.html", m=m, members=members, users=users)
 
-    @app.route("/matters/<int:matter_id>/tasks", methods=["GET", "POST"])
-    @login_required
-    def matter_tasks(matter_id: int):
-        if not can_access_matter(matter_id):
-            abort(403)
-        m = db.session.get(Matter, matter_id)
-        if not m:
-            abort(404)
-
-        if request.method == "POST":
-            template_id = request.form.get("template_id", type=int)
-            template = db.session.get(TaskTemplate, template_id) if template_id else None
-            if template_id and template is None:
-                flash("Selected task template was not found.", "warning")
-                return redirect(url_for("matter_tasks", matter_id=matter_id))
-
-            template_items: list[TaskTemplateItem] = []
-            if template is not None:
-                template_items = (
-                    TaskTemplateItem.query.filter_by(task_template_id=template.id)
-                    .order_by(TaskTemplateItem.position.asc())
-                    .all()
-                )
-            template_primary_item = template_items[0] if template_items else None
-
-            title = normalize_query(request.form.get("title", ""))
-            description = (request.form.get("description") or "").strip()
-            if not title and template_primary_item is not None:
-                title = normalize_query(template_primary_item.title or "")
-            if not description and template_primary_item is not None and template_primary_item.description:
-                description = template_primary_item.description.strip()
-            if not description and len(template_items) > 1:
-                checklist_lines = "\n".join(f"- {item.title}" for item in template_items[1:] if item.title)
-                if checklist_lines:
-                    description = f"Template checklist:\n{checklist_lines}"
-
-            due = normalize_query(request.form.get("due_date", ""))
-            assigned_to_email = normalize_query(request.form.get("assigned_to", "")).lower()
-            save_as_template = (request.form.get("save_as_template") or "").strip().lower() in {"1", "true", "yes", "on"}
-            template_name = normalize_query(request.form.get("template_name", ""))
-
-            if not title:
-                flash("Task title is required.", "warning")
-                return redirect(url_for("matter_tasks", matter_id=matter_id))
-            if save_as_template and not template_name:
-                flash("Template name is required when saving this task as a template.", "warning")
-                return redirect(url_for("matter_tasks", matter_id=matter_id))
-
-            due_date = None
-            if due:
-                try:
-                    due_date = dt.date.fromisoformat(due)
-                except ValueError:
-                    flash("Invalid due date. Use YYYY-MM-DD.", "warning")
-                    return redirect(url_for("matter_tasks", matter_id=matter_id))
-            elif template is not None and template.sla_hours:
-                due_days = max(1, (int(template.sla_hours) + 23) // 24)
-                due_date = dt.date.today() + dt.timedelta(days=due_days)
-
-            assignee_ids: list[int] = []
-            seen_assignees: set[int] = set()
-            for raw_user_id in request.form.getlist("assignee_user_ids"):
-                raw_user_id = (raw_user_id or "").strip()
-                if not raw_user_id:
-                    continue
-                try:
-                    user_id = int(raw_user_id)
-                except (TypeError, ValueError):
-                    flash("One or more assignee selections are invalid.", "warning")
-                    return redirect(url_for("matter_tasks", matter_id=matter_id))
-                if user_id in seen_assignees:
-                    continue
-                if db.session.get(User, user_id) is None:
-                    flash("One or more selected assignees could not be found.", "warning")
-                    return redirect(url_for("matter_tasks", matter_id=matter_id))
-                assignee_ids.append(user_id)
-                seen_assignees.add(user_id)
-
-            if assigned_to_email:
-                u = User.query.filter_by(email=assigned_to_email).first()
-                if not u:
-                    flash("Assigned-to user not found.", "warning")
-                    return redirect(url_for("matter_tasks", matter_id=matter_id))
-                if u.id not in seen_assignees:
-                    assignee_ids.append(u.id)
-                    seen_assignees.add(u.id)
-
-            assigned_to = assignee_ids[0] if assignee_ids else None
-            requires_two_person_review = (request.form.get("requires_two_person_review") or "").strip().lower() in {
-                "1",
-                "true",
-                "yes",
-                "on",
-            }
-            task_priority = (template.priority if template is not None else "Medium") or "Medium"
-            task_sla_hours = template.sla_hours if template is not None else None
-            task_recurrence_rule = template.recurrence_rule if template is not None else None
-
-            t = Task(
-                matter_id=matter_id,
-                title=title,
-                description=description,
-                due_date=due_date,
-                assigned_to=assigned_to,
-                created_by=current_user.id,
-                requires_two_person_review=requires_two_person_review,
-                priority=task_priority,
-                sla_hours=task_sla_hours,
-                recurrence_rule=task_recurrence_rule,
-            )
-            db.session.add(t)
-            db.session.flush()
-            for user_id in assignee_ids:
-                db.session.add(TaskAssignee(task_id=t.id, user_id=user_id, assigned_by=current_user.id))
-
-            template_saved_name: str | None = None
-            template_saved_id: int | None = None
-            if save_as_template:
-                template_row = TaskTemplate.query.filter_by(name=template_name).first()
-                if template_row is None:
-                    template_row = TaskTemplate(
-                        name=template_name,
-                        matter_type=(m.case_type or m.practice_area or "").strip() or None,
-                        priority=task_priority,
-                        sla_hours=task_sla_hours,
-                        recurrence_rule=task_recurrence_rule,
-                        created_by=current_user.id,
-                    )
-                    db.session.add(template_row)
-                    db.session.flush()
-                else:
-                    if template_row.matter_type is None:
-                        template_row.matter_type = (m.case_type or m.practice_area or "").strip() or None
-                    template_row.priority = task_priority
-                    template_row.sla_hours = task_sla_hours
-                    template_row.recurrence_rule = task_recurrence_rule
-                    TaskTemplateItem.query.filter_by(task_template_id=template_row.id).delete(synchronize_session=False)
-                db.session.add(
-                    TaskTemplateItem(
-                        task_template_id=template_row.id,
-                        title=title,
-                        description=description or None,
-                        position=1,
-                    )
-                )
-                template_saved_name = template_row.name
-                template_saved_id = template_row.id
-
-            db.session.commit()
-            audit(
-                "task_create",
-                "Task",
-                t.id,
-                {"matter_id": matter_id, "assignee_count": len(assignee_ids), "template_id": template.id if template else None},
-            )
-            if template_saved_name:
-                audit("task_template_save_from_task", "TaskTemplate", template_saved_id, {"name": template_saved_name})
-            matter_activity(matter_id, f"Task created: {t.title}", f"Due {t.due_date}" if t.due_date else "No due date")
-            if template_saved_name:
-                flash(f"Task created and template '{template_saved_name}' saved.", "info")
-            else:
-                flash("Task created.", "info")
-            return redirect(url_for("matter_tasks", matter_id=matter_id))
-
-        tasks = Task.query.filter_by(matter_id=matter_id).order_by(Task.status.asc(), Task.due_date.asc().nullslast()).limit(200).all()
+    def _task_form_context() -> tuple[list[User], list[TaskTemplate], dict[int, TaskTemplateItem]]:
         users = User.query.order_by(User.full_name.asc()).limit(500).all()
-        users_map = {u.id: u for u in users}
         task_templates = TaskTemplate.query.order_by(TaskTemplate.name.asc()).limit(250).all()
         template_primary_items: dict[int, TaskTemplateItem] = {}
         template_ids = [row.id for row in task_templates]
@@ -669,9 +528,181 @@ def register_matter_routes(app):
             for item in template_items:
                 if item.task_template_id not in template_primary_items:
                     template_primary_items[item.task_template_id] = item
+        return users, task_templates, template_primary_items
 
+    def _create_task_from_request(m: Matter):
+        matter_id = int(m.id)
+
+        def _redirect_to_create():
+            return redirect(url_for("matter_task_create", matter_id=matter_id))
+
+        template_id = request.form.get("template_id", type=int)
+        template = db.session.get(TaskTemplate, template_id) if template_id else None
+        if template_id and template is None:
+            flash("Selected task template was not found.", "warning")
+            return _redirect_to_create()
+
+        template_items: list[TaskTemplateItem] = []
+        if template is not None:
+            template_items = (
+                TaskTemplateItem.query.filter_by(task_template_id=template.id)
+                .order_by(TaskTemplateItem.position.asc())
+                .all()
+            )
+        template_primary_item = template_items[0] if template_items else None
+
+        title = normalize_query(request.form.get("title", ""))
+        description = (request.form.get("description") or "").strip()
+        if not title and template_primary_item is not None:
+            title = normalize_query(template_primary_item.title or "")
+        if not description and template_primary_item is not None and template_primary_item.description:
+            description = template_primary_item.description.strip()
+        if not description and len(template_items) > 1:
+            checklist_lines = "\n".join(f"- {item.title}" for item in template_items[1:] if item.title)
+            if checklist_lines:
+                description = f"Template checklist:\n{checklist_lines}"
+
+        due = normalize_query(request.form.get("due_date", ""))
+        assigned_to_email = normalize_query(request.form.get("assigned_to", "")).lower()
+        save_as_template = (request.form.get("save_as_template") or "").strip().lower() in {"1", "true", "yes", "on"}
+        template_name = normalize_query(request.form.get("template_name", ""))
+
+        if not title:
+            flash("Task title is required.", "warning")
+            return _redirect_to_create()
+        if save_as_template and not template_name:
+            flash("Template name is required when saving this task as a template.", "warning")
+            return _redirect_to_create()
+
+        due_date = None
+        if due:
+            try:
+                due_date = dt.date.fromisoformat(due)
+            except ValueError:
+                flash("Invalid due date. Use YYYY-MM-DD.", "warning")
+                return _redirect_to_create()
+        elif template is not None and template.sla_hours:
+            due_days = max(1, (int(template.sla_hours) + 23) // 24)
+            due_date = dt.date.today() + dt.timedelta(days=due_days)
+
+        assignee_ids: list[int] = []
+        seen_assignees: set[int] = set()
+        for raw_user_id in request.form.getlist("assignee_user_ids"):
+            raw_user_id = (raw_user_id or "").strip()
+            if not raw_user_id:
+                continue
+            try:
+                user_id = int(raw_user_id)
+            except (TypeError, ValueError):
+                flash("One or more assignee selections are invalid.", "warning")
+                return _redirect_to_create()
+            if user_id in seen_assignees:
+                continue
+            if db.session.get(User, user_id) is None:
+                flash("One or more selected assignees could not be found.", "warning")
+                return _redirect_to_create()
+            assignee_ids.append(user_id)
+            seen_assignees.add(user_id)
+
+        if assigned_to_email:
+            u = User.query.filter_by(email=assigned_to_email).first()
+            if not u:
+                flash("Assigned-to user not found.", "warning")
+                return _redirect_to_create()
+            if u.id not in seen_assignees:
+                assignee_ids.append(u.id)
+                seen_assignees.add(u.id)
+
+        assigned_to = assignee_ids[0] if assignee_ids else None
+        requires_two_person_review = (request.form.get("requires_two_person_review") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        task_priority = (template.priority if template is not None else "Medium") or "Medium"
+        task_sla_hours = template.sla_hours if template is not None else None
+        task_recurrence_rule = template.recurrence_rule if template is not None else None
+
+        t = Task(
+            matter_id=matter_id,
+            title=title,
+            description=description,
+            due_date=due_date,
+            assigned_to=assigned_to,
+            created_by=current_user.id,
+            requires_two_person_review=requires_two_person_review,
+            priority=task_priority,
+            sla_hours=task_sla_hours,
+            recurrence_rule=task_recurrence_rule,
+        )
+        db.session.add(t)
+        db.session.flush()
+        for user_id in assignee_ids:
+            db.session.add(TaskAssignee(task_id=t.id, user_id=user_id, assigned_by=current_user.id))
+
+        template_saved_name: str | None = None
+        template_saved_id: int | None = None
+        if save_as_template:
+            template_row = TaskTemplate.query.filter_by(name=template_name).first()
+            if template_row is None:
+                template_row = TaskTemplate(
+                    name=template_name,
+                    matter_type=(m.case_type or m.practice_area or "").strip() or None,
+                    priority=task_priority,
+                    sla_hours=task_sla_hours,
+                    recurrence_rule=task_recurrence_rule,
+                    created_by=current_user.id,
+                )
+                db.session.add(template_row)
+                db.session.flush()
+            else:
+                if template_row.matter_type is None:
+                    template_row.matter_type = (m.case_type or m.practice_area or "").strip() or None
+                template_row.priority = task_priority
+                template_row.sla_hours = task_sla_hours
+                template_row.recurrence_rule = task_recurrence_rule
+                TaskTemplateItem.query.filter_by(task_template_id=template_row.id).delete(synchronize_session=False)
+            db.session.add(
+                TaskTemplateItem(
+                    task_template_id=template_row.id,
+                    title=title,
+                    description=description or None,
+                    position=1,
+                )
+            )
+            template_saved_name = template_row.name
+            template_saved_id = template_row.id
+
+        db.session.commit()
+        audit(
+            "task_create",
+            "Task",
+            t.id,
+            {"matter_id": matter_id, "assignee_count": len(assignee_ids), "template_id": template.id if template else None},
+        )
+        if template_saved_name:
+            audit("task_template_save_from_task", "TaskTemplate", template_saved_id, {"name": template_saved_name})
+        matter_activity(matter_id, f"Task created: {t.title}", f"Due {t.due_date}" if t.due_date else "No due date")
+        if template_saved_name:
+            flash(f"Task created and template '{template_saved_name}' saved.", "info")
+        else:
+            flash("Task created.", "info")
+        return redirect(url_for("matter_tasks", matter_id=matter_id))
+
+    @app.get("/matters/<int:matter_id>/tasks")
+    @login_required
+    def matter_tasks(matter_id: int):
+        if not can_access_matter(matter_id):
+            abort(403)
+        m = db.session.get(Matter, matter_id)
+        if not m:
+            abort(404)
+
+        tasks = Task.query.filter_by(matter_id=matter_id).order_by(Task.status.asc(), Task.due_date.asc().nullslast()).limit(200).all()
         task_assignees_map: dict[int, list[User]] = {task.id: [] for task in tasks}
         task_ids = [task.id for task in tasks]
+        users_map: dict[int, User] = {}
         if task_ids:
             assignment_rows = (
                 db.session.query(TaskAssignee, User)
@@ -682,10 +713,13 @@ def register_matter_routes(app):
             )
             for assignment, user in assignment_rows:
                 task_assignees_map.setdefault(assignment.task_id, []).append(user)
+                users_map[user.id] = user
+        fallback_ids = {int(task.assigned_to) for task in tasks if task.assigned_to and task.assigned_to not in users_map}
+        if fallback_ids:
+            for row in User.query.filter(User.id.in_(fallback_ids)).all():
+                users_map[row.id] = row
         for task in tasks:
-            if task_assignees_map.get(task.id):
-                continue
-            if task.assigned_to is None:
+            if task_assignees_map.get(task.id) or task.assigned_to is None:
                 continue
             fallback_user = users_map.get(task.assigned_to)
             if fallback_user is not None:
@@ -696,9 +730,27 @@ def register_matter_routes(app):
             "matters/tasks.html",
             m=m,
             tasks=tasks,
-            users_map=users_map,
-            users=users,
             task_assignees_map=task_assignees_map,
+        )
+
+    @app.route("/matters/<int:matter_id>/tasks/new", methods=["GET", "POST"])
+    @login_required
+    def matter_task_create(matter_id: int):
+        if not can_access_matter(matter_id):
+            abort(403)
+        m = db.session.get(Matter, matter_id)
+        if not m:
+            abort(404)
+
+        if request.method == "POST":
+            return _create_task_from_request(m)
+
+        users, task_templates, template_primary_items = _task_form_context()
+        return page(
+            "Add Task",
+            "matters/task_new.html",
+            m=m,
+            users=users,
             task_templates=task_templates,
             template_primary_items=template_primary_items,
         )
@@ -711,6 +763,7 @@ def register_matter_routes(app):
             abort(404)
         if not can_access_matter(t.matter_id):
             abort(403)
+        previous_status = t.status
         status = normalize_query(request.form.get("status", "Todo")) or "Todo"
         if status not in {"Todo", "Doing", "Done"}:
             abort(400)
@@ -718,6 +771,27 @@ def register_matter_routes(app):
         db.session.commit()
         audit("task_status", "Task", t.id, {"status": status, "matter_id": t.matter_id})
         matter_activity(t.matter_id, f"Task status changed: {t.title}", f"Now {status}")
+        suggest_time_on_done = (request.form.get("suggest_time_on_done") or "1").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if status == "Done" and previous_status != "Done" and suggest_time_on_done:
+            end_at = dt.datetime.utcnow().replace(second=0, microsecond=0)
+            start_at = end_at - dt.timedelta(minutes=30)
+            flash("Task marked done. Confirm the suggested time entry.", "info")
+            return redirect(
+                url_for(
+                    "time_entries",
+                    matter_id=t.matter_id,
+                    task_id=t.id,
+                    start_at=start_at.isoformat(timespec="minutes"),
+                    end_at=end_at.isoformat(timespec="minutes"),
+                    narrative=f"Completed task: {t.title}",
+                    is_billable=1,
+                )
+            )
         return redirect(url_for("matter_tasks", matter_id=t.matter_id))
 
     @app.route("/matters/<int:matter_id>/documents", methods=["GET", "POST"])

@@ -24,6 +24,7 @@ REQUIRED_ROUTES = {
     "/admin/rules/trust",
     "/matters/intake",
     "/matters/recent/clear",
+    "/matters/<int:matter_id>/tasks/new",
     "/matters/<int:matter_id>/workspace",
     "/matters/<int:matter_id>/parties",
     "/matters/<int:matter_id>/notes",

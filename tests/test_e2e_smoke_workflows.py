@@ -106,7 +106,7 @@ def test_smoke_core_matter_time_billing_flow(app_ctx):
     )
 
     response = client.post(
-        f"/matters/{matter.id}/tasks",
+        f"/matters/{matter.id}/tasks/new",
         data={
             "csrf_token": csrf_token,
             "title": "Draft strategy memo",

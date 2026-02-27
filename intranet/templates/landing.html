@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title or "ELF Demo Hub" }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/@fontsource-variable/manrope@5.0.18/index.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #0f1f1a;
+      --muted: #4f625b;
+      --bg: #edf3ef;
+      --card: #ffffff;
+      --line: #c9d8cf;
+      --accent: #0f5f44;
+      --accent-strong: #083e2d;
+      --accent-soft: #e7f4ee;
+      --danger: #bb0400;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Manrope Variable", "Manrope", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 420px at -5% -10%, rgba(15, 95, 68, 0.15), transparent 70%),
+        radial-gradient(760px 380px at 110% 0%, rgba(187, 4, 0, 0.12), transparent 68%),
+        linear-gradient(165deg, #f6faf8, var(--bg) 60%);
+      display: grid;
+      place-items: center;
+      padding: 1.25rem;
+    }
+
+    .shell {
+      width: min(960px, 100%);
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .hero h1 {
+      margin: 0.4rem 0 0;
+      font-size: clamp(2rem, 5vw, 3rem);
+      line-height: 1.05;
+    }
+
+    .cards {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 1.1rem;
+      box-shadow: 0 16px 34px rgba(17, 36, 27, 0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+      min-height: 240px;
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 1.35rem;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .chip {
+      align-self: flex-start;
+      border: 1px solid #b5cec2;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.3rem 0.6rem;
+    }
+
+    .chip.danger {
+      border-color: #efc3c1;
+      color: var(--danger);
+      background: #fff3f2;
+    }
+
+    .action {
+      margin-top: auto;
+      display: inline-flex;
+      width: fit-content;
+      text-decoration: none;
+      border-radius: 10px;
+      padding: 0.65rem 0.9rem;
+      font-weight: 700;
+      color: #ffffff;
+      background: linear-gradient(120deg, var(--accent), var(--accent-strong));
+    }
+
+    .action:hover {
+      filter: brightness(1.08);
+    }
+
+    .action.disabled {
+      background: #9ba8a2;
+      pointer-events: none;
+    }
+
+    @media (max-width: 800px) {
+      .cards {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <p>Client Demo Portal</p>
+      <h1>Choose an experience</h1>
+    </header>
+
+    <section class="cards">
+      <article class="card">
+        <div class="chip">Core Product</div>
+        <h2>Law Firm Intranet</h2>
+        <p>Access the existing intranet login and continue to matters, workflows, billing, trust, and operations.</p>
+        <a class="action" href="{{ intranet_login_url }}">Open Intranet Login</a>
+      </article>
+
+      <article class="card">
+        {% if ufc_enabled %}
+        <div class="chip">Model Demo</div>
+        {% else %}
+        <div class="chip danger">Model Demo</div>
+        {% endif %}
+        <h2>UFC Prediction</h2>
+        <p>Open the UFC fight outcome predictor app and its bet tracking dashboard.</p>
+        {% if ufc_enabled %}
+        <a class="action" href="{{ ufc_url }}">Open UFC Prediction</a>
+        {% else %}
+        <a class="action disabled" href="#" aria-disabled="true">UFC Demo Unavailable</a>
+        {% endif %}
+      </article>
+    </section>
+  </main>
+</body>
+</html>

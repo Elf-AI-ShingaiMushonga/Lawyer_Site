@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">Add Task</h3>
+      <div class="page-intro mt-1">Matter {{ m.matter_no }} - {{ m.title }}</div>
+    </div>
+    <div class="list-actions">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Back to Tasks</a>
+    </div>
+  </div>
+
+  <form method="post" class="row g-2 mt-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-6">
+      <label class="form-label" for="task-template-id">Use Template (Optional)</label>
+      <select class="form-select" id="task-template-id" name="template_id">
+        <option value="">No template</option>
+        {% for template in task_templates %}
+          {% set primary_item = template_primary_items.get(template.id) %}
+          <option value="{{ template.id }}">
+            {{ template.name }}{% if primary_item %} - {{ primary_item.title }}{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+      <div class="form-help">If title/description are empty, the selected template pre-fills them.</div>
+    </div>
+    <div class="col-12">
+      <label class="form-label">Task Title</label>
+      <input class="form-control" name="title" placeholder="e.g. Draft founding affidavit">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Due Date (Optional)</label>
+      <input class="form-control" name="due_date" type="date">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Assign To (Optional, Multiple)</label>
+      <select class="form-select" name="assignee_user_ids" multiple size="5">
+        {% for u in users %}
+          <option value="{{ u.id }}" {% if u.id == current_user.id %}selected{% endif %}>{{ u.full_name }} ({{ u.email }})</option>
+        {% endfor %}
+      </select>
+      <div class="form-help">Use Ctrl/Cmd + click to select multiple assignees.</div>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Assign By Email (Compatibility)</label>
+      <input class="form-control" name="assigned_to" list="emails" placeholder="Optional legacy single-email input">
+      <datalist id="emails">
+        {% for u in users %}
+          <option value="{{ u.email }}">{{ u.full_name }}</option>
+        {% endfor %}
+      </datalist>
+    </div>
+    <div class="col-12">
+      <label class="form-label">Description</label>
+      <textarea class="form-control" name="description" rows="4" placeholder="Short notes..."></textarea>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Template Name (Optional)</label>
+      <input class="form-control" name="template_name" placeholder="e.g. Hearing prep baseline">
+      <div class="form-help">Used only when "Save this task as template" is checked.</div>
+    </div>
+    <div class="col-12">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="requires_two_person_review" name="requires_two_person_review" value="1">
+        <label class="form-check-label muted small" for="requires_two_person_review">Require two-person approval</label>
+      </div>
+    </div>
+    <div class="col-12">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="save_as_template" name="save_as_template" value="1">
+        <label class="form-check-label muted small" for="save_as_template">Save this task as a reusable template (assignees are excluded)</label>
+      </div>
+    </div>
+    <div class="col-12 d-grid">
+      <button class="btn btn-light">Create Task</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

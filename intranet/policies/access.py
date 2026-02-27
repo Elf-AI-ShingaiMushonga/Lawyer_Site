@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import wraps
+
 from sqlalchemy import and_
 
 from flask import abort
@@ -9,11 +11,48 @@ from ..extensions import db
 from ..helpers import is_admin
 from ..types import AccessDecision
 
+ROLE_ALIASES = {
+    "partner": "lawyer",
+    "associate": "lawyer",
+}
+
+# Default route-level permissions. PermissionGrant rows can override these.
+DEFAULT_ROLE_PERMISSIONS: dict[str, dict[str, set[str]]] = {
+    "lawyer": {
+        "matter": {"create"},
+        "matter_team": {"manage"},
+        "time_entry": {"review", "lock"},
+        "crm": {"read", "write", "conflict_check", "override", "export", "sign_engagement"},
+        "billing": {"generate", "approve", "adjust", "capture_payment", "settle_payment", "report", "audit"},
+    },
+    "paralegal": {
+        "matter": {"create"},
+        "crm": {"read", "write", "conflict_check"},
+    },
+    "staff": {
+        "crm": {"read"},
+    },
+}
+
 
 def _models():
     from ..models import EthicalWallMatter, EthicalWallRule, Matter, MatterMember, PermissionGrant
 
     return EthicalWallMatter, EthicalWallRule, Matter, MatterMember, PermissionGrant
+
+
+def _normalized_role() -> str:
+    raw = str(getattr(current_user, "role", "") or "").strip().lower()
+    return ROLE_ALIASES.get(raw, raw)
+
+
+def _default_permission_allows(role: str, resource: str, action: str) -> bool:
+    role_matrix = DEFAULT_ROLE_PERMISSIONS.get(role, {})
+    direct_actions = role_matrix.get(resource, set())
+    if "*" in direct_actions or action in direct_actions:
+        return True
+    wildcard_actions = role_matrix.get("*", set())
+    return "*" in wildcard_actions or action in wildcard_actions
 
 
 def visible_matter_ids() -> list[int]:
@@ -97,18 +136,36 @@ def has_permission(resource: str, action: str) -> bool:
     if is_admin():
         return True
 
+    normalized_role = _normalized_role()
+    raw_role = str(getattr(current_user, "role", "") or "").strip().lower()
+    roles = {normalized_role}
+    if raw_role:
+        roles.add(raw_role)
+
     _, _, _, _, PermissionGrant = _models()
-    grant = (
-        PermissionGrant.query.filter_by(
-            role=current_user.role,
-            resource=resource,
-            action=action,
-            is_allowed=True,
+    grant_rows = (
+        PermissionGrant.query.filter(
+            PermissionGrant.role.in_(roles),
+            PermissionGrant.resource.in_([resource, "*"]),
+            PermissionGrant.action.in_([action, "*"]),
         )
         .order_by(PermissionGrant.id.desc())
-        .first()
+        .all()
     )
-    return grant is not None
+    best_grant = None
+    best_score = -1
+    for row in grant_rows:
+        score = 0
+        if row.resource == resource:
+            score += 2
+        if row.action == action:
+            score += 1
+        if score > best_score:
+            best_score = score
+            best_grant = row
+    if best_grant is not None:
+        return bool(best_grant.is_allowed)
+    return _default_permission_allows(normalized_role, resource, action)
 
 
 def enforce_matter_access(matter_id: int) -> None:
@@ -120,3 +177,15 @@ def enforce_matter_access(matter_id: int) -> None:
 def enforce_permission(resource: str, action: str) -> None:
     if not has_permission(resource, action):
         abort(403)
+
+
+def permission_required(resource: str, action: str):
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            enforce_permission(resource, action)
+            return view(*args, **kwargs)
+
+        return wrapped
+
+    return decorator

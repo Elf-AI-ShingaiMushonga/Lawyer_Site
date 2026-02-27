@@ -53,6 +53,11 @@ python app.py worker --max-jobs 100
 
 Open: http://127.0.0.1:5000
 
+Demo routing:
+- `/` is the demo hub landing page.
+- `Law Firm Intranet` routes to `/login`.
+- `UFC Prediction` routes to `/ufc/` and mounts `UFC_Elf/app.py` inside this app.
+
 ## Demo data seed (recommended for client walkthroughs)
 
 Use the built-in seed command to prepopulate realistic records:

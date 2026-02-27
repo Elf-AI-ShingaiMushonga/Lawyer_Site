@@ -9,7 +9,11 @@ from sqlalchemy import and_, or_
 from ..extensions import db
 from ..helpers import audit, can_access_matter, get_active_matter_id, is_admin, set_active_matter_context
 from ..models import FeeArrangement, Matter, RateCard, TimeEntry, TimeRoundingPolicy, TimeTimer, TimeValidationEvent
-from ..policies import visible_matter_ids
+from ..policies import enforce_permission, visible_matter_ids
+from ..services.workflow_automation import (
+    capture_timer_to_draft_time_entry,
+    ensure_draft_billing_item_for_time_entry,
+)
 from ..templates import page
 
 
@@ -68,6 +72,13 @@ def _policy_for_matter(matter_id: int) -> TimeRoundingPolicy | None:
     if policy:
         return policy
     return TimeRoundingPolicy.query.filter_by(client_name=matter.client_name, is_active=True).order_by(TimeRoundingPolicy.id.desc()).first()
+
+
+def _matter_is_closed(matter_id: int | None) -> bool:
+    if not matter_id:
+        return False
+    row = db.session.get(Matter, int(matter_id))
+    return row is not None and (row.status or "").strip().lower() == "closed"
 
 
 def _scoped_matters_for_current_user(limit: int = 200) -> list[Matter]:
@@ -308,6 +319,12 @@ def register_timekeeping_routes(app):
             return
 
         _pause_timer(running, cap_seconds=cap_seconds)
+        captured_entry_id, captured_invoice_id = capture_timer_to_draft_time_entry(
+            running.id,
+            pause_reason="cap_reached",
+            actor_user_id=current_user.id,
+            auto_create_billing_item=True,
+        )
         db.session.commit()
         audit(
             "timer_auto_pause_cap",
@@ -317,6 +334,8 @@ def register_timekeeping_routes(app):
                 "reason": "single_timer_cap",
                 "cap_seconds": cap_seconds,
                 "elapsed_seconds": running.elapsed_seconds,
+                "captured_entry_id": captured_entry_id,
+                "captured_invoice_id": captured_invoice_id,
             },
         )
         if _request_prefers_html():
@@ -324,6 +343,14 @@ def register_timekeeping_routes(app):
                 f"Running timer auto-paused at {cap_seconds // 60} minutes to prevent accidental overrun.",
                 "warning",
             )
+            if captured_entry_id is not None:
+                if captured_invoice_id is not None:
+                    flash(
+                        f"Captured draft entry #{captured_entry_id} and queued it on draft invoice #{captured_invoice_id}.",
+                        "info",
+                    )
+                else:
+                    flash(f"Captured draft entry #{captured_entry_id}.", "info")
 
     @app.get("/time/prompts")
     @login_required
@@ -543,12 +570,23 @@ def register_timekeeping_routes(app):
         matter_id = request.form.get("matter_id", type=int)
         if matter_id and not can_access_matter(matter_id):
             abort(403)
+        if _matter_is_closed(matter_id):
+            flash("Cannot start a timer on a closed matter. Reopen the matter first.", "warning")
+            return redirect(url_for("time_timers"))
 
         cap_seconds = _single_timer_cap_seconds()
         running = _active_timer_for_user(current_user.id)
         previous_timer_capped = False
+        previous_entry_id = None
+        previous_invoice_id = None
         if running:
             _, previous_timer_capped = _pause_timer(running, cap_seconds=cap_seconds)
+            previous_entry_id, previous_invoice_id = capture_timer_to_draft_time_entry(
+                running.id,
+                pause_reason="switch",
+                actor_user_id=current_user.id,
+                auto_create_billing_item=True,
+            )
 
         timer = TimeTimer(
             user_id=current_user.id,
@@ -568,6 +606,14 @@ def register_timekeeping_routes(app):
                 f"Previous timer was capped at {cap_seconds // 60} minutes and auto-paused.",
                 "warning",
             )
+        if previous_entry_id:
+            if previous_invoice_id:
+                flash(
+                    f"Previous timer captured as draft entry #{previous_entry_id} and queued on draft invoice #{previous_invoice_id}.",
+                    "info",
+                )
+            else:
+                flash(f"Previous timer captured as draft time entry #{previous_entry_id}.", "info")
         flash("Timer started.", "info")
         return redirect(url_for("time_timers"))
 
@@ -581,10 +627,21 @@ def register_timekeeping_routes(app):
             return redirect(url_for("time_timers"))
 
         pause_reason = (request.form.get("pause_reason") or "").strip().lower()
+        auto_capture = _as_bool(request.form.get("auto_capture"), default=True)
+        auto_create_billing_item = _as_bool(request.form.get("auto_create_billing_item"), default=True)
         cap_seconds = _single_timer_cap_seconds()
         capped = False
+        captured_entry_id = None
+        captured_invoice_id = None
         if timer.status == "running":
             _, capped = _pause_timer(timer, cap_seconds=cap_seconds)
+            if auto_capture:
+                captured_entry_id, captured_invoice_id = capture_timer_to_draft_time_entry(
+                    timer.id,
+                    pause_reason=(pause_reason or ("cap_reached" if capped else "manual_pause")),
+                    actor_user_id=current_user.id,
+                    auto_create_billing_item=auto_create_billing_item,
+                )
         else:
             timer.status = "paused"
             timer.paused_at = dt.datetime.utcnow()
@@ -597,8 +654,18 @@ def register_timekeeping_routes(app):
                 "reason": pause_reason or "manual",
                 "capped": bool(capped),
                 "elapsed_seconds": int(timer.elapsed_seconds or 0),
+                "captured_entry_id": captured_entry_id,
+                "captured_invoice_id": captured_invoice_id,
             },
         )
+        if captured_entry_id is not None:
+            if captured_invoice_id is not None:
+                flash(
+                    f"Timer captured as draft entry #{captured_entry_id} and queued on draft invoice #{captured_invoice_id}.",
+                    "info",
+                )
+            else:
+                flash(f"Timer captured as draft time entry #{captured_entry_id}.", "info")
         if pause_reason == "idle_timeout":
             flash("Timer auto-paused after inactivity. Resume it when you return.", "warning")
         elif pause_reason == "cap_reached" or capped:
@@ -616,12 +683,23 @@ def register_timekeeping_routes(app):
         matter_id = request.form.get("matter_id", type=int)
         if matter_id and not can_access_matter(matter_id):
             abort(403)
+        if _matter_is_closed(matter_id):
+            flash("Cannot switch a timer onto a closed matter. Reopen the matter first.", "warning")
+            return redirect(url_for("time_timers"))
 
         cap_seconds = _single_timer_cap_seconds()
         running = _active_timer_for_user(current_user.id)
         previous_timer_capped = False
+        previous_entry_id = None
+        previous_invoice_id = None
         if running:
             _, previous_timer_capped = _pause_timer(running, cap_seconds=cap_seconds)
+            previous_entry_id, previous_invoice_id = capture_timer_to_draft_time_entry(
+                running.id,
+                pause_reason="switch",
+                actor_user_id=current_user.id,
+                auto_create_billing_item=True,
+            )
 
         timer = TimeTimer(
             user_id=current_user.id,
@@ -641,6 +719,14 @@ def register_timekeeping_routes(app):
                 f"Previous timer was capped at {cap_seconds // 60} minutes and auto-paused.",
                 "warning",
             )
+        if previous_entry_id:
+            if previous_invoice_id:
+                flash(
+                    f"Previous timer captured as draft entry #{previous_entry_id} and queued on draft invoice #{previous_invoice_id}.",
+                    "info",
+                )
+            else:
+                flash(f"Previous timer captured as draft time entry #{previous_entry_id}.", "info")
         flash("Timer switched.", "info")
         return redirect(url_for("time_timers"))
 
@@ -666,6 +752,9 @@ def register_timekeeping_routes(app):
                 continue
             if not can_access_matter(matter_id):
                 errors.append({"index": idx, "error": "access denied for matter"})
+                continue
+            if _matter_is_closed(matter_id):
+                errors.append({"index": idx, "error": "matter is closed and cannot accept new time entries"})
                 continue
 
             start_raw = str(item.get("start_at") or "").strip()
@@ -742,6 +831,9 @@ def register_timekeeping_routes(app):
             matter_id = request.form.get("matter_id", type=int)
             if not matter_id or not can_access_matter(matter_id):
                 abort(403)
+            if _matter_is_closed(matter_id):
+                flash("Matter is closed. Reopen it before posting new time.", "warning")
+                return redirect(url_for("time_entries"))
 
             start_raw = (request.form.get("start_at") or "").strip()
             end_raw = (request.form.get("end_at") or "").strip()
@@ -819,6 +911,10 @@ def register_timekeeping_routes(app):
                 matters = [selected] + matters
                 matter_lookup[selected.id] = selected
         prefill_task_id = request.args.get("task_id", type=int)
+        prefill_task_code = (request.args.get("task_code") or "").strip()
+        prefill_activity_code = (request.args.get("activity_code") or "").strip()
+        prefill_narrative = (request.args.get("narrative") or "").strip()
+        prefill_is_billable = _as_bool(request.args.get("is_billable"), default=True)
 
         default_end_dt = dt.datetime.utcnow().replace(second=0, microsecond=0)
         default_start_dt = default_end_dt - dt.timedelta(minutes=30)
@@ -840,6 +936,10 @@ def register_timekeeping_routes(app):
             matter_lookup=matter_lookup,
             prefill_matter_id=prefill_matter_id,
             prefill_task_id=prefill_task_id,
+            prefill_task_code=prefill_task_code,
+            prefill_activity_code=prefill_activity_code,
+            prefill_narrative=prefill_narrative,
+            prefill_is_billable=prefill_is_billable,
             prefill_start_at=prefill_start_at,
             prefill_end_at=prefill_end_at,
             time_code_assist=time_code_assist,
@@ -848,6 +948,7 @@ def register_timekeeping_routes(app):
     @app.route("/time/review", methods=["GET", "POST"])
     @login_required
     def time_review():
+        enforce_permission("time_entry", "review")
         if request.method == "POST":
             entry_id = request.form.get("entry_id", type=int)
             state = (request.form.get("state") or "approved").strip().lower()
@@ -866,10 +967,24 @@ def register_timekeeping_routes(app):
             if state == "approved":
                 entry.approved_by = current_user.id
                 entry.approved_at = dt.datetime.utcnow()
+                queued_invoice_id = ensure_draft_billing_item_for_time_entry(
+                    entry.id,
+                    actor_user_id=current_user.id,
+                )
+            else:
+                queued_invoice_id = None
             db.session.commit()
             set_active_matter_context(entry.matter_id)
-            audit("time_entry_review", "TimeEntry", entry.id, {"state": state})
-            flash("Review saved.", "info")
+            audit(
+                "time_entry_review",
+                "TimeEntry",
+                entry.id,
+                {"state": state, "queued_invoice_id": queued_invoice_id},
+            )
+            if state == "approved" and queued_invoice_id is not None:
+                flash(f"Review saved. Entry queued on draft invoice #{queued_invoice_id}.", "info")
+            else:
+                flash("Review saved.", "info")
             return redirect(url_for("time_review"))
 
         rows = TimeEntry.query.order_by(TimeEntry.created_at.desc()).limit(300).all()
@@ -879,6 +994,7 @@ def register_timekeeping_routes(app):
     @app.post("/time/entries/<int:entry_id>/lock")
     @login_required
     def time_entry_lock(entry_id: int):
+        enforce_permission("time_entry", "lock")
         entry = db.session.get(TimeEntry, entry_id)
         if not entry:
             abort(404)

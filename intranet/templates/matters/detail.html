@@ -36,7 +36,7 @@
           <a class="btn btn-sm btn-light" href="{{ url_for('time_timers', matter_id=m.id, label='Work on ' ~ m.matter_no) }}">Start Timer</a>
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=m.id) }}">Log Time</a>
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_matter', matter_id=m.id) }}">Schedule Deadline</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Add Task</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_task_create', matter_id=m.id) }}">Add Task</a>
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_documents', matter_id=m.id) }}">Upload Document</a>
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_invoices', matter_id=m.id, period_start=today[:8] ~ '01', period_end=today) }}">Generate Invoice</a>
         </div>

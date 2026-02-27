@@ -16,6 +16,7 @@ from ..extensions import db, limiter
 from ..helpers import allowed_doc, audit, sha256_file
 from ..mfa import build_otpauth_uri, generate_totp_secret, verify_totp
 from ..models import (
+    DocumentFile,
     DocumentRecord,
     DocumentVersion,
     Invoice,
@@ -32,6 +33,7 @@ from ..models import (
 )
 from ..policies import enforce_data_residency
 from ..services.notification_engine import NotificationEngine
+from ..services.workflow_automation import create_portal_upload_review_task
 from ..templates import page
 
 
@@ -68,7 +70,13 @@ def _visibility_rank(level: str | None) -> int:
 def portal_login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        if _portal_current_user() is None:
+        portal_user = _portal_current_user()
+        if portal_user is None:
+            return redirect(url_for("portal_login"))
+        if not portal_user.is_active:
+            session.pop(PORTAL_SESSION_KEY, None)
+            session.pop(PORTAL_ACTIVE_MATTER_SESSION_KEY, None)
+            flash("Portal access is inactive. Contact your law firm administrator.", "warning")
             return redirect(url_for("portal_login"))
         return view(*args, **kwargs)
 
@@ -357,11 +365,42 @@ def register_portal_routes(app):
                 sha256=sha256_file(path),
             )
             db.session.add(row)
+            db.session.flush()
+
+            matter = db.session.get(Matter, matter_id)
+            if matter is None:
+                abort(404)
+            dms_row = DocumentFile(
+                matter_id=matter_id,
+                original_filename=safe,
+                stored_filename=stored,
+                sha256=row.sha256,
+                content_type=(f.mimetype or "").strip() or None,
+                category="Correspondence",
+                doc_version="v1",
+                lifecycle_stage="For Review",
+                owner_name=f"portal_upload:{row.id}",
+                is_privileged=False,
+                uploaded_by=int(matter.created_by),
+            )
+            db.session.add(dms_row)
+            review_task_id = create_portal_upload_review_task(
+                row.id,
+                actor_user_id=int(matter.created_by),
+            )
             db.session.commit()
             _portal_set_active_matter(portal_user.id, matter_id, min_level="shared_docs")
             NotificationEngine.enqueue("portal_upload_created", None, f"portal_upload:{row.id}")
-            audit("portal_upload", "PortalUpload", row.id)
-            flash("Upload complete.", "info")
+            audit(
+                "portal_upload",
+                "PortalUpload",
+                row.id,
+                {"document_file_id": dms_row.id, "review_task_id": review_task_id},
+            )
+            if review_task_id:
+                flash(f"Upload complete. Filed to DMS and queued review task #{review_task_id}.", "info")
+            else:
+                flash("Upload complete. Filed to DMS.", "info")
             return redirect(url_for("portal_uploads"))
 
         ids = _portal_accessible_matter_ids(portal_user.id, min_level="shared_docs")

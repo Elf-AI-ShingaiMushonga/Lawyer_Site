@@ -10,9 +10,11 @@ from flask import Response, abort, current_app, flash, redirect, request, url_fo
 from flask_login import current_user, login_required
 
 from ..extensions import db
-from ..helpers import audit, get_active_matter_id, normalize_query, set_active_matter_context
+from ..helpers import audit, can_access_matter, get_active_matter_id, is_admin, normalize_query, set_active_matter_context
 from ..reports import export_conflict_report_csv
 from ..models import CRMFollowUp, CRMLead, ConflictCheck, ConflictSemanticHit, EngagementLetter, IntakeForm, LeadQuote, Matter
+from ..policies import enforce_permission, visible_matter_ids
+from ..services.workflow_automation import create_engagement_signed_tasks
 from ..services.conflict_engine import ConflictEngine
 from ..templates import page
 
@@ -63,7 +65,9 @@ def register_crm_routes(app):
     @app.route("/crm/leads", methods=["GET", "POST"])
     @login_required
     def crm_leads():
+        enforce_permission("crm", "read")
         if request.method == "POST":
+            enforce_permission("crm", "write")
             full_name = normalize_query(request.form.get("full_name", ""))
             if not full_name:
                 flash("Lead name is required.", "warning")
@@ -118,6 +122,7 @@ def register_crm_routes(app):
     @app.route("/crm/leads/<int:lead_id>", methods=["GET", "POST"])
     @login_required
     def crm_lead_detail(lead_id: int):
+        enforce_permission("crm", "read")
         lead = db.session.get(CRMLead, lead_id)
         if not lead:
             abort(404)
@@ -134,6 +139,7 @@ def register_crm_routes(app):
             return None
 
         if request.method == "POST":
+            enforce_permission("crm", "write")
             action = (request.form.get("action") or "update").strip()
             if action == "update":
                 stage = (request.form.get("stage") or lead.stage).strip()
@@ -166,6 +172,8 @@ def register_crm_routes(app):
 
             elif action == "intake":
                 matter_id = _selected_matter_id(fallback_to_active=True)
+                if matter_id and not can_access_matter(matter_id):
+                    abort(403)
                 if matter_id and not db.session.get(Matter, matter_id):
                     flash("Selected matter does not exist.", "warning")
                     return redirect(url_for("crm_lead_detail", lead_id=lead_id))
@@ -208,6 +216,8 @@ def register_crm_routes(app):
                 if not matter_id:
                     flash("Select a matter for the engagement letter.", "warning")
                     return redirect(url_for("crm_lead_detail", lead_id=lead_id))
+                if not can_access_matter(matter_id):
+                    abort(403)
                 if not db.session.get(Matter, matter_id):
                     flash("Selected matter does not exist.", "warning")
                     return redirect(url_for("crm_lead_detail", lead_id=lead_id))
@@ -310,7 +320,14 @@ def register_crm_routes(app):
             if intakes
             else []
         )
-        matters = Matter.query.order_by(Matter.opened_at.desc()).limit(200).all()
+        matter_query = Matter.query
+        if not is_admin():
+            scope_ids = visible_matter_ids()
+            if scope_ids:
+                matter_query = matter_query.filter(Matter.id.in_(scope_ids))
+            else:
+                matter_query = matter_query.filter(Matter.id == -1)
+        matters = matter_query.order_by(Matter.opened_at.desc()).limit(200).all()
         letters = (
             EngagementLetter.query.filter(EngagementLetter.matter_id.in_([m.id for m in matters]))
             .order_by(EngagementLetter.created_at.desc())
@@ -382,7 +399,7 @@ def register_crm_routes(app):
         selected_matter_id = get_active_matter_id()
         if selected_matter_id and selected_matter_id not in {matter.id for matter in matters}:
             selected_matter = db.session.get(Matter, selected_matter_id)
-            if selected_matter is not None:
+            if selected_matter is not None and can_access_matter(selected_matter.id):
                 matters = [selected_matter] + matters
                 matter_lookup[selected_matter.id] = selected_matter
 
@@ -411,6 +428,7 @@ def register_crm_routes(app):
     @app.post("/crm/followups/<int:followup_id>/status")
     @login_required
     def crm_followup_status(followup_id: int):
+        enforce_permission("crm", "write")
         followup = db.session.get(CRMFollowUp, followup_id)
         if not followup:
             abort(404)
@@ -450,6 +468,7 @@ def register_crm_routes(app):
     @app.post("/crm/quotes/<int:quote_id>/status")
     @login_required
     def crm_quote_status(quote_id: int):
+        enforce_permission("crm", "write")
         row = db.session.get(LeadQuote, quote_id)
         if not row:
             abort(404)
@@ -498,6 +517,7 @@ def register_crm_routes(app):
     @app.post("/crm/conflicts/check")
     @login_required
     def crm_conflicts_check():
+        enforce_permission("crm", "conflict_check")
         intake_id = request.form.get("intake_id", type=int)
         if not intake_id:
             flash("Intake id required.", "warning")
@@ -538,8 +558,7 @@ def register_crm_routes(app):
     @app.post("/crm/conflicts/<int:conflict_id>/override")
     @login_required
     def crm_conflict_override(conflict_id: int):
-        if current_user.role not in {"admin", "lawyer"}:
-            abort(403)
+        enforce_permission("crm", "override")
         row = db.session.get(ConflictCheck, conflict_id)
         if not row:
             abort(404)
@@ -564,6 +583,7 @@ def register_crm_routes(app):
     @app.get("/crm/conflicts/<int:conflict_id>/export")
     @login_required
     def crm_conflict_export(conflict_id: int):
+        enforce_permission("crm", "export")
         row = db.session.get(ConflictCheck, conflict_id)
         if not row:
             abort(404)
@@ -579,6 +599,7 @@ def register_crm_routes(app):
     @app.post("/crm/engagements/<int:engagement_id>/sign")
     @login_required
     def crm_engagement_sign(engagement_id: int):
+        enforce_permission("crm", "sign_engagement")
         row = db.session.get(EngagementLetter, engagement_id)
         if not row:
             abort(404)
@@ -592,7 +613,22 @@ def register_crm_routes(app):
         row.signed_by = signer_name
         row.signed_at = dt.datetime.utcnow()
         row.signed_ip = request.remote_addr
+        onboarding_task_ids = create_engagement_signed_tasks(
+            row.id,
+            actor_user_id=current_user.id,
+        )
         db.session.commit()
-        audit("engagement_signed", "EngagementLetter", row.id, {"signed_by": signer_name})
-        flash("Engagement signed.", "info")
-        return redirect(url_for("crm_leads"))
+        audit(
+            "engagement_signed",
+            "EngagementLetter",
+            row.id,
+            {"signed_by": signer_name, "onboarding_task_ids": onboarding_task_ids},
+        )
+        if onboarding_task_ids:
+            flash(
+                f"Engagement signed and kickoff task(s) created: {', '.join(f'#{task_id}' for task_id in onboarding_task_ids)}.",
+                "info",
+            )
+        else:
+            flash("Engagement signed.", "info")
+        return redirect(url_for("matter_workspace", matter_id=row.matter_id))

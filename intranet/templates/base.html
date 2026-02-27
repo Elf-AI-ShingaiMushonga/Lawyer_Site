@@ -108,6 +108,11 @@
       opacity: 0.98;
     }
 
+    .navbar.has-active-matter.is-collapsed {
+      transform: translateY(0);
+      box-shadow: 0 8px 22px rgba(115, 28, 28, 0.1);
+    }
+
     .nav-head {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -117,6 +122,23 @@
       align-items: center;
       column-gap: 10px;
       row-gap: 8px;
+      max-height: 900px;
+      opacity: 1;
+      overflow: visible;
+      transition: max-height 0.22s ease, opacity 0.18s ease, margin 0.22s ease, padding 0.22s ease;
+    }
+
+    .navbar.has-active-matter.is-collapsed .nav-head {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      pointer-events: none;
+    }
+
+    .navbar.has-active-matter.is-collapsed .context-rail {
+      margin-top: 0;
     }
 
     .nav-brand {
@@ -2246,7 +2268,7 @@
 <a class="skip-link" href="#main-content">Skip to main content</a>
 <div class="shell">
   {% set endpoint = request.endpoint or "" %}
-  {% set matter_endpoints = ["matters", "matter_create", "matter_detail", "matter_team", "matter_tasks", "matter_documents", "matter_intake", "matter_workspace", "matter_parties", "matter_notes", "matter_stage_update", "matter_close"] %}
+  {% set matter_endpoints = ["matters", "matter_create", "matter_detail", "matter_team", "matter_tasks", "matter_task_create", "matter_documents", "matter_intake", "matter_workspace", "matter_parties", "matter_notes", "matter_stage_update", "matter_close"] %}
   {% set admin_endpoints = ["admin", "admin_users", "admin_announcements", "admin_audit"] %}
   {% set trust_endpoints = ["trust_policy", "trust_security", "trust_incidents"] %}
   {% set calendar_endpoints = ["calendar_my", "calendar_team", "calendar_matter", "calendar_milestone_report"] %}
@@ -2327,7 +2349,7 @@
     and not (is_support_role and endpoint in workflow_endpoints)
     and not (is_lawyer_role and endpoint in billing_endpoints)
     and not ((is_support_role or is_admin_role) and endpoint in crm_endpoints) %}
-  <nav class="navbar px-3 py-2 mb-3" data-collapsible-nav>
+  <nav class="navbar px-3 py-2 mb-3{% if current_user.is_authenticated and active_matter %} has-active-matter{% endif %}" data-collapsible-nav>
     <div class="nav-head">
       <div class="nav-brand">
         <a class="brand" href="{{ url_for('dashboard') }}">

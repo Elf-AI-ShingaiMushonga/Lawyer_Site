@@ -6,7 +6,7 @@ from flask_login import current_user, logout_user
 from .extensions import db
 from sqlalchemy.exc import OperationalError
 
-from .helpers import audit, validate_user_session
+from .helpers import audit, revoke_current_session, validate_user_session
 from .templates import page
 
 MFA_REQUIRED_ROLES = {"admin", "lawyer", "paralegal", "staff"}
@@ -22,6 +22,47 @@ MFA_ENROLLMENT_ALLOWLIST = {
 
 
 def register_security_handlers(app):
+    def _clear_internal_auth_session() -> None:
+        for key in ("_user_id", "_fresh", "_id", "_session_token", "mfa_verified_at"):
+            session.pop(key, None)
+
+    @app.before_request
+    def enforce_active_account():
+        endpoint = request.endpoint or ""
+        if endpoint in {"logout", "static"}:
+            return None
+        session_user_id = session.get("_user_id")
+        if not session_user_id:
+            return None
+
+        blocked_user_id: int | None = None
+        if current_user.is_authenticated:
+            if bool(getattr(current_user, "is_active", True)):
+                return None
+            blocked_user_id = int(current_user.id)
+            revoke_current_session()
+        else:
+            try:
+                parsed_user_id = int(session_user_id)
+            except (TypeError, ValueError):
+                _clear_internal_auth_session()
+                return None
+            from .models import User
+
+            row = db.session.get(User, parsed_user_id)
+            if row is None:
+                _clear_internal_auth_session()
+                return None
+            if bool(getattr(row, "is_active", True)):
+                return None
+            blocked_user_id = int(row.id)
+
+        audit("inactive_account_block", "User", blocked_user_id)
+        _clear_internal_auth_session()
+        logout_user()
+        flash("Your account is inactive. Contact an administrator.", "warning")
+        return redirect(url_for("login"))
+
     @app.before_request
     def enforce_mfa_enrollment():
         if not current_user.is_authenticated:

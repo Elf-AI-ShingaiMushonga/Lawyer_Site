@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from flask import flash, redirect, request, session, url_for
+from flask import current_app, flash, redirect, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
@@ -46,11 +46,13 @@ def has_any_users() -> bool:
 def register_auth_routes(app):
     @app.get("/")
     def index():
-        if current_user.is_authenticated:
-            return redirect(url_for("dashboard"))
-        if has_any_users():
-            return redirect(url_for("login"))
-        return redirect(url_for("register"))
+        return page(
+            "ELF Demo Hub",
+            "landing.html",
+            intranet_login_url=url_for("login"),
+            ufc_url=current_app.config.get("UFC_DEMO_PATH", "/ufc/"),
+            ufc_enabled=bool(current_app.config.get("UFC_DEMO_ENABLED", False)),
+        )
 
     @app.route("/register", methods=["GET", "POST"])
     @limiter.limit(lambda: app.config.get("AUTH_REGISTER_RATE_LIMIT", "5/hour"), methods=["POST"])

@@ -50,6 +50,8 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="timer_id" value="{{ guard_timer.id }}">
         <input type="hidden" name="pause_reason" value="idle_timeout">
+        <input type="hidden" name="auto_capture" value="1">
+        <input type="hidden" name="auto_create_billing_item" value="1">
       </form>
     </div>
   {% endif %}
@@ -176,6 +178,8 @@
                       <form method="post" action="{{ url_for('time_timer_pause') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="timer_id" value="{{ timer.id }}">
+                        <input type="hidden" name="auto_capture" value="1">
+                        <input type="hidden" name="auto_create_billing_item" value="1">
                         <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Pausing...">Pause</button>
                       </form>
                     {% endif %}

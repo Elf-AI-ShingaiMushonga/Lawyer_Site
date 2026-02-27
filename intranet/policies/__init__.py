@@ -3,6 +3,7 @@ from .access import (
     enforce_permission,
     evaluate_matter_access,
     has_permission,
+    permission_required,
     visible_matter_ids,
 )
 from .residency import enforce_data_residency, residency_allowed
@@ -13,6 +14,7 @@ __all__ = [
     "enforce_data_residency",
     "evaluate_matter_access",
     "has_permission",
+    "permission_required",
     "residency_allowed",
     "visible_matter_ids",
 ]

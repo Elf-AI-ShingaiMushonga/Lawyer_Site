@@ -35,8 +35,10 @@ from ..models import (
     MatterStageHistory,
     MatterTemplate,
     Task,
+    TaskAssignee,
     User,
 )
+from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..services.notification_engine import NotificationEngine
 from ..templates import page
 
@@ -375,12 +377,69 @@ def register_matters_plus_routes(app):
 
         m.status = "Closed"
         m.closed_at = dt.datetime.utcnow()
+        auto_pause_summary = auto_pause_running_timers_for_matter(
+            m.id,
+            actor_user_id=current_user.id,
+            pause_reason="matter_closed",
+        )
+        open_task_count = Task.query.filter(Task.matter_id == m.id, Task.status != "Done").count()
+        closure_followup_task_id = None
+        if open_task_count > 0:
+            followup_title = f"Post-close task review for {m.matter_no}"
+            existing_followup = (
+                Task.query.filter_by(matter_id=m.id, title=followup_title)
+                .order_by(Task.id.desc())
+                .first()
+            )
+            if existing_followup is not None:
+                closure_followup_task_id = int(existing_followup.id)
+            else:
+                assignee_id = current_user.id
+                lead_member = (
+                    MatterMember.query.filter_by(matter_id=m.id)
+                    .order_by(MatterMember.id.asc())
+                    .first()
+                )
+                if lead_member is not None:
+                    assignee_id = int(lead_member.user_id)
+                followup_task = Task(
+                    matter_id=m.id,
+                    title=followup_title,
+                    description=(
+                        f"Review {open_task_count} open task(s) after matter closure and document final outcomes."
+                    ),
+                    status="Todo",
+                    due_date=dt.date.today() + dt.timedelta(days=1),
+                    assigned_to=assignee_id,
+                    created_by=current_user.id,
+                    priority="High",
+                )
+                db.session.add(followup_task)
+                db.session.flush()
+                db.session.add(
+                    TaskAssignee(
+                        task_id=followup_task.id,
+                        user_id=assignee_id,
+                        assigned_by=current_user.id,
+                    )
+                )
+                closure_followup_task_id = int(followup_task.id)
         if has_active_legal_hold(m.id):
             m.archival_status = "legal_hold_blocked"
             m.archival_due_at = None
             db.session.commit()
             audit("matter_close_legal_hold_blocked", "Matter", m.id)
             matter_activity(m.id, "Matter closed with legal hold", "Archival blocked by active legal hold")
+            if auto_pause_summary.get("paused", 0) > 0:
+                flash(
+                    (
+                        f"Auto-paused {auto_pause_summary.get('paused', 0)} running timer(s) and captured "
+                        f"{auto_pause_summary.get('captured_entries', 0)} draft entry(ies)."
+                    ),
+                    "info",
+                )
+            if closure_followup_task_id is not None:
+                flash(f"Created follow-up task #{closure_followup_task_id} to resolve open work.", "warning")
             flash("Matter closed. Archival blocked because an active legal hold exists.", "warning")
             return redirect(url_for("matter_workspace", matter_id=m.id))
 
@@ -404,5 +463,15 @@ def register_matters_plus_routes(app):
             raise
         audit("matter_close", "Matter", m.id)
         matter_activity(m.id, "Matter closed")
+        if auto_pause_summary.get("paused", 0) > 0:
+            flash(
+                (
+                    f"Auto-paused {auto_pause_summary.get('paused', 0)} running timer(s) and captured "
+                    f"{auto_pause_summary.get('captured_entries', 0)} draft entry(ies)."
+                ),
+                "info",
+            )
+        if closure_followup_task_id is not None:
+            flash(f"Created follow-up task #{closure_followup_task_id} to resolve open work.", "warning")
         flash("Matter closed and archival workflow started.", "info")
         return redirect(url_for("matter_workspace", matter_id=m.id))
