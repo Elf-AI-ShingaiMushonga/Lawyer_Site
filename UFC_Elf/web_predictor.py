@@ -291,7 +291,7 @@ class FightPredictor:
         self._refresh_runtime_state()
         return self.model_cache_status()
 
-    def retrain_models(self) -> dict[str, Any]:
+    def retrain_models(self, include_siamese: bool = False) -> dict[str, Any]:
         self.df = load_and_prepare_dataframe(self.csv_path)
         self.df_aug = self._augment_with_swapped_rows(self.df)
         (
@@ -313,6 +313,12 @@ class FightPredictor:
         self._siamese_base_df = self._prepare_siamese_base_dataframe()
         self._clear_siamese_cache()
         self._refresh_runtime_state()
+        if include_siamese:
+            self._ensure_siamese_model()
+        return self.model_cache_status()
+
+    def warm_siamese_model(self) -> dict[str, Any]:
+        self._ensure_siamese_model()
         return self.model_cache_status()
 
     def model_cache_status(self) -> dict[str, Any]:

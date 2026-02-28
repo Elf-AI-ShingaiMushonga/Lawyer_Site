@@ -44,6 +44,14 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
+If you want model retraining to run automatically on each deployment boot, set:
+
+```bash
+echo "UFC_TRAIN_ON_BOOT=1" >> .env
+echo "UFC_FORCE_RETRAIN_ON_BOOT=1" >> .env
+echo "UFC_TRAIN_SIAMESE_ON_BOOT=1" >> .env
+```
+
 ## 4) Systemd Service
 
 ```bash
@@ -85,6 +93,7 @@ sudo certbot --nginx -d your-domain.com
 ## Model/Data Operations
 
 - The app caches trained models in `data/model_cache/` and reuses them across restarts/deploys.
+- The provided systemd service enables startup training by default (`UFC_TRAIN_ON_BOOT=1`).
 - Use the web UI:
   - `Update Data (Run Scraper)` to ingest new UFCStats data.
   - `Retrain Models` to rebuild model cache from updated CSV.

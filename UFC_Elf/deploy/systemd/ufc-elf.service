@@ -11,11 +11,14 @@ EnvironmentFile=-/opt/ufc-elf/.env
 Environment=PATH=/opt/ufc-elf/.venv/bin
 Environment=UFC_POWER_PROFILE=max_power
 Environment=UFC_DEFAULT_MODEL=accuracy_weighted_ensemble
+Environment=UFC_TRAIN_ON_BOOT=1
+Environment=UFC_FORCE_RETRAIN_ON_BOOT=1
+Environment=UFC_TRAIN_SIAMESE_ON_BOOT=1
 Environment=LOKY_MAX_CPU_COUNT=8
 ExecStart=/opt/ufc-elf/.venv/bin/gunicorn --config /opt/ufc-elf/gunicorn.conf.py wsgi:app
 Restart=always
 RestartSec=5
-TimeoutStartSec=3600
+TimeoutStartSec=7200
 
 [Install]
 WantedBy=multi-user.target

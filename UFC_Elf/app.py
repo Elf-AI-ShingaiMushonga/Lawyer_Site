@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import sys
@@ -69,8 +70,10 @@ BET_COLUMNS = [
 
 PREDICTOR_LOCK = RLock()
 _PREDICTOR_BOOT_LOCK = RLock()
+_PREDICTOR_BOOTSTRAP_DONE = False
 _predictor_instance: FightPredictor | None = None
 ufc_bp = Blueprint("ufc", __name__, template_folder="templates", static_folder="static")
+logger = logging.getLogger(__name__)
 
 
 def _get_predictor() -> FightPredictor:
@@ -104,6 +107,49 @@ try:
     import fcntl  # type: ignore
 except Exception:  # pragma: no cover - non-posix fallback
     fcntl = None  # type: ignore
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _bootstrap_predictor_training_on_deploy() -> None:
+    global _PREDICTOR_BOOTSTRAP_DONE
+    if _PREDICTOR_BOOTSTRAP_DONE:
+        return
+    if not _env_bool("UFC_TRAIN_ON_BOOT", False):
+        return
+
+    force_retrain = _env_bool("UFC_FORCE_RETRAIN_ON_BOOT", True)
+    train_siamese = _env_bool("UFC_TRAIN_SIAMESE_ON_BOOT", True)
+    logger.info(
+        "UFC boot training enabled (force_retrain=%s, train_siamese=%s).",
+        force_retrain,
+        train_siamese,
+    )
+    with _PREDICTOR_BOOT_LOCK:
+        if _PREDICTOR_BOOTSTRAP_DONE:
+            return
+        with PREDICTOR_LOCK:
+            predictor_instance = _get_predictor()
+            if force_retrain:
+                status = predictor_instance.retrain_models(include_siamese=train_siamese)
+            else:
+                if train_siamese:
+                    status = predictor_instance.warm_siamese_model()
+                else:
+                    status = predictor_instance.model_cache_status()
+        _PREDICTOR_BOOTSTRAP_DONE = True
+
+    logger.info(
+        "UFC boot training complete: rows=%s base_models_trained_at_utc=%s siamese_trained_at_utc=%s",
+        status.get("data_rows"),
+        status.get("base_models_trained_at_utc"),
+        status.get("siamese_trained_at_utc"),
+    )
 
 
 @contextmanager
@@ -739,6 +785,7 @@ def healthz() -> Any:
 
 
 def create_app() -> Flask:
+    _bootstrap_predictor_training_on_deploy()
     app = Flask(__name__)
     app.register_blueprint(ufc_bp)
     return app

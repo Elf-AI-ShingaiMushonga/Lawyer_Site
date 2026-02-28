@@ -30,12 +30,16 @@ App starts on `http://0.0.0.0:8000` by default.
 - `PORT` (default: `8000`)
 - `FLASK_HOST` (default: `0.0.0.0`)
 - `FLASK_DEBUG` (default: `0`)
+- `UFC_TRAIN_ON_BOOT` (default: `0`) - train models during app startup
+- `UFC_FORCE_RETRAIN_ON_BOOT` (default: `1`) - force full base-model retrain on startup when boot training is enabled
+- `UFC_TRAIN_SIAMESE_ON_BOOT` (default: `1`) - also train/warm Siamese model during startup when boot training is enabled
 
 ## Runtime Behavior
 
 - Base/tabular models are cached to `data/model_cache/base_models.joblib`.
 - Siamese weights are cached to `data/model_cache/siamese_no_context.pt` after first Siamese inference.
-- On restart/deploy, cached models are loaded (no automatic retrain unless cache is missing).
+- By default, restart/deploy loads cached models (no automatic retrain unless cache is missing).
+- If `UFC_TRAIN_ON_BOOT=1`, startup performs deployment-time training before serving traffic.
 - Use the web UI buttons to:
   - run scraper update (`Update Data`),
   - retrain models on latest data (`Retrain Models`).
