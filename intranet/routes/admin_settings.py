@@ -25,6 +25,7 @@ from ..models import (
     TrustAccount,
     TrustThresholdAlert,
 )
+from ..services.archetypes import load_required_fields, parse_required_fields_definition
 from ..services.priority_inbox import (
     load_priority_inbox_config,
     save_priority_inbox_config,
@@ -212,28 +213,53 @@ def register_admin_settings_routes(app):
         _admin_required()
         if request.method == "POST":
             name = (request.form.get("name") or "").strip()
+            legal_category = (request.form.get("legal_category") or "").strip()
+            boilerplate_template = (request.form.get("boilerplate_template") or "").strip()
+            required_fields, field_errors = parse_required_fields_definition(request.form.get("required_fields"))
             if not name:
                 flash("Template name required.", "warning")
                 return redirect(url_for("admin_templates_matters"))
-            if MatterTemplate.query.filter_by(name=name).first() is None:
-                row = MatterTemplate(
-                    name=name,
-                    practice_area=(request.form.get("practice_area") or "").strip() or None,
-                    default_stage=(request.form.get("default_stage") or "").strip() or None,
-                    default_risk_level=(request.form.get("default_risk_level") or "Medium").strip() or "Medium",
-                    checklist_json=json.dumps(
-                        [line.strip() for line in (request.form.get("checklist") or "").splitlines() if line.strip()]
-                    ),
-                    created_by=current_user.id,
-                )
+
+            if not legal_category:
+                flash("Legal category is required.", "warning")
+                return redirect(url_for("admin_templates_matters"))
+            if not boilerplate_template:
+                flash("Boilerplate template is required.", "warning")
+                return redirect(url_for("admin_templates_matters"))
+            if field_errors:
+                flash(field_errors[0], "warning")
+                return redirect(url_for("admin_templates_matters"))
+
+            row = MatterTemplate.query.filter_by(name=name).first()
+            is_new = row is None
+            if row is None:
+                row = MatterTemplate(name=name, created_by=current_user.id)
                 db.session.add(row)
-                db.session.commit()
-                audit("matter_template_create", "MatterTemplate", row.id)
-            flash("Matter template saved.", "info")
+
+            row.legal_category = legal_category
+            row.practice_area = (request.form.get("practice_area") or "").strip() or None
+            row.default_stage = (request.form.get("default_stage") or "").strip() or None
+            row.default_risk_level = (request.form.get("default_risk_level") or "Medium").strip() or "Medium"
+            row.checklist_json = json.dumps(
+                [line.strip() for line in (request.form.get("checklist") or "").splitlines() if line.strip()]
+            )
+            row.required_fields_json = json.dumps(required_fields, ensure_ascii=True)
+            row.boilerplate_template = boilerplate_template
+            db.session.commit()
+            audit("matter_template_create" if is_new else "matter_template_update", "MatterTemplate", row.id)
+            flash("Matter archetype saved.", "info")
             return redirect(url_for("admin_templates_matters"))
 
         rows = MatterTemplate.query.order_by(MatterTemplate.created_at.desc()).all()
-        return page("Matter Templates", "admin_settings/templates_matters.html", templates=rows)
+        template_fields_map = {row.id: load_required_fields(row.required_fields_json) for row in rows}
+        categories = sorted({row.legal_category for row in rows if row.legal_category})
+        return page(
+            "Matter Templates",
+            "admin_settings/templates_matters.html",
+            templates=rows,
+            template_fields_map=template_fields_map,
+            categories=categories,
+        )
 
     @app.route("/admin/templates/tasks", methods=["GET", "POST"])
     @login_required

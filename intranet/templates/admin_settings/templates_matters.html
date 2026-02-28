@@ -1,21 +1,30 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card p-3 mb-3">
-  <h3 class="mb-1">New Matter Template</h3>
+  <h3 class="mb-1">Matter Archetype Builder</h3>
   <form method="post" class="mt-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="form-section">
       <div class="row g-2">
         <div class="col-md-4">
-          <label class="form-label" for="matter-template-name">Template Name</label>
-          <input class="form-control" id="matter-template-name" name="name" placeholder="Template name" required>
+          <label class="form-label" for="matter-template-name">Archetype Name</label>
+          <input class="form-control" id="matter-template-name" name="name" placeholder="e.g. Negligence Clause" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="matter-template-category">Legal Category</label>
+          <input class="form-control" id="matter-template-category" name="legal_category" placeholder="e.g. Labour Law" list="matter-template-categories" required>
+          <datalist id="matter-template-categories">
+            {% for category in categories %}
+              <option value="{{ category }}"></option>
+            {% endfor %}
+          </datalist>
         </div>
         <div class="col-md-4">
           <label class="form-label" for="matter-template-area">Practice Area</label>
-          <input class="form-control" id="matter-template-area" name="practice_area" placeholder="Practice area">
+          <input class="form-control" id="matter-template-area" name="practice_area" placeholder="Practice area (optional)">
         </div>
         <div class="col-md-4">
-          <label class="form-label" for="matter-template-stage">Default Stage</label>
+          <label class="form-label" for="matter-template-stage">Default Matter Stage</label>
           <input class="form-control" id="matter-template-stage" name="default_stage" placeholder="Default stage">
         </div>
         <div class="col-md-4">
@@ -28,18 +37,49 @@
       <label class="form-label" for="matter-template-checklist">Closing Checklist</label>
       <textarea class="form-control" id="matter-template-checklist" name="checklist" rows="4" placeholder="One item per line"></textarea>
     </div>
+    <div class="form-section mt-2">
+      <label class="form-label" for="matter-template-required-fields">Required Matter Fields</label>
+      <textarea
+        class="form-control"
+        id="matter-template-required-fields"
+        name="required_fields"
+        rows="4"
+        placeholder="contract_start_date|Contract Start Date&#10;employee_role|Employee Role|Optional helper text"
+      ></textarea>
+      <div class="form-help mt-2">
+        One field per line. Format: <span class="code-like">field_key|Field Label|Help text</span>.
+        All listed fields become required when opening a matter with this archetype.
+      </div>
+    </div>
+    <div class="form-section mt-2">
+      <label class="form-label" for="matter-template-boilerplate">Boilerplate Template</label>
+      <textarea
+        class="form-control"
+        id="matter-template-boilerplate"
+        name="boilerplate_template"
+        rows="8"
+        placeholder="This clause applies to {{ client_name }} under matter {{ matter_no }}.&#10;Role: {{ employee_role }}"
+        required
+      ></textarea>
+      <div class="form-help mt-2">
+        Merge fields can include core matter fields like <span class="code-like">{{ "{{matter_no}}" }}</span>,
+        <span class="code-like">{{ "{{client_name}}" }}</span>, <span class="code-like">{{ "{{legal_category}}" }}</span>,
+        plus your required field keys.
+      </div>
+    </div>
     <div class="d-grid mt-2"><button class="btn btn-light">Save Template</button></div>
   </form>
 </div>
 
 <div class="card p-3">
-  <h3 class="mb-1">Matter Templates</h3>
+  <h3 class="mb-1">Matter Archetypes</h3>
   <div class="table-responsive mt-2">
     <table class="table">
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Area</th>
+          <th>Category</th>
+          <th>Archetype</th>
+          <th>Required Fields</th>
           <th>Stage</th>
           <th>Risk</th>
         </tr>
@@ -47,13 +87,24 @@
       <tbody>
         {% for t in templates %}
           <tr>
+            <td>{{ t.legal_category or '-' }}</td>
             <td>{{ t.name }}</td>
-            <td>{{ t.practice_area or '-' }}</td>
+            <td>
+              {% set defs = template_fields_map.get(t.id, []) %}
+              {% if defs %}
+                {{ defs|length }} required
+                <div class="small muted">
+                  {{ defs|map(attribute="label")|join(", ") }}
+                </div>
+              {% else %}
+                <span class="muted">No custom fields</span>
+              {% endif %}
+            </td>
             <td>{{ t.default_stage or '-' }}</td>
             <td>{{ t.default_risk_level or '-' }}</td>
           </tr>
         {% else %}
-          <tr><td colspan="4" class="muted">No templates.</td></tr>
+          <tr><td colspan="5" class="muted">No templates.</td></tr>
         {% endfor %}
       </tbody>
     </table>

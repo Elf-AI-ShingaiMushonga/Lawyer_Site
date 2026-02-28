@@ -12,8 +12,18 @@
     <div class="col-md-4"><input class="form-control" name="practice_area" placeholder="Practice Area"></div>
     <div class="col-md-4"><input class="form-control" name="case_type" placeholder="Case Type"></div>
     <div class="col-md-4">
-      <select class="form-select" name="template_id">
-        <option value="">No template</option>
+      <input class="form-control" name="legal_category" placeholder="Legal Category" list="intake-legal-categories" required>
+      <datalist id="intake-legal-categories">
+        {% for t in templates %}
+          {% if t.legal_category %}
+            <option value="{{ t.legal_category }}"></option>
+          {% endif %}
+        {% endfor %}
+      </datalist>
+    </div>
+    <div class="col-md-4">
+      <select class="form-select" name="template_id" required>
+        <option value="">Select archetype</option>
         {% for t in templates %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
       </select>
     </div>
@@ -21,7 +31,98 @@
     <div class="col-12"><textarea class="form-control" name="objective" rows="2" placeholder="Objective"></textarea></div>
     <div class="col-md-6"><input class="form-control" name="risk_level" value="Medium"></div>
     <div class="col-md-6"><input class="form-control" name="budget_status" value="On Track"></div>
+    <div class="col-12">
+      <label class="muted small">Archetype Required Fields</label>
+      <div id="intake-archetype-required-fields" class="row g-2"></div>
+      <div id="intake-archetype-help" class="form-help mt-2">Select an archetype to load required fields.</div>
+    </div>
     <div class="col-12 d-grid"><button class="btn btn-light">Create Intake</button></div>
   </form>
 </div>
+<script>
+  (() => {
+    const templatePayload = {{ template_payload|tojson }};
+    const categoryInput = document.querySelector('input[name="legal_category"]');
+    const archetypeSelect = document.querySelector('select[name="template_id"]');
+    const requiredFieldsContainer = document.getElementById("intake-archetype-required-fields");
+    const requiredHelp = document.getElementById("intake-archetype-help");
+    if (!templatePayload || !categoryInput || !archetypeSelect || !requiredFieldsContainer || !requiredHelp) {
+      return;
+    }
+
+    const byId = new Map(Object.entries(templatePayload).map(([id, value]) => [String(id), value]));
+
+    const setHelpText = (text) => {
+      requiredHelp.textContent = text;
+    };
+
+    const renderRequiredFields = () => {
+      requiredFieldsContainer.innerHTML = "";
+      const selected = byId.get(String(archetypeSelect.value));
+      if (!selected) {
+        setHelpText("Select an archetype to load required fields.");
+        return;
+      }
+      const fields = Array.isArray(selected.required_fields) ? selected.required_fields : [];
+      if (!fields.length) {
+        setHelpText("This archetype has no additional required fields.");
+        return;
+      }
+      setHelpText("Complete all required fields before creating intake.");
+      fields.forEach((field) => {
+        const key = String(field.key || "").trim();
+        if (!key) {
+          return;
+        }
+        const wrapper = document.createElement("div");
+        wrapper.className = "col-md-6";
+        const label = document.createElement("label");
+        label.className = "muted small";
+        label.textContent = String(field.label || key);
+        const input = document.createElement("input");
+        input.className = "form-control";
+        input.name = `field_${key}`;
+        input.required = true;
+        wrapper.appendChild(label);
+        wrapper.appendChild(input);
+        if (field.help) {
+          const helper = document.createElement("div");
+          helper.className = "form-help mt-1";
+          helper.textContent = String(field.help);
+          wrapper.appendChild(helper);
+        }
+        requiredFieldsContainer.appendChild(wrapper);
+      });
+    };
+
+    const filterByCategory = () => {
+      const category = String(categoryInput.value || "").trim().toLowerCase();
+      Array.from(archetypeSelect.options).forEach((option) => {
+        if (!option.value) {
+          option.hidden = false;
+          return;
+        }
+        const selected = byId.get(String(option.value));
+        const optionCategory = String(selected?.legal_category || "").trim().toLowerCase();
+        option.hidden = category ? optionCategory !== category : false;
+      });
+      const selectedOption = archetypeSelect.options[archetypeSelect.selectedIndex];
+      if (selectedOption && selectedOption.hidden) {
+        archetypeSelect.value = "";
+      }
+      renderRequiredFields();
+    };
+
+    categoryInput.addEventListener("input", filterByCategory);
+    archetypeSelect.addEventListener("change", () => {
+      const selected = byId.get(String(archetypeSelect.value));
+      if (selected && !String(categoryInput.value || "").trim() && selected.legal_category) {
+        categoryInput.value = selected.legal_category;
+      }
+      filterByCategory();
+    });
+
+    filterByCategory();
+  })();
+</script>
 {% endblock %}

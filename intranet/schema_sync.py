@@ -35,6 +35,14 @@ COLUMN_PATCHES: dict[str, list[str]] = {
         "closing_checklist_json TEXT",
         "originating_partner_id INTEGER",
         "supervising_partner_id INTEGER",
+        "legal_category VARCHAR(120)",
+        "archetype_id INTEGER",
+        "archetype_data_json TEXT",
+    ],
+    "matter_template": [
+        "legal_category VARCHAR(120)",
+        "required_fields_json TEXT",
+        "boilerplate_template TEXT",
     ],
     "document_file": [
         "category VARCHAR(80)",

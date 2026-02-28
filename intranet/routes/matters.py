@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
 import uuid
 from urllib.parse import urlsplit
 
 import sqlalchemy as sa
-from flask import abort, flash, redirect, request, send_from_directory, url_for
+from flask import Response, abort, flash, redirect, request, send_from_directory, url_for
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
@@ -28,6 +29,7 @@ from ..models import (
     MatterMember,
     MatterPin,
     MatterRecentView,
+    MatterTemplate,
     MatterTimelineEvent,
     Task,
     TaskAssignee,
@@ -36,6 +38,14 @@ from ..models import (
     User,
 )
 from ..policies import enforce_data_residency, enforce_permission, visible_matter_ids
+from ..services.archetypes import (
+    build_document_context,
+    collect_required_field_values,
+    load_required_fields,
+    parse_matter_archetype_values,
+    render_template_text,
+    validate_required_field_values,
+)
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..templates import page
 
@@ -79,6 +89,39 @@ def _record_recent_matter_view(user_id: int, matter_id: int) -> None:
     row.last_viewed_at = now
     row.view_count = int(row.view_count or 0) + 1
     db.session.commit()
+
+
+def _archetype_templates() -> list[MatterTemplate]:
+    return (
+        MatterTemplate.query.order_by(
+            MatterTemplate.legal_category.asc().nullslast(),
+            MatterTemplate.name.asc(),
+        )
+        .limit(500)
+        .all()
+    )
+
+
+def _serialize_template_payload(templates: list[MatterTemplate]) -> dict[int, dict[str, object]]:
+    payload: dict[int, dict[str, object]] = {}
+    for template in templates:
+        payload[template.id] = {
+            "id": int(template.id),
+            "name": template.name or "",
+            "legal_category": template.legal_category or "",
+            "required_fields": load_required_fields(template.required_fields_json),
+        }
+    return payload
+
+
+def _generate_archetype_document(matter: Matter, template: MatterTemplate | None) -> tuple[str, list[str]]:
+    if template is None:
+        return "", []
+    if not (template.boilerplate_template or "").strip():
+        return "", []
+    matter_specific_values = parse_matter_archetype_values(matter.archetype_data_json)
+    context = build_document_context(matter, archetype=template, required_values=matter_specific_values)
+    return render_template_text(template.boilerplate_template, context)
 
 
 def register_matter_routes(app):
@@ -177,6 +220,8 @@ def register_matter_routes(app):
     @login_required
     def matter_create():
         enforce_permission("matter", "create")
+        archetype_templates = _archetype_templates()
+        template_by_id = {row.id: row for row in archetype_templates}
         if request.method == "POST":
             matter_no = normalize_query(request.form.get("matter_no", "")).upper()
             title = normalize_query(request.form.get("title", ""))
@@ -187,9 +232,21 @@ def register_matter_routes(app):
             risk_level = normalize_query(request.form.get("risk_level", "Medium")) or "Medium"
             budget_status = normalize_query(request.form.get("budget_status", "On Track")) or "On Track"
             last_update_note = (request.form.get("last_update_note") or "").strip()
+            legal_category = normalize_query(request.form.get("legal_category", ""))
+            archetype_id = request.form.get("archetype_id", type=int)
+            archetype = (template_by_id.get(archetype_id) or db.session.get(MatterTemplate, archetype_id)) if archetype_id else None
 
             if not matter_no or not title or not client_name:
                 flash("Matter number, title, and client name are required.", "warning")
+                return redirect(url_for("matter_create"))
+            if not archetype_templates:
+                flash("Create at least one matter archetype in Admin before opening a matter.", "warning")
+                return redirect(url_for("admin_templates_matters"))
+            if not legal_category or archetype is None:
+                flash("Legal category and archetype are required.", "warning")
+                return redirect(url_for("matter_create"))
+            if archetype.legal_category and legal_category != normalize_query(archetype.legal_category):
+                flash("Selected archetype does not belong to the selected legal category.", "warning")
                 return redirect(url_for("matter_create"))
 
             if Matter.query.filter_by(matter_no=matter_no).first():
@@ -203,6 +260,14 @@ def register_matter_routes(app):
                 return redirect(url_for("matter_create"))
             if budget_status not in BUDGET_STATUSES:
                 flash("Invalid budget status.", "warning")
+                return redirect(url_for("matter_create"))
+
+            required_field_defs = load_required_fields(archetype.required_fields_json)
+            matter_specific_values = collect_required_field_values(request.form, required_field_defs)
+            missing_required_fields = validate_required_field_values(required_field_defs, matter_specific_values)
+            if missing_required_fields:
+                preview = ", ".join(missing_required_fields[:5])
+                flash(f"Provide required archetype fields: {preview}.", "warning")
                 return redirect(url_for("matter_create"))
 
             now = dt.datetime.utcnow()
@@ -219,6 +284,9 @@ def register_matter_routes(app):
                 last_update_note=last_update_note or None,
                 last_updated_at=now,
                 created_by=current_user.id,
+                legal_category=legal_category or None,
+                archetype_id=archetype.id,
+                archetype_data_json=(json.dumps(matter_specific_values, ensure_ascii=True) if matter_specific_values else None),
             )
             db.session.add(m)
             db.session.flush()
@@ -244,15 +312,28 @@ def register_matter_routes(app):
             )
             db.session.commit()
 
-            audit("matter_create", "Matter", m.id, {"matter_no": m.matter_no, "risk_level": m.risk_level})
+            audit(
+                "matter_create",
+                "Matter",
+                m.id,
+                {
+                    "matter_no": m.matter_no,
+                    "risk_level": m.risk_level,
+                    "legal_category": m.legal_category,
+                    "archetype_id": m.archetype_id,
+                },
+            )
             flash("Matter created.", "info")
             return redirect(url_for("matter_detail", matter_id=m.id))
 
+        archetype_payload = _serialize_template_payload(archetype_templates)
         return page(
             "New Matter",
             "matters/new.html",
             risk_levels=sorted(RISK_LEVELS),
             budget_statuses=sorted(BUDGET_STATUSES),
+            archetype_templates=archetype_templates,
+            archetype_payload=archetype_payload,
         )
 
     @app.post("/matters/<int:matter_id>/summary")
@@ -380,6 +461,40 @@ def register_matter_routes(app):
         flash("Timeline event added.", "info")
         return redirect(url_for("matter_detail", matter_id=m.id))
 
+    @app.post("/matters/<int:matter_id>/archetype-document")
+    @login_required
+    def matter_archetype_document_download(matter_id: int):
+        if not can_access_matter(matter_id):
+            abort(403)
+
+        m = db.session.get(Matter, matter_id)
+        if not m:
+            abort(404)
+
+        archetype = db.session.get(MatterTemplate, m.archetype_id) if m.archetype_id else None
+        rendered, missing_tokens = _generate_archetype_document(m, archetype)
+        if not rendered.strip():
+            flash("No archetype boilerplate is configured for this matter yet.", "warning")
+            return redirect(url_for("matter_detail", matter_id=m.id))
+
+        if missing_tokens:
+            missing_summary = ", ".join(missing_tokens[:10])
+            rendered = f"[Missing merge fields: {missing_summary}]\n\n{rendered}"
+
+        archetype_name = archetype.name if archetype else "archetype"
+        filename_base = secure_filename(f"{m.matter_no}_{archetype_name}_draft") or f"matter_{m.id}_archetype_draft"
+        audit(
+            "matter_archetype_document_download",
+            "Matter",
+            m.id,
+            {"archetype_id": m.archetype_id, "missing_tokens": missing_tokens},
+        )
+        return Response(
+            rendered,
+            mimetype="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename_base}.txt"'},
+        )
+
     @app.get("/matters/<int:matter_id>")
     @login_required
     def matter_detail(matter_id: int):
@@ -418,6 +533,10 @@ def register_matter_routes(app):
         today = dt.date.today()
         overdue_tasks = [t for t in tasks if t.status != "Done" and t.due_date and t.due_date < today]
         due_soon_tasks = [t for t in tasks if t.status != "Done" and t.due_date and today <= t.due_date <= (today + dt.timedelta(days=7))]
+        archetype = db.session.get(MatterTemplate, m.archetype_id) if m.archetype_id else None
+        archetype_fields = load_required_fields(archetype.required_fields_json if archetype else None)
+        archetype_values = parse_matter_archetype_values(m.archetype_data_json)
+        archetype_document, archetype_missing_tokens = _generate_archetype_document(m, archetype)
 
         return page(
             f"Matter {m.matter_no}",
@@ -436,6 +555,11 @@ def register_matter_routes(app):
             timeline_event_types=sorted(TIMELINE_EVENT_TYPES),
             today=today.isoformat(),
             is_pinned=is_pinned,
+            archetype=archetype,
+            archetype_fields=archetype_fields,
+            archetype_values=archetype_values,
+            archetype_document=archetype_document,
+            archetype_missing_tokens=archetype_missing_tokens,
         )
 
     @app.post("/matters/<int:matter_id>/pin")

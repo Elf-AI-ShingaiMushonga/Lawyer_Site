@@ -1551,19 +1551,43 @@ def seed_demo_data(app, password: str, reset: bool = False):
         matter_templates = [
             MatterTemplate(
                 name="Commercial Dispute Standard",
+                legal_category="Commercial Litigation",
                 practice_area="Commercial Litigation",
                 default_stage="Intake",
                 default_risk_level="Medium",
                 checklist_json=json.dumps(["Conflict check", "Engagement letter", "Initial strategy memo"]),
+                required_fields_json=json.dumps(
+                    [
+                        {"key": "opposing_party", "label": "Opposing Party", "help": ""},
+                        {"key": "claim_amount", "label": "Claim Amount", "help": "Use local currency."},
+                    ]
+                ),
+                boilerplate_template=(
+                    "Matter {{ matter_no }} opened for {{ client_name }} in {{ legal_category }}.\n"
+                    "Opposing party: {{ opposing_party }}.\n"
+                    "Claim amount: {{ claim_amount }}."
+                ),
                 created_by=admin_id,
                 created_at=now - dt.timedelta(days=20),
             ),
             MatterTemplate(
                 name="Regulatory Remediation",
+                legal_category="Regulatory",
                 practice_area="Regulatory",
                 default_stage="Assessment",
                 default_risk_level="High",
                 checklist_json=json.dumps(["Regulator notice review", "Filing checklist", "Executive briefing"]),
+                required_fields_json=json.dumps(
+                    [
+                        {"key": "regulator_name", "label": "Regulator Name", "help": ""},
+                        {"key": "notice_reference", "label": "Notice Reference", "help": ""},
+                    ]
+                ),
+                boilerplate_template=(
+                    "This remediation plan is prepared for {{ client_name }} under matter {{ matter_no }}.\n"
+                    "Regulator: {{ regulator_name }}.\n"
+                    "Notice reference: {{ notice_reference }}."
+                ),
                 created_by=admin_id,
                 created_at=now - dt.timedelta(days=20),
             ),

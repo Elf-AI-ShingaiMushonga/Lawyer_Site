@@ -77,6 +77,9 @@ class Matter(db.Model):
     closed_at = db.Column(db.DateTime, nullable=True)
     last_updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    legal_category = db.Column(db.String(120), nullable=True, index=True)
+    archetype_id = db.Column(db.Integer, db.ForeignKey("matter_template.id"), nullable=True, index=True)
+    archetype_data_json = db.Column(db.Text, nullable=True)
 
     # Expanded matter metadata
     court_name = db.Column(db.String(255), nullable=True)
@@ -443,10 +446,13 @@ class TimekeeperRole(db.Model):
 class MatterTemplate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False, unique=True)
+    legal_category = db.Column(db.String(120), nullable=True)
     practice_area = db.Column(db.String(120), nullable=True)
     default_stage = db.Column(db.String(80), nullable=True)
     default_risk_level = db.Column(db.String(40), nullable=True)
     checklist_json = db.Column(db.Text, nullable=True)
+    required_fields_json = db.Column(db.Text, nullable=True)
+    boilerplate_template = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
 

@@ -13,6 +13,8 @@
             {% if is_pinned %}<span class="tag-chip">Pinned</span>{% endif %}
             <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }} risk</span>
             <span>{{ m.budget_status }}</span>
+            {% if m.legal_category %}<span class="tag-chip">{{ m.legal_category }}</span>{% endif %}
+            {% if archetype %}<span class="tag-chip">{{ archetype.name }}</span>{% endif %}
           </div>
         </div>
         <div class="list-actions">
@@ -117,6 +119,48 @@
           <div class="label">Documents</div>
           <div class="value">{{ docs|length }}</div>
         </div>
+      </div>
+
+      <div class="form-section mt-3">
+        <div class="small fw-semibold text-uppercase muted">Legal Category and Archetype</div>
+        {% if archetype %}
+          <div class="list-meta mt-1">
+            <span>Category: {{ m.legal_category or archetype.legal_category or "-" }}</span>
+            <span>Archetype: {{ archetype.name }}</span>
+          </div>
+          {% if archetype_fields %}
+            <div class="row g-2 mt-2">
+              {% for field in archetype_fields %}
+                <div class="col-md-6">
+                  <label class="form-label">{{ field.label }}</label>
+                  <input class="form-control" value="{{ archetype_values.get(field.key, '') }}" readonly>
+                  {% if field.help %}
+                    <div class="form-help mt-1">{{ field.help }}</div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if archetype_document %}
+            <div class="mt-2">
+              <label class="form-label">Generated Boilerplate Draft</label>
+              <textarea class="form-control" rows="10" readonly>{{ archetype_document }}</textarea>
+              {% if archetype_missing_tokens %}
+                <div class="form-help mt-1">
+                  Missing merge fields were left blank: {{ archetype_missing_tokens|join(", ") }}
+                </div>
+              {% endif %}
+              <form method="post" action="{{ url_for('matter_archetype_document_download', matter_id=m.id) }}" class="mt-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-light">Download Draft (.txt)</button>
+              </form>
+            </div>
+          {% else %}
+            <div class="muted small mt-2">No boilerplate template text is configured for this archetype yet.</div>
+          {% endif %}
+        {% else %}
+          <div class="muted small mt-1">No legal archetype is linked to this matter.</div>
+        {% endif %}
       </div>
     </div>
 

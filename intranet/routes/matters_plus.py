@@ -38,6 +38,11 @@ from ..models import (
     TaskAssignee,
     User,
 )
+from ..services.archetypes import (
+    collect_required_field_values,
+    load_required_fields,
+    validate_required_field_values,
+)
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..services.notification_engine import NotificationEngine
 from ..templates import page
@@ -58,8 +63,25 @@ def register_matters_plus_routes(app):
                 flash("Matter number already exists.", "warning")
                 return redirect(url_for("matters_intake"))
 
+            legal_category = normalize_query(request.form.get("legal_category", ""))
             template_id = request.form.get("template_id", type=int)
             template = db.session.get(MatterTemplate, template_id) if template_id else None
+            if template is None:
+                flash("Select a matter archetype.", "warning")
+                return redirect(url_for("matters_intake"))
+            if not legal_category:
+                legal_category = normalize_query(template.legal_category or "")
+            if template.legal_category and legal_category != normalize_query(template.legal_category):
+                flash("Selected archetype does not belong to the selected legal category.", "warning")
+                return redirect(url_for("matters_intake"))
+
+            required_field_defs = load_required_fields(template.required_fields_json)
+            matter_specific_values = collect_required_field_values(request.form, required_field_defs)
+            missing_required_fields = validate_required_field_values(required_field_defs, matter_specific_values)
+            if missing_required_fields:
+                flash(f"Provide required archetype fields: {', '.join(missing_required_fields[:5])}.", "warning")
+                return redirect(url_for("matters_intake"))
+
             now = dt.datetime.utcnow()
             m = Matter(
                 matter_no=matter_no,
@@ -76,6 +98,9 @@ def register_matters_plus_routes(app):
                 case_type=(request.form.get("case_type") or "General").strip() or "General",
                 created_by=current_user.id,
                 last_updated_at=now,
+                legal_category=legal_category or None,
+                archetype_id=template.id,
+                archetype_data_json=(json.dumps(matter_specific_values, ensure_ascii=True) if matter_specific_values else None),
             )
             db.session.add(m)
             db.session.flush()
@@ -106,7 +131,21 @@ def register_matters_plus_routes(app):
             return redirect(url_for("matter_workspace", matter_id=m.id))
 
         templates = MatterTemplate.query.order_by(MatterTemplate.name.asc()).all()
-        return page("Matter Intake", "matters_plus/intake.html", templates=templates)
+        template_payload = {
+            row.id: {
+                "id": row.id,
+                "name": row.name,
+                "legal_category": row.legal_category or "",
+                "required_fields": load_required_fields(row.required_fields_json),
+            }
+            for row in templates
+        }
+        return page(
+            "Matter Intake",
+            "matters_plus/intake.html",
+            templates=templates,
+            template_payload=template_payload,
+        )
 
     @app.get("/matters/<int:matter_id>/workspace")
     @login_required

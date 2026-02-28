@@ -11,6 +11,14 @@
 
   <form method="post" class="row g-2">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if not archetype_templates %}
+      <div class="col-12">
+        <div class="alert alert-warning mb-0">
+          No matter archetypes are configured yet.
+          <a href="{{ url_for('admin_templates_matters') }}">Create an archetype first</a>.
+        </div>
+      </div>
+    {% endif %}
     <div class="col-md-3">
       <label class="muted small">Matter Number</label>
       <input class="form-control" name="matter_no" placeholder="e.g. 2026-AC-0142" required>
@@ -22,6 +30,26 @@
     <div class="col-md-6">
       <label class="muted small">Client Name</label>
       <input class="form-control" name="client_name" placeholder="e.g. Smith Family Trust" required>
+    </div>
+    <div class="col-md-4">
+      <label class="muted small">Legal Category</label>
+      <input class="form-control" name="legal_category" placeholder="e.g. Labour Law" list="matter-legal-category-options" required>
+      <datalist id="matter-legal-category-options">
+        {% for t in archetype_templates %}
+          {% if t.legal_category %}
+            <option value="{{ t.legal_category }}"></option>
+          {% endif %}
+        {% endfor %}
+      </datalist>
+    </div>
+    <div class="col-md-8">
+      <label class="muted small">Archetype</label>
+      <select class="form-select" name="archetype_id" {% if not archetype_templates %}disabled{% endif %} required>
+        <option value="">Select archetype...</option>
+        {% for t in archetype_templates %}
+          <option value="{{ t.id }}" data-category="{{ t.legal_category or '' }}">{{ t.name }}{% if t.legal_category %} ({{ t.legal_category }}){% endif %}</option>
+        {% endfor %}
+      </select>
     </div>
     <div class="col-md-6">
       <label class="muted small">Status</label>
@@ -59,9 +87,101 @@
       <label class="muted small">Latest Update Note</label>
       <textarea class="form-control" name="last_update_note" rows="2" placeholder="Current context for stakeholders"></textarea>
     </div>
+    <div class="col-12">
+      <label class="muted small">Archetype Required Fields</label>
+      <div id="archetype-required-fields" class="row g-2"></div>
+      <div id="archetype-required-help" class="form-help mt-2">Select an archetype to load its required matter-specific fields.</div>
+    </div>
     <div class="col-12 d-grid">
       <button class="btn btn-light">Create</button>
     </div>
   </form>
 </div>
+<script>
+  (() => {
+    const templatePayload = {{ archetype_payload|tojson }};
+    const categoryInput = document.querySelector('input[name="legal_category"]');
+    const archetypeSelect = document.querySelector('select[name="archetype_id"]');
+    const requiredFieldsContainer = document.getElementById("archetype-required-fields");
+    const requiredHelp = document.getElementById("archetype-required-help");
+    if (!categoryInput || !archetypeSelect || !requiredFieldsContainer || !requiredHelp) {
+      return;
+    }
+
+    const byId = new Map(Object.entries(templatePayload).map(([id, value]) => [String(id), value]));
+
+    const setHelpText = (text) => {
+      requiredHelp.textContent = text;
+    };
+
+    const renderRequiredFields = () => {
+      requiredFieldsContainer.innerHTML = "";
+      const selectedId = archetypeSelect.value;
+      const selected = byId.get(String(selectedId));
+      if (!selected) {
+        setHelpText("Select an archetype to load its required matter-specific fields.");
+        return;
+      }
+      const fields = Array.isArray(selected.required_fields) ? selected.required_fields : [];
+      if (!fields.length) {
+        setHelpText("This archetype has no additional required fields.");
+        return;
+      }
+      setHelpText("Complete all fields below. They are required for this archetype.");
+      fields.forEach((field) => {
+        const key = String(field.key || "").trim();
+        if (!key) {
+          return;
+        }
+        const label = String(field.label || key);
+        const helpText = String(field.help || "");
+        const wrapper = document.createElement("div");
+        wrapper.className = "col-md-6";
+        const fieldLabel = document.createElement("label");
+        fieldLabel.className = "muted small";
+        fieldLabel.textContent = label;
+        const fieldInput = document.createElement("input");
+        fieldInput.className = "form-control";
+        fieldInput.name = `field_${key}`;
+        fieldInput.required = true;
+        wrapper.appendChild(fieldLabel);
+        wrapper.appendChild(fieldInput);
+        if (helpText) {
+          const helper = document.createElement("div");
+          helper.className = "form-help mt-1";
+          helper.textContent = helpText;
+          wrapper.appendChild(helper);
+        }
+        requiredFieldsContainer.appendChild(wrapper);
+      });
+    };
+
+    const filterArchetypesByCategory = () => {
+      const category = String(categoryInput.value || "").trim().toLowerCase();
+      Array.from(archetypeSelect.options).forEach((option) => {
+        if (!option.value) {
+          option.hidden = false;
+          return;
+        }
+        const optionCategory = String(option.dataset.category || "").trim().toLowerCase();
+        option.hidden = category ? optionCategory !== category : false;
+      });
+      const selectedOption = archetypeSelect.options[archetypeSelect.selectedIndex];
+      if (selectedOption && selectedOption.hidden) {
+        archetypeSelect.value = "";
+      }
+      renderRequiredFields();
+    };
+
+    categoryInput.addEventListener("input", filterArchetypesByCategory);
+    archetypeSelect.addEventListener("change", () => {
+      const selected = byId.get(String(archetypeSelect.value));
+      if (selected && !String(categoryInput.value || "").trim() && selected.legal_category) {
+        categoryInput.value = selected.legal_category;
+      }
+      filterArchetypesByCategory();
+    });
+    filterArchetypesByCategory();
+  })();
+</script>
 {% endblock %}

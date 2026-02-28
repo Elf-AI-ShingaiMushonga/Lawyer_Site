@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import json
 import os
 import time
 
@@ -15,6 +16,7 @@ from intranet.models import (
     Invoice,
     LeadQuote,
     Matter,
+    MatterTemplate,
     MatterMember,
     PaymentAllocation,
     PortalLinkToken,
@@ -72,6 +74,27 @@ def _login(client, email: str, password: str, mfa_secret: str, csrf_token: str) 
 
 
 def _create_matter_via_route(client, csrf_token: str, *, matter_no: str, title: str, client_name: str) -> Matter:
+    archetype = MatterTemplate.query.filter_by(name="Smoke Negligence Clause").first()
+    if archetype is None:
+        owner = User.query.order_by(User.id.asc()).first()
+        assert owner is not None
+        archetype = MatterTemplate(
+            name="Smoke Negligence Clause",
+            legal_category="Labour Law",
+            default_risk_level="Medium",
+            required_fields_json=json.dumps(
+                [{"key": "incident_date", "label": "Incident Date", "help": ""}],
+                ensure_ascii=True,
+            ),
+            boilerplate_template=(
+                "Matter {{ matter_no }} for {{ client_name }} in {{ legal_category }}. "
+                "Incident date: {{ incident_date }}."
+            ),
+            created_by=owner.id,
+        )
+        db.session.add(archetype)
+        db.session.commit()
+
     response = client.post(
         "/matters/new",
         data={
@@ -79,6 +102,9 @@ def _create_matter_via_route(client, csrf_token: str, *, matter_no: str, title: 
             "matter_no": matter_no,
             "title": title,
             "client_name": client_name,
+            "legal_category": "Labour Law",
+            "archetype_id": archetype.id,
+            "field_incident_date": dt.date.today().isoformat(),
             "status": "Open",
             "risk_level": "Medium",
             "budget_status": "On Track",
