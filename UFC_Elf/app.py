@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
-"""Flask app for UFC fight outcome prediction + bet tracking."""
+"""Embedded UFC blueprint for fight outcome prediction + bet tracking."""
 
 from __future__ import annotations
 
-import logging
 import os
 import subprocess
 import sys
@@ -12,7 +10,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from threading import RLock
 from typing import Any
-import json
 
 os.environ.setdefault("LOKY_MAX_CPU_COUNT", str(max(1, int(os.cpu_count() or 1))))
 warnings.filterwarnings(
@@ -23,12 +20,9 @@ warnings.filterwarnings(
 
 import numpy as np
 import pandas as pd
-from flask import Blueprint, Flask, jsonify, render_template, request
+from flask import Blueprint, jsonify, render_template, request
 
-try:
-    from .web_predictor import FightPredictor
-except ImportError:  # pragma: no cover - standalone fallback
-    from web_predictor import FightPredictor
+from .web_predictor import FightPredictor
 
 
 APP_ROOT = Path(__file__).resolve().parent
@@ -70,14 +64,8 @@ BET_COLUMNS = [
 ]
 
 PREDICTOR_LOCK = RLock()
-_PREDICTOR_BOOT_LOCK = RLock()
-_PREDICTOR_BOOTSTRAP_DONE = False
 _predictor_instance: FightPredictor | None = None
 ufc_bp = Blueprint("ufc", __name__, template_folder="templates", static_folder="static")
-logger = logging.getLogger(__name__)
-BOOT_TRAIN_LOCK_PATH = APP_ROOT / "data" / "model_cache" / ".boot_train.lock"
-BOOT_TRAIN_STAMP_PATH = APP_ROOT / "data" / "model_cache" / ".boot_train_stamp.json"
-_LOCAL_BOOT_TRAIN_LOCK = RLock()
 
 
 def _get_predictor() -> FightPredictor:
@@ -85,7 +73,7 @@ def _get_predictor() -> FightPredictor:
     if _predictor_instance is not None:
         return _predictor_instance
 
-    with _PREDICTOR_BOOT_LOCK:
+    with PREDICTOR_LOCK:
         if _predictor_instance is None:
             _predictor_instance = FightPredictor(
                 APP_ROOT / "data" / "ufc_fights_rnn.csv",
@@ -111,102 +99,6 @@ try:
     import fcntl  # type: ignore
 except Exception:  # pragma: no cover - non-posix fallback
     fcntl = None  # type: ignore
-
-
-def _env_bool(name: str, default: bool = False) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-@contextmanager
-def _boot_train_lock():
-    BOOT_TRAIN_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with _LOCAL_BOOT_TRAIN_LOCK:
-        with open(BOOT_TRAIN_LOCK_PATH, "a+", encoding="utf-8") as lock_file:
-            if fcntl is not None:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                if fcntl is not None:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-
-
-def _boot_train_run_key(force_retrain: bool, train_siamese: bool) -> str:
-    invocation_id = (os.getenv("INVOCATION_ID") or "").strip()
-    if invocation_id:
-        scope = f"invocation:{invocation_id}"
-    else:
-        scope = f"ppid:{os.getppid()}"
-    return f"{scope}|force={int(force_retrain)}|siamese={int(train_siamese)}"
-
-
-def _read_boot_train_stamp() -> dict[str, Any]:
-    if not BOOT_TRAIN_STAMP_PATH.exists():
-        return {}
-    try:
-        payload = json.loads(BOOT_TRAIN_STAMP_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def _write_boot_train_stamp(payload: dict[str, Any]) -> None:
-    BOOT_TRAIN_STAMP_PATH.parent.mkdir(parents=True, exist_ok=True)
-    BOOT_TRAIN_STAMP_PATH.write_text(json.dumps(payload, ensure_ascii=True), encoding="utf-8")
-
-
-def _bootstrap_predictor_training_on_deploy() -> None:
-    global _PREDICTOR_BOOTSTRAP_DONE
-    if _PREDICTOR_BOOTSTRAP_DONE:
-        return
-    if not _env_bool("UFC_TRAIN_ON_BOOT", False):
-        return
-
-    force_retrain = _env_bool("UFC_FORCE_RETRAIN_ON_BOOT", True)
-    train_siamese = _env_bool("UFC_TRAIN_SIAMESE_ON_BOOT", True)
-    logger.info(
-        "UFC boot training enabled (force_retrain=%s, train_siamese=%s).",
-        force_retrain,
-        train_siamese,
-    )
-    with _PREDICTOR_BOOT_LOCK:
-        if _PREDICTOR_BOOTSTRAP_DONE:
-            return
-        run_key = _boot_train_run_key(force_retrain, train_siamese)
-        with _boot_train_lock():
-            stamp = _read_boot_train_stamp()
-            if stamp.get("run_key") == run_key and stamp.get("status") == "ok":
-                logger.info("UFC boot training already completed for this deployment run key; skipping duplicate execution.")
-                _PREDICTOR_BOOTSTRAP_DONE = True
-                return
-            with PREDICTOR_LOCK:
-                predictor_instance = _get_predictor()
-                if force_retrain:
-                    status = predictor_instance.retrain_models(include_siamese=train_siamese)
-                else:
-                    if train_siamese:
-                        status = predictor_instance.warm_siamese_model()
-                    else:
-                        status = predictor_instance.model_cache_status()
-            _write_boot_train_stamp(
-                {
-                    "run_key": run_key,
-                    "status": "ok",
-                    "base_models_trained_at_utc": status.get("base_models_trained_at_utc"),
-                    "siamese_trained_at_utc": status.get("siamese_trained_at_utc"),
-                }
-            )
-            _PREDICTOR_BOOTSTRAP_DONE = True
-
-    logger.info(
-        "UFC boot training complete: rows=%s base_models_trained_at_utc=%s siamese_trained_at_utc=%s",
-        status.get("data_rows"),
-        status.get("base_models_trained_at_utc"),
-        status.get("siamese_trained_at_utc"),
-    )
 
 
 @contextmanager
@@ -622,9 +514,9 @@ def index() -> str:
         elif action == "retrain_models":
             try:
                 with PREDICTOR_LOCK:
-                    system_status = predictor.retrain_models()
+                    system_status = predictor.retrain_models(include_siamese=True)
                 notice = (
-                    "Model retrain complete. "
+                    "Model retrain complete (base + Siamese). "
                     f"Rows used: {system_status.get('data_rows', 'n/a')}."
                 )
             except Exception as exc:  # noqa: BLE001
@@ -839,20 +731,3 @@ def predict_api() -> Any:
 @ufc_bp.route("/healthz", methods=["GET"])
 def healthz() -> Any:
     return jsonify({"ok": True})
-
-
-def create_app() -> Flask:
-    _bootstrap_predictor_training_on_deploy()
-    app = Flask(__name__)
-    app.register_blueprint(ufc_bp)
-    return app
-
-
-app = create_app()
-
-
-if __name__ == "__main__":
-    host = os.getenv("FLASK_HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "8000"))
-    debug = os.getenv("FLASK_DEBUG", "0").strip().lower() in {"1", "true", "yes", "on"}
-    app.run(host=host, port=port, debug=debug)

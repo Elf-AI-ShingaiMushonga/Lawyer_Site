@@ -1,42 +1,12 @@
 from __future__ import annotations
 
 import importlib
-import importlib.util
-import sys
-from pathlib import Path
 
 from flask import Response, current_app, jsonify
 
 
 def _load_ufc_module():
-    for module_name in ("UFC_Elf.app", "ufc_elf.app"):
-        try:
-            return importlib.import_module(module_name)
-        except Exception:
-            continue
-
-    repo_root = Path(__file__).resolve().parents[2]
-    candidates = [
-        repo_root / "UFC_Elf" / "app.py",
-        repo_root / "ufc_elf" / "app.py",
-    ]
-    for app_path in candidates:
-        if not app_path.exists():
-            continue
-
-        module_name = f"ufc_embedded_app_{app_path.parent.name.lower()}"
-        if str(app_path.parent) not in sys.path:
-            sys.path.append(str(app_path.parent))
-        spec = importlib.util.spec_from_file_location(module_name, app_path)
-        if spec is None or spec.loader is None:
-            continue
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
-        return module
-
-    searched = ", ".join(str(path) for path in candidates)
-    raise ModuleNotFoundError(f"Could not locate UFC module. Searched: {searched}")
+    return importlib.import_module("UFC_Elf.app")
 
 
 def register_ufc_routes(app):

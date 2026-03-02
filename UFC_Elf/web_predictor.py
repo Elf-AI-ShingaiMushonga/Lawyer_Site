@@ -22,46 +22,25 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
 
-try:
-    from .scripts.run_ufc_siamese_study import (
-        NEGATIVE_LABEL,
-        POSITIVE_LABEL,
-        SPLIT_COL,
-        TARGET_COL,
-        FightPairDataset,
-        SiameseConfig,
-        SiameseGRUModel,
-        build_tabular_pipeline,
-        build_siamese_dataset,
-        get_training_capacity_profile,
-        indices_from_names,
-        load_and_prepare_dataframe,
-        make_one_hot_encoder,
-        rebalance_binary_orientation_if_needed,
-        resolve_device,
-        select_baseline_features,
-        subset_prepared_data,
-    )
-except ImportError:  # pragma: no cover - standalone fallback
-    from scripts.run_ufc_siamese_study import (
-        NEGATIVE_LABEL,
-        POSITIVE_LABEL,
-        SPLIT_COL,
-        TARGET_COL,
-        FightPairDataset,
-        SiameseConfig,
-        SiameseGRUModel,
-        build_tabular_pipeline,
-        build_siamese_dataset,
-        get_training_capacity_profile,
-        indices_from_names,
-        load_and_prepare_dataframe,
-        make_one_hot_encoder,
-        rebalance_binary_orientation_if_needed,
-        resolve_device,
-        select_baseline_features,
-        subset_prepared_data,
-    )
+from .scripts.run_ufc_siamese_study import (
+    NEGATIVE_LABEL,
+    POSITIVE_LABEL,
+    SPLIT_COL,
+    TARGET_COL,
+    FightPairDataset,
+    SiameseConfig,
+    SiameseGRUModel,
+    build_tabular_pipeline,
+    build_siamese_dataset,
+    get_training_capacity_profile,
+    indices_from_names,
+    load_and_prepare_dataframe,
+    make_one_hot_encoder,
+    rebalance_binary_orientation_if_needed,
+    resolve_device,
+    select_baseline_features,
+    subset_prepared_data,
+)
 
 
 # Highest-accuracy model options plus best-performing Siamese variant.
@@ -155,7 +134,7 @@ class FightPredictor:
             self.categorical_cols,
             loaded_from_cache,
             trained_at_utc,
-        ) = self._load_or_train_base_models(self.df_aug)
+        ) = self._load_or_prepare_base_models(self.df_aug)
         self._cache_info.update(
             {
                 "base_models_loaded_from_cache": bool(loaded_from_cache),
@@ -165,8 +144,8 @@ class FightPredictor:
 
         self._refresh_runtime_state()
 
-        # Siamese model (best-performing variant) is trained lazily on first use.
-        # It is fit on all available historical rows and cached after first train.
+        # Siamese model is loaded from cache when available.
+        # Training happens only via explicit retrain/warm actions.
         self._siamese_model: Any = None
         self._siamese_device: str = "cpu"
         self._siamese_max_seq_len: int = 8
@@ -257,25 +236,34 @@ class FightPredictor:
         }
         joblib.dump(payload, self._base_model_cache_path)
 
-    def _load_or_train_base_models(
+    def _derive_feature_schema(self, df: pd.DataFrame) -> tuple[list[str], list[str], list[str]]:
+        feature_cols, numeric_cols, categorical_cols = select_baseline_features(df)
+        feature_cols = [col for col in feature_cols if df[col].notna().any()]
+        numeric_cols = [c for c in numeric_cols if c in feature_cols]
+        categorical_cols = [c for c in categorical_cols if c in feature_cols]
+        return feature_cols, numeric_cols, categorical_cols
+
+    def _load_or_prepare_base_models(
         self,
         df: pd.DataFrame,
-    ) -> tuple[dict[str, Any], list[str], list[str], list[str], bool, str]:
+    ) -> tuple[dict[str, Any], list[str], list[str], list[str], bool, str | None]:
         cached = self._load_base_models_from_cache()
         if cached is not None:
             models, feature_cols, numeric_cols, categorical_cols, trained_at_utc = cached
             return models, feature_cols, numeric_cols, categorical_cols, True, trained_at_utc
 
-        models, feature_cols, numeric_cols, categorical_cols = self._train_models(df)
-        trained_at_utc = self._utc_now_iso()
-        self._save_base_models_to_cache(
-            models=models,
-            feature_cols=feature_cols,
-            numeric_cols=numeric_cols,
-            categorical_cols=categorical_cols,
-            trained_at_utc=trained_at_utc,
+        feature_cols, numeric_cols, categorical_cols = self._derive_feature_schema(df)
+        return {}, feature_cols, numeric_cols, categorical_cols, False, None
+
+    def _base_models_ready(self) -> bool:
+        return all(key in self.base_models for key in BASE_MODEL_KEYS)
+
+    def _require_base_models_ready(self) -> None:
+        if self._base_models_ready():
+            return
+        raise RuntimeError(
+            "Base models are not trained yet. Use 'Retrain Models' before running predictions."
         )
-        return models, feature_cols, numeric_cols, categorical_cols, False, trained_at_utc
 
     def _clear_siamese_cache(self) -> None:
         self._siamese_model = None
@@ -314,11 +302,11 @@ class FightPredictor:
         self._clear_siamese_cache()
         self._refresh_runtime_state()
         if include_siamese:
-            self._ensure_siamese_model()
+            self._ensure_siamese_model(allow_train=True)
         return self.model_cache_status()
 
     def warm_siamese_model(self) -> dict[str, Any]:
-        self._ensure_siamese_model()
+        self._ensure_siamese_model(allow_train=True)
         return self.model_cache_status()
 
     def model_cache_status(self) -> dict[str, Any]:
@@ -330,6 +318,7 @@ class FightPredictor:
             ).isoformat()
         return {
             "cache_dir": str(self.model_cache_dir),
+            "base_models_ready": self._base_models_ready(),
             "base_models_loaded_from_cache": bool(self._cache_info.get("base_models_loaded_from_cache", False)),
             "base_models_trained_at_utc": self._cache_info.get("base_models_trained_at_utc"),
             "siamese_loaded_from_cache": bool(self._cache_info.get("siamese_loaded_from_cache", False)),
@@ -529,7 +518,7 @@ class FightPredictor:
         }
         torch.save(payload, self._siamese_cache_path)
 
-    def _ensure_siamese_model(self) -> None:
+    def _ensure_siamese_model(self, allow_train: bool = False) -> None:
         if self._siamese_model is not None:
             return
 
@@ -552,6 +541,11 @@ class FightPredictor:
             self._siamese_seq_idx = seq_idx
             self._siamese_static_idx = static_idx
             return
+
+        if not allow_train:
+            raise RuntimeError(
+                "Siamese model is not trained yet. Use 'Retrain Models' before requesting Siamese predictions."
+            )
 
         model = self._train_siamese_model_for_web(prepared_sub, device=self._siamese_device)
         self._save_siamese_to_cache(
@@ -699,13 +693,7 @@ class FightPredictor:
         self,
         df: pd.DataFrame,
     ) -> tuple[dict[str, Any], list[str], list[str], list[str]]:
-        feature_cols, numeric_cols, categorical_cols = select_baseline_features(df)
-        feature_cols = [col for col in feature_cols if df[col].notna().any()]
-        numeric_cols = [c for c in numeric_cols if c in feature_cols]
-        categorical_cols = [c for c in categorical_cols if c in feature_cols]
-
-        self.numeric_cols = numeric_cols
-        self.categorical_cols = categorical_cols
+        feature_cols, numeric_cols, categorical_cols = self._derive_feature_schema(df)
 
         x = df[feature_cols].copy()
         y = df[TARGET_COL].to_numpy(dtype=int)
@@ -828,12 +816,17 @@ class FightPredictor:
         return chosen
 
     def _predict_proba_with_model(self, model_name: str, x: pd.DataFrame) -> np.ndarray:
+        self._require_base_models_ready()
         if model_name == "accuracy_weighted_ensemble":
             probs = np.zeros(len(x), dtype=float)
             for key, weight in ACCURACY_ENSEMBLE_WEIGHTS.items():
+                if key not in self.base_models:
+                    raise RuntimeError(f"Base model '{key}' is missing. Use 'Retrain Models' to rebuild caches.")
                 model = self.base_models[key]
                 probs += float(weight) * model.predict_proba(x)[:, 1]
             return np.clip(probs, 0.0, 1.0)
+        if model_name not in self.base_models:
+            raise RuntimeError(f"Base model '{model_name}' is missing. Use 'Retrain Models' to rebuild caches.")
         model = self.base_models[model_name]
         return model.predict_proba(x)[:, 1]
 

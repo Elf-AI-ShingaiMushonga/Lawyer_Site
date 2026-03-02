@@ -167,9 +167,6 @@ Optional but recommended:
 - `GUNICORN_THREADS=2`
 - `GUNICORN_TIMEOUT=60`
 - `UFC_STRICT_INIT=true` (fail fast at startup if UFC module/dependencies fail to load)
-- `UFC_TRAIN_ON_BOOT=true` to retrain UFC models when the service boots (e.g., deployment restart)
-- `UFC_FORCE_RETRAIN_ON_BOOT=true` to force a full base-model retrain instead of cache reuse when boot training is enabled
-- `UFC_TRAIN_SIAMESE_ON_BOOT=true` to train/warm the Siamese model during boot training
 - `GUNICORN_TIMEOUT=900` when using UFC `Update Data` / `Retrain Models` actions in-request
 - `WORKER_LOOP_SLEEP_SECONDS=3`
 - `SCHEDULER_LOOP_SLEEP_SECONDS=30`
@@ -177,7 +174,7 @@ Optional but recommended:
 UFC production notes:
 - Install only once from root `requirements.txt`; do not create/use a separate `UFC_Elf/venv`.
 - Ensure outbound internet egress is allowed for `Update Data` (scraper hits UFCStats).
-- With `UFC_TRAIN_ON_BOOT=true`, deployment startup will run UFC training once per service invocation (multi-worker safe).
+- UFC model training is manual via the `/ufc/` `Retrain Models` action.
 
 ## Database migrations
 
