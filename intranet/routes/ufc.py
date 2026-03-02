@@ -48,3 +48,18 @@ def register_ufc_routes(app):
     def ufc_unavailable_healthz():
         message = current_app.config.get("UFC_DEMO_ERROR") or "Unknown startup error."
         return jsonify({"ok": False, "error": message}), 503
+
+    @app.post("/ufc/api/jobs")
+    def ufc_unavailable_jobs_create():
+        message = current_app.config.get("UFC_DEMO_ERROR") or "Unknown startup error."
+        return jsonify({"ok": False, "error": message}), 503
+
+    @app.get("/ufc/api/jobs/active")
+    def ufc_unavailable_jobs_active():
+        message = current_app.config.get("UFC_DEMO_ERROR") or "Unknown startup error."
+        return jsonify({"ok": False, "error": message, "job": None}), 503
+
+    @app.get("/ufc/api/jobs/<job_id>")
+    def ufc_unavailable_jobs_status(job_id: str):
+        message = current_app.config.get("UFC_DEMO_ERROR") or "Unknown startup error."
+        return jsonify({"ok": False, "error": message, "job_id": job_id}), 503

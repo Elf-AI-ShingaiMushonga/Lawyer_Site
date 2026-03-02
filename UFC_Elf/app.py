@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import datetime as dt
+import json
+import logging
 import os
+import queue
+import re
 import subprocess
 import sys
+import threading
+import time
+import uuid
 import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from threading import RLock
-from typing import Any
+from typing import Any, Callable
 
 os.environ.setdefault("LOKY_MAX_CPU_COUNT", str(max(1, int(os.cpu_count() or 1))))
 warnings.filterwarnings(
@@ -30,6 +38,11 @@ BETS_PATH = APP_ROOT / "data" / "bets_tracker.csv"
 BETS_LOCK_PATH = APP_ROOT / "data" / "bets_tracker.lock"
 SCRAPER_SCRIPT = APP_ROOT / "scrape_ufc_fights.py"
 SCRAPER_TIMEOUT_SECONDS = int(os.getenv("SCRAPER_TIMEOUT_SECONDS", "7200"))
+OPS_JOB_STATUS_DIR = APP_ROOT / "data" / "job_status"
+OPS_JOB_LOCK_PATH = OPS_JOB_STATUS_DIR / ".ops-job.lock"
+OPS_JOB_LOG_TAIL_LINES = 40
+_SCRAPER_EVENTS_RE = re.compile(r"Processing\s+(\d+)\s+event\(s\)\.")
+_SCRAPER_EVENT_DONE_RE = re.compile(r"Event completed\.")
 
 BET_COLUMNS = [
     "bet_id",
@@ -94,11 +107,231 @@ RECOMMENDED_MIN_EDGE = 0.02
 KELLY_FRACTION = 0.25
 KELLY_CAP = 0.05
 _LOCAL_BETS_LOCK = RLock()
+_LOCAL_JOB_STATUS_LOCK = RLock()
+_LOCAL_JOB_EXEC_LOCK = threading.Lock()
+logger = logging.getLogger(__name__)
 
 try:
     import fcntl  # type: ignore
 except Exception:  # pragma: no cover - non-posix fallback
     fcntl = None  # type: ignore
+
+
+def _utc_now_iso() -> str:
+    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _ensure_job_status_dir() -> None:
+    OPS_JOB_STATUS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _job_status_path(job_id: str) -> Path:
+    return OPS_JOB_STATUS_DIR / f"{job_id}.json"
+
+
+def _write_job_status(payload: dict[str, Any]) -> None:
+    _ensure_job_status_dir()
+    path = _job_status_path(str(payload["job_id"]))
+    tmp_path = path.with_suffix(".tmp")
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=True, sort_keys=True), encoding="utf-8")
+    os.replace(tmp_path, path)
+
+
+def _load_job_status(job_id: str) -> dict[str, Any] | None:
+    path = _job_status_path(job_id)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _list_job_statuses() -> list[dict[str, Any]]:
+    _ensure_job_status_dir()
+    out: list[dict[str, Any]] = []
+    for path in OPS_JOB_STATUS_DIR.glob("*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            out.append(payload)
+    return out
+
+
+def _append_job_log(payload: dict[str, Any], message: str) -> None:
+    line = str(message).strip()
+    if not line:
+        return
+    lines = payload.get("log_tail")
+    if not isinstance(lines, list):
+        lines = []
+    lines.append(line)
+    payload["log_tail"] = lines[-OPS_JOB_LOG_TAIL_LINES:]
+
+
+def _create_job_status(job_id: str, action: str) -> dict[str, Any]:
+    now = _utc_now_iso()
+    payload = {
+        "job_id": job_id,
+        "action": action,
+        "state": "queued",
+        "progress_pct": 0,
+        "stage": "Queued",
+        "message": "Queued for execution.",
+        "created_at_utc": now,
+        "started_at_utc": None,
+        "updated_at_utc": now,
+        "finished_at_utc": None,
+        "error": None,
+        "result": None,
+        "log_tail": [],
+    }
+    _write_job_status(payload)
+    return payload
+
+
+def _update_job_status(
+    job_id: str,
+    *,
+    append_log: str | None = None,
+    **updates: Any,
+) -> dict[str, Any] | None:
+    with _LOCAL_JOB_STATUS_LOCK:
+        payload = _load_job_status(job_id)
+        if payload is None:
+            return None
+        payload.update(updates)
+        if append_log:
+            _append_job_log(payload, append_log)
+        payload["updated_at_utc"] = _utc_now_iso()
+        _write_job_status(payload)
+        return payload
+
+
+def _find_active_job_status() -> dict[str, Any] | None:
+    statuses = [
+        status
+        for status in _list_job_statuses()
+        if str(status.get("state", "")).lower() in {"queued", "running"}
+    ]
+    if not statuses:
+        return None
+    statuses.sort(key=lambda item: str(item.get("updated_at_utc", "")), reverse=True)
+    return statuses[0]
+
+
+def _acquire_job_execution_lease() -> tuple[Any, bool] | None:
+    _ensure_job_status_dir()
+    lock_file = open(OPS_JOB_LOCK_PATH, "a+", encoding="utf-8")
+    if fcntl is not None:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            lock_file.close()
+            return None
+        return lock_file, False
+
+    acquired = _LOCAL_JOB_EXEC_LOCK.acquire(blocking=False)
+    if not acquired:
+        lock_file.close()
+        return None
+    return lock_file, True
+
+
+def _release_job_execution_lease(lease: tuple[Any, bool]) -> None:
+    lock_file, used_local_lock = lease
+    try:
+        if fcntl is not None:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    finally:
+        lock_file.close()
+        if used_local_lock:
+            _LOCAL_JOB_EXEC_LOCK.release()
+
+
+def _make_job_progress_callback(job_id: str) -> Callable[[float, str, str], None]:
+    state = {"percent": -1, "stage": "", "message": ""}
+
+    def emit(percent: float, stage: str, message: str) -> None:
+        pct = max(0, min(100, int(round(float(percent)))))
+        safe_stage = str(stage or "Running").strip() or "Running"
+        safe_message = str(message or "").strip()
+        if pct == state["percent"] and safe_stage == state["stage"] and safe_message == state["message"]:
+            return
+        append_log = None
+        if safe_message and safe_message != state["message"]:
+            append_log = safe_message
+        state["percent"] = pct
+        state["stage"] = safe_stage
+        state["message"] = safe_message
+        _update_job_status(
+            job_id,
+            progress_pct=pct,
+            stage=safe_stage,
+            message=safe_message,
+            append_log=append_log,
+        )
+
+    return emit
+
+
+def _run_async_ops_job(job_id: str, action: str, lease: tuple[Any, bool]) -> None:
+    progress = _make_job_progress_callback(job_id)
+    _update_job_status(
+        job_id,
+        state="running",
+        started_at_utc=_utc_now_iso(),
+        stage="Starting",
+        message="Starting operation...",
+    )
+    try:
+        if action == "update_data":
+            progress(1, "Scraping Data", "Starting UFCStats scrape...")
+            scraper_summary = run_scraper_update(progress_cb=progress)
+            progress(92, "Reloading Data", "Reloading refreshed data into predictor...")
+            with PREDICTOR_LOCK:
+                system_status = predictor.reload_data()
+            progress(100, "Completed", "Fight data update complete.")
+            _update_job_status(
+                job_id,
+                state="succeeded",
+                finished_at_utc=_utc_now_iso(),
+                result={
+                    "system_status": system_status,
+                    "summary": scraper_summary,
+                },
+            )
+            return
+
+        if action == "retrain_models":
+            progress(1, "Retraining Models", "Preparing model retraining pipeline...")
+            with PREDICTOR_LOCK:
+                system_status = predictor.retrain_models(include_siamese=True, progress_cb=progress)
+            progress(100, "Completed", "Model retrain complete (base + Siamese).")
+            _update_job_status(
+                job_id,
+                state="succeeded",
+                finished_at_utc=_utc_now_iso(),
+                result={"system_status": system_status},
+            )
+            return
+
+        raise RuntimeError(f"Unsupported async action: {action}")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("UFC async job failed: job_id=%s action=%s", job_id, action)
+        _update_job_status(
+            job_id,
+            state="failed",
+            finished_at_utc=_utc_now_iso(),
+            error=str(exc),
+            stage="Failed",
+            message=str(exc),
+        )
+    finally:
+        _release_job_execution_lease(lease)
 
 
 @contextmanager
@@ -251,9 +484,16 @@ def build_bet_recommendation(
     }
 
 
-def run_scraper_update() -> str:
+def run_scraper_update(progress_cb: Callable[[float, str, str], None] | None = None) -> str:
     if not SCRAPER_SCRIPT.exists():
         raise FileNotFoundError(f"Scraper script not found: {SCRAPER_SCRIPT}")
+
+    def emit(percent: float, stage: str, message: str) -> None:
+        if progress_cb is None:
+            return
+        progress_cb(percent, stage, message)
+
+    emit(2, "Scraping Data", "Preparing scraper process...")
     cmd = [
         sys.executable,
         str(SCRAPER_SCRIPT),
@@ -264,19 +504,91 @@ def run_scraper_update() -> str:
         "--log-level",
         "INFO",
     ]
-    result = subprocess.run(
+
+    process = subprocess.Popen(
         cmd,
         cwd=str(APP_ROOT),
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
-        timeout=SCRAPER_TIMEOUT_SECONDS,
+        bufsize=1,
     )
-    stdout = (result.stdout or "").strip()
-    stderr = (result.stderr or "").strip()
-    if result.returncode != 0:
-        tail = "\n".join((stdout + "\n" + stderr).strip().splitlines()[-12:])
-        raise RuntimeError(f"Scraper failed (exit {result.returncode}).\n{tail}")
-    lines = stdout.splitlines()
+    if process.stdout is None:
+        raise RuntimeError("Could not capture scraper output stream.")
+
+    output_queue: queue.Queue[str | None] = queue.Queue()
+
+    def _read_scraper_output() -> None:
+        try:
+            for raw_line in process.stdout:
+                output_queue.put(raw_line.rstrip("\n"))
+        finally:
+            output_queue.put(None)
+
+    reader = threading.Thread(target=_read_scraper_output, daemon=True)
+    reader.start()
+
+    lines: list[str] = []
+    started_at = time.monotonic()
+    total_events: int | None = None
+    completed_events = 0
+
+    emit(5, "Scraping Data", "Scraper started. Fetching event index...")
+
+    while True:
+        if (time.monotonic() - started_at) > SCRAPER_TIMEOUT_SECONDS:
+            process.kill()
+            raise RuntimeError(f"Scraper timed out after {SCRAPER_TIMEOUT_SECONDS} seconds.")
+        try:
+            queued_line = output_queue.get(timeout=0.5)
+        except queue.Empty:
+            if process.poll() is not None and not reader.is_alive():
+                break
+            continue
+
+        if queued_line is None:
+            break
+
+        line = str(queued_line).strip()
+        if not line:
+            continue
+        lines.append(line)
+
+        events_match = _SCRAPER_EVENTS_RE.search(line)
+        if events_match:
+            try:
+                total_events = max(1, int(events_match.group(1)))
+            except ValueError:
+                total_events = None
+            emit(12, "Scraping Data", line)
+            continue
+
+        if _SCRAPER_EVENT_DONE_RE.search(line):
+            completed_events += 1
+            if total_events:
+                scrape_progress = 12 + int((completed_events / total_events) * 72)
+                emit(scrape_progress, "Scraping Data", f"Completed {completed_events}/{total_events} events...")
+            else:
+                emit(50, "Scraping Data", line)
+            continue
+
+        if "Run complete." in line:
+            emit(88, "Scraping Data", "Scrape run complete. Finalizing output...")
+            continue
+
+        if "No new events to scrape" in line:
+            emit(88, "Scraping Data", "No new events found. Refreshing dataset export...")
+            continue
+
+        if line.startswith("Event:"):
+            emit(20, "Scraping Data", line)
+
+    return_code = process.wait(timeout=5)
+    if return_code != 0:
+        tail = "\n".join(lines[-12:])
+        raise RuntimeError(f"Scraper failed (exit {return_code}).\n{tail}")
+
+    emit(90, "Scraping Data", "Scraper finished successfully.")
     if not lines:
         return "Scrape completed."
     return lines[-1]
@@ -726,6 +1038,54 @@ def predict_api() -> Any:
         return jsonify({"ok": True, "prediction": prediction})
     except Exception as exc:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@ufc_bp.route("/api/jobs", methods=["POST"])
+def create_async_job() -> Any:
+    payload = request.get_json(silent=True) or {}
+    action = str(payload.get("action", "")).strip().lower()
+    if action not in {"update_data", "retrain_models"}:
+        return jsonify({"ok": False, "error": "Invalid action. Use 'update_data' or 'retrain_models'."}), 400
+
+    lease = _acquire_job_execution_lease()
+    if lease is None:
+        active = _find_active_job_status()
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "Another UFC operation is already running.",
+                    "active_job": active,
+                }
+            ),
+            409,
+        )
+
+    job_id = uuid.uuid4().hex
+    job_status = _create_job_status(job_id, action)
+    thread = threading.Thread(
+        target=_run_async_ops_job,
+        args=(job_id, action, lease),
+        daemon=True,
+    )
+    thread.start()
+    return jsonify({"ok": True, "job": job_status}), 202
+
+
+@ufc_bp.route("/api/jobs/active", methods=["GET"])
+def get_active_job() -> Any:
+    return jsonify({"ok": True, "job": _find_active_job_status()})
+
+
+@ufc_bp.route("/api/jobs/<job_id>", methods=["GET"])
+def get_job_status(job_id: str) -> Any:
+    safe_job_id = str(job_id).strip().lower()
+    if not safe_job_id or any(ch not in "0123456789abcdef" for ch in safe_job_id):
+        return jsonify({"ok": False, "error": "Job not found."}), 404
+    payload = _load_job_status(safe_job_id)
+    if payload is None:
+        return jsonify({"ok": False, "error": "Job not found."}), 404
+    return jsonify({"ok": True, "job": payload})
 
 
 @ufc_bp.route("/healthz", methods=["GET"])

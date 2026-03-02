@@ -8,7 +8,7 @@ import datetime as dt
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import joblib
 import numpy as np
@@ -74,6 +74,7 @@ BASE_MODEL_KEYS = [
 CACHE_VERSION = 1
 BASE_MODEL_CACHE_FILE = "base_models.joblib"
 SIAMESE_CACHE_FILE = "siamese_no_context.pt"
+ProgressCallback = Callable[[float, str, str], None]
 
 
 @dataclass
@@ -170,6 +171,21 @@ class FightPredictor:
     @staticmethod
     def _utc_now_iso() -> str:
         return dt.datetime.now(dt.timezone.utc).isoformat()
+
+    @staticmethod
+    def _emit_progress(
+        progress_cb: ProgressCallback | None,
+        percent: float,
+        stage: str,
+        message: str,
+    ) -> None:
+        if progress_cb is None:
+            return
+        pct = max(0.0, min(100.0, float(percent)))
+        try:
+            progress_cb(pct, str(stage), str(message))
+        except Exception:
+            return
 
     def _refresh_runtime_state(self) -> None:
         self.feature_set = set(self.feature_cols)
@@ -279,15 +295,26 @@ class FightPredictor:
         self._refresh_runtime_state()
         return self.model_cache_status()
 
-    def retrain_models(self, include_siamese: bool = False) -> dict[str, Any]:
+    def retrain_models(
+        self,
+        include_siamese: bool = False,
+        progress_cb: ProgressCallback | None = None,
+    ) -> dict[str, Any]:
+        self._emit_progress(progress_cb, 2, "Retraining Models", "Loading latest UFC dataset...")
         self.df = load_and_prepare_dataframe(self.csv_path)
         self.df_aug = self._augment_with_swapped_rows(self.df)
+        self._emit_progress(progress_cb, 8, "Retraining Models", "Starting base model training...")
         (
             self.base_models,
             self.feature_cols,
             self.numeric_cols,
             self.categorical_cols,
-        ) = self._train_models(self.df_aug)
+        ) = self._train_models(
+            self.df_aug,
+            progress_cb=progress_cb,
+            progress_start=10.0,
+            progress_end=78.0,
+        )
         trained_at_utc = self._utc_now_iso()
         self._save_base_models_to_cache(
             models=self.base_models,
@@ -296,17 +323,30 @@ class FightPredictor:
             categorical_cols=self.categorical_cols,
             trained_at_utc=trained_at_utc,
         )
+        self._emit_progress(progress_cb, 82, "Retraining Models", "Refreshing model state...")
         self._cache_info["base_models_loaded_from_cache"] = False
         self._cache_info["base_models_trained_at_utc"] = trained_at_utc
         self._siamese_base_df = self._prepare_siamese_base_dataframe()
         self._clear_siamese_cache()
         self._refresh_runtime_state()
         if include_siamese:
-            self._ensure_siamese_model(allow_train=True)
+            self._emit_progress(progress_cb, 84, "Retraining Models", "Starting Siamese training...")
+            self._ensure_siamese_model(
+                allow_train=True,
+                progress_cb=progress_cb,
+                progress_start=84.0,
+                progress_end=99.0,
+            )
+        self._emit_progress(progress_cb, 100, "Retraining Models", "Model retrain complete.")
         return self.model_cache_status()
 
-    def warm_siamese_model(self) -> dict[str, Any]:
-        self._ensure_siamese_model(allow_train=True)
+    def warm_siamese_model(self, progress_cb: ProgressCallback | None = None) -> dict[str, Any]:
+        self._ensure_siamese_model(
+            allow_train=True,
+            progress_cb=progress_cb,
+            progress_start=10.0,
+            progress_end=100.0,
+        )
         return self.model_cache_status()
 
     def model_cache_status(self) -> dict[str, Any]:
@@ -390,7 +430,14 @@ class FightPredictor:
         df[SPLIT_COL] = "train"
         return df
 
-    def _train_siamese_model_for_web(self, prepared: Any, device: str) -> Any:
+    def _train_siamese_model_for_web(
+        self,
+        prepared: Any,
+        device: str,
+        progress_cb: ProgressCallback | None = None,
+        progress_start: float = 0.0,
+        progress_end: float = 100.0,
+    ) -> Any:
         train_ds = FightPairDataset(
             prepared.seq1_train,
             prepared.len1_train,
@@ -425,7 +472,9 @@ class FightPredictor:
         )
         criterion = nn.BCEWithLogitsLoss()
 
-        for _ in range(self._siamese_config.epochs):
+        total_epochs = max(1, int(self._siamese_config.epochs))
+        progress_span = max(0.0, float(progress_end) - float(progress_start))
+        for epoch_idx in range(total_epochs):
             model.train()
             for batch in train_loader:
                 seq1 = batch["seq1"].to(device)
@@ -442,6 +491,13 @@ class FightPredictor:
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                 optimizer.step()
+            epoch_progress = float(progress_start) + progress_span * ((epoch_idx + 1) / total_epochs)
+            self._emit_progress(
+                progress_cb,
+                epoch_progress,
+                "Training Siamese",
+                f"Siamese epoch {epoch_idx + 1}/{total_epochs}",
+            )
         return model
 
     def _try_load_siamese_from_cache(
@@ -518,8 +574,15 @@ class FightPredictor:
         }
         torch.save(payload, self._siamese_cache_path)
 
-    def _ensure_siamese_model(self, allow_train: bool = False) -> None:
+    def _ensure_siamese_model(
+        self,
+        allow_train: bool = False,
+        progress_cb: ProgressCallback | None = None,
+        progress_start: float = 0.0,
+        progress_end: float = 100.0,
+    ) -> None:
         if self._siamese_model is not None:
+            self._emit_progress(progress_cb, progress_end, "Training Siamese", "Siamese model is already loaded.")
             return
 
         self._siamese_device = resolve_device("auto")
@@ -540,6 +603,7 @@ class FightPredictor:
             self._siamese_model = cached_model
             self._siamese_seq_idx = seq_idx
             self._siamese_static_idx = static_idx
+            self._emit_progress(progress_cb, progress_end, "Training Siamese", "Loaded Siamese model from cache.")
             return
 
         if not allow_train:
@@ -547,7 +611,14 @@ class FightPredictor:
                 "Siamese model is not trained yet. Use 'Retrain Models' before requesting Siamese predictions."
             )
 
-        model = self._train_siamese_model_for_web(prepared_sub, device=self._siamese_device)
+        self._emit_progress(progress_cb, progress_start, "Training Siamese", "Preparing Siamese training data...")
+        model = self._train_siamese_model_for_web(
+            prepared_sub,
+            device=self._siamese_device,
+            progress_cb=progress_cb,
+            progress_start=progress_start,
+            progress_end=max(progress_start, progress_end - 1),
+        )
         self._save_siamese_to_cache(
             model=model,
             prepared=prepared_sub,
@@ -559,6 +630,7 @@ class FightPredictor:
         self._siamese_static_idx = static_idx
         self._cache_info["siamese_loaded_from_cache"] = False
         self._cache_info["siamese_trained_at_utc"] = self._utc_now_iso()
+        self._emit_progress(progress_cb, progress_end, "Training Siamese", "Siamese training complete.")
 
     def _build_siamese_prediction_row(
         self,
@@ -692,6 +764,9 @@ class FightPredictor:
     def _train_models(
         self,
         df: pd.DataFrame,
+        progress_cb: ProgressCallback | None = None,
+        progress_start: float = 0.0,
+        progress_end: float = 100.0,
     ) -> tuple[dict[str, Any], list[str], list[str], list[str]]:
         feature_cols, numeric_cols, categorical_cols = self._derive_feature_schema(df)
 
@@ -704,7 +779,9 @@ class FightPredictor:
             x[col] = x[col].astype(str).replace("nan", "__UNK__").replace("", "__UNK__")
 
         models: dict[str, Any] = {}
-        for model_name in BASE_MODEL_KEYS:
+        total_models = max(1, len(BASE_MODEL_KEYS))
+        progress_span = max(0.0, float(progress_end) - float(progress_start))
+        for model_index, model_name in enumerate(BASE_MODEL_KEYS, start=1):
             if model_name in {"random_forest", "extra_trees"}:
                 model = self._build_tree_pipeline(model_name)
             else:
@@ -717,6 +794,13 @@ class FightPredictor:
                 )
             model.fit(x, y)
             models[model_name] = model
+            model_progress = float(progress_start) + progress_span * (model_index / total_models)
+            self._emit_progress(
+                progress_cb,
+                model_progress,
+                "Training Base Models",
+                f"Trained {model_name} ({model_index}/{total_models})",
+            )
 
         return models, feature_cols, numeric_cols, categorical_cols
 

@@ -146,6 +146,29 @@ h1 {
   color: var(--muted);
 }
 
+.ops-progress-meter {
+  margin: 0.7rem 0 0;
+  height: 10px;
+  border-radius: 999px;
+  background: #e2ebe6;
+  overflow: hidden;
+}
+
+.ops-progress-meter span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #0e6a55, #0b8a6f);
+  transition: width 0.25s ease;
+}
+
+.ops-progress-percent {
+  margin: 0.38rem 0 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .ops-progress-elapsed {
   margin: 0.55rem 0 0;
   color: var(--muted);

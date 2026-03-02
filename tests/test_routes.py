@@ -4,6 +4,9 @@ from __future__ import annotations
 REQUIRED_ROUTES = {
     "/ufc/",
     "/ufc/api/predict",
+    "/ufc/api/jobs",
+    "/ufc/api/jobs/active",
+    "/ufc/api/jobs/<job_id>",
     "/ufc/healthz",
     "/auth/mfa/setup",
     "/auth/mfa/verify",
