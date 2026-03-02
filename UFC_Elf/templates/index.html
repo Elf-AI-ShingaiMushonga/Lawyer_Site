@@ -38,12 +38,12 @@
           <p>Loaded base models from cache this boot: <strong>{{ "Yes" if system_status.base_models_loaded_from_cache else "No" }}</strong></p>
         </div>
         <div class="ops-buttons">
-          <form method="post">
+          <form method="post" data-ops-progress-label="Updating fight data...">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <input type="hidden" name="action" value="update_data" />
             <button type="submit" class="secondary">Update Data (Run Scraper)</button>
           </form>
-          <form method="post">
+          <form method="post" data-ops-progress-label="Retraining models (base + Siamese)...">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <input type="hidden" name="action" value="retrain_models" />
             <button type="submit">Retrain Models</button>
@@ -526,5 +526,14 @@
         {% endif %}
       </section>
     </main>
+    <div class="ops-progress" id="ops-progress" aria-hidden="true" aria-live="polite">
+      <div class="ops-progress-card" role="status">
+        <div class="ops-spinner" aria-hidden="true"></div>
+        <p class="ops-progress-title" id="ops-progress-title">Running operation...</p>
+        <p class="ops-progress-copy">This can take several minutes. Keep this tab open.</p>
+        <p class="ops-progress-elapsed">Elapsed: <span id="ops-progress-seconds">0s</span></p>
+      </div>
+    </div>
+    <script src="{{ url_for('ufc.static', filename='ops_progress.js') }}" defer></script>
   </body>
 </html>
