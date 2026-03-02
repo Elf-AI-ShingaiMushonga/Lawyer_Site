@@ -1890,6 +1890,56 @@ def filter_events(
     return filtered
 
 
+def _backfill_processed_events_from_existing_fights(
+    *,
+    store: CheckpointStore,
+    client: HttpClient,
+    events: list[EventMeta],
+    processed_event_ids: set[str],
+) -> int:
+    """Mark events as processed only when all event fight IDs already exist in checkpoint DB."""
+    if processed_event_ids:
+        return 0
+    if store.fights_count() <= 0:
+        return 0
+
+    backfilled = 0
+    for event in events:
+        existing_fight_ids = store.existing_fight_ids_for_event(event.event_id)
+        if not existing_fight_ids:
+            break
+
+        try:
+            stubs = parse_event_fights(client, event)
+        except Exception as exc:
+            logging.warning(
+                "Checkpoint backfill stopped at event %s (%s): %s",
+                event.event_id,
+                event.event_name,
+                exc,
+            )
+            break
+
+        expected_fight_ids = {stub.fight_id for stub in stubs if stub.fight_id}
+        if not expected_fight_ids:
+            logging.warning(
+                "Checkpoint backfill stopped at event %s (%s): no fight stubs discovered.",
+                event.event_id,
+                event.event_name,
+            )
+            break
+        if not expected_fight_ids.issubset(existing_fight_ids):
+            break
+
+        store.mark_event_processed(event)
+        processed_event_ids.add(event.event_id)
+        backfilled += 1
+
+    if backfilled > 0:
+        store.commit()
+    return backfilled
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
@@ -1927,6 +1977,22 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 1
 
         processed_event_ids = store.processed_event_ids()
+        backfilled_events = _backfill_processed_events_from_existing_fights(
+            store=store,
+            client=client,
+            events=all_events,
+            processed_event_ids=processed_event_ids,
+        )
+        if backfilled_events > 0:
+            logging.info(
+                "Checkpoint backfill marked %s event(s) as processed using existing fights.",
+                backfilled_events,
+            )
+        logging.info(
+            "Checkpoint summary: processed_events=%s, fights=%s",
+            len(processed_event_ids),
+            store.fights_count(),
+        )
 
         pending_events = filter_events(
             all_events,
