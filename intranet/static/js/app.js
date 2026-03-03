@@ -2173,11 +2173,24 @@
     }
 
     const minDelta = 8;
+    const hasActiveMatter = nav.classList.contains("has-active-matter");
     let lastY = window.scrollY;
     let isCollapsed = false;
     let ticking = false;
+    let expandedHeight = nav.offsetHeight;
 
-    const collapseStart = () => Math.max(72, nav.offsetHeight + 18);
+    const measureExpandedHeight = () => {
+      const wasCollapsed = nav.classList.contains("is-collapsed");
+      if (wasCollapsed) {
+        nav.classList.remove("is-collapsed");
+      }
+      expandedHeight = Math.max(1, nav.offsetHeight);
+      if (wasCollapsed) {
+        nav.classList.add("is-collapsed");
+      }
+    };
+
+    const collapseStart = () => Math.max(72, expandedHeight + 18);
 
     const setCollapsed = (nextState) => {
       if (isCollapsed === nextState) {
@@ -2193,10 +2206,22 @@
 
       if (y <= 10 || nav.contains(document.activeElement)) {
         setCollapsed(false);
-      } else if (delta > minDelta && y > collapseStart()) {
-        setCollapsed(true);
-      } else if (delta < -minDelta) {
-        setCollapsed(false);
+      } else if (hasActiveMatter) {
+        // In active-matter mode the nav height changes during collapse.
+        // Use a fixed threshold + hysteresis to prevent scroll flicker.
+        const collapseY = collapseStart();
+        const expandY = Math.max(10, collapseY - 48);
+        if (!isCollapsed && y > collapseY) {
+          setCollapsed(true);
+        } else if (isCollapsed && y <= expandY) {
+          setCollapsed(false);
+        }
+      } else {
+        if (delta > minDelta && y > collapseStart()) {
+          setCollapsed(true);
+        } else if (delta < -minDelta) {
+          setCollapsed(false);
+        }
       }
 
       lastY = y;
@@ -2213,9 +2238,11 @@
 
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", () => {
+      measureExpandedHeight();
       if (window.scrollY <= collapseStart()) {
         setCollapsed(false);
       }
+      update();
     });
     window.addEventListener("keydown", (event) => {
       if (event.key === "Tab") {
@@ -2223,6 +2250,7 @@
       }
     });
 
+    measureExpandedHeight();
     update();
   };
 
