@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import importlib.util
 import logging
 import os
 import secrets
@@ -231,6 +232,45 @@ def create_app() -> Flask:
     def inject_ui_state():
         active_matter = resolve_active_matter()
         active_timer_cue = None
+        ai_status = {
+            "available": False,
+            "label": "AI Off",
+            "tone": "tone-neutral",
+            "tooltip": "AI features are disabled.",
+        }
+        ai_enabled = bool(app.config.get("AI_ENABLED", False))
+        ai_provider = str(app.config.get("AI_PROVIDER") or "openai").strip().lower()
+        ai_openai_key = (app.config.get("AI_OPENAI_API_KEY") or "").strip()
+        if ai_enabled:
+            if ai_provider != "openai":
+                ai_status = {
+                    "available": False,
+                    "label": "AI Unavailable",
+                    "tone": "tone-warning",
+                    "tooltip": f"Unsupported AI provider configured: {ai_provider or 'unknown'}.",
+                }
+            elif not ai_openai_key:
+                ai_status = {
+                    "available": False,
+                    "label": "AI Key Missing",
+                    "tone": "tone-warning",
+                    "tooltip": "OpenAI API key is not configured.",
+                }
+            elif importlib.util.find_spec("openai") is None:
+                ai_status = {
+                    "available": False,
+                    "label": "AI SDK Missing",
+                    "tone": "tone-warning",
+                    "tooltip": "OpenAI SDK package is not installed.",
+                }
+            else:
+                model_name = str(app.config.get("AI_OPENAI_TEXT_MODEL") or "gpt-4o-mini").strip()
+                ai_status = {
+                    "available": True,
+                    "label": "AI Available",
+                    "tone": "tone-positive",
+                    "tooltip": f"OpenAI is configured and available (model: {model_name}).",
+                }
         if current_user.is_authenticated:
             running_timer = (
                 TimeTimer.query.filter_by(user_id=current_user.id, status="running")
@@ -270,6 +310,7 @@ def create_app() -> Flask:
         return {
             "active_matter": active_matter,
             "active_timer_cue": active_timer_cue,
+            "ai_status": ai_status,
         }
 
     db.init_app(app)

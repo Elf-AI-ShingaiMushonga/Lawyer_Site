@@ -158,3 +158,45 @@ def test_ai_job_status_endpoint_returns_semantic_job_state(app_ctx):
     assert int(payload["job"]["id"]) == int(job_id)
     assert payload["job"]["job_type"] == "semantic_index_document_version"
     assert payload["job"]["status"] in {"queued", "running", "failed", "succeeded", "dead_letter"}
+
+
+def test_nav_shows_ai_available_indicator_when_provider_ready(app_ctx, monkeypatch):
+    app = app_ctx
+    app.config.update(
+        AI_ENABLED=True,
+        AI_PROVIDER="openai",
+        AI_OPENAI_API_KEY="test-api-key",
+        AI_OPENAI_TEXT_MODEL="gpt-4o-mini",
+    )
+    monkeypatch.setattr("importlib.util.find_spec", lambda name: object() if name == "openai" else None)
+    user = _seed_user("ai-indicator-ready@example.com")
+    db.session.commit()
+
+    client = app.test_client()
+    _login(client, user.id)
+    response = client.get("/dashboard")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "AI Available" in body
+    assert "tone-positive" in body
+
+
+def test_nav_shows_ai_key_missing_indicator_when_ai_key_not_configured(app_ctx):
+    app = app_ctx
+    app.config.update(
+        AI_ENABLED=True,
+        AI_PROVIDER="openai",
+        AI_OPENAI_API_KEY="",
+    )
+    user = _seed_user("ai-indicator-missing-key@example.com")
+    db.session.commit()
+
+    client = app.test_client()
+    _login(client, user.id)
+    response = client.get("/dashboard")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "AI Key Missing" in body
+    assert "tone-warning" in body

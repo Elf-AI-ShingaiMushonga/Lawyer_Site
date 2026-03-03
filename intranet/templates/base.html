@@ -2663,6 +2663,7 @@
         {% if current_user.is_authenticated %}
           <div class="nav-brand-meta">
             <span class="badge status-badge status-{{ current_user.role|lower|replace(' ', '-') }}">{{ current_user.role }}</span>
+            <span class="badge status-badge {{ ai_status.tone }}" title="{{ ai_status.tooltip }}">{{ ai_status.label }}</span>
             <span class="muted small">{{ current_user.email }}</span>
           </div>
         {% endif %}
