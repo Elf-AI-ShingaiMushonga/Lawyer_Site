@@ -355,7 +355,11 @@ def test_admin_can_generate_ai_archetype_draft_payload(app_ctx):
     assert suggestion.get("boilerplate_template")
     assert isinstance(suggestion.get("required_fields"), list)
     assert suggestion["required_fields"]
+    assert suggestion.get("source") == "fallback"
+    assert suggestion.get("fallback_reason") == "ai_disabled"
+    assert "disabled" in str(suggestion.get("fallback_detail") or "").lower()
     assert int(payload.get("elapsed_ms") or 0) >= 0
+    assert payload.get("fallback_reason") == "ai_disabled"
 
 
 def test_matter_archetype_builder_renders_ai_widget_with_feedback_markers(app_ctx):

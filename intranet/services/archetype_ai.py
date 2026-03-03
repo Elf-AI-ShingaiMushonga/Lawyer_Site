@@ -181,6 +181,20 @@ def _normalize_suggestion(payload: dict[str, Any], fallback: dict[str, Any]) -> 
     }
 
 
+def _fallback_with_reason(
+    fallback: dict[str, Any],
+    *,
+    reason: str,
+    detail: str = "",
+) -> dict[str, Any]:
+    payload = dict(fallback)
+    payload["source"] = "fallback"
+    payload["fallback_reason"] = " ".join(str(reason or "").split()).strip() or "unknown"
+    if detail:
+        payload["fallback_detail"] = " ".join(str(detail).split()).strip()[:280]
+    return payload
+
+
 def suggest_matter_archetype(*, prompt: str, legal_category_hint: str = "", name_hint: str = "") -> dict[str, Any]:
     prompt_clean = " ".join((prompt or "").split()).strip()
     legal_category_hint = " ".join((legal_category_hint or "").split()).strip()
@@ -195,66 +209,87 @@ def suggest_matter_archetype(*, prompt: str, legal_category_hint: str = "", name
     max_retries = max(0, int(current_app.config.get("AI_OPENAI_MAX_RETRIES", 2) or 2))
     request_chars = len(prompt_clean) + len(legal_category_hint) + len(name_hint)
 
-    if ai_enabled and provider == "openai" and api_key:
-        started = time.perf_counter()
-        try:
-            from openai import OpenAI
+    if not ai_enabled:
+        return _fallback_with_reason(
+            fallback,
+            reason="ai_disabled",
+            detail="AI is disabled in server configuration.",
+        )
+    if provider != "openai":
+        return _fallback_with_reason(
+            fallback,
+            reason="unsupported_provider",
+            detail=f"Configured provider '{provider or 'unknown'}' is unsupported for this draft flow.",
+        )
+    if not api_key:
+        return _fallback_with_reason(
+            fallback,
+            reason="missing_api_key",
+            detail="OpenAI API key is not configured.",
+        )
 
-            client = OpenAI(api_key=api_key, timeout=float(timeout_seconds), max_retries=max_retries)
-            instructions = (
-                "You generate legal matter archetype drafts. Return strict JSON with keys: "
-                "name, legal_category, practice_area, default_stage, default_risk_level, required_fields, checklist, boilerplate_template. "
-                "required_fields must be a list of objects with key,label,help. "
-                "boilerplate_template must include merge fields like {{matter_no}}, {{client_name}} and required field keys."
-            )
-            user_payload = {
-                "prompt": prompt_clean,
-                "legal_category_hint": legal_category_hint,
-                "name_hint": name_hint,
-                "max_required_fields": _MAX_REQUIRED_FIELDS,
-                "max_checklist_items": _MAX_CHECKLIST_ITEMS,
-            }
-            response = client.chat.completions.create(
-                model=model,
-                temperature=0.2,
-                response_format={"type": "json_object"},
-                messages=[
-                    {"role": "system", "content": instructions},
-                    {"role": "user", "content": json.dumps(user_payload, ensure_ascii=True)},
-                ],
-            )
-            content = ""
-            if response.choices:
-                first = response.choices[0]
-                if first and getattr(first, "message", None) is not None:
-                    content = str(first.message.content or "").strip()
-            parsed = json.loads(content) if content else {}
-            suggestion = _normalize_suggestion(parsed if isinstance(parsed, dict) else {}, fallback)
-            latency_ms = int((time.perf_counter() - started) * 1000)
-            log_ai_operation(
-                operation_type="archetype_suggest",
-                provider="openai",
-                model=model,
-                status="ok",
-                request_chars=request_chars,
-                response_units=len(json.dumps(suggestion, ensure_ascii=True)),
-                latency_ms=latency_ms,
-                metadata={"required_fields": len(suggestion["required_fields"]), "checklist": len(suggestion["checklist"])},
-            )
-            suggestion["source"] = "openai"
-            return suggestion
-        except Exception as exc:  # pragma: no cover - provider/network fallback
-            latency_ms = int((time.perf_counter() - started) * 1000)
-            log_ai_operation(
-                operation_type="archetype_suggest",
-                provider="openai",
-                model=model,
-                status="error",
-                request_chars=request_chars,
-                latency_ms=latency_ms,
-                metadata={},
-                error_message=str(exc),
-            )
-            current_app.logger.warning("OpenAI archetype suggestion fallback engaged: %s", exc)
+    started = time.perf_counter()
+    try:
+        from openai import OpenAI
 
-    return fallback
+        client = OpenAI(api_key=api_key, timeout=float(timeout_seconds), max_retries=max_retries)
+        instructions = (
+            "You generate legal matter archetype drafts. Return strict JSON with keys: "
+            "name, legal_category, practice_area, default_stage, default_risk_level, required_fields, checklist, boilerplate_template. "
+            "required_fields must be a list of objects with key,label,help. "
+            "boilerplate_template must include merge fields like {{matter_no}}, {{client_name}} and required field keys."
+        )
+        user_payload = {
+            "prompt": prompt_clean,
+            "legal_category_hint": legal_category_hint,
+            "name_hint": name_hint,
+            "max_required_fields": _MAX_REQUIRED_FIELDS,
+            "max_checklist_items": _MAX_CHECKLIST_ITEMS,
+        }
+        response = client.chat.completions.create(
+            model=model,
+            temperature=0.2,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": instructions},
+                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=True)},
+            ],
+        )
+        content = ""
+        if response.choices:
+            first = response.choices[0]
+            if first and getattr(first, "message", None) is not None:
+                content = str(first.message.content or "").strip()
+        parsed = json.loads(content) if content else {}
+        suggestion = _normalize_suggestion(parsed if isinstance(parsed, dict) else {}, fallback)
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_ai_operation(
+            operation_type="archetype_suggest",
+            provider="openai",
+            model=model,
+            status="ok",
+            request_chars=request_chars,
+            response_units=len(json.dumps(suggestion, ensure_ascii=True)),
+            latency_ms=latency_ms,
+            metadata={"required_fields": len(suggestion["required_fields"]), "checklist": len(suggestion["checklist"])},
+        )
+        suggestion["source"] = "openai"
+        return suggestion
+    except Exception as exc:  # pragma: no cover - provider/network fallback
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_ai_operation(
+            operation_type="archetype_suggest",
+            provider="openai",
+            model=model,
+            status="error",
+            request_chars=request_chars,
+            latency_ms=latency_ms,
+            metadata={},
+            error_message=str(exc),
+        )
+        current_app.logger.warning("OpenAI archetype suggestion fallback engaged: %s", exc)
+        return _fallback_with_reason(
+            fallback,
+            reason="openai_error",
+            detail=str(exc),
+        )

@@ -399,11 +399,20 @@ def register_admin_settings_routes(app):
             None,
             {
                 "source": suggestion.get("source"),
+                "fallback_reason": suggestion.get("fallback_reason"),
                 "required_fields": len(suggestion.get("required_fields") or []),
                 "elapsed_ms": elapsed_ms,
             },
         )
-        return jsonify({"ok": True, "suggestion": suggestion, "elapsed_ms": elapsed_ms})
+        return jsonify(
+            {
+                "ok": True,
+                "suggestion": suggestion,
+                "elapsed_ms": elapsed_ms,
+                "fallback_reason": suggestion.get("fallback_reason"),
+                "fallback_detail": suggestion.get("fallback_detail"),
+            }
+        )
 
     @app.route("/admin/templates/tasks", methods=["GET", "POST"])
     @login_required

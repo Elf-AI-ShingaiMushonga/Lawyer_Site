@@ -906,6 +906,26 @@
       statusEl.textContent = text;
     };
 
+    const describeFallbackReason = (reasonCode) => {
+      const code = String(reasonCode || "").trim().toLowerCase();
+      if (code === "ai_disabled") {
+        return "AI is disabled in server configuration";
+      }
+      if (code === "missing_api_key") {
+        return "OpenAI API key is not configured";
+      }
+      if (code === "unsupported_provider") {
+        return "Configured AI provider is unsupported for this draft flow";
+      }
+      if (code === "openai_error") {
+        return "OpenAI request failed";
+      }
+      if (code) {
+        return code.replace(/_/g, " ");
+      }
+      return "fallback reason unavailable";
+    };
+
     const defaultButtonText = String(generateButton.textContent || "Generate Draft with AI").trim();
     let requestInFlight = false;
 
@@ -990,6 +1010,15 @@
         const source = String(suggestion.source || "fallback").trim() || "fallback";
         const elapsedMs = Math.max(0, Number.parseInt(String(payload.elapsed_ms || ""), 10) || Date.now() - startedAtMs);
         const elapsedText = `${Math.max(1, Math.round(elapsedMs / 1000))}s`;
+        if (source === "fallback") {
+          const reasonCode = String(suggestion.fallback_reason || payload.fallback_reason || "").trim();
+          const reasonText = describeFallbackReason(reasonCode);
+          const rawDetail = String(suggestion.fallback_detail || payload.fallback_detail || "").trim();
+          const detail = rawDetail && rawDetail.length <= 180 ? rawDetail : "";
+          const reasonMessage = detail ? `${reasonText}: ${detail}` : reasonText;
+          setStatus(`Archetype draft generated (fallback) in ${elapsedText}. Reason: ${reasonMessage}. Review and save.`, "text-warning");
+          return;
+        }
         setStatus(`Archetype draft generated (${source}) in ${elapsedText}. Review and save.`, "text-success");
       } catch (error) {
         if (error && typeof error === "object" && String(error.name || "") === "AbortError") {
