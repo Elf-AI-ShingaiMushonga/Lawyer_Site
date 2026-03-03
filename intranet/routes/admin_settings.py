@@ -38,6 +38,23 @@ def _admin_required() -> None:
         abort(403)
 
 
+def _required_fields_to_text(raw_json: str | None) -> str:
+    lines: list[str] = []
+    for field in load_required_fields(raw_json):
+        key = str(field.get("key") or "").strip()
+        if not key:
+            continue
+        label = str(field.get("label") or "").strip()
+        help_text = str(field.get("help") or "").strip()
+        if help_text:
+            lines.append(f"{key}|{label}|{help_text}")
+        elif label:
+            lines.append(f"{key}|{label}")
+        else:
+            lines.append(key)
+    return "\n".join(lines)
+
+
 def _sync_priority_digest_schedule(config: dict) -> None:
     now = dt.datetime.utcnow()
     interval = int(config.get("digest_interval_minutes") or 60)
@@ -212,6 +229,29 @@ def register_admin_settings_routes(app):
     def admin_templates_matters():
         _admin_required()
         if request.method == "POST":
+            action = (request.form.get("action") or "save").strip().lower()
+            template_id = request.form.get("template_id", type=int)
+            row = db.session.get(MatterTemplate, template_id) if template_id else None
+
+            if action == "delete":
+                if row is None:
+                    flash("Matter archetype not found.", "warning")
+                    return redirect(url_for("admin_templates_matters"))
+                linked_count = Matter.query.filter_by(archetype_id=row.id).count()
+                if linked_count > 0:
+                    flash(
+                        f"Cannot delete archetype '{row.name}' because {linked_count} matter(s) still use it.",
+                        "warning",
+                    )
+                    return redirect(url_for("admin_templates_matters"))
+                deleted_id = int(row.id)
+                deleted_name = row.name
+                db.session.delete(row)
+                db.session.commit()
+                audit("matter_template_delete", "MatterTemplate", deleted_id, {"name": deleted_name})
+                flash("Matter archetype deleted.", "info")
+                return redirect(url_for("admin_templates_matters"))
+
             name = (request.form.get("name") or "").strip()
             legal_category = (request.form.get("legal_category") or "").strip()
             boilerplate_template = (request.form.get("boilerplate_template") or "").strip()
@@ -230,11 +270,27 @@ def register_admin_settings_routes(app):
                 flash(field_errors[0], "warning")
                 return redirect(url_for("admin_templates_matters"))
 
-            row = MatterTemplate.query.filter_by(name=name).first()
+            if template_id and row is None:
+                flash("Matter archetype not found.", "warning")
+                return redirect(url_for("admin_templates_matters"))
+
+            duplicate_name = (
+                MatterTemplate.query.filter(MatterTemplate.name == name, MatterTemplate.id != template_id).first()
+                if template_id
+                else MatterTemplate.query.filter_by(name=name).first()
+            )
+            if duplicate_name is not None and row is not duplicate_name:
+                flash("Another archetype already uses that name.", "warning")
+                return redirect(url_for("admin_templates_matters"))
+
+            if row is None:
+                row = duplicate_name
             is_new = row is None
             if row is None:
                 row = MatterTemplate(name=name, created_by=current_user.id)
                 db.session.add(row)
+            else:
+                row.name = name
 
             row.legal_category = legal_category
             row.practice_area = (request.form.get("practice_area") or "").strip() or None
@@ -250,15 +306,53 @@ def register_admin_settings_routes(app):
             flash("Matter archetype saved.", "info")
             return redirect(url_for("admin_templates_matters"))
 
+        edit_id = request.args.get("edit_id", type=int)
+        edit_row = db.session.get(MatterTemplate, edit_id) if edit_id else None
+        if edit_id and edit_row is None:
+            flash("Matter archetype not found.", "warning")
+            return redirect(url_for("admin_templates_matters"))
+
         rows = MatterTemplate.query.order_by(MatterTemplate.created_at.desc()).all()
         template_fields_map = {row.id: load_required_fields(row.required_fields_json) for row in rows}
         categories = sorted({row.legal_category for row in rows if row.legal_category})
+        usage_rows = (
+            db.session.query(Matter.archetype_id, db.func.count(Matter.id))
+            .filter(Matter.archetype_id.isnot(None))
+            .group_by(Matter.archetype_id)
+            .all()
+        )
+        template_usage_map = {int(archetype_id): int(count) for archetype_id, count in usage_rows if archetype_id}
+        form_data = {
+            "name": edit_row.name if edit_row else "",
+            "legal_category": edit_row.legal_category if edit_row else "",
+            "practice_area": edit_row.practice_area if edit_row else "",
+            "default_stage": edit_row.default_stage if edit_row else "",
+            "default_risk_level": (edit_row.default_risk_level if edit_row else "Medium") or "Medium",
+            "checklist": (
+                "\n".join(
+                    str(item).strip()
+                    for item in (
+                        json.loads(edit_row.checklist_json)
+                        if edit_row and edit_row.checklist_json
+                        else []
+                    )
+                    if str(item).strip()
+                )
+                if edit_row
+                else ""
+            ),
+            "required_fields": _required_fields_to_text(edit_row.required_fields_json if edit_row else None),
+            "boilerplate_template": edit_row.boilerplate_template if edit_row else "",
+        }
         return page(
             "Matter Templates",
             "admin_settings/templates_matters.html",
             templates=rows,
             template_fields_map=template_fields_map,
             categories=categories,
+            edit_template_id=(edit_row.id if edit_row else None),
+            form_data=form_data,
+            template_usage_map=template_usage_map,
         )
 
     @app.route("/admin/templates/tasks", methods=["GET", "POST"])

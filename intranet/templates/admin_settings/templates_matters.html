@@ -1,18 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card p-3 mb-3">
-  <h3 class="mb-1">Matter Archetype Builder</h3>
+  <h3 class="mb-1">{{ "Edit Matter Archetype" if edit_template_id else "Matter Archetype Builder" }}</h3>
   <form method="post" class="mt-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="save">
+    <input type="hidden" name="template_id" value="{{ edit_template_id or '' }}">
     <div class="form-section">
       <div class="row g-2">
         <div class="col-md-4">
           <label class="form-label" for="matter-template-name">Archetype Name</label>
-          <input class="form-control" id="matter-template-name" name="name" placeholder="e.g. Negligence Clause" required>
+          <input class="form-control" id="matter-template-name" name="name" placeholder="e.g. Negligence Clause" value="{{ form_data.name if form_data else '' }}" required>
         </div>
         <div class="col-md-4">
           <label class="form-label" for="matter-template-category">Legal Category</label>
-          <input class="form-control" id="matter-template-category" name="legal_category" placeholder="e.g. Labour Law" list="matter-template-categories" required>
+          <input class="form-control" id="matter-template-category" name="legal_category" placeholder="e.g. Labour Law" value="{{ form_data.legal_category if form_data else '' }}" list="matter-template-categories" required>
           <datalist id="matter-template-categories">
             {% for category in categories %}
               <option value="{{ category }}"></option>
@@ -21,21 +23,21 @@
         </div>
         <div class="col-md-4">
           <label class="form-label" for="matter-template-area">Practice Area</label>
-          <input class="form-control" id="matter-template-area" name="practice_area" placeholder="Practice area (optional)">
+          <input class="form-control" id="matter-template-area" name="practice_area" value="{{ form_data.practice_area if form_data else '' }}" placeholder="Practice area (optional)">
         </div>
         <div class="col-md-4">
           <label class="form-label" for="matter-template-stage">Default Matter Stage</label>
-          <input class="form-control" id="matter-template-stage" name="default_stage" placeholder="Default stage">
+          <input class="form-control" id="matter-template-stage" name="default_stage" value="{{ form_data.default_stage if form_data else '' }}" placeholder="Default stage">
         </div>
         <div class="col-md-4">
           <label class="form-label" for="matter-template-risk">Default Risk Level</label>
-          <input class="form-control" id="matter-template-risk" name="default_risk_level" placeholder="Risk" value="Medium">
+          <input class="form-control" id="matter-template-risk" name="default_risk_level" placeholder="Risk" value="{{ form_data.default_risk_level if form_data else 'Medium' }}">
         </div>
       </div>
     </div>
     <div class="form-section mt-2">
       <label class="form-label" for="matter-template-checklist">Closing Checklist</label>
-      <textarea class="form-control" id="matter-template-checklist" name="checklist" rows="4" placeholder="One item per line"></textarea>
+      <textarea class="form-control" id="matter-template-checklist" name="checklist" rows="4" placeholder="One item per line">{{ form_data.checklist if form_data else '' }}</textarea>
     </div>
     <div class="form-section mt-2">
       <label class="form-label" for="matter-template-required-fields">Required Matter Fields</label>
@@ -45,7 +47,7 @@
         name="required_fields"
         rows="4"
         placeholder="contract_start_date|Contract Start Date&#10;employee_role|Employee Role|Optional helper text"
-      ></textarea>
+      >{{ form_data.required_fields if form_data else '' }}</textarea>
       <div class="form-help mt-2">
         One field per line. Format: <span class="code-like">field_key|Field Label|Help text</span>.
         All listed fields become required when opening a matter with this archetype.
@@ -60,14 +62,19 @@
         rows="8"
         placeholder="This clause applies to {{ client_name }} under matter {{ matter_no }}.&#10;Role: {{ employee_role }}"
         required
-      ></textarea>
+      >{{ form_data.boilerplate_template if form_data else '' }}</textarea>
       <div class="form-help mt-2">
         Merge fields can include core matter fields like <span class="code-like">{{ "{{matter_no}}" }}</span>,
         <span class="code-like">{{ "{{client_name}}" }}</span>, <span class="code-like">{{ "{{legal_category}}" }}</span>,
         plus your required field keys.
       </div>
     </div>
-    <div class="d-grid mt-2"><button class="btn btn-light">Save Template</button></div>
+    <div class="d-grid mt-2 gap-2">
+      <button class="btn btn-light">{{ "Update Archetype" if edit_template_id else "Save Archetype" }}</button>
+      {% if edit_template_id %}
+        <a class="btn btn-outline-light" href="{{ url_for('admin_templates_matters') }}">Cancel Edit</a>
+      {% endif %}
+    </div>
   </form>
 </div>
 
@@ -82,10 +89,12 @@
           <th>Required Fields</th>
           <th>Stage</th>
           <th>Risk</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for t in templates %}
+          {% set usage_count = (template_usage_map.get(t.id, 0) if template_usage_map else 0) %}
           <tr>
             <td>{{ t.legal_category or '-' }}</td>
             <td>{{ t.name }}</td>
@@ -102,9 +111,23 @@
             </td>
             <td>{{ t.default_stage or '-' }}</td>
             <td>{{ t.default_risk_level or '-' }}</td>
+            <td>
+              <div class="d-flex flex-wrap gap-1">
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_matters', edit_id=t.id) }}">Edit</a>
+                <form method="post" onsubmit="return confirm('Delete this archetype?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="template_id" value="{{ t.id }}">
+                  <button class="btn btn-sm btn-outline-danger" {% if usage_count > 0 %}disabled title="In use by {{ usage_count }} matter(s)"{% endif %}>Delete</button>
+                </form>
+              </div>
+              {% if usage_count > 0 %}
+                <div class="small muted mt-1">In use by {{ usage_count }} matter(s)</div>
+              {% endif %}
+            </td>
           </tr>
         {% else %}
-          <tr><td colspan="5" class="muted">No templates.</td></tr>
+          <tr><td colspan="6" class="muted">No templates.</td></tr>
         {% endfor %}
       </tbody>
     </table>

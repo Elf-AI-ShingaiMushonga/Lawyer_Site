@@ -81,6 +81,87 @@ def test_admin_can_create_matter_archetype(app_ctx):
     assert required and required[0]["key"] == "settlement_amount"
 
 
+def test_admin_can_edit_matter_archetype(app_ctx):
+    app = app_ctx
+    admin = _seed_admin()
+    archetype = _seed_archetype(admin.id)
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, admin.id)
+
+    response = client.post(
+        "/admin/templates/matters",
+        data={
+            "csrf_token": csrf_token,
+            "action": "save",
+            "template_id": archetype.id,
+            "name": "Negligence Clause Updated",
+            "legal_category": "Labour Law",
+            "default_risk_level": "High",
+            "required_fields": "incident_date|Incident Date|Date of incident",
+            "boilerplate_template": "Updated template for {{ client_name }} on {{ incident_date }}.",
+        },
+    )
+    assert response.status_code == 302
+    updated = db.session.get(MatterTemplate, archetype.id)
+    assert updated is not None
+    assert updated.name == "Negligence Clause Updated"
+    assert updated.default_risk_level == "High"
+    required = json.loads(updated.required_fields_json or "[]")
+    assert required and required[0]["key"] == "incident_date"
+
+
+def test_admin_can_delete_unused_matter_archetype(app_ctx):
+    app = app_ctx
+    admin = _seed_admin()
+    archetype = _seed_archetype(admin.id)
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, admin.id)
+
+    response = client.post(
+        "/admin/templates/matters",
+        data={
+            "csrf_token": csrf_token,
+            "action": "delete",
+            "template_id": archetype.id,
+        },
+    )
+    assert response.status_code == 302
+    assert db.session.get(MatterTemplate, archetype.id) is None
+
+
+def test_admin_cannot_delete_archetype_in_use(app_ctx):
+    app = app_ctx
+    admin = _seed_admin()
+    archetype = _seed_archetype(admin.id)
+    db.session.add(
+        Matter(
+            matter_no="2026-ARC-0099",
+            title="Linked Matter",
+            client_name="Client Z",
+            status="Open",
+            risk_level="Medium",
+            budget_status="On Track",
+            created_by=admin.id,
+            legal_category="Labour Law",
+            archetype_id=archetype.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, admin.id)
+    response = client.post(
+        "/admin/templates/matters",
+        data={
+            "csrf_token": csrf_token,
+            "action": "delete",
+            "template_id": archetype.id,
+        },
+    )
+    assert response.status_code == 302
+    assert db.session.get(MatterTemplate, archetype.id) is not None
+
+
 def test_matter_creation_requires_archetype_specific_fields(app_ctx):
     app = app_ctx
     admin = _seed_admin()

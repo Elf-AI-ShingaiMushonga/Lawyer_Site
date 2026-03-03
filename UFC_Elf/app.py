@@ -88,10 +88,13 @@ def _get_predictor() -> FightPredictor:
 
     with PREDICTOR_LOCK:
         if _predictor_instance is None:
+            model_store_dir_raw = os.getenv("UFC_MODEL_STORE_DIR", "").strip()
+            model_store_dir = Path(model_store_dir_raw).expanduser() if model_store_dir_raw else None
             _predictor_instance = FightPredictor(
                 APP_ROOT / "data" / "ufc_fights_rnn.csv",
                 default_model=os.getenv("UFC_DEFAULT_MODEL", "accuracy_weighted_ensemble"),
                 power_profile=os.getenv("UFC_POWER_PROFILE", "max_power"),
+                model_store_dir=model_store_dir,
             )
     return _predictor_instance
 

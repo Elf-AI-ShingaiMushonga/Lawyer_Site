@@ -175,6 +175,7 @@ UFC production notes:
 - Install only once from root `requirements.txt`; do not create/use a separate `UFC_Elf/venv`.
 - Ensure outbound internet egress is allowed for `Update Data` (scraper hits UFCStats).
 - UFC model training is manual via the `/ufc/` `Retrain Models` action.
+- Set `UFC_MODEL_STORE_DIR` to a persistent path (for example `/home/ubuntu/law-model-store`) so trained UFC models survive redeploys.
 
 ## Database migrations
 

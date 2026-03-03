@@ -74,6 +74,7 @@ BASE_MODEL_KEYS = [
 CACHE_VERSION = 1
 BASE_MODEL_CACHE_FILE = "base_models.joblib"
 SIAMESE_CACHE_FILE = "siamese_no_context.pt"
+LEGACY_MODEL_CACHE_DIR_NAME = "model_cache"
 ProgressCallback = Callable[[float, str, str], None]
 
 
@@ -99,19 +100,24 @@ class FightPredictor:
         default_model: str = "mlp",
         power_profile: str = "max_power",
         seed: int = 42,
+        model_store_dir: Path | None = None,
         model_cache_dir: Path | None = None,
     ) -> None:
         self.csv_path = csv_path
         self.seed = int(seed)
         self.power_profile = str(power_profile)
-        self.model_cache_dir = (
-            model_cache_dir
-            if model_cache_dir is not None
-            else (self.csv_path.parent / "model_cache")
-        )
-        self.model_cache_dir.mkdir(parents=True, exist_ok=True)
-        self._base_model_cache_path = self.model_cache_dir / BASE_MODEL_CACHE_FILE
-        self._siamese_cache_path = self.model_cache_dir / SIAMESE_CACHE_FILE
+        if model_store_dir is not None and model_cache_dir is not None and Path(model_store_dir) != Path(model_cache_dir):
+            raise ValueError("model_store_dir and model_cache_dir must match when both are provided.")
+        resolved_model_store_dir = model_store_dir or model_cache_dir or (self.csv_path.parent / "model_store")
+        self.model_store_dir = Path(resolved_model_store_dir)
+        self.model_store_dir.mkdir(parents=True, exist_ok=True)
+        # Backward-compatible aliases for existing callsites/status payload keys.
+        self.model_cache_dir = self.model_store_dir
+        self._base_model_store_path = self.model_store_dir / BASE_MODEL_CACHE_FILE
+        self._siamese_model_store_path = self.model_store_dir / SIAMESE_CACHE_FILE
+        self._legacy_model_cache_dir = self.csv_path.parent / LEGACY_MODEL_CACHE_DIR_NAME
+        self._legacy_base_model_cache_path = self._legacy_model_cache_dir / BASE_MODEL_CACHE_FILE
+        self._legacy_siamese_cache_path = self._legacy_model_cache_dir / SIAMESE_CACHE_FILE
         self._cache_info: dict[str, Any] = {}
         self.capacity_cfg = get_training_capacity_profile(power_profile=self.power_profile, seed=self.seed)
         self.model_specs = [ModelSpec(*row) for row in TOP_MODEL_RANKING]
@@ -145,7 +151,7 @@ class FightPredictor:
 
         self._refresh_runtime_state()
 
-        # Siamese model is loaded from cache when available.
+        # Siamese model is loaded from disk when available.
         # Training happens only via explicit retrain/warm actions.
         self._siamese_model: Any = None
         self._siamese_device: str = "cpu"
@@ -203,10 +209,15 @@ class FightPredictor:
     def _load_base_models_from_cache(
         self,
     ) -> tuple[dict[str, Any], list[str], list[str], list[str], str] | None:
-        if not self._base_model_cache_path.exists():
+        source_path = None
+        if self._base_model_store_path.exists():
+            source_path = self._base_model_store_path
+        elif self._legacy_base_model_cache_path.exists():
+            source_path = self._legacy_base_model_cache_path
+        if source_path is None:
             return None
         try:
-            payload = joblib.load(self._base_model_cache_path)
+            payload = joblib.load(source_path)
         except Exception:
             return None
         if not isinstance(payload, dict):
@@ -229,6 +240,11 @@ class FightPredictor:
         if not isinstance(feature_cols, list) or not isinstance(numeric_cols, list) or not isinstance(categorical_cols, list):
             return None
         trained_at_utc = str(payload.get("trained_at_utc", ""))
+        if source_path != self._base_model_store_path:
+            try:
+                joblib.dump(payload, self._base_model_store_path)
+            except Exception:
+                pass
         return models, feature_cols, numeric_cols, categorical_cols, trained_at_utc
 
     def _save_base_models_to_cache(
@@ -250,7 +266,7 @@ class FightPredictor:
             "numeric_cols": numeric_cols,
             "categorical_cols": categorical_cols,
         }
-        joblib.dump(payload, self._base_model_cache_path)
+        joblib.dump(payload, self._base_model_store_path)
 
     def _derive_feature_schema(self, df: pd.DataFrame) -> tuple[list[str], list[str], list[str]]:
         feature_cols, numeric_cols, categorical_cols = select_baseline_features(df)
@@ -285,8 +301,9 @@ class FightPredictor:
         self._siamese_model = None
         self._siamese_seq_idx = []
         self._siamese_static_idx = []
-        if self._siamese_cache_path.exists():
-            self._siamese_cache_path.unlink()
+        for path in (self._siamese_model_store_path, self._legacy_siamese_cache_path):
+            if path.exists():
+                path.unlink()
 
     def reload_data(self) -> dict[str, Any]:
         self.df = load_and_prepare_dataframe(self.csv_path)
@@ -357,11 +374,14 @@ class FightPredictor:
                 tz=dt.timezone.utc,
             ).isoformat()
         return {
-            "cache_dir": str(self.model_cache_dir),
+            "model_store_dir": str(self.model_store_dir),
+            "cache_dir": str(self.model_store_dir),
             "base_models_ready": self._base_models_ready(),
             "base_models_loaded_from_cache": bool(self._cache_info.get("base_models_loaded_from_cache", False)),
+            "base_models_loaded_from_store": bool(self._cache_info.get("base_models_loaded_from_cache", False)),
             "base_models_trained_at_utc": self._cache_info.get("base_models_trained_at_utc"),
             "siamese_loaded_from_cache": bool(self._cache_info.get("siamese_loaded_from_cache", False)),
+            "siamese_loaded_from_store": bool(self._cache_info.get("siamese_loaded_from_cache", False)),
             "siamese_trained_at_utc": self._cache_info.get("siamese_trained_at_utc"),
             "data_rows": int(len(self.df)),
             "data_updated_utc": data_updated_utc,
@@ -507,10 +527,15 @@ class FightPredictor:
         static_idx: list[int],
         device: str,
     ) -> Any | None:
-        if not self._siamese_cache_path.exists():
+        source_path = None
+        if self._siamese_model_store_path.exists():
+            source_path = self._siamese_model_store_path
+        elif self._legacy_siamese_cache_path.exists():
+            source_path = self._legacy_siamese_cache_path
+        if source_path is None:
             return None
         try:
-            payload = torch.load(self._siamese_cache_path, map_location=device)
+            payload = torch.load(source_path, map_location=device)
         except Exception:
             return None
         if not isinstance(payload, dict):
@@ -550,6 +575,11 @@ class FightPredictor:
         except Exception:
             return None
         model.eval()
+        if source_path != self._siamese_model_store_path:
+            try:
+                torch.save(payload, self._siamese_model_store_path)
+            except Exception:
+                pass
         self._cache_info["siamese_loaded_from_cache"] = True
         self._cache_info["siamese_trained_at_utc"] = payload.get("trained_at_utc")
         return model
@@ -572,7 +602,7 @@ class FightPredictor:
             "trained_at_utc": self._utc_now_iso(),
             "state_dict": model.state_dict(),
         }
-        torch.save(payload, self._siamese_cache_path)
+        torch.save(payload, self._siamese_model_store_path)
 
     def _ensure_siamese_model(
         self,
@@ -603,7 +633,7 @@ class FightPredictor:
             self._siamese_model = cached_model
             self._siamese_seq_idx = seq_idx
             self._siamese_static_idx = static_idx
-            self._emit_progress(progress_cb, progress_end, "Training Siamese", "Loaded Siamese model from cache.")
+            self._emit_progress(progress_cb, progress_end, "Training Siamese", "Loaded Siamese model from disk.")
             return
 
         if not allow_train:
@@ -905,12 +935,16 @@ class FightPredictor:
             probs = np.zeros(len(x), dtype=float)
             for key, weight in ACCURACY_ENSEMBLE_WEIGHTS.items():
                 if key not in self.base_models:
-                    raise RuntimeError(f"Base model '{key}' is missing. Use 'Retrain Models' to rebuild caches.")
+                    raise RuntimeError(
+                        f"Base model '{key}' is missing. Use 'Retrain Models' to rebuild the saved model store."
+                    )
                 model = self.base_models[key]
                 probs += float(weight) * model.predict_proba(x)[:, 1]
             return np.clip(probs, 0.0, 1.0)
         if model_name not in self.base_models:
-            raise RuntimeError(f"Base model '{model_name}' is missing. Use 'Retrain Models' to rebuild caches.")
+            raise RuntimeError(
+                f"Base model '{model_name}' is missing. Use 'Retrain Models' to rebuild the saved model store."
+            )
         model = self.base_models[model_name]
         return model.predict_proba(x)[:, 1]
 
