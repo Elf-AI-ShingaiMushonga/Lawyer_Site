@@ -10,6 +10,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_DOC_EXT = {"pdf", "docx", "xlsx", "pptx", "txt", "png", "jpg", "jpeg", "eml", "msg"}
 ALLOWED_AUDIO_EXT = {"m4a", "mp3", "wav", "ogg", "webm"}
 MATTER_STATUSES = {"Open", "On Hold", "Closed"}
+RISK_LEVELS = ("Low", "Medium", "High", "Critical")
+BUDGET_STATUSES = ("On Track", "Watch", "Over Budget", "Needs Review")
 VALID_ROLES = {"admin", "lawyer", "staff", "paralegal"}
 PRODUCTION_ENV_VALUES = {"prod", "production"}
 

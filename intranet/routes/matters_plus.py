@@ -11,6 +11,7 @@ from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.utils import secure_filename
 
+from ..config import BUDGET_STATUSES, RISK_LEVELS
 from ..extensions import db
 from ..helpers import (
     allowed_audio,
@@ -54,6 +55,7 @@ from ..services.contracts import (
     validate_contract_field_values,
 )
 from ..services.intake_ai import suggest_matter_intake
+from ..services.matter_option_lists import legal_category_options, practice_area_options
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..services.notification_engine import NotificationEngine
 from ..templates import page
@@ -139,6 +141,20 @@ def register_matters_plus_routes(app):
                 or (template.practice_area if template else None)
                 or ""
             ).strip() or None
+            risk_level_value = (
+                normalize_query(request.form.get("risk_level") or (template.default_risk_level if template else "Medium"))
+                or "Medium"
+            )
+            budget_status_value = (
+                normalize_query(request.form.get("budget_status") or "On Track")
+                or "On Track"
+            )
+            if risk_level_value not in RISK_LEVELS:
+                flash("Invalid risk level.", "warning")
+                return redirect(url_for("matters_intake"))
+            if budget_status_value not in BUDGET_STATUSES:
+                flash("Invalid budget status.", "warning")
+                return redirect(url_for("matters_intake"))
             m = Matter(
                 matter_no=matter_no,
                 title=title,
@@ -146,8 +162,8 @@ def register_matters_plus_routes(app):
                 status="Open",
                 description=(request.form.get("description") or "").strip() or None,
                 objective=(request.form.get("objective") or "").strip() or None,
-                risk_level=(request.form.get("risk_level") or (template.default_risk_level if template else "Medium")) or "Medium",
-                budget_status=(request.form.get("budget_status") or "On Track") or "On Track",
+                risk_level=risk_level_value,
+                budget_status=budget_status_value,
                 jurisdiction=(request.form.get("jurisdiction") or "ZA").strip() or "ZA",
                 stage=stage_value,
                 practice_area=practice_area_value,
@@ -292,6 +308,10 @@ def register_matters_plus_routes(app):
             "matters_plus/intake.html",
             templates=templates,
             template_payload=template_payload,
+            legal_categories=legal_category_options(),
+            practice_areas=practice_area_options(),
+            risk_levels=list(RISK_LEVELS),
+            budget_statuses=list(BUDGET_STATUSES),
         )
 
     @app.get("/matters/<int:matter_id>/workspace")

@@ -43,16 +43,23 @@
         </div>
         <div class="col-md-4">
           <label class="form-label" for="matter-template-category">Legal Category</label>
-          <input class="form-control" id="matter-template-category" name="legal_category" placeholder="e.g. Labour Law" value="{{ form_data.legal_category if form_data else '' }}" list="matter-template-categories" required>
-          <datalist id="matter-template-categories">
+          <select class="form-select" id="matter-template-category" name="legal_category">
+            <option value="">Select legal category</option>
             {% for category in categories %}
-              <option value="{{ category }}"></option>
+              <option value="{{ category }}" {% if form_data and form_data.legal_category == category %}selected{% endif %}>{{ category }}</option>
             {% endfor %}
-          </datalist>
+          </select>
+          <input class="form-control mt-1" id="matter-template-category-new" name="legal_category_new" placeholder="Add new legal category (optional)">
+          <div class="form-help mt-1">New categories entered here become reusable options.</div>
         </div>
         <div class="col-md-4">
           <label class="form-label" for="matter-template-area">Practice Area</label>
-          <input class="form-control" id="matter-template-area" name="practice_area" value="{{ form_data.practice_area if form_data else '' }}" placeholder="Practice area (optional)">
+          <select class="form-select" id="matter-template-area" name="practice_area">
+            <option value="">Unspecified</option>
+            {% for area in practice_areas %}
+              <option value="{{ area }}" {% if form_data and form_data.practice_area == area %}selected{% endif %}>{{ area }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="col-md-4">
           <label class="form-label" for="matter-template-stage">Default Matter Stage</label>
@@ -60,7 +67,11 @@
         </div>
         <div class="col-md-4">
           <label class="form-label" for="matter-template-risk">Default Risk Level</label>
-          <input class="form-control" id="matter-template-risk" name="default_risk_level" placeholder="Risk" value="{{ form_data.default_risk_level if form_data else 'Medium' }}">
+          <select class="form-select" id="matter-template-risk" name="default_risk_level">
+            {% for risk in risk_levels %}
+              <option value="{{ risk }}" {% if (form_data.default_risk_level if form_data else 'Medium') == risk %}selected{% endif %}>{{ risk }}</option>
+            {% endfor %}
+          </select>
         </div>
       </div>
     </div>

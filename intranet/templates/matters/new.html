@@ -51,14 +51,12 @@
     </div>
     <div class="col-md-4">
       <label class="muted small">Legal Category</label>
-      <input class="form-control" name="legal_category" placeholder="e.g. Labour Law" list="matter-legal-category-options" required>
-      <datalist id="matter-legal-category-options">
-        {% for t in archetype_templates %}
-          {% if t.legal_category %}
-            <option value="{{ t.legal_category }}"></option>
-          {% endif %}
+      <select class="form-select" name="legal_category" required>
+        <option value="">Select legal category...</option>
+        {% for category in legal_categories %}
+          <option value="{{ category }}">{{ category }}</option>
         {% endfor %}
-      </datalist>
+      </select>
     </div>
     <div class="col-md-8">
       <label class="muted small">Archetype</label>
@@ -125,7 +123,7 @@
 <script>
   (() => {
     const templatePayload = {{ archetype_payload|tojson }};
-    const categoryInput = document.querySelector('input[name="legal_category"]');
+    const categoryInput = document.querySelector('select[name="legal_category"]');
     const archetypeSelect = document.querySelector('select[name="archetype_id"]');
     const requiredFieldsContainer = document.getElementById("archetype-required-fields");
     const requiredHelp = document.getElementById("archetype-required-help");
@@ -286,7 +284,7 @@
       renderRequiredFields();
     };
 
-    categoryInput.addEventListener("input", filterArchetypesByCategory);
+    categoryInput.addEventListener("change", filterArchetypesByCategory);
     archetypeSelect.addEventListener("change", () => {
       const selected = byId.get(String(archetypeSelect.value));
       if (selected && !String(categoryInput.value || "").trim() && selected.legal_category) {

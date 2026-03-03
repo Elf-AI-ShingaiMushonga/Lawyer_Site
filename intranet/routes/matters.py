@@ -11,7 +11,7 @@ from flask import Response, abort, flash, redirect, request, send_from_directory
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
-from ..config import ALLOWED_DOC_EXT, MATTER_STATUSES, is_valid_email
+from ..config import ALLOWED_DOC_EXT, BUDGET_STATUSES, MATTER_STATUSES, RISK_LEVELS, is_valid_email
 from ..extensions import db
 from ..helpers import (
     allowed_doc,
@@ -55,11 +55,10 @@ from ..services.contracts import (
     render_contract_template_for_matter,
     validate_contract_field_values,
 )
+from ..services.matter_option_lists import legal_category_options
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..templates import page
 
-RISK_LEVELS = {"Low", "Medium", "High", "Critical"}
-BUDGET_STATUSES = {"On Track", "Watch", "Over Budget", "Needs Review"}
 TIMELINE_EVENT_TYPES = {"Milestone", "Filing", "Hearing", "Client Update", "Internal Review", "Delivery"}
 DOC_CATEGORIES = {"Pleading", "Evidence", "Contract", "Advisory", "Correspondence", "Court Filing", "General"}
 DOC_LIFECYCLE_STAGES = {"Draft", "For Review", "Final", "Executed"}
@@ -482,8 +481,9 @@ def register_matter_routes(app):
         return page(
             "New Matter",
             "matters/new.html",
-            risk_levels=sorted(RISK_LEVELS),
-            budget_statuses=sorted(BUDGET_STATUSES),
+            risk_levels=list(RISK_LEVELS),
+            budget_statuses=list(BUDGET_STATUSES),
+            legal_categories=legal_category_options(),
             archetype_templates=archetype_templates,
             archetype_payload=archetype_payload,
             assignable_lawyers=assignable_lawyers,
@@ -702,8 +702,8 @@ def register_matter_routes(app):
             activity_items=activity_items,
             overdue_tasks=overdue_tasks,
             due_soon_tasks=due_soon_tasks,
-            risk_levels=sorted(RISK_LEVELS),
-            budget_statuses=sorted(BUDGET_STATUSES),
+            risk_levels=list(RISK_LEVELS),
+            budget_statuses=list(BUDGET_STATUSES),
             matter_statuses=sorted(MATTER_STATUSES),
             timeline_event_types=sorted(TIMELINE_EVENT_TYPES),
             today=today.isoformat(),

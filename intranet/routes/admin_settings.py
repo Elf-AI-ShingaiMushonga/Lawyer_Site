@@ -7,6 +7,7 @@ import time
 from flask import abort, flash, jsonify, redirect, request, url_for
 from flask_login import current_user, login_required
 
+from ..config import RISK_LEVELS
 from ..extensions import db
 from ..helpers import audit
 from ..models import (
@@ -29,6 +30,7 @@ from ..models import (
 )
 from ..services.archetypes import load_required_fields, parse_required_fields_definition
 from ..services.archetype_ai import suggest_matter_archetype
+from ..services.matter_option_lists import legal_category_options, practice_area_options
 from ..services.priority_inbox import (
     load_priority_inbox_config,
     save_priority_inbox_config,
@@ -274,6 +276,9 @@ def register_admin_settings_routes(app):
 
             name = (request.form.get("name") or "").strip()
             legal_category = (request.form.get("legal_category") or "").strip()
+            legal_category_new = (request.form.get("legal_category_new") or "").strip()
+            if legal_category_new:
+                legal_category = legal_category_new
             boilerplate_template = (request.form.get("boilerplate_template") or "").strip()
             required_fields, field_errors = parse_required_fields_definition(request.form.get("required_fields"))
             if not name:
@@ -315,7 +320,11 @@ def register_admin_settings_routes(app):
             row.legal_category = legal_category
             row.practice_area = (request.form.get("practice_area") or "").strip() or None
             row.default_stage = (request.form.get("default_stage") or "").strip() or None
-            row.default_risk_level = (request.form.get("default_risk_level") or "Medium").strip() or "Medium"
+            default_risk_level = (request.form.get("default_risk_level") or "Medium").strip() or "Medium"
+            if default_risk_level not in RISK_LEVELS:
+                flash("Default risk level must be one of: " + ", ".join(RISK_LEVELS) + ".", "warning")
+                return redirect(url_for("admin_templates_matters"))
+            row.default_risk_level = default_risk_level
             row.checklist_json = json.dumps(
                 [line.strip() for line in (request.form.get("checklist") or "").splitlines() if line.strip()]
             )
@@ -334,7 +343,8 @@ def register_admin_settings_routes(app):
 
         rows = MatterTemplate.query.order_by(MatterTemplate.created_at.desc()).all()
         template_fields_map = {row.id: load_required_fields(row.required_fields_json) for row in rows}
-        categories = sorted({row.legal_category for row in rows if row.legal_category})
+        categories = legal_category_options(extra_values=[edit_row.legal_category if edit_row else None])
+        practice_areas = practice_area_options(extra_values=[edit_row.practice_area if edit_row else None])
         usage_rows = (
             db.session.query(Matter.archetype_id, db.func.count(Matter.id))
             .filter(Matter.archetype_id.isnot(None))
@@ -370,6 +380,8 @@ def register_admin_settings_routes(app):
             templates=rows,
             template_fields_map=template_fields_map,
             categories=categories,
+            practice_areas=practice_areas,
+            risk_levels=list(RISK_LEVELS),
             edit_template_id=(edit_row.id if edit_row else None),
             form_data=form_data,
             template_usage_map=template_usage_map,
@@ -548,7 +560,10 @@ def register_admin_settings_routes(app):
                 row.name = name
                 is_new = False
 
-            row.legal_category = (request.form.get("legal_category") or "").strip() or None
+            selected_legal_category = (request.form.get("legal_category") or "").strip()
+            if not selected_legal_category and archetype and archetype.legal_category:
+                selected_legal_category = str(archetype.legal_category).strip()
+            row.legal_category = selected_legal_category or None
             row.archetype_id = archetype.id if archetype else None
             row.contract_type = (request.form.get("contract_type") or "Contract").strip() or "Contract"
             row.required_fields_json = json.dumps(required_fields, ensure_ascii=True)
@@ -579,18 +594,7 @@ def register_admin_settings_routes(app):
 
         rows = ContractTemplate.query.order_by(ContractTemplate.created_at.desc()).all()
         archetypes = MatterTemplate.query.order_by(MatterTemplate.name.asc()).all()
-        categories = sorted(
-            {
-                row.legal_category
-                for row in rows
-                if row.legal_category
-            }
-            | {
-                row.legal_category
-                for row in archetypes
-                if row.legal_category
-            }
-        )
+        categories = legal_category_options(extra_values=[edit_row.legal_category if edit_row else None])
         archetype_name_map = {int(row.id): row.name for row in archetypes}
         contract_fields_map = {row.id: load_required_fields(row.required_fields_json) for row in rows}
         form_data = {

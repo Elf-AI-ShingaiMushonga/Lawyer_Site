@@ -2372,8 +2372,15 @@
       return;
     }
 
-    const minDelta = 8;
     const hasActiveMatter = nav.classList.contains("has-active-matter");
+    if (hasActiveMatter) {
+      // Keep the active-matter rail stable; collapsing a sticky container here
+      // causes layout shifts that can produce scroll flicker.
+      nav.classList.remove("is-collapsed");
+      return;
+    }
+
+    const minDelta = 8;
     let lastY = window.scrollY;
     let isCollapsed = false;
     let ticking = false;
@@ -2406,16 +2413,6 @@
 
       if (y <= 10 || nav.contains(document.activeElement)) {
         setCollapsed(false);
-      } else if (hasActiveMatter) {
-        // In active-matter mode the nav height changes during collapse.
-        // Use a fixed threshold + hysteresis to prevent scroll flicker.
-        const collapseY = collapseStart();
-        const expandY = Math.max(10, collapseY - 48);
-        if (!isCollapsed && y > collapseY) {
-          setCollapsed(true);
-        } else if (isCollapsed && y <= expandY) {
-          setCollapsed(false);
-        }
       } else {
         if (delta > minDelta && y > collapseStart()) {
           setCollapsed(true);

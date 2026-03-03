@@ -28,17 +28,22 @@
     <div class="col-md-6"><input class="form-control" name="client_name" placeholder="Client Name" required></div>
     <div class="col-md-3"><input class="form-control" name="jurisdiction" value="ZA"></div>
     <div class="col-md-3"><input class="form-control" name="stage" value="Intake"></div>
-    <div class="col-md-4"><input class="form-control" name="practice_area" placeholder="Practice Area"></div>
+    <div class="col-md-4">
+      <select class="form-select" name="practice_area">
+        <option value="">Practice Area (Optional)</option>
+        {% for area in practice_areas %}
+          <option value="{{ area }}">{{ area }}</option>
+        {% endfor %}
+      </select>
+    </div>
     <div class="col-md-4"><input class="form-control" name="case_type" placeholder="Case Type"></div>
     <div class="col-md-4">
-      <input class="form-control" name="legal_category" placeholder="Legal Category" list="intake-legal-categories" required>
-      <datalist id="intake-legal-categories">
-        {% for t in templates %}
-          {% if t.legal_category %}
-            <option value="{{ t.legal_category }}"></option>
-          {% endif %}
+      <select class="form-select" name="legal_category" required>
+        <option value="">Select legal category...</option>
+        {% for category in legal_categories %}
+          <option value="{{ category }}">{{ category }}</option>
         {% endfor %}
-      </datalist>
+      </select>
     </div>
     <div class="col-md-4">
       <select class="form-select" name="template_id" required>
@@ -49,8 +54,20 @@
     </div>
     <div class="col-12"><textarea class="form-control" name="description" rows="3" placeholder="Description"></textarea></div>
     <div class="col-12"><textarea class="form-control" name="objective" rows="2" placeholder="Objective"></textarea></div>
-    <div class="col-md-6"><input class="form-control" name="risk_level" value="Medium"></div>
-    <div class="col-md-6"><input class="form-control" name="budget_status" value="On Track"></div>
+    <div class="col-md-6">
+      <select class="form-select" name="risk_level">
+        {% for risk in risk_levels %}
+          <option value="{{ risk }}" {% if risk == "Medium" %}selected{% endif %}>{{ risk }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-6">
+      <select class="form-select" name="budget_status">
+        {% for budget in budget_statuses %}
+          <option value="{{ budget }}" {% if budget == "On Track" %}selected{% endif %}>{{ budget }}</option>
+        {% endfor %}
+      </select>
+    </div>
     <div class="col-12">
       <label class="muted small">Archetype Required Fields</label>
       <div id="intake-archetype-required-fields" class="row g-2"></div>
@@ -69,7 +86,7 @@
   (() => {
     const templatePayload = {{ template_payload|tojson }};
     const csrfInput = document.querySelector('input[name="csrf_token"]');
-    const categoryInput = document.querySelector('input[name="legal_category"]');
+    const categoryInput = document.querySelector('select[name="legal_category"]');
     const archetypeSelect = document.querySelector('select[name="template_id"]');
     const requiredFieldsContainer = document.getElementById("intake-archetype-required-fields");
     const requiredHelp = document.getElementById("intake-archetype-help");
@@ -100,6 +117,12 @@
       const next = String(value || "").trim();
       if (!next) {
         return;
+      }
+      if (input instanceof HTMLSelectElement) {
+        const hasOption = Array.from(input.options).some((option) => String(option.value || "") === next);
+        if (!hasOption) {
+          return;
+        }
       }
       input.value = next;
     };
@@ -315,7 +338,7 @@
       }
     };
 
-    categoryInput.addEventListener("input", filterByCategory);
+    categoryInput.addEventListener("change", filterByCategory);
     archetypeSelect.addEventListener("change", () => {
       const selected = byId.get(String(archetypeSelect.value));
       if (selected && !String(categoryInput.value || "").trim() && selected.legal_category) {

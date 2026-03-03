@@ -14,12 +14,12 @@
         </div>
         <div class="col-md-4">
           <label class="form-label" for="contract-template-category">Legal Category</label>
-          <input class="form-control" id="contract-template-category" name="legal_category" value="{{ form_data.legal_category if form_data else '' }}" list="contract-template-categories" placeholder="e.g. Labour Law">
-          <datalist id="contract-template-categories">
+          <select class="form-select" id="contract-template-category" name="legal_category">
+            <option value="">Unspecified</option>
             {% for category in categories %}
-              <option value="{{ category }}"></option>
+              <option value="{{ category }}" {% if form_data and form_data.legal_category == category %}selected{% endif %}>{{ category }}</option>
             {% endfor %}
-          </datalist>
+          </select>
         </div>
         <div class="col-md-4">
           <label class="form-label" for="contract-template-type">Contract Type</label>
