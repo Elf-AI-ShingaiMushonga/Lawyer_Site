@@ -837,6 +837,177 @@
     });
   };
 
+  const initArchetypeAIDraftGenerator = () => {
+    const root = document.querySelector("[data-archetype-ai-widget]");
+    if (!(root instanceof HTMLElement)) {
+      return;
+    }
+
+    const promptInput = root.querySelector("[data-ai-archetype-prompt]");
+    const generateButton = root.querySelector("[data-ai-archetype-generate]");
+    const statusEl = root.querySelector("[data-ai-archetype-status]");
+    const csrfInput = document.querySelector("form input[name='csrf_token']");
+    const endpoint = String(root.dataset.endpoint || "").trim();
+    const timeoutMs = Math.max(15000, Number.parseInt(String(root.dataset.timeoutMs || "90000"), 10) || 90000);
+    if (
+      !(promptInput instanceof HTMLTextAreaElement) ||
+      !(generateButton instanceof HTMLButtonElement) ||
+      !(statusEl instanceof HTMLElement) ||
+      !(csrfInput instanceof HTMLInputElement) ||
+      !endpoint
+    ) {
+      return;
+    }
+
+    const controls = {
+      name: document.getElementById("matter-template-name"),
+      legalCategory: document.getElementById("matter-template-category"),
+      practiceArea: document.getElementById("matter-template-area"),
+      defaultStage: document.getElementById("matter-template-stage"),
+      defaultRiskLevel: document.getElementById("matter-template-risk"),
+      checklist: document.getElementById("matter-template-checklist"),
+      requiredFields: document.getElementById("matter-template-required-fields"),
+      boilerplateTemplate: document.getElementById("matter-template-boilerplate"),
+    };
+
+    const fieldLine = (field) => {
+      const key = String((field && field.key) || "").trim();
+      const label = String((field && field.label) || "").trim();
+      const helpText = String((field && field.help) || "").trim();
+      if (!key) {
+        return "";
+      }
+      if (helpText) {
+        return `${key}|${label || key}|${helpText}`;
+      }
+      if (label) {
+        return `${key}|${label}`;
+      }
+      return key;
+    };
+
+    const fillControl = (control, value) => {
+      if (
+        !(
+          control instanceof HTMLInputElement ||
+          control instanceof HTMLTextAreaElement ||
+          control instanceof HTMLSelectElement
+        )
+      ) {
+        return;
+      }
+      control.value = String(value || "");
+      control.dispatchEvent(new Event("input", { bubbles: true }));
+      control.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+
+    const setStatus = (text, tone = "muted") => {
+      statusEl.className = `small ${tone}`;
+      statusEl.textContent = text;
+    };
+
+    const defaultButtonText = String(generateButton.textContent || "Generate Draft with AI").trim();
+    let requestInFlight = false;
+
+    generateButton.addEventListener("click", async () => {
+      if (requestInFlight) {
+        return;
+      }
+      const prompt = String(promptInput.value || "").trim();
+      if (prompt.length < 20) {
+        setStatus("Provide at least 20 characters in the prompt.", "text-warning");
+        promptInput.focus();
+        return;
+      }
+
+      requestInFlight = true;
+      generateButton.disabled = true;
+      generateButton.setAttribute("aria-busy", "true");
+
+      const startedAtMs = Date.now();
+      let elapsedSeconds = 0;
+      const renderProgress = () => {
+        const phasePrefix = elapsedSeconds < 8 ? "Generating archetype draft..." : "Still generating draft...";
+        generateButton.textContent = `${phasePrefix} ${elapsedSeconds}s`;
+        setStatus(`${phasePrefix} ${elapsedSeconds}s elapsed.`, "text-muted");
+      };
+      renderProgress();
+      const progressHandle = window.setInterval(() => {
+        elapsedSeconds = Math.floor((Date.now() - startedAtMs) / 1000);
+        renderProgress();
+      }, 1000);
+
+      const controller = new AbortController();
+      const timeoutHandle = window.setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-CSRF-Token": csrfInput.value,
+          },
+          body: JSON.stringify({
+            prompt,
+            legal_category_hint: controls.legalCategory instanceof HTMLInputElement ? controls.legalCategory.value : "",
+            name_hint: controls.name instanceof HTMLInputElement ? controls.name.value : "",
+          }),
+          signal: controller.signal,
+        });
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        const payload = contentType.includes("application/json") ? await response.json().catch(() => ({})) : {};
+        if (!response.ok || payload.ok !== true) {
+          let errorMessage = String(payload.error || "").trim();
+          if (!errorMessage) {
+            if (response.status === 400) {
+              errorMessage = "Request rejected. Check prompt length and refresh the page to renew CSRF/session.";
+            } else if (response.status === 401 || response.status === 403 || response.redirected) {
+              errorMessage = "Session or permissions invalid. Sign in as admin and try again.";
+            } else if (response.status >= 500) {
+              errorMessage = "Server error while generating draft. Check AI configuration and retry.";
+            } else {
+              errorMessage = "AI draft failed.";
+            }
+          }
+          setStatus(errorMessage, "text-warning");
+          return;
+        }
+
+        const suggestion = payload.suggestion || {};
+        fillControl(controls.name, suggestion.name);
+        fillControl(controls.legalCategory, suggestion.legal_category);
+        fillControl(controls.practiceArea, suggestion.practice_area);
+        fillControl(controls.defaultStage, suggestion.default_stage);
+        fillControl(controls.defaultRiskLevel, suggestion.default_risk_level);
+        fillControl(controls.checklist, Array.isArray(suggestion.checklist) ? suggestion.checklist.join("\n") : "");
+        fillControl(
+          controls.requiredFields,
+          Array.isArray(suggestion.required_fields) ? suggestion.required_fields.map(fieldLine).filter(Boolean).join("\n") : ""
+        );
+        fillControl(controls.boilerplateTemplate, suggestion.boilerplate_template || "");
+
+        const source = String(suggestion.source || "fallback").trim() || "fallback";
+        const elapsedMs = Math.max(0, Number.parseInt(String(payload.elapsed_ms || ""), 10) || Date.now() - startedAtMs);
+        const elapsedText = `${Math.max(1, Math.round(elapsedMs / 1000))}s`;
+        setStatus(`Archetype draft generated (${source}) in ${elapsedText}. Review and save.`, "text-success");
+      } catch (error) {
+        if (error && typeof error === "object" && String(error.name || "") === "AbortError") {
+          setStatus("AI draft timed out. Check AI connectivity/configuration and try again.", "text-warning");
+        } else {
+          setStatus("AI draft service is unavailable right now. Please retry.", "text-warning");
+        }
+      } finally {
+        window.clearTimeout(timeoutHandle);
+        window.clearInterval(progressHandle);
+        generateButton.removeAttribute("aria-busy");
+        generateButton.disabled = false;
+        generateButton.textContent = defaultButtonText;
+        requestInFlight = false;
+      }
+    });
+  };
+
   const initTimeCodeAssist = () => {
     const forms = Array.from(document.querySelectorAll("form[data-time-code-assist]"));
     if (forms.length === 0) {
@@ -2818,6 +2989,7 @@
     initNavMenus();
     initMatterQuickFilters();
     initTimePrompts();
+    initArchetypeAIDraftGenerator();
     initTimeCodeAssist();
     initTimerPresenceGuard();
     initLiveBillingCue();

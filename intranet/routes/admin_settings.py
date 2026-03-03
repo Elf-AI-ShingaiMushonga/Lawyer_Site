@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import time
 
 from flask import abort, flash, jsonify, redirect, request, url_for
 from flask_login import current_user, login_required
@@ -385,11 +386,13 @@ def register_admin_settings_routes(app):
 
         legal_category_hint = " ".join(str(payload.get("legal_category_hint") or "").split()).strip() if payload else ""
         name_hint = " ".join(str(payload.get("name_hint") or "").split()).strip() if payload else ""
+        started = time.perf_counter()
         suggestion = suggest_matter_archetype(
             prompt=prompt,
             legal_category_hint=legal_category_hint,
             name_hint=name_hint,
         )
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
         audit(
             "matter_template_ai_suggest",
             "MatterTemplate",
@@ -397,9 +400,10 @@ def register_admin_settings_routes(app):
             {
                 "source": suggestion.get("source"),
                 "required_fields": len(suggestion.get("required_fields") or []),
+                "elapsed_ms": elapsed_ms,
             },
         )
-        return jsonify({"ok": True, "suggestion": suggestion})
+        return jsonify({"ok": True, "suggestion": suggestion, "elapsed_ms": elapsed_ms})
 
     @app.route("/admin/templates/tasks", methods=["GET", "POST"])
     @login_required

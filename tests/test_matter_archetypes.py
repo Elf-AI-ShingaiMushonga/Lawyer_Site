@@ -355,6 +355,21 @@ def test_admin_can_generate_ai_archetype_draft_payload(app_ctx):
     assert suggestion.get("boilerplate_template")
     assert isinstance(suggestion.get("required_fields"), list)
     assert suggestion["required_fields"]
+    assert int(payload.get("elapsed_ms") or 0) >= 0
+
+
+def test_matter_archetype_builder_renders_ai_widget_with_feedback_markers(app_ctx):
+    app = app_ctx
+    admin = _seed_admin()
+    client = app.test_client()
+    _set_internal_session(client, admin.id)
+
+    response = client.get("/admin/templates/matters")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "data-archetype-ai-widget" in body
+    assert "data-ai-archetype-generate" in body
+    assert "data-ai-archetype-status" in body
 
 
 def test_non_admin_cannot_generate_ai_archetype_draft(app_ctx):
