@@ -1,5 +1,5 @@
 [Unit]
-Description=Law Firm Intranet Worker
+Description=DM-Inc Intranet Worker
 After=network-online.target redis-server.service law-intranet.service
 Wants=network-online.target redis-server.service
 

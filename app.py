@@ -1,5 +1,5 @@
 """
-Law Firm Intranet (ELF demo)
+DM-Inc Intranet (demo)
 
 Entrypoint module. App code is organized under the `intranet/` package.
 """
@@ -127,11 +127,11 @@ def main() -> None:
         for key in extra_keys:
             print(f"  {key}={summary[key]}")
         print("Login credentials:")
-        print("  admin@elf-ai-demo.co.za")
-        print("  partner@elf-ai-demo.co.za")
-        print("  associate@elf-ai-demo.co.za")
-        print("  paralegal@elf-ai-demo.co.za")
-        print("  staff@elf-ai-demo.co.za")
+        print("  admin@dm-inc.co.za")
+        print("  partner@dm-inc.co.za")
+        print("  associate@dm-inc.co.za")
+        print("  paralegal@dm-inc.co.za")
+        print("  staff@dm-inc.co.za")
         print(f"  password={summary['password']}")
     elif args.cmd == "run":
         run_server(app, host=args.host, port=args.port, debug=args.debug)

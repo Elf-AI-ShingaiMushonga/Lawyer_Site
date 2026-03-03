@@ -1,4 +1,4 @@
-# Law Firm Intranet (ELF demo)
+# DM-Inc Intranet (demo)
 
 This is a functional intranet website for a law firm:
 - User authentication + roles (admin/lawyer/staff/paralegal)
@@ -46,7 +46,7 @@ export FLASK_SECRET_KEY="change-me"
 # optional: export DATABASE_URL="postgresql+psycopg://..."
 flask --app app.py db upgrade -d migrations
 
-python app.py create-user --email admin@firm.local --password "ChangeMeNow!" --role admin --name "Admin User"
+python app.py create-user --email admin@dm-inc.co.za --password "ChangeMeNow!" --role admin --name "Admin User"
 python app.py run --debug
 
 # optional background processing
@@ -58,7 +58,7 @@ Open: http://127.0.0.1:5000
 
 Demo routing:
 - `/` is the demo hub landing page.
-- `Law Firm Intranet` routes to `/login`.
+- `DM-Inc Intranet` routes to `/login`.
 - `UFC Prediction` routes to `/ufc/` as a first-party route module inside this app.
 - UFC dependencies are installed from this root `requirements.txt` (no second virtualenv required).
 
@@ -82,11 +82,11 @@ Or run the helper script:
 ```
 
 Seeded demo logins:
-- `admin@elf-ai-demo.co.za`
-- `partner@elf-ai-demo.co.za`
-- `associate@elf-ai-demo.co.za`
-- `paralegal@elf-ai-demo.co.za`
-- `staff@elf-ai-demo.co.za`
+- `admin@dm-inc.co.za`
+- `partner@dm-inc.co.za`
+- `associate@dm-inc.co.za`
+- `paralegal@dm-inc.co.za`
+- `staff@dm-inc.co.za`
 
 Seeded demo content now includes:
 - Matter/case portfolio with stage, risk, parties, notes, and timeline activity
@@ -209,7 +209,7 @@ UFC production notes:
     - `APP_REPO_DIR`
   - Replace placeholders in that file first:
     - `REPO_URL`
-    - `APP_DOMAIN` (defaults to `elf-ai-demo.co.za www.elf-ai-demo.co.za`)
+    - `APP_DOMAIN` (defaults to `dm-inc.co.za www.dm-inc.co.za`)
     - `FLASK_SECRET_KEY`
     - `DATABASE_URL`
     - `TRUSTED_PROXY_HOPS` (`2` if ALB is in front of Nginx)
@@ -281,7 +281,7 @@ UFC production notes:
     - `sudo mkdir -p /etc/nginx/conf.d`
     - `sudo cp deploy/ubuntu/nginx/law-intranet.conf /etc/nginx/conf.d/law-intranet.conf`
     - `sudo rm -f /etc/nginx/conf.d/default.conf`
-  - `server_name` is preconfigured for `elf-ai-demo.co.za` and `www.elf-ai-demo.co.za`.
+  - `server_name` is preconfigured for `dm-inc.co.za` and `www.dm-inc.co.za`.
   - Update `server_name` in whichever file you installed (`/etc/nginx/sites-available/law-intranet.conf` or `/etc/nginx/conf.d/law-intranet.conf`).
   - `sudo nginx -t`
   - `sudo systemctl enable --now nginx`

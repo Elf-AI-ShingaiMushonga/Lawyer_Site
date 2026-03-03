@@ -9,6 +9,7 @@ from flask_login import current_user, login_required
 from ..extensions import db
 from ..helpers import audit
 from ..models import (
+    ContractTemplate,
     DeadlineRule,
     DocumentTemplate,
     FirmSetting,
@@ -224,6 +225,23 @@ def register_admin_settings_routes(app):
 
         rates = RateCard.query.order_by(RateCard.id.desc()).limit(200).all()
         return page("Rates", "admin_settings/rates.html", rates=rates)
+
+    @app.get("/admin/automation")
+    @login_required
+    def admin_automation():
+        _admin_required()
+        stats = {
+            "matter_archetypes": MatterTemplate.query.count(),
+            "contract_templates": ContractTemplate.query.count(),
+            "task_templates": TaskTemplate.query.count(),
+            "document_templates": DocumentTemplate.query.count(),
+            "linked_contract_templates": ContractTemplate.query.filter(ContractTemplate.archetype_id.isnot(None)).count(),
+            "auto_contract_templates": ContractTemplate.query.filter_by(
+                is_active=True,
+                auto_create_on_matter_open=True,
+            ).count(),
+        }
+        return page("Automation Studio", "admin_settings/automation.html", stats=stats)
 
     @app.route("/admin/templates/matters", methods=["GET", "POST"])
     @login_required
@@ -456,6 +474,134 @@ def register_admin_settings_routes(app):
 
         rows = DocumentTemplate.query.order_by(DocumentTemplate.created_at.desc()).all()
         return page("Document Templates", "admin_settings/templates_documents.html", templates=rows)
+
+    @app.route("/admin/templates/contracts", methods=["GET", "POST"])
+    @login_required
+    def admin_templates_contracts():
+        _admin_required()
+        if request.method == "POST":
+            action = (request.form.get("action") or "save").strip().lower()
+            template_id = request.form.get("template_id", type=int)
+            row = db.session.get(ContractTemplate, template_id) if template_id else None
+
+            if action == "delete":
+                if row is None:
+                    flash("Contract template not found.", "warning")
+                    return redirect(url_for("admin_templates_contracts"))
+                deleted_id = int(row.id)
+                deleted_name = row.name
+                db.session.delete(row)
+                db.session.commit()
+                audit("contract_template_delete", "ContractTemplate", deleted_id, {"name": deleted_name})
+                flash("Contract template deleted.", "info")
+                return redirect(url_for("admin_templates_contracts"))
+
+            name = (request.form.get("name") or "").strip()
+            body = (request.form.get("body") or "").strip()
+            archetype_id = request.form.get("archetype_id", type=int)
+            archetype = db.session.get(MatterTemplate, archetype_id) if archetype_id else None
+            required_fields, field_errors = parse_required_fields_definition(request.form.get("required_fields"))
+
+            if not name:
+                flash("Contract template name is required.", "warning")
+                return redirect(url_for("admin_templates_contracts"))
+            if not body:
+                flash("Contract template body is required.", "warning")
+                return redirect(url_for("admin_templates_contracts"))
+            if archetype_id and archetype is None:
+                flash("Selected archetype was not found.", "warning")
+                return redirect(url_for("admin_templates_contracts"))
+            if field_errors:
+                flash(field_errors[0], "warning")
+                return redirect(url_for("admin_templates_contracts"))
+            if template_id and row is None:
+                flash("Contract template not found.", "warning")
+                return redirect(url_for("admin_templates_contracts"))
+
+            duplicate_name = (
+                ContractTemplate.query.filter(ContractTemplate.name == name, ContractTemplate.id != template_id).first()
+                if template_id
+                else ContractTemplate.query.filter_by(name=name).first()
+            )
+            if duplicate_name is not None and row is not duplicate_name:
+                flash("Another contract template already uses that name.", "warning")
+                return redirect(url_for("admin_templates_contracts"))
+
+            if row is None:
+                row = ContractTemplate(name=name, created_by=current_user.id)
+                db.session.add(row)
+                is_new = True
+            else:
+                row.name = name
+                is_new = False
+
+            row.legal_category = (request.form.get("legal_category") or "").strip() or None
+            row.archetype_id = archetype.id if archetype else None
+            row.contract_type = (request.form.get("contract_type") or "Contract").strip() or "Contract"
+            row.required_fields_json = json.dumps(required_fields, ensure_ascii=True)
+            row.body = body
+            row.requires_signature = (request.form.get("requires_signature") or "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+            row.auto_create_on_matter_open = (request.form.get("auto_create_on_matter_open") or "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+            row.is_active = (request.form.get("is_active") or "").strip().lower() in {"1", "true", "yes", "on"}
+            db.session.commit()
+            audit("contract_template_create" if is_new else "contract_template_update", "ContractTemplate", row.id)
+            flash("Contract template saved.", "info")
+            return redirect(url_for("admin_templates_contracts"))
+
+        edit_id = request.args.get("edit_id", type=int)
+        edit_row = db.session.get(ContractTemplate, edit_id) if edit_id else None
+        if edit_id and edit_row is None:
+            flash("Contract template not found.", "warning")
+            return redirect(url_for("admin_templates_contracts"))
+
+        rows = ContractTemplate.query.order_by(ContractTemplate.created_at.desc()).all()
+        archetypes = MatterTemplate.query.order_by(MatterTemplate.name.asc()).all()
+        categories = sorted(
+            {
+                row.legal_category
+                for row in rows
+                if row.legal_category
+            }
+            | {
+                row.legal_category
+                for row in archetypes
+                if row.legal_category
+            }
+        )
+        archetype_name_map = {int(row.id): row.name for row in archetypes}
+        contract_fields_map = {row.id: load_required_fields(row.required_fields_json) for row in rows}
+        form_data = {
+            "name": edit_row.name if edit_row else "",
+            "legal_category": edit_row.legal_category if edit_row else "",
+            "archetype_id": edit_row.archetype_id if edit_row else "",
+            "contract_type": (edit_row.contract_type if edit_row else "Contract") or "Contract",
+            "required_fields": _required_fields_to_text(edit_row.required_fields_json if edit_row else None),
+            "body": edit_row.body if edit_row else "",
+            "requires_signature": bool(edit_row.requires_signature) if edit_row else True,
+            "auto_create_on_matter_open": bool(edit_row.auto_create_on_matter_open) if edit_row else True,
+            "is_active": bool(edit_row.is_active) if edit_row else True,
+        }
+        return page(
+            "Contract Templates",
+            "admin_settings/templates_contracts.html",
+            templates=rows,
+            archetypes=archetypes,
+            categories=categories,
+            archetype_name_map=archetype_name_map,
+            contract_fields_map=contract_fields_map,
+            edit_template_id=(edit_row.id if edit_row else None),
+            form_data=form_data,
+        )
 
     @app.route("/admin/rules/deadlines", methods=["GET", "POST"])
     @login_required

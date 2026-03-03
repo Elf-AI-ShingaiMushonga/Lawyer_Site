@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="section-title">Automation Studio</h3>
+      <div class="page-intro mt-1">Centralized template automation for matters, contracts, workflow tasks, and documents.</div>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin') }}">Back to Admin</a>
+  </div>
+
+  <div class="row g-2 mt-2">
+    <div class="col-md-3">
+      <div class="kpi-pill h-100">
+        <div class="label">Matter Archetypes</div>
+        <div class="value">{{ stats.matter_archetypes }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="kpi-pill h-100">
+        <div class="label">Contract Templates</div>
+        <div class="value">{{ stats.contract_templates }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="kpi-pill h-100">
+        <div class="label">Task Templates</div>
+        <div class="value">{{ stats.task_templates }}</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="kpi-pill h-100">
+        <div class="label">Document Templates</div>
+        <div class="value">{{ stats.document_templates }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card p-3 h-100">
+      <h4 class="mb-1">Matter Archetypes</h4>
+      <div class="form-help mb-2">Define legal category templates with required intake fields and boilerplate.</div>
+      <div class="table-actions mt-auto">
+        <a class="btn btn-light btn-sm" href="{{ url_for('admin_templates_matters') }}">Open Builder</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card p-3 h-100">
+      <h4 class="mb-1">Contract Templates</h4>
+      <div class="form-help mb-2">
+        Create standalone contracts or link contracts to archetypes for automatic matter-time generation.
+        Linked: {{ stats.linked_contract_templates }} | Auto-create active: {{ stats.auto_contract_templates }}
+      </div>
+      <div class="table-actions mt-auto">
+        <a class="btn btn-light btn-sm" href="{{ url_for('admin_templates_contracts') }}">Open Builder</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card p-3 h-100">
+      <h4 class="mb-1">Task Templates</h4>
+      <div class="form-help mb-2">Configure repeatable workflow checklists used for task orchestration and approvals.</div>
+      <div class="table-actions mt-auto">
+        <a class="btn btn-light btn-sm" href="{{ url_for('admin_templates_tasks') }}">Open Builder</a>
+        <a class="btn btn-outline-light btn-sm" href="{{ url_for('task_templates') }}">Workflow Console</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card p-3 h-100">
+      <h4 class="mb-1">Document Templates</h4>
+      <div class="form-help mb-2">Maintain reusable precedent text and merge fields for fast DMS draft generation.</div>
+      <div class="table-actions mt-auto">
+        <a class="btn btn-light btn-sm" href="{{ url_for('admin_templates_documents') }}">Open Builder</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

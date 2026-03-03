@@ -7,6 +7,6 @@ def test_demo_landing_page_shows_both_experiences(app):
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "Law Firm Intranet" in body
+    assert "DM-Inc Intranet" in body
     assert "UFC Prediction" in body
     assert 'href="/login"' in body

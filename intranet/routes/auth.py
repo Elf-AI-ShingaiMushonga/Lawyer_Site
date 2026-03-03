@@ -47,7 +47,7 @@ def register_auth_routes(app):
     @app.get("/")
     def index():
         return page(
-            "ELF Demo Hub",
+            "DM-Inc Demo Hub",
             "landing.html",
             intranet_login_url=url_for("login"),
             ufc_url=current_app.config.get("UFC_DEMO_PATH", "/ufc/"),

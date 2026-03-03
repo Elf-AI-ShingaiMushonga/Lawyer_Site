@@ -5,7 +5,7 @@ import json
 from flask import g
 
 from intranet.extensions import db
-from intranet.models import Matter, MatterTemplate, User
+from intranet.models import Matter, MatterMember, MatterTemplate, User
 
 
 def _set_internal_session(client, user_id: int, csrf_token: str = "test-csrf") -> str:
@@ -223,6 +223,111 @@ def test_matter_creation_requires_archetype_specific_fields(app_ctx):
     values = json.loads(matter.archetype_data_json or "{}")
     assert values.get("incident_date") == "2026-02-01"
     assert values.get("employment_role") == "Senior Analyst"
+
+
+def test_matter_creation_allows_custom_no_archetype(app_ctx):
+    app = app_ctx
+    admin = _seed_admin()
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, admin.id)
+
+    created_response = client.post(
+        "/matters/new",
+        data={
+            "csrf_token": csrf_token,
+            "matter_no": "2026-ARC-CUSTOM-1",
+            "title": "Custom Matter",
+            "client_name": "Client Custom",
+            "status": "Open",
+            "risk_level": "Medium",
+            "budget_status": "On Track",
+            "legal_category": "Labour Law",
+            "archetype_id": "custom",
+        },
+    )
+    assert created_response.status_code == 302
+    matter = Matter.query.filter_by(matter_no="2026-ARC-CUSTOM-1").first()
+    assert matter is not None
+    assert matter.archetype_id is None
+    assert matter.archetype_data_json is None
+
+
+def test_matter_intake_allows_custom_no_archetype(app_ctx):
+    app = app_ctx
+    admin = _seed_admin()
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, admin.id)
+
+    created_response = client.post(
+        "/matters/intake",
+        data={
+            "csrf_token": csrf_token,
+            "matter_no": "2026-ARC-CUSTOM-INTAKE-1",
+            "title": "Custom Intake Matter",
+            "client_name": "Client Intake",
+            "legal_category": "Labour Law",
+            "template_id": "custom",
+        },
+    )
+    assert created_response.status_code == 302
+    matter = Matter.query.filter_by(matter_no="2026-ARC-CUSTOM-INTAKE-1").first()
+    assert matter is not None
+    assert matter.archetype_id is None
+    assert matter.archetype_data_json is None
+
+
+def test_matter_creation_can_assign_lawyers_from_create_screen(app_ctx):
+    app = app_ctx
+    admin = _seed_admin()
+    archetype = _seed_archetype(admin.id)
+    lawyer = User(
+        email="matter-assign-lawyer@example.com",
+        full_name="Assigned Lawyer",
+        role="lawyer",
+        password_hash="x",
+        mfa_enabled=True,
+    )
+    lawyer.set_password("TestPassword123!")
+    partner = User(
+        email="matter-assign-partner@example.com",
+        full_name="Assigned Partner",
+        role="partner",
+        password_hash="x",
+        mfa_enabled=True,
+    )
+    partner.set_password("TestPassword123!")
+    db.session.add_all([lawyer, partner])
+    db.session.commit()
+
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, admin.id)
+
+    created_response = client.post(
+        "/matters/new",
+        data={
+            "csrf_token": csrf_token,
+            "matter_no": "2026-ARC-ASSIGN-1",
+            "title": "Matter With Assigned Lawyers",
+            "client_name": "Client Team",
+            "status": "Open",
+            "risk_level": "Medium",
+            "budget_status": "On Track",
+            "legal_category": "Labour Law",
+            "archetype_id": archetype.id,
+            "field_incident_date": "2026-02-03",
+            "field_employment_role": "Counsel",
+            "lawyer_user_ids": [str(lawyer.id), str(partner.id)],
+        },
+    )
+    assert created_response.status_code == 302
+
+    matter = Matter.query.filter_by(matter_no="2026-ARC-ASSIGN-1").first()
+    assert matter is not None
+    members = MatterMember.query.filter_by(matter_id=matter.id).all()
+    member_user_ids = {int(row.user_id) for row in members}
+    assert admin.id in member_user_ids
+    assert lawyer.id in member_user_ids
+    assert partner.id in member_user_ids
 
 
 def test_admin_can_generate_ai_archetype_draft_payload(app_ctx):

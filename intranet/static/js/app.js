@@ -1165,6 +1165,50 @@
     }, 1000);
   };
 
+  const initLiveBillingCue = () => {
+    const root = document.querySelector("[data-live-timer-root]");
+    if (!(root instanceof HTMLElement)) {
+      return;
+    }
+
+    const elapsedNode = root.querySelector("[data-live-timer-elapsed]");
+    if (!(elapsedNode instanceof HTMLElement)) {
+      return;
+    }
+
+    const parseNonNegativeInt = (value, fallback = 0) => {
+      const parsed = Number.parseInt(String(value || ""), 10);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return fallback;
+      }
+      return parsed;
+    };
+
+    const elapsedSeedSeconds = parseNonNegativeInt(root.dataset.elapsedSeedSeconds, 0);
+    const startedAtRaw = String(root.dataset.startedAt || "").trim();
+    const startedAtMs = startedAtRaw ? Date.parse(startedAtRaw) : Number.NaN;
+
+    const formatElapsed = (totalSeconds) => {
+      const safeTotal = Math.max(0, parseNonNegativeInt(totalSeconds, 0));
+      const hours = Math.floor(safeTotal / 3600);
+      const minutes = Math.floor((safeTotal % 3600) / 60);
+      const seconds = safeTotal % 60;
+      const pad = (value) => String(value).padStart(2, "0");
+      return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    };
+
+    const render = () => {
+      let elapsed = elapsedSeedSeconds;
+      if (Number.isFinite(startedAtMs)) {
+        elapsed += Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000));
+      }
+      elapsedNode.textContent = formatElapsed(elapsed);
+    };
+
+    render();
+    window.setInterval(render, 1000);
+  };
+
   const initQuoteAssist = () => {
     const forms = Array.from(document.querySelectorAll("[data-quote-form]"));
     if (forms.length === 0) {
@@ -2748,6 +2792,7 @@
     initTimePrompts();
     initTimeCodeAssist();
     initTimerPresenceGuard();
+    initLiveBillingCue();
     initQuoteAssist();
     initPortalMessageComposer();
     initLeadMatterSync();

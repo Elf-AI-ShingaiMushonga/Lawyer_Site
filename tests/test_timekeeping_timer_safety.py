@@ -165,3 +165,53 @@ def test_timers_page_renders_idle_presence_guard_attributes(app_ctx):
     assert 'data-idle-prompt-seconds="1234"' in body
     assert 'data-idle-grace-seconds="45"' in body
     assert 'data-cap-minutes="180"' in body
+
+
+def test_global_live_billing_cue_renders_when_timer_running(app_ctx):
+    app = app_ctx
+    user = _seed_user("timer-live-cue@example.com")
+    matter = _seed_matter(user, "2026-TIMER-CUE-0001")
+    timer = TimeTimer(
+        user_id=user.id,
+        matter_id=matter.id,
+        status="running",
+        label="Drafting heads of argument",
+        elapsed_seconds=75,
+        started_at=dt.datetime.utcnow() - dt.timedelta(minutes=2),
+    )
+    db.session.add(timer)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get("/dashboard")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Billing Timer Running" in body
+    assert "data-live-timer-root" in body
+    assert f'data-elapsed-seed-seconds="{timer.elapsed_seconds}"' in body
+    assert matter.matter_no in body
+
+
+def test_global_live_billing_cue_hidden_without_running_timer(app_ctx):
+    app = app_ctx
+    user = _seed_user("timer-live-cue-paused@example.com")
+    matter = _seed_matter(user, "2026-TIMER-CUE-0002")
+    timer = TimeTimer(
+        user_id=user.id,
+        matter_id=matter.id,
+        status="paused",
+        label="Paused timer",
+        elapsed_seconds=180,
+        started_at=dt.datetime.utcnow() - dt.timedelta(minutes=5),
+    )
+    db.session.add(timer)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get("/dashboard")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "data-live-timer-root" not in body
+    assert "Billing Timer Running" not in body

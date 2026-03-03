@@ -457,6 +457,24 @@ class MatterTemplate(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
 
 
+class ContractTemplate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True)
+    legal_category = db.Column(db.String(120), nullable=True)
+    archetype_id = db.Column(db.Integer, db.ForeignKey("matter_template.id"), nullable=True, index=True)
+    contract_type = db.Column(db.String(80), nullable=False, default="Contract")
+    required_fields_json = db.Column(db.Text, nullable=True)
+    body = db.Column(db.Text, nullable=False)
+    requires_signature = db.Column(db.Boolean, nullable=False, default=True)
+    auto_create_on_matter_open = db.Column(db.Boolean, nullable=False, default=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (
+        db.Index("ix_contract_template_archetype_active", "archetype_id", "is_active"),
+    )
+
+
 class TaskTemplate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False, unique=True)

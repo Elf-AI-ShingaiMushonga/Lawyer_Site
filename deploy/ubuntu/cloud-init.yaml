@@ -26,12 +26,12 @@ write_files:
       # Replace these placeholders before using this cloud-init file.
       REPO_URL="https://github.com/your-org/your-repo.git"
       REPO_REF="main"
-      APP_DOMAIN="elf-ai-demo.co.za www.elf-ai-demo.co.za"
+      APP_DOMAIN="dm-inc.co.za www.dm-inc.co.za"
       FLASK_SECRET_KEY="REPLACE_WITH_A_LONG_RANDOM_SECRET"
       DATABASE_URL="postgresql+psycopg://app_user:app_password@db-host:5432/law_intranet?sslmode=require"
       BACKUP_ENCRYPTION_KEY="REPLACE_WITH_32_BYTE_URLSAFE_BASE64_KEY"
       TRUSTED_PROXY_HOPS="1"
-      ADMIN_EMAIL="admin@firm.local"
+      ADMIN_EMAIL="admin@dm-inc.co.za"
       ADMIN_PASSWORD="REPLACE_WITH_STRONG_ADMIN_PASSWORD"
       ADMIN_NAME="Admin User"
       GUNICORN_WORKERS="3"
@@ -170,13 +170,13 @@ write_files:
 
       if [[ -d /etc/nginx/sites-available ]]; then
         cp "${APP_DIR}/deploy/ubuntu/nginx/law-intranet.conf" /etc/nginx/sites-available/law-intranet.conf
-        sed -i "s/server_name elf-ai-demo\\.co\\.za www\\.elf-ai-demo\\.co\\.za;/server_name ${APP_DOMAIN};/" /etc/nginx/sites-available/law-intranet.conf
+        sed -i "s/server_name dm-inc\\.co\\.za www\\.dm-inc\\.co\\.za;/server_name ${APP_DOMAIN};/" /etc/nginx/sites-available/law-intranet.conf
         ln -sf /etc/nginx/sites-available/law-intranet.conf /etc/nginx/sites-enabled/law-intranet.conf
         rm -f /etc/nginx/sites-enabled/default
       else
         mkdir -p /etc/nginx/conf.d
         cp "${APP_DIR}/deploy/ubuntu/nginx/law-intranet.conf" /etc/nginx/conf.d/law-intranet.conf
-        sed -i "s/server_name elf-ai-demo\\.co\\.za www\\.elf-ai-demo\\.co\\.za;/server_name ${APP_DOMAIN};/" /etc/nginx/conf.d/law-intranet.conf
+        sed -i "s/server_name dm-inc\\.co\\.za www\\.dm-inc\\.co\\.za;/server_name ${APP_DOMAIN};/" /etc/nginx/conf.d/law-intranet.conf
         rm -f /etc/nginx/conf.d/default.conf
       fi
 

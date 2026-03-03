@@ -47,11 +47,13 @@
   <div class="form-section mt-3">
     <div class="form-label">Configuration and Templates</div>
     <div class="table-actions mt-2">
+      <a class="btn btn-sm btn-light" href="{{ url_for('admin_automation') }}">Automation Studio</a>
       <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_firm') }}">Firm Settings</a>
       <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_offices') }}">Offices</a>
       <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_practice_areas') }}">Practice Areas</a>
       <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_rates') }}">Rates</a>
       <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_matters') }}">Matter Archetypes</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_contracts') }}">Contract Templates</a>
       <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_tasks') }}">Task Templates</a>
       <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_documents') }}">Document Templates</a>
     </div>

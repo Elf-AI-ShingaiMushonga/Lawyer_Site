@@ -17,9 +17,10 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if not archetype_templates %}
       <div class="col-12">
-        <div class="alert alert-warning mb-0">
+        <div class="alert alert-info mb-0">
           No matter archetypes are configured yet.
-          <a href="{{ url_for('admin_templates_matters') }}">Create an archetype first</a>.
+          You can still proceed with <strong>Custom (No Archetype)</strong>, or
+          <a href="{{ url_for('admin_templates_matters') }}">create an archetype</a>.
         </div>
       </div>
     {% endif %}
@@ -35,6 +36,19 @@
       <label class="muted small">Client Name</label>
       <input class="form-control" name="client_name" placeholder="e.g. Smith Family Trust" required>
     </div>
+    <div class="col-md-6">
+      <label class="muted small">Assign Lawyers</label>
+      <select class="form-select" name="lawyer_user_ids" multiple size="5" {% if not assignable_lawyers %}disabled{% endif %}>
+        {% for u in assignable_lawyers %}
+          <option value="{{ u.id }}">{{ u.full_name }} ({{ u.email }})</option>
+        {% endfor %}
+      </select>
+      {% if assignable_lawyers %}
+        <div class="form-help mt-1">Optional. Hold Ctrl/Cmd and click to assign one or more lawyers while creating the matter.</div>
+      {% else %}
+        <div class="form-help mt-1">No active lawyers are currently available for assignment.</div>
+      {% endif %}
+    </div>
     <div class="col-md-4">
       <label class="muted small">Legal Category</label>
       <input class="form-control" name="legal_category" placeholder="e.g. Labour Law" list="matter-legal-category-options" required>
@@ -48,8 +62,9 @@
     </div>
     <div class="col-md-8">
       <label class="muted small">Archetype</label>
-      <select class="form-select" name="archetype_id" {% if not archetype_templates %}disabled{% endif %} required>
+      <select class="form-select" name="archetype_id" required>
         <option value="">Select archetype...</option>
+        <option value="custom">Custom (No Archetype)</option>
         {% for t in archetype_templates %}
           <option value="{{ t.id }}" data-category="{{ t.legal_category or '' }}">{{ t.name }}{% if t.legal_category %} ({{ t.legal_category }}){% endif %}</option>
         {% endfor %}
@@ -96,6 +111,11 @@
       <div id="archetype-required-fields" class="row g-2"></div>
       <div id="archetype-required-help" class="form-help mt-2">Select an archetype to load its required matter-specific fields.</div>
     </div>
+    <div class="col-12">
+      <label class="muted small">Contract Autofill Fields</label>
+      <div id="contract-required-fields" class="row g-2"></div>
+      <div id="contract-required-help" class="form-help mt-2">Select an archetype to load contract fields for auto-generated drafts.</div>
+    </div>
     <div class="col-12 d-grid">
       <button class="btn btn-light" data-submitting-text="Creating Matter...">Create</button>
     </div>
@@ -109,7 +129,9 @@
     const archetypeSelect = document.querySelector('select[name="archetype_id"]');
     const requiredFieldsContainer = document.getElementById("archetype-required-fields");
     const requiredHelp = document.getElementById("archetype-required-help");
-    if (!categoryInput || !archetypeSelect || !requiredFieldsContainer || !requiredHelp) {
+    const contractFieldsContainer = document.getElementById("contract-required-fields");
+    const contractHelp = document.getElementById("contract-required-help");
+    if (!categoryInput || !archetypeSelect || !requiredFieldsContainer || !requiredHelp || !contractFieldsContainer || !contractHelp) {
       return;
     }
 
@@ -119,17 +141,102 @@
       requiredHelp.textContent = text;
     };
 
+    const setContractHelpText = (text) => {
+      contractHelp.textContent = text;
+    };
+
+    const renderContractRequiredFields = (selected) => {
+      contractFieldsContainer.innerHTML = "";
+      if (!selected) {
+        setContractHelpText("Select an archetype to load contract fields for auto-generated drafts.");
+        return;
+      }
+      const archetypeKeys = new Set(
+        (Array.isArray(selected.required_fields) ? selected.required_fields : [])
+          .map((field) => String(field?.key || "").trim())
+          .filter(Boolean)
+      );
+      const contractTemplates = Array.isArray(selected.contract_templates) ? selected.contract_templates : [];
+      if (!contractTemplates.length) {
+        setContractHelpText("No auto-generated contracts are linked to this archetype.");
+        return;
+      }
+      const byKey = new Map();
+      contractTemplates.forEach((template) => {
+        const templateName = String(template?.name || "Contract");
+        const requiredFields = Array.isArray(template?.required_fields) ? template.required_fields : [];
+        requiredFields.forEach((field) => {
+          const key = String(field?.key || "").trim();
+          if (!key) {
+            return;
+          }
+          if (archetypeKeys.has(key)) {
+            return;
+          }
+          const label = String(field?.label || key);
+          const helpText = String(field?.help || "");
+          const existing = byKey.get(key);
+          if (existing) {
+            if (!existing.templates.includes(templateName)) {
+              existing.templates.push(templateName);
+            }
+            if (!existing.help && helpText) {
+              existing.help = helpText;
+            }
+            return;
+          }
+          byKey.set(key, {
+            key,
+            label,
+            help: helpText,
+            templates: [templateName],
+          });
+        });
+      });
+      if (!byKey.size) {
+        setContractHelpText("This archetype has auto-generated contracts, but no additional required contract fields.");
+        return;
+      }
+      setContractHelpText(`Complete these fields to auto-generate ${contractTemplates.length} contract draft(s).`);
+      Array.from(byKey.values()).forEach((field) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "col-md-6";
+        const labelNode = document.createElement("label");
+        labelNode.className = "muted small";
+        labelNode.textContent = field.label;
+        const inputNode = document.createElement("input");
+        inputNode.className = "form-control";
+        inputNode.name = `contract_field_${field.key}`;
+        inputNode.required = true;
+        wrapper.appendChild(labelNode);
+        wrapper.appendChild(inputNode);
+        const helper = document.createElement("div");
+        helper.className = "form-help mt-1";
+        const templateList = field.templates.join(", ");
+        helper.textContent = field.help ? `${field.help} (${templateList})` : `Required for: ${templateList}`;
+        wrapper.appendChild(helper);
+        contractFieldsContainer.appendChild(wrapper);
+      });
+    };
+
     const renderRequiredFields = () => {
       requiredFieldsContainer.innerHTML = "";
       const selectedId = archetypeSelect.value;
+      if (selectedId === "custom") {
+        setHelpText("Custom matter selected. No archetype-required fields are needed.");
+        renderContractRequiredFields(null);
+        return;
+      }
       const selected = byId.get(String(selectedId));
       if (!selected) {
         setHelpText("Select an archetype to load its required matter-specific fields.");
+        renderContractRequiredFields(null);
         return;
       }
       const fields = Array.isArray(selected.required_fields) ? selected.required_fields : [];
       if (!fields.length) {
         setHelpText("This archetype has no additional required fields.");
+        renderContractRequiredFields(selected);
         return;
       }
       setHelpText("Complete all fields below. They are required for this archetype.");
@@ -159,12 +266,13 @@
         }
         requiredFieldsContainer.appendChild(wrapper);
       });
+      renderContractRequiredFields(selected);
     };
 
     const filterArchetypesByCategory = () => {
       const category = String(categoryInput.value || "").trim().toLowerCase();
       Array.from(archetypeSelect.options).forEach((option) => {
-        if (!option.value) {
+        if (!option.value || option.value === "custom") {
           option.hidden = false;
           return;
         }

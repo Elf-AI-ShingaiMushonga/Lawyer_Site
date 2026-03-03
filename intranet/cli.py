@@ -355,7 +355,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
         users = {}
         user_specs = [
             {
-                "email": "admin@elf-ai-demo.co.za",
+                "email": "admin@dm-inc.co.za",
                 "full_name": "Alicia Mokoena",
                 "role": "admin",
                 "mfa_enabled": True,
@@ -363,7 +363,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 "failed_login_attempts": 0,
             },
             {
-                "email": "partner@elf-ai-demo.co.za",
+                "email": "partner@dm-inc.co.za",
                 "full_name": "Daniel Naidoo",
                 "role": "lawyer",
                 "mfa_enabled": True,
@@ -371,7 +371,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 "failed_login_attempts": 0,
             },
             {
-                "email": "associate@elf-ai-demo.co.za",
+                "email": "associate@dm-inc.co.za",
                 "full_name": "Nandi Maseko",
                 "role": "lawyer",
                 "mfa_enabled": False,
@@ -379,7 +379,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 "failed_login_attempts": 0,
             },
             {
-                "email": "paralegal@elf-ai-demo.co.za",
+                "email": "paralegal@dm-inc.co.za",
                 "full_name": "Sipho Khumalo",
                 "role": "paralegal",
                 "mfa_enabled": False,
@@ -387,7 +387,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 "failed_login_attempts": 1,
             },
             {
-                "email": "staff@elf-ai-demo.co.za",
+                "email": "staff@dm-inc.co.za",
                 "full_name": "Leah Pillay",
                 "role": "staff",
                 "mfa_enabled": False,
@@ -420,11 +420,11 @@ def seed_demo_data(app, password: str, reset: bool = False):
 
         db.session.flush()
 
-        admin_id = users["admin@elf-ai-demo.co.za"].id
-        partner_id = users["partner@elf-ai-demo.co.za"].id
-        associate_id = users["associate@elf-ai-demo.co.za"].id
-        paralegal_id = users["paralegal@elf-ai-demo.co.za"].id
-        staff_id = users["staff@elf-ai-demo.co.za"].id
+        admin_id = users["admin@dm-inc.co.za"].id
+        partner_id = users["partner@dm-inc.co.za"].id
+        associate_id = users["associate@dm-inc.co.za"].id
+        paralegal_id = users["paralegal@dm-inc.co.za"].id
+        staff_id = users["staff@dm-inc.co.za"].id
 
         announcements = [
             (
@@ -1252,7 +1252,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
             name="Client Portal Companion",
             client_id="portal-companion-web",
             client_secret_hash=hash_backup_code("portal-client-secret-2026"),
-            redirect_uri="https://portal.elf-ai-demo.co.za/sso/callback",
+            redirect_uri="https://portal.dm-inc.co.za/sso/callback",
             is_active=True,
             created_at=now - dt.timedelta(days=18),
         )
@@ -1484,16 +1484,16 @@ def seed_demo_data(app, password: str, reset: bool = False):
         # Admin settings and templates
         # -------------------------------------------------------------------
         firm_settings = [
-            ("firm_profile", {"name": "Elf AI Demo Attorneys", "jurisdiction_default": "ZA-GP", "timezone": "Africa/Johannesburg"}),
+            ("firm_profile", {"name": "DM-Inc Attorneys", "jurisdiction_default": "ZA-GP", "timezone": "Africa/Johannesburg"}),
             ("default_tax", {"code": "VAT", "rate_percent": 15.0}),
             ("deadline_policy", {"default_calendar": "South Africa Court Calendar", "business_day_adjust": True}),
             (
                 "office365_integration",
                 {
                     "enabled": True,
-                    "tenant_id": "elf-ai-demo-tenant",
-                    "client_id": "elf-ai-demo-office365-client",
-                    "domain_hint": "elf-ai-demo.co.za",
+                    "tenant_id": "dm-inc-tenant",
+                    "client_id": "dm-inc-office365-client",
+                    "domain_hint": "dm-inc.co.za",
                     "sync_notes": "Pilot enabled for Outlook calendar and Excel exports.",
                 },
             ),

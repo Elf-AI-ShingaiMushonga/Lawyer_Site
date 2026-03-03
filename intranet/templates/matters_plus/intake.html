@@ -43,6 +43,7 @@
     <div class="col-md-4">
       <select class="form-select" name="template_id" required>
         <option value="">Select archetype</option>
+        <option value="custom">Custom (No Archetype)</option>
         {% for t in templates %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
       </select>
     </div>
@@ -54,6 +55,11 @@
       <label class="muted small">Archetype Required Fields</label>
       <div id="intake-archetype-required-fields" class="row g-2"></div>
       <div id="intake-archetype-help" class="form-help mt-2">Select an archetype to load required fields.</div>
+    </div>
+    <div class="col-12">
+      <label class="muted small">Contract Autofill Fields</label>
+      <div id="intake-contract-required-fields" class="row g-2"></div>
+      <div id="intake-contract-help" class="form-help mt-2">Select an archetype to load contract fields for auto-generated drafts.</div>
     </div>
     <div class="col-12 d-grid"><button class="btn btn-light" data-submitting-text="Creating Intake...">Create Intake</button></div>
     <div class="col-12"><div id="matter-intake-draft-status" class="form-help mt-1"></div></div>
@@ -67,10 +73,12 @@
     const archetypeSelect = document.querySelector('select[name="template_id"]');
     const requiredFieldsContainer = document.getElementById("intake-archetype-required-fields");
     const requiredHelp = document.getElementById("intake-archetype-help");
+    const contractFieldsContainer = document.getElementById("intake-contract-required-fields");
+    const contractHelp = document.getElementById("intake-contract-help");
     const aiPrompt = document.getElementById("intake-ai-prompt");
     const aiButton = document.getElementById("intake-ai-generate");
     const aiStatus = document.getElementById("intake-ai-status");
-    if (!templatePayload || !csrfInput || !categoryInput || !archetypeSelect || !requiredFieldsContainer || !requiredHelp) {
+    if (!templatePayload || !csrfInput || !categoryInput || !archetypeSelect || !requiredFieldsContainer || !requiredHelp || !contractFieldsContainer || !contractHelp) {
       return;
     }
 
@@ -78,6 +86,10 @@
 
     const setHelpText = (text) => {
       requiredHelp.textContent = text;
+    };
+
+    const setContractHelpText = (text) => {
+      contractHelp.textContent = text;
     };
 
     const setInputValue = (name, value) => {
@@ -103,17 +115,24 @@
 
     const renderRequiredFields = () => {
       requiredFieldsContainer.innerHTML = "";
+      contractFieldsContainer.innerHTML = "";
+      if (String(archetypeSelect.value) === "custom") {
+        setHelpText("Custom matter selected. No archetype-required fields are needed.");
+        setContractHelpText("Custom matter selected. No contract autofill fields are needed.");
+        return;
+      }
       const selected = byId.get(String(archetypeSelect.value));
       if (!selected) {
         setHelpText("Select an archetype to load required fields.");
+        setContractHelpText("Select an archetype to load contract fields for auto-generated drafts.");
         return;
       }
       const fields = Array.isArray(selected.required_fields) ? selected.required_fields : [];
       if (!fields.length) {
         setHelpText("This archetype has no additional required fields.");
-        return;
+      } else {
+        setHelpText("Complete all required fields before creating intake.");
       }
-      setHelpText("Complete all required fields before creating intake.");
       fields.forEach((field) => {
         const key = String(field.key || "").trim();
         if (!key) {
@@ -138,12 +157,79 @@
         }
         requiredFieldsContainer.appendChild(wrapper);
       });
+
+      const contractTemplates = Array.isArray(selected.contract_templates) ? selected.contract_templates : [];
+      if (!contractTemplates.length) {
+        setContractHelpText("No auto-generated contracts are linked to this archetype.");
+        return;
+      }
+      const archetypeKeys = new Set(
+        (Array.isArray(selected.required_fields) ? selected.required_fields : [])
+          .map((field) => String(field?.key || "").trim())
+          .filter(Boolean)
+      );
+      const byKey = new Map();
+      contractTemplates.forEach((template) => {
+        const templateName = String(template?.name || "Contract");
+        const required = Array.isArray(template?.required_fields) ? template.required_fields : [];
+        required.forEach((field) => {
+          const key = String(field?.key || "").trim();
+          if (!key) {
+            return;
+          }
+          if (archetypeKeys.has(key)) {
+            return;
+          }
+          const label = String(field?.label || key);
+          const helpText = String(field?.help || "");
+          const existing = byKey.get(key);
+          if (existing) {
+            if (!existing.templates.includes(templateName)) {
+              existing.templates.push(templateName);
+            }
+            if (!existing.help && helpText) {
+              existing.help = helpText;
+            }
+            return;
+          }
+          byKey.set(key, {
+            key,
+            label,
+            help: helpText,
+            templates: [templateName],
+          });
+        });
+      });
+      if (!byKey.size) {
+        setContractHelpText("This archetype has auto-generated contracts, but no additional required contract fields.");
+        return;
+      }
+      setContractHelpText(`Complete these fields to auto-generate ${contractTemplates.length} contract draft(s).`);
+      Array.from(byKey.values()).forEach((field) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "col-md-6";
+        const label = document.createElement("label");
+        label.className = "muted small";
+        label.textContent = field.label;
+        const input = document.createElement("input");
+        input.className = "form-control";
+        input.name = `contract_field_${field.key}`;
+        input.required = true;
+        wrapper.appendChild(label);
+        wrapper.appendChild(input);
+        const helper = document.createElement("div");
+        helper.className = "form-help mt-1";
+        const templateNames = field.templates.join(", ");
+        helper.textContent = field.help ? `${field.help} (${templateNames})` : `Required for: ${templateNames}`;
+        wrapper.appendChild(helper);
+        contractFieldsContainer.appendChild(wrapper);
+      });
     };
 
     const filterByCategory = () => {
       const category = String(categoryInput.value || "").trim().toLowerCase();
       Array.from(archetypeSelect.options).forEach((option) => {
-        if (!option.value) {
+        if (!option.value || option.value === "custom") {
           option.hidden = false;
           return;
         }

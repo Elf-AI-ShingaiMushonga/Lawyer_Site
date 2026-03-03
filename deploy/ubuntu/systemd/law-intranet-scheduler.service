@@ -1,5 +1,5 @@
 [Unit]
-Description=Law Firm Intranet Scheduler
+Description=DM-Inc Intranet Scheduler
 After=network-online.target redis-server.service law-intranet.service
 Wants=network-online.target redis-server.service
 

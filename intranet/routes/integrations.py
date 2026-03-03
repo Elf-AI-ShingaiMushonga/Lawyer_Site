@@ -252,10 +252,10 @@ def register_integration_routes(app):
         lines = [
             "BEGIN:VCALENDAR",
             "VERSION:2.0",
-            "PRODID:-//Law Intranet//Office365//EN",
+            "PRODID:-//DM-Inc Intranet//Office365//EN",
             "CALSCALE:GREGORIAN",
             "METHOD:PUBLISH",
-            "X-WR-CALNAME:Law Intranet Deadlines",
+            "X-WR-CALNAME:DM-Inc Intranet Deadlines",
         ]
         for deadline, matter in rows:
             start_value = deadline.due_at.strftime("%Y%m%d")
@@ -263,7 +263,7 @@ def register_integration_routes(app):
             lines.extend(
                 [
                     "BEGIN:VEVENT",
-                    f"UID:deadline-{deadline.id}@law-intranet.local",
+                    f"UID:deadline-{deadline.id}@dm-inc-intranet.local",
                     f"DTSTAMP:{now_stamp}",
                     f"DTSTART;VALUE=DATE:{start_value}",
                     f"DTEND;VALUE=DATE:{end_value}",

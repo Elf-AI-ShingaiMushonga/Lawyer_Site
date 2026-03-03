@@ -23,7 +23,7 @@ from .extensions import (
     migrate,
 )
 from .helpers import ACTIVE_MATTER_SESSION_KEY, resolve_active_matter, set_active_matter_context
-from .models import User
+from .models import Matter, TimeTimer, User
 from .routes import register_routes
 from .schema_sync import sync_schema_compatibility
 from .security import register_security_handlers
@@ -229,8 +229,47 @@ def create_app() -> Flask:
 
     @app.context_processor
     def inject_ui_state():
+        active_matter = resolve_active_matter()
+        active_timer_cue = None
+        if current_user.is_authenticated:
+            running_timer = (
+                TimeTimer.query.filter_by(user_id=current_user.id, status="running")
+                .order_by(TimeTimer.started_at.desc(), TimeTimer.id.desc())
+                .first()
+            )
+            if running_timer is not None:
+                seed_elapsed_seconds = max(0, int(running_timer.elapsed_seconds or 0))
+                started_at = running_timer.started_at
+                now_utc = dt.datetime.utcnow()
+                total_elapsed_seconds = seed_elapsed_seconds
+                started_at_iso = ""
+                if started_at:
+                    total_elapsed_seconds += max(0, int((now_utc - started_at).total_seconds()))
+                    started_at_iso = started_at.replace(microsecond=0).isoformat() + "Z"
+
+                elapsed_hours, elapsed_remainder = divmod(total_elapsed_seconds, 3600)
+                elapsed_minutes, elapsed_seconds = divmod(elapsed_remainder, 60)
+
+                timer_matter = None
+                timer_matter_id = int(running_timer.matter_id) if running_timer.matter_id else None
+                if timer_matter_id and active_matter and int(active_matter.id) == timer_matter_id:
+                    timer_matter = active_matter
+                elif timer_matter_id:
+                    timer_matter = db.session.get(Matter, timer_matter_id)
+
+                active_timer_cue = {
+                    "timer_id": int(running_timer.id),
+                    "matter_id": timer_matter_id,
+                    "matter_no": timer_matter.matter_no if timer_matter is not None else "",
+                    "label": (running_timer.label or "").strip(),
+                    "elapsed_seed_seconds": seed_elapsed_seconds,
+                    "elapsed_display": f"{elapsed_hours:02d}:{elapsed_minutes:02d}:{elapsed_seconds:02d}",
+                    "started_at_iso": started_at_iso,
+                }
+
         return {
-            "active_matter": resolve_active_matter(),
+            "active_matter": active_matter,
+            "active_timer_cue": active_timer_cue,
         }
 
     db.init_app(app)

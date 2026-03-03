@@ -10,7 +10,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-md-6">
       <label class="muted small">User email</label>
-      <input class="form-control" name="email" list="emails" placeholder="lawyer@firm.local" required>
+      <input class="form-control" name="email" list="emails" placeholder="lawyer@dm-inc.co.za" required>
       <datalist id="emails">
         {% for u in users %}
           <option value="{{ u.email }}">{{ u.full_name }}</option>

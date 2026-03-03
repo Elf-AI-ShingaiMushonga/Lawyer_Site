@@ -1,5 +1,5 @@
 [Unit]
-Description=Law Firm Intranet (Gunicorn)
+Description=DM-Inc Intranet (Gunicorn)
 After=network-online.target redis-server.service
 Wants=network-online.target redis-server.service
 

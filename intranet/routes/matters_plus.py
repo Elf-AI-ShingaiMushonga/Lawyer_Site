@@ -22,6 +22,7 @@ from ..helpers import (
     sha256_file,
 )
 from ..models import (
+    ContractTemplate,
     Deadline,
     DocumentFile,
     DocumentRecord,
@@ -43,10 +44,21 @@ from ..services.archetypes import (
     load_required_fields,
     validate_required_field_values,
 )
+from ..services.contracts import (
+    auto_contract_templates_for_archetype,
+    cleanup_generated_files,
+    collect_contract_field_values,
+    contract_required_fields_union,
+    persist_generated_contract_document,
+    render_contract_template_for_matter,
+    validate_contract_field_values,
+)
 from ..services.intake_ai import suggest_matter_intake
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..services.notification_engine import NotificationEngine
 from ..templates import page
+
+CUSTOM_ARCHETYPE_SENTINEL = "custom"
 
 
 def register_matters_plus_routes(app):
@@ -88,25 +100,45 @@ def register_matters_plus_routes(app):
                 return redirect(url_for("matters_intake"))
 
             legal_category = normalize_query(request.form.get("legal_category", ""))
-            template_id = request.form.get("template_id", type=int)
+            template_raw_value = str(request.form.get("template_id", "") or "").strip()
+            is_custom_archetype = template_raw_value.lower() == CUSTOM_ARCHETYPE_SENTINEL
+            template_id = request.form.get("template_id", type=int) if not is_custom_archetype else None
             template = db.session.get(MatterTemplate, template_id) if template_id else None
-            if template is None:
-                flash("Select a matter archetype.", "warning")
+            if template is None and not is_custom_archetype:
+                flash("Select a matter archetype or choose Custom (No Archetype).", "warning")
                 return redirect(url_for("matters_intake"))
             if not legal_category:
-                legal_category = normalize_query(template.legal_category or "")
-            if template.legal_category and legal_category != normalize_query(template.legal_category):
+                legal_category = normalize_query(template.legal_category or "") if template else ""
+            if template is not None and template.legal_category and legal_category != normalize_query(template.legal_category):
                 flash("Selected archetype does not belong to the selected legal category.", "warning")
                 return redirect(url_for("matters_intake"))
 
-            required_field_defs = load_required_fields(template.required_fields_json)
+            required_field_defs = load_required_fields(template.required_fields_json if template else None)
             matter_specific_values = collect_required_field_values(request.form, required_field_defs)
             missing_required_fields = validate_required_field_values(required_field_defs, matter_specific_values)
             if missing_required_fields:
                 flash(f"Provide required archetype fields: {', '.join(missing_required_fields[:5])}.", "warning")
                 return redirect(url_for("matters_intake"))
 
+            auto_contract_templates = auto_contract_templates_for_archetype(template.id if template else None)
+            contract_required_defs = contract_required_fields_union(auto_contract_templates)
+            contract_field_values = collect_contract_field_values(request.form, contract_required_defs)
+            for key, value in matter_specific_values.items():
+                normalized_key = str(key or "").strip()
+                if normalized_key and normalized_key not in contract_field_values and str(value or "").strip():
+                    contract_field_values[normalized_key] = str(value).strip()
+            missing_contract_fields = validate_contract_field_values(contract_required_defs, contract_field_values)
+            if missing_contract_fields:
+                flash(f"Provide required contract fields: {', '.join(missing_contract_fields[:5])}.", "warning")
+                return redirect(url_for("matters_intake"))
+
             now = dt.datetime.utcnow()
+            stage_value = (request.form.get("stage") or (template.default_stage if template else None) or "Intake").strip() or "Intake"
+            practice_area_value = (
+                request.form.get("practice_area")
+                or (template.practice_area if template else None)
+                or ""
+            ).strip() or None
             m = Matter(
                 matter_no=matter_no,
                 title=title,
@@ -117,18 +149,57 @@ def register_matters_plus_routes(app):
                 risk_level=(request.form.get("risk_level") or (template.default_risk_level if template else "Medium")) or "Medium",
                 budget_status=(request.form.get("budget_status") or "On Track") or "On Track",
                 jurisdiction=(request.form.get("jurisdiction") or "ZA").strip() or "ZA",
-                stage=(request.form.get("stage") or (template.default_stage if template else "Intake")).strip() or "Intake",
-                practice_area=(request.form.get("practice_area") or (template.practice_area if template else "")).strip() or None,
+                stage=stage_value,
+                practice_area=practice_area_value,
                 case_type=(request.form.get("case_type") or "General").strip() or "General",
                 created_by=current_user.id,
                 last_updated_at=now,
                 legal_category=legal_category or None,
-                archetype_id=template.id,
+                archetype_id=template.id if template else None,
                 archetype_data_json=(json.dumps(matter_specific_values, ensure_ascii=True) if matter_specific_values else None),
             )
             db.session.add(m)
             db.session.flush()
             db.session.add(MatterMember(matter_id=m.id, user_id=current_user.id, role_in_matter="Responsible"))
+            generated_contract_file_paths: list[str] = []
+            generated_contract_template_ids: list[int] = []
+            generated_contract_missing_tokens: list[tuple[str, list[str]]] = []
+            for contract_template in auto_contract_templates:
+                rendered_contract, missing_tokens = render_contract_template_for_matter(
+                    template=contract_template,
+                    matter=m,
+                    archetype=template,
+                    archetype_values=matter_specific_values,
+                    contract_values=contract_field_values,
+                )
+                if not rendered_contract.strip():
+                    db.session.rollback()
+                    cleanup_generated_files(generated_contract_file_paths)
+                    flash(
+                        f"Contract template '{contract_template.name}' produced an empty document. Intake was not created.",
+                        "warning",
+                    )
+                    return redirect(url_for("matters_intake"))
+                try:
+                    _, _, file_path = persist_generated_contract_document(
+                        matter=m,
+                        template=contract_template,
+                        rendered_body=rendered_contract,
+                        actor_user_id=current_user.id,
+                        actor_full_name=current_user.full_name,
+                    )
+                except Exception:
+                    db.session.rollback()
+                    cleanup_generated_files(generated_contract_file_paths)
+                    flash(
+                        f"Failed to generate contract '{contract_template.name}'. Intake was not created.",
+                        "warning",
+                    )
+                    return redirect(url_for("matters_intake"))
+                generated_contract_template_ids.append(int(contract_template.id))
+                generated_contract_file_paths.append(file_path)
+                if missing_tokens:
+                    generated_contract_missing_tokens.append((contract_template.name, missing_tokens))
 
             if template and template.checklist_json:
                 try:
@@ -148,19 +219,71 @@ def register_matters_plus_routes(app):
                     changed_by=current_user.id,
                 )
             )
-            db.session.commit()
-            audit("matter_intake", "Matter", m.id, {"matter_no": m.matter_no})
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                cleanup_generated_files(generated_contract_file_paths)
+                flash("Matter intake could not be created due to a storage error. Please retry.", "warning")
+                return redirect(url_for("matters_intake"))
+            audit(
+                "matter_intake",
+                "Matter",
+                m.id,
+                {
+                    "matter_no": m.matter_no,
+                    "contract_template_ids": generated_contract_template_ids,
+                },
+            )
             matter_activity(m.id, "Matter intake created", f"Stage {m.stage}")
-            flash("Matter intake created.", "info")
+            if generated_contract_template_ids:
+                flash(
+                    f"Matter intake created. {len(generated_contract_template_ids)} contract draft(s) were attached.",
+                    "info",
+                )
+            else:
+                flash("Matter intake created.", "info")
+            if generated_contract_missing_tokens:
+                warnings = [
+                    f"{template_name}: {', '.join(tokens[:4])}"
+                    for template_name, tokens in generated_contract_missing_tokens[:3]
+                ]
+                flash("Some contract merge fields were blank: " + "; ".join(warnings), "warning")
             return redirect(url_for("matter_workspace", matter_id=m.id))
 
         templates = MatterTemplate.query.order_by(MatterTemplate.name.asc()).all()
+        template_ids = [int(row.id) for row in templates]
+        linked_contract_templates = (
+            ContractTemplate.query.filter(
+                ContractTemplate.archetype_id.in_(template_ids),
+                ContractTemplate.is_active.is_(True),
+                ContractTemplate.auto_create_on_matter_open.is_(True),
+            )
+            .order_by(ContractTemplate.name.asc())
+            .all()
+            if template_ids
+            else []
+        )
+        contract_templates_by_archetype: dict[int, list[ContractTemplate]] = {}
+        for contract_template in linked_contract_templates:
+            if not contract_template.archetype_id:
+                continue
+            key = int(contract_template.archetype_id)
+            contract_templates_by_archetype.setdefault(key, []).append(contract_template)
         template_payload = {
             row.id: {
                 "id": row.id,
                 "name": row.name,
                 "legal_category": row.legal_category or "",
                 "required_fields": load_required_fields(row.required_fields_json),
+                "contract_templates": [
+                    {
+                        "id": int(contract_template.id),
+                        "name": contract_template.name or "",
+                        "required_fields": load_required_fields(contract_template.required_fields_json),
+                    }
+                    for contract_template in contract_templates_by_archetype.get(int(row.id), [])
+                ],
             }
             for row in templates
         }

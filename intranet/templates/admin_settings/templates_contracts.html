@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <h3 class="mb-1">{{ "Edit Contract Template" if edit_template_id else "Contract Template Builder" }}</h3>
+  <form method="post" class="mt-3" data-form-draft-key="admin-contract-template-builder" data-form-draft-status="contract-template-draft-status">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="save">
+    <input type="hidden" name="template_id" value="{{ edit_template_id or '' }}">
+    <div class="form-section">
+      <div class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label" for="contract-template-name">Template Name</label>
+          <input class="form-control" id="contract-template-name" name="name" value="{{ form_data.name if form_data else '' }}" placeholder="e.g. Standard Employment Agreement" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="contract-template-category">Legal Category</label>
+          <input class="form-control" id="contract-template-category" name="legal_category" value="{{ form_data.legal_category if form_data else '' }}" list="contract-template-categories" placeholder="e.g. Labour Law">
+          <datalist id="contract-template-categories">
+            {% for category in categories %}
+              <option value="{{ category }}"></option>
+            {% endfor %}
+          </datalist>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="contract-template-type">Contract Type</label>
+          <input class="form-control" id="contract-template-type" name="contract_type" value="{{ form_data.contract_type if form_data else 'Contract' }}" placeholder="Contract">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="contract-template-archetype">Linked Archetype (Optional)</label>
+          <select class="form-select" id="contract-template-archetype" name="archetype_id">
+            <option value="">Standalone (No Archetype)</option>
+            {% for archetype in archetypes %}
+              <option value="{{ archetype.id }}" {% if form_data and form_data.archetype_id and form_data.archetype_id == archetype.id %}selected{% endif %}>
+                {{ archetype.name }}{% if archetype.legal_category %} ({{ archetype.legal_category }}){% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="contract-template-required-fields">Required Contract Fields</label>
+          <textarea class="form-control" id="contract-template-required-fields" name="required_fields" rows="4" placeholder="agreement_date|Agreement Date&#10;salary_amount|Salary Amount|Gross monthly salary">{{ form_data.required_fields if form_data else '' }}</textarea>
+          <div class="form-help mt-2">One field per line: <span class="code-like">field_key|Field Label|Help text</span>. These are required when auto-generating the contract on matter creation.</div>
+        </div>
+      </div>
+    </div>
+    <div class="form-section mt-2">
+      <label class="form-label" for="contract-template-body">Contract Template Body</label>
+      <textarea class="form-control" id="contract-template-body" name="body" rows="8" placeholder="Agreement between {{ client_name }} and {{ counterparty_name }} for matter {{ matter_no }}." required>{{ form_data.body if form_data else '' }}</textarea>
+      <div class="form-help mt-2">
+        Merge fields can use matter values such as <span class="code-like">{{ "{{matter_no}}" }}</span>, <span class="code-like">{{ "{{client_name}}" }}</span>, <span class="code-like">{{ "{{legal_category}}" }}</span>, plus your required contract fields.
+      </div>
+    </div>
+    <div class="form-section mt-2">
+      <div class="row g-2">
+        <div class="col-md-4">
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" value="1" id="contract-template-signature" name="requires_signature" {% if form_data and form_data.requires_signature %}checked{% endif %}>
+            <label class="form-check-label" for="contract-template-signature">Requires Signature</label>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" value="1" id="contract-template-auto" name="auto_create_on_matter_open" {% if form_data and form_data.auto_create_on_matter_open %}checked{% endif %}>
+            <label class="form-check-label" for="contract-template-auto">Auto-Create On Matter Open</label>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" value="1" id="contract-template-active" name="is_active" {% if form_data and form_data.is_active %}checked{% endif %}>
+            <label class="form-check-label" for="contract-template-active">Active</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="d-grid mt-2 gap-2">
+      <button class="btn btn-light" data-submitting-text="Saving Contract Template...">{{ "Update Contract Template" if edit_template_id else "Save Contract Template" }}</button>
+      {% if edit_template_id %}
+        <a class="btn btn-outline-light" href="{{ url_for('admin_templates_contracts') }}">Cancel Edit</a>
+      {% endif %}
+    </div>
+    <div id="contract-template-draft-status" class="form-help mt-2"></div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <h3 class="mb-1">Contract Templates</h3>
+  <div class="table-responsive mt-2">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Archetype</th>
+          <th>Category</th>
+          <th>Auto</th>
+          <th>Active</th>
+          <th>Required Fields</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in templates %}
+          <tr>
+            <td>{{ t.name }}</td>
+            <td>{{ archetype_name_map.get(t.archetype_id, 'Standalone') }}</td>
+            <td>{{ t.legal_category or '-' }}</td>
+            <td>{{ "Yes" if t.auto_create_on_matter_open else "No" }}</td>
+            <td>{{ "Yes" if t.is_active else "No" }}</td>
+            <td>
+              {% set defs = contract_fields_map.get(t.id, []) %}
+              {% if defs %}
+                {{ defs|length }} required
+                <div class="small muted">{{ defs|map(attribute="label")|join(", ") }}</div>
+              {% else %}
+                <span class="muted">None</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="d-flex flex-wrap gap-1">
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_contracts', edit_id=t.id) }}">Edit</a>
+                <form method="post" onsubmit="return confirm('Delete this contract template?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="template_id" value="{{ t.id }}">
+                  <button class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="7" class="muted">No contract templates.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
