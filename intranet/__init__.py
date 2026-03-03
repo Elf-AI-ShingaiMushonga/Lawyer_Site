@@ -59,6 +59,20 @@ def create_app() -> Flask:
     auth_register_rate_limit = os.environ.get("AUTH_REGISTER_RATE_LIMIT", "5/hour")
     portal_login_rate_limit = os.environ.get("PORTAL_LOGIN_RATE_LIMIT", "10/minute")
     sso_token_rate_limit = os.environ.get("AUTH_SSO_TOKEN_RATE_LIMIT", "60/minute")
+    ai_enabled = env_bool("AI_ENABLED", False)
+    ai_provider = (os.environ.get("AI_PROVIDER") or "openai").strip().lower() or "openai"
+    ai_semantic_search_enabled = env_bool("AI_SEMANTIC_SEARCH_ENABLED", ai_enabled)
+    ai_openai_api_key = (os.environ.get("AI_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip() or None
+    ai_openai_embed_model = (os.environ.get("AI_OPENAI_EMBED_MODEL") or "text-embedding-3-small").strip()
+    ai_openai_text_model = (os.environ.get("AI_OPENAI_TEXT_MODEL") or "gpt-4o-mini").strip()
+    ai_openai_embed_dimensions = max(0, env_int("AI_OPENAI_EMBED_DIMENSIONS", 1024))
+    ai_openai_timeout_seconds = max(1, env_int("AI_OPENAI_TIMEOUT_SECONDS", 20))
+    ai_openai_max_retries = max(0, env_int("AI_OPENAI_MAX_RETRIES", 2))
+    ai_fallback_embedding_dimensions = max(32, env_int("AI_FALLBACK_EMBED_DIMENSIONS", 256))
+    ai_embed_strict = env_bool("AI_EMBED_STRICT", False)
+    ai_redact_before_embedding = env_bool("AI_REDACT_BEFORE_EMBEDDING", True)
+    ai_operation_logging = env_bool("AI_OPERATION_LOGGING", True)
+    ai_semantic_candidate_limit = max(50, env_int("AI_SEMANTIC_CANDIDATE_LIMIT", 600))
 
     if is_production and not secret_key:
         raise RuntimeError("FLASK_SECRET_KEY must be set in production.")
@@ -70,6 +84,10 @@ def create_app() -> Flask:
         raise RuntimeError("Flask-Migrate dependency is required in production.")
     if is_production and not HAS_FLASK_LIMITER:
         raise RuntimeError("Flask-Limiter dependency is required in production.")
+    if is_production and ai_enabled and ai_provider == "openai" and not ai_openai_api_key:
+        raise RuntimeError(
+            "OPENAI_API_KEY or AI_OPENAI_API_KEY must be set in production when AI_ENABLED=true and AI_PROVIDER=openai."
+        )
     if not secret_key:
         secret_key = secrets.token_urlsafe(32)
     if not database_uri:
@@ -128,6 +146,20 @@ def create_app() -> Flask:
         TIMER_IDLE_PROMPT_SECONDS=timer_idle_prompt_seconds,
         TIMER_IDLE_GRACE_SECONDS=timer_idle_grace_seconds,
         UFC_STRICT_INIT=env_bool("UFC_STRICT_INIT", False),
+        AI_ENABLED=ai_enabled,
+        AI_PROVIDER=ai_provider,
+        AI_SEMANTIC_SEARCH_ENABLED=ai_semantic_search_enabled,
+        AI_OPENAI_API_KEY=ai_openai_api_key,
+        AI_OPENAI_EMBED_MODEL=ai_openai_embed_model,
+        AI_OPENAI_TEXT_MODEL=ai_openai_text_model,
+        AI_OPENAI_EMBED_DIMENSIONS=ai_openai_embed_dimensions,
+        AI_OPENAI_TIMEOUT_SECONDS=ai_openai_timeout_seconds,
+        AI_OPENAI_MAX_RETRIES=ai_openai_max_retries,
+        AI_FALLBACK_EMBED_DIMENSIONS=ai_fallback_embedding_dimensions,
+        AI_EMBED_STRICT=ai_embed_strict,
+        AI_REDACT_BEFORE_EMBEDDING=ai_redact_before_embedding,
+        AI_OPERATION_LOGGING=ai_operation_logging,
+        AI_SEMANTIC_CANDIDATE_LIMIT=ai_semantic_candidate_limit,
     )
 
     if db_backend != "sqlite":

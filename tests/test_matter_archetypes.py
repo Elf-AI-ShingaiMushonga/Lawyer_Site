@@ -56,6 +56,20 @@ def _seed_archetype(created_by: int) -> MatterTemplate:
     return row
 
 
+def _seed_non_admin() -> User:
+    row = User(
+        email="archetype-lawyer@example.com",
+        full_name="Archetype Lawyer",
+        role="lawyer",
+        password_hash="x",
+        mfa_enabled=True,
+    )
+    row.set_password("TestPassword123!")
+    db.session.add(row)
+    db.session.commit()
+    return row
+
+
 def test_admin_can_create_matter_archetype(app_ctx):
     app = app_ctx
     admin = _seed_admin()
@@ -209,6 +223,47 @@ def test_matter_creation_requires_archetype_specific_fields(app_ctx):
     values = json.loads(matter.archetype_data_json or "{}")
     assert values.get("incident_date") == "2026-02-01"
     assert values.get("employment_role") == "Senior Analyst"
+
+
+def test_admin_can_generate_ai_archetype_draft_payload(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=False)
+    admin = _seed_admin()
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, admin.id)
+
+    response = client.post(
+        "/admin/templates/matters/ai/suggest",
+        json={
+            "prompt": "Create a labour law negligence clause archetype covering employee misconduct, damages, and reporting timelines.",
+            "legal_category_hint": "Labour Law",
+            "name_hint": "Negligence Clause",
+        },
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None and payload.get("ok") is True
+    suggestion = payload.get("suggestion") or {}
+    assert suggestion.get("name")
+    assert suggestion.get("legal_category")
+    assert suggestion.get("boilerplate_template")
+    assert isinstance(suggestion.get("required_fields"), list)
+    assert suggestion["required_fields"]
+
+
+def test_non_admin_cannot_generate_ai_archetype_draft(app_ctx):
+    app = app_ctx
+    non_admin = _seed_non_admin()
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, non_admin.id)
+
+    response = client.post(
+        "/admin/templates/matters/ai/suggest",
+        json={"prompt": "Create a contractual negligence archetype with required fields."},
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert response.status_code == 403
 
 
 def test_matter_archetype_document_download_renders_required_values(app_ctx):

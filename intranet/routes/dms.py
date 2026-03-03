@@ -7,7 +7,7 @@ import os
 import re
 import uuid
 
-from flask import Response, abort, flash, redirect, request, send_from_directory, url_for
+from flask import Response, abort, current_app, flash, redirect, request, send_from_directory, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
@@ -32,6 +32,7 @@ from ..models import (
 from ..policies import visible_matter_ids
 from ..policies.residency import enforce_data_residency
 from ..services.notification_engine import NotificationEngine
+from ..services.semantic_search import SemanticSearchService
 from ..templates import page
 
 DOCUMENT_STATES = {"draft", "reviewed", "final", "filed"}
@@ -262,6 +263,12 @@ def register_dms_routes(app):
                     {"matter_id": matter_id, "template_id": template.id, "missing_tokens": missing_tokens},
                 )
                 NotificationEngine.enqueue("document_generated", current_user.id, f"document_version:{version.id}")
+                try:
+                    SemanticSearchService.enqueue_document_version_index(version.id, requested_by=current_user.id)
+                except Exception:  # pragma: no cover - non-blocking indexing fallback
+                    current_app.logger.exception(
+                        "Failed to queue semantic index for generated document version_id=%s", version.id
+                    )
                 if missing_tokens:
                     flash(
                         "Document generated, but some merge fields were blank: " + ", ".join(missing_tokens[:6]),
@@ -352,6 +359,10 @@ def register_dms_routes(app):
                 return redirect(url_for("matter_dms", matter_id=matter_id))
 
             audit("dms_document_create", "DocumentRecord", container.id, {"matter_id": matter_id})
+            try:
+                SemanticSearchService.enqueue_document_version_index(version.id, requested_by=current_user.id)
+            except Exception:  # pragma: no cover - non-blocking indexing fallback
+                current_app.logger.exception("Failed to queue semantic index for document version_id=%s", version.id)
             flash("Document created in DMS.", "info")
             return redirect(url_for("matter_dms", matter_id=matter_id))
 
@@ -581,6 +592,10 @@ def register_dms_routes(app):
                 flash("Version upload failed. Please retry.", "warning")
                 return redirect(url_for("document_versions", document_id=document_id))
             NotificationEngine.enqueue("document_uploaded", current_user.id, f"document_version:{ver.id}")
+            try:
+                SemanticSearchService.enqueue_document_version_index(ver.id, requested_by=current_user.id)
+            except Exception:  # pragma: no cover - non-blocking indexing fallback
+                current_app.logger.exception("Failed to queue semantic index for document version_id=%s", ver.id)
             audit("dms_version_add", "DocumentVersion", ver.id, {"document_id": doc.id, "version_no": next_no})
             flash("Version uploaded.", "info")
             return redirect(url_for("document_versions", document_id=document_id))

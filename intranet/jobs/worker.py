@@ -417,6 +417,23 @@ def _handle_conflict_semantic_scan(payload: dict) -> str:
     )
 
 
+def _handle_semantic_index_document_version(payload: dict) -> str:
+    from ..services.semantic_search import SemanticSearchService
+
+    document_version_id = int(payload.get("document_version_id") or 0)
+    if document_version_id <= 0:
+        return "semantic index skipped: missing document_version_id"
+
+    requested_by = int(payload.get("requested_by") or 0) or None
+    result = SemanticSearchService.index_document_version(document_version_id, requested_by=requested_by)
+    indexed_chunks = int(result.get("indexed_chunks") or 0)
+    provider = str(result.get("provider") or "unknown")
+    return (
+        f"semantic index: document_version_id={document_version_id}, "
+        f"chunks={indexed_chunks}, provider={provider}"
+    )
+
+
 def _handle_suspicious_activity_scan(payload: dict) -> str:
     from sqlalchemy import func
 
@@ -525,6 +542,7 @@ HANDLERS = {
     "workload_forecast": _handle_workload_forecast,
     "burnout_heuristics": _handle_burnout_heuristics,
     "conflict_semantic_scan": _handle_conflict_semantic_scan,
+    "semantic_index_document_version": _handle_semantic_index_document_version,
     "suspicious_activity_scan": _handle_suspicious_activity_scan,
 }
 

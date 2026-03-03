@@ -2,7 +2,25 @@
 {% block content %}
 <div class="card p-3 mb-3">
   <h3 class="mb-1">{{ "Edit Matter Archetype" if edit_template_id else "Matter Archetype Builder" }}</h3>
-  <form method="post" class="mt-3">
+  <div class="form-section mt-3">
+    <label class="form-label" for="matter-template-ai-prompt">AI Draft Prompt</label>
+    <textarea
+      class="form-control"
+      id="matter-template-ai-prompt"
+      rows="3"
+      placeholder="Describe the legal archetype, target use-case, risk posture, and clauses you want prebuilt."
+    ></textarea>
+    <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+      <button type="button" id="matter-template-ai-generate" class="btn btn-outline-light btn-sm">Generate Draft with AI</button>
+      <span id="matter-template-ai-status" class="muted small">Uses OpenAI when enabled, with deterministic fallback.</span>
+    </div>
+  </div>
+  <form
+    method="post"
+    class="mt-3"
+    data-form-draft-key="admin-matter-archetype-builder"
+    data-form-draft-status="matter-archetype-draft-status"
+  >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="save">
     <input type="hidden" name="template_id" value="{{ edit_template_id or '' }}">
@@ -70,11 +88,12 @@
       </div>
     </div>
     <div class="d-grid mt-2 gap-2">
-      <button class="btn btn-light">{{ "Update Archetype" if edit_template_id else "Save Archetype" }}</button>
+      <button class="btn btn-light" data-submitting-text="Saving Archetype...">{{ "Update Archetype" if edit_template_id else "Save Archetype" }}</button>
       {% if edit_template_id %}
         <a class="btn btn-outline-light" href="{{ url_for('admin_templates_matters') }}">Cancel Edit</a>
       {% endif %}
     </div>
+    <div id="matter-archetype-draft-status" class="form-help mt-2"></div>
   </form>
 </div>
 
@@ -133,4 +152,105 @@
     </table>
   </div>
 </div>
+
+<script>
+  (() => {
+    const promptInput = document.getElementById("matter-template-ai-prompt");
+    const generateButton = document.getElementById("matter-template-ai-generate");
+    const statusEl = document.getElementById("matter-template-ai-status");
+    const csrfInput = document.querySelector("form input[name='csrf_token']");
+    const endpoint = "{{ url_for('admin_templates_matters_ai_suggest') }}";
+    if (!promptInput || !generateButton || !statusEl || !csrfInput) {
+      return;
+    }
+
+    const controls = {
+      name: document.getElementById("matter-template-name"),
+      legal_category: document.getElementById("matter-template-category"),
+      practice_area: document.getElementById("matter-template-area"),
+      default_stage: document.getElementById("matter-template-stage"),
+      default_risk_level: document.getElementById("matter-template-risk"),
+      checklist: document.getElementById("matter-template-checklist"),
+      required_fields: document.getElementById("matter-template-required-fields"),
+      boilerplate_template: document.getElementById("matter-template-boilerplate"),
+    };
+
+    const fieldLine = (field) => {
+      const key = String(field?.key || "").trim();
+      const label = String(field?.label || "").trim();
+      const helpText = String(field?.help || "").trim();
+      if (!key) {
+        return "";
+      }
+      if (helpText) {
+        return `${key}|${label || key}|${helpText}`;
+      }
+      if (label) {
+        return `${key}|${label}`;
+      }
+      return key;
+    };
+
+    const setStatus = (text, tone = "muted") => {
+      statusEl.className = `small ${tone}`;
+      statusEl.textContent = text;
+    };
+
+    const fillControl = (control, value) => {
+      if (!control) {
+        return;
+      }
+      control.value = String(value || "");
+      control.dispatchEvent(new Event("input", { bubbles: true }));
+      control.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+
+    generateButton.addEventListener("click", async () => {
+      const prompt = String(promptInput.value || "").trim();
+      if (prompt.length < 20) {
+        setStatus("Provide at least 20 characters in the prompt.", "text-warning");
+        return;
+      }
+      generateButton.disabled = true;
+      setStatus("Generating archetype draft...", "text-muted");
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-CSRF-Token": csrfInput.value,
+          },
+          body: JSON.stringify({
+            prompt,
+            legal_category_hint: controls.legal_category ? controls.legal_category.value : "",
+            name_hint: controls.name ? controls.name.value : "",
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.ok) {
+          const error = String(payload.error || "AI draft failed.");
+          setStatus(error, "text-warning");
+          return;
+        }
+        const suggestion = payload.suggestion || {};
+        fillControl(controls.name, suggestion.name);
+        fillControl(controls.legal_category, suggestion.legal_category);
+        fillControl(controls.practice_area, suggestion.practice_area);
+        fillControl(controls.default_stage, suggestion.default_stage);
+        fillControl(controls.default_risk_level, suggestion.default_risk_level);
+        fillControl(controls.checklist, Array.isArray(suggestion.checklist) ? suggestion.checklist.join("\n") : "");
+        const requiredFields = Array.isArray(suggestion.required_fields) ? suggestion.required_fields.map(fieldLine).filter(Boolean).join("\n") : "";
+        fillControl(controls.required_fields, requiredFields);
+        fillControl(controls.boilerplate_template, suggestion.boilerplate_template || "");
+        const source = String(suggestion.source || "fallback");
+        setStatus(`Archetype draft generated (${source}). Review and save.`, "text-success");
+      } catch (_error) {
+        setStatus("AI draft service is unavailable right now.", "text-warning");
+      } finally {
+        generateButton.disabled = false;
+      }
+    });
+  })();
+</script>
 {% endblock %}

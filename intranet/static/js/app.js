@@ -2300,6 +2300,264 @@
     });
   };
 
+  const initFormDrafts = () => {
+    const forms = Array.from(document.querySelectorAll("form[data-form-draft-key]")).filter(
+      (form) => form instanceof HTMLFormElement
+    );
+    if (forms.length === 0) {
+      return;
+    }
+
+    const canUseStorage = (() => {
+      try {
+        const probeKey = "__form_draft_probe__";
+        window.localStorage.setItem(probeKey, "1");
+        window.localStorage.removeItem(probeKey);
+        return true;
+      } catch (_error) {
+        return false;
+      }
+    })();
+    if (!canUseStorage) {
+      return;
+    }
+
+    const skipInputTypes = new Set(["hidden", "password", "file", "submit", "button", "reset"]);
+
+    const collectNamedControls = (form) => {
+      const grouped = new Map();
+      Array.from(form.elements).forEach((element) => {
+        if (
+          !(
+            element instanceof HTMLInputElement ||
+            element instanceof HTMLTextAreaElement ||
+            element instanceof HTMLSelectElement
+          )
+        ) {
+          return;
+        }
+        if (!element.name || element.disabled) {
+          return;
+        }
+        if (element instanceof HTMLInputElement && skipInputTypes.has(element.type)) {
+          return;
+        }
+        if (!grouped.has(element.name)) {
+          grouped.set(element.name, []);
+        }
+        grouped.get(element.name).push(element);
+      });
+      return grouped;
+    };
+
+    const controlValue = (controls) => {
+      if (!Array.isArray(controls) || controls.length === 0) {
+        return "";
+      }
+      const first = controls[0];
+      if (first instanceof HTMLInputElement && first.type === "radio") {
+        const selected = controls.find(
+          (control) => control instanceof HTMLInputElement && control.checked
+        );
+        return selected instanceof HTMLInputElement ? selected.value : "";
+      }
+      if (first instanceof HTMLInputElement && first.type === "checkbox") {
+        if (controls.length === 1) {
+          return first.checked;
+        }
+        return controls
+          .filter((control) => control instanceof HTMLInputElement && control.checked)
+          .map((control) => (control instanceof HTMLInputElement ? control.value : ""))
+          .filter((value) => value.length > 0);
+      }
+      if (first instanceof HTMLSelectElement && first.multiple) {
+        return Array.from(first.selectedOptions).map((option) => option.value);
+      }
+      if (
+        first instanceof HTMLInputElement ||
+        first instanceof HTMLTextAreaElement ||
+        first instanceof HTMLSelectElement
+      ) {
+        return first.value;
+      }
+      return "";
+    };
+
+    const serializeForm = (form) => {
+      const grouped = collectNamedControls(form);
+      const payload = {};
+      grouped.forEach((controls, name) => {
+        payload[name] = controlValue(controls);
+      });
+      return payload;
+    };
+
+    const isMeaningfulValue = (value) => {
+      if (Array.isArray(value)) {
+        return value.length > 0;
+      }
+      if (typeof value === "boolean") {
+        return value;
+      }
+      return String(value || "").trim().length > 0;
+    };
+
+    const hasMeaningfulData = (payload) =>
+      Object.values(payload || {}).some((value) => isMeaningfulValue(value));
+
+    const applyPayload = (form, payload) => {
+      if (!payload || typeof payload !== "object") {
+        return;
+      }
+      const grouped = collectNamedControls(form);
+      Object.entries(payload).forEach(([name, value]) => {
+        const controls = grouped.get(name) || [];
+        if (controls.length === 0) {
+          return;
+        }
+        const first = controls[0];
+        if (first instanceof HTMLInputElement && first.type === "radio") {
+          const next = String(value || "");
+          controls.forEach((control) => {
+            if (control instanceof HTMLInputElement) {
+              control.checked = control.value === next;
+            }
+          });
+          return;
+        }
+        if (first instanceof HTMLInputElement && first.type === "checkbox") {
+          if (controls.length === 1) {
+            first.checked = Boolean(value);
+            return;
+          }
+          const picked = Array.isArray(value) ? new Set(value.map((item) => String(item))) : new Set();
+          controls.forEach((control) => {
+            if (control instanceof HTMLInputElement) {
+              control.checked = picked.has(control.value);
+            }
+          });
+          return;
+        }
+        if (first instanceof HTMLSelectElement && first.multiple) {
+          const picked = Array.isArray(value) ? new Set(value.map((item) => String(item))) : new Set();
+          Array.from(first.options).forEach((option) => {
+            option.selected = picked.has(option.value);
+          });
+          return;
+        }
+        if (
+          first instanceof HTMLInputElement ||
+          first instanceof HTMLTextAreaElement ||
+          first instanceof HTMLSelectElement
+        ) {
+          first.value = String(value || "");
+          first.dispatchEvent(new Event("input", { bubbles: true }));
+          first.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      });
+    };
+
+    const formatSavedAt = (value) => {
+      const date = new Date(value || "");
+      if (Number.isNaN(date.getTime())) {
+        return "";
+      }
+      return date.toLocaleString();
+    };
+
+    forms.forEach((form) => {
+      const draftKey = String(form.getAttribute("data-form-draft-key") || "").trim();
+      if (!draftKey) {
+        return;
+      }
+      const storageKey = `form_draft::${window.location.pathname}::${draftKey}`;
+      const statusId = form.getAttribute("data-form-draft-status") || "";
+      const statusNode = statusId ? document.getElementById(statusId) : null;
+
+      const setStatus = (message, tone = "muted") => {
+        if (!(statusNode instanceof HTMLElement)) {
+          return;
+        }
+        statusNode.className = `form-help mt-1 ${tone}`;
+        statusNode.textContent = message;
+      };
+
+      const readDraft = () => {
+        const raw = window.localStorage.getItem(storageKey);
+        if (!raw) {
+          return null;
+        }
+        try {
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== "object") {
+            return null;
+          }
+          return parsed;
+        } catch (_error) {
+          return null;
+        }
+      };
+
+      const removeDraft = () => {
+        window.localStorage.removeItem(storageKey);
+      };
+
+      const saveDraft = () => {
+        const values = serializeForm(form);
+        if (!hasMeaningfulData(values)) {
+          removeDraft();
+          setStatus("");
+          return;
+        }
+        const savedAt = new Date().toISOString();
+        window.localStorage.setItem(
+          storageKey,
+          JSON.stringify({
+            saved_at: savedAt,
+            values,
+          })
+        );
+        const pretty = formatSavedAt(savedAt);
+        setStatus(pretty ? `Draft saved locally at ${pretty}.` : "Draft saved locally.");
+      };
+
+      const draft = readDraft();
+      if (draft && draft.values && typeof draft.values === "object") {
+        const currentValues = serializeForm(form);
+        const currentHasData = hasMeaningfulData(currentValues);
+        if (!currentHasData) {
+          applyPayload(form, draft.values);
+          const pretty = formatSavedAt(draft.saved_at);
+          setStatus(pretty ? `Draft restored from ${pretty}.` : "Draft restored.");
+        } else if (draft.saved_at) {
+          const pretty = formatSavedAt(draft.saved_at);
+          setStatus(
+            pretty
+              ? `Saved draft available from ${pretty}. Clear current values to auto-restore.`
+              : "Saved draft available."
+          );
+        }
+      }
+
+      let debounceHandle = 0;
+      const queueSave = () => {
+        window.clearTimeout(debounceHandle);
+        debounceHandle = window.setTimeout(saveDraft, 300);
+      };
+
+      form.addEventListener("input", queueSave);
+      form.addEventListener("change", queueSave);
+      form.addEventListener(
+        "submit",
+        () => {
+          removeDraft();
+          setStatus("");
+        },
+        { capture: true }
+      );
+    });
+  };
+
   const run = () => {
     initFlashDismiss();
     initPasswordToggles();
@@ -2323,6 +2581,7 @@
     initBackToTop();
     initFormValidationUX();
     initSubmitState();
+    initFormDrafts();
   };
 
   if (document.readyState === "loading") {

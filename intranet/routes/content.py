@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 
-from flask import abort, flash, redirect, request, url_for
+from flask import abort, current_app, flash, jsonify, redirect, request, url_for
 from flask_login import current_user, login_required
 
 from ..config import is_valid_email
 from ..extensions import db
 from ..helpers import audit, is_admin, normalize_query
-from ..models import Contact, DocumentFile, KnowledgeBase, Matter, Task
+from ..models import Contact, DocumentFile, JobQueue, KnowledgeBase, Matter, Task
 from ..policies import visible_matter_ids
+from ..services.semantic_search import SemanticSearchService
 from ..templates import page
 
 
@@ -108,23 +110,25 @@ def register_content_routes(app):
     def search():
         q = normalize_query(request.args.get("q", ""))
         matters = tasks = docs = articles = contacts = []
+        semantic_hits = []
         matter_by_id: dict[int, Matter] = {}
         query_too_short = bool(q) and len(q) < 2
+        scoped_matter_ids: set[int] | None = None
         if q and not query_too_short:
             like = f"%{q}%"
             m_base = Matter.query
             task_base = Task.query
             doc_base = DocumentFile.query
             if not is_admin():
-                matter_ids = visible_matter_ids()
-                if not matter_ids:
+                scoped_matter_ids = visible_matter_ids()
+                if not scoped_matter_ids:
                     m_base = m_base.filter(Matter.id == -1)
                     task_base = task_base.filter(Task.id == -1)
                     doc_base = doc_base.filter(DocumentFile.id == -1)
                 else:
-                    m_base = m_base.filter(Matter.id.in_(matter_ids))
-                    task_base = task_base.filter(Task.matter_id.in_(matter_ids))
-                    doc_base = doc_base.filter(DocumentFile.matter_id.in_(matter_ids))
+                    m_base = m_base.filter(Matter.id.in_(scoped_matter_ids))
+                    task_base = task_base.filter(Task.matter_id.in_(scoped_matter_ids))
+                    doc_base = doc_base.filter(DocumentFile.matter_id.in_(scoped_matter_ids))
             matters = m_base.filter(
                 (Matter.matter_no.ilike(like))
                 | (Matter.title.ilike(like))
@@ -151,6 +155,16 @@ def register_content_routes(app):
                 rows = Matter.query.filter(Matter.id.in_(extra_matter_ids)).all()
                 for row in rows:
                     matter_by_id[row.id] = row
+            if bool(current_app.config.get("AI_SEMANTIC_SEARCH_ENABLED", False)):
+                try:
+                    semantic_hits = SemanticSearchService.search(
+                        q,
+                        matter_scope_ids=scoped_matter_ids if not is_admin() else None,
+                        limit=8,
+                    )
+                except Exception as exc:  # pragma: no cover - resilience guard for provider/database failures
+                    current_app.logger.warning("Semantic search unavailable: %s", exc)
+                    semantic_hits = []
 
         return page(
             "Search",
@@ -161,6 +175,50 @@ def register_content_routes(app):
             docs=docs,
             articles=articles,
             contacts=contacts,
+            semantic_hits=semantic_hits,
             matter_by_id=matter_by_id,
             query_too_short=query_too_short,
+        )
+
+    @app.get("/api/ai/jobs/<int:job_id>")
+    @login_required
+    def ai_job_status(job_id: int):
+        row = db.session.get(JobQueue, job_id)
+        if row is None or not str(row.job_type or "").startswith("semantic_"):
+            abort(404)
+
+        requested_by = None
+        payload = {}
+        if row.payload_json:
+            try:
+                payload = json.loads(row.payload_json)
+            except json.JSONDecodeError:
+                payload = {}
+        if isinstance(payload, dict):
+            raw_requested_by = payload.get("requested_by")
+            if raw_requested_by is not None:
+                try:
+                    requested_by = int(raw_requested_by)
+                except (TypeError, ValueError):
+                    requested_by = None
+
+        if current_user.role != "admin" and requested_by and int(current_user.id) != requested_by:
+            abort(403)
+
+        return jsonify(
+            {
+                "ok": True,
+                "job": {
+                    "id": int(row.id),
+                    "job_type": row.job_type,
+                    "status": row.status,
+                    "attempts": int(row.attempts or 0),
+                    "max_attempts": int(row.max_attempts or 0),
+                    "worker_id": row.worker_id,
+                    "last_error": row.last_error,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "started_at": row.started_at.isoformat() if row.started_at else None,
+                    "finished_at": row.finished_at.isoformat() if row.finished_at else None,
+                },
+            }
         )

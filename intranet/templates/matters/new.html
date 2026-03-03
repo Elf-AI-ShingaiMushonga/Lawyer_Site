@@ -8,8 +8,12 @@
     </div>
   </div>
 
-
-  <form method="post" class="row g-2">
+  <form
+    method="post"
+    class="row g-2"
+    data-form-draft-key="matter-new-form"
+    data-form-draft-status="matter-new-draft-status"
+  >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if not archetype_templates %}
       <div class="col-12">
@@ -93,8 +97,9 @@
       <div id="archetype-required-help" class="form-help mt-2">Select an archetype to load its required matter-specific fields.</div>
     </div>
     <div class="col-12 d-grid">
-      <button class="btn btn-light">Create</button>
+      <button class="btn btn-light" data-submitting-text="Creating Matter...">Create</button>
     </div>
+    <div class="col-12"><div id="matter-new-draft-status" class="form-help mt-1"></div></div>
   </form>
 </div>
 <script>

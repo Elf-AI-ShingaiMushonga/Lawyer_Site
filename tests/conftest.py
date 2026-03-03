@@ -34,6 +34,11 @@ def app_ctx(app):
 
 
 @pytest.fixture()
+def client(app):
+    return app.test_client()
+
+
+@pytest.fixture()
 def seed_user_matter(app_ctx):
     user = User(email="test@example.com", full_name="Test User", role="admin", password_hash="x")
     user.set_password("TestPassword123!")

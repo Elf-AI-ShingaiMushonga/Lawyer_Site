@@ -43,6 +43,10 @@
         <div class="label">Contacts</div>
         <div class="value">{{ contacts|length }}</div>
       </div>
+      <div class="kpi-pill">
+        <div class="label">Semantic</div>
+        <div class="value">{{ semantic_hits|length }}</div>
+      </div>
     </div>
 
     <div class="result-grid mt-3">
@@ -167,6 +171,33 @@
           </div>
         {% else %}
           <div class="empty-state">No matching contacts.</div>
+        {% endif %}
+      </div>
+
+      <div class="result-panel">
+        <div class="result-head">
+          <h5>Semantic Results</h5>
+          <span class="result-count">{{ semantic_hits|length }}</span>
+        </div>
+        {% if semantic_hits %}
+          <div class="list-stack">
+            {% for hit in semantic_hits %}
+              <div class="list-item">
+                {% if hit.url %}
+                  <a class="list-title" href="{{ hit.url }}">{{ hit.title }}</a>
+                {% else %}
+                  <div class="list-title">{{ hit.title }}</div>
+                {% endif %}
+                <div class="list-meta mt-1">
+                  <span>Score {{ '%.2f'|format(hit.score) }}</span>
+                  {% if hit.matter_id %}<span>Matter #{{ hit.matter_id }}</span>{% endif %}
+                </div>
+                {% if hit.excerpt %}<div class="muted small mt-1">{{ hit.excerpt }}</div>{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">No semantic matches.</div>
         {% endif %}
       </div>
     </div>

@@ -29,6 +29,7 @@ REQUIRED_ROUTES = {
     "/admin/rules/legal-holds",
     "/admin/rules/trust",
     "/matters/intake",
+    "/matters/intake/ai/parse",
     "/matters/recent/clear",
     "/matters/<int:matter_id>/tasks/new",
     "/matters/<int:matter_id>/workspace",

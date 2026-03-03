@@ -30,6 +30,9 @@ This is a functional intranet website for a law firm:
 - Contacts directory
 - Knowledge base (internal articles)
 - Search across core objects
+- Optional AI semantic indexing/search over DMS content (OpenAI provider with async indexing jobs)
+- AI-assisted Matter Archetype drafting in Admin Settings (`/admin/templates/matters`)
+- AI-assisted Matter Intake parsing/autofill in Intake Wizard (`/matters/intake`)
 - Trust center pages (data policy, security posture, incident/change register)
 - Audit log (admin view)
 
@@ -170,6 +173,11 @@ Optional but recommended:
 - `GUNICORN_TIMEOUT=900` when using UFC `Update Data` / `Retrain Models` actions in-request
 - `WORKER_LOOP_SLEEP_SECONDS=3`
 - `SCHEDULER_LOOP_SLEEP_SECONDS=30`
+- `AI_ENABLED=false` (set `true` to enable AI integrations)
+- `AI_PROVIDER=openai`
+- `OPENAI_API_KEY=<provider key>` or `AI_OPENAI_API_KEY=<provider key>`
+- `AI_OPENAI_TEXT_MODEL=gpt-4o-mini`
+- `AI_SEMANTIC_SEARCH_ENABLED=true` (enable semantic search panel on `/search`)
 
 UFC production notes:
 - Install only once from root `requirements.txt`; do not create/use a separate `UFC_Elf/venv`.

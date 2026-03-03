@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 
-from flask import abort, flash, redirect, request, url_for
+from flask import abort, flash, jsonify, redirect, request, url_for
 from flask_login import current_user, login_required
 
 from ..extensions import db
@@ -26,6 +26,7 @@ from ..models import (
     TrustThresholdAlert,
 )
 from ..services.archetypes import load_required_fields, parse_required_fields_definition
+from ..services.archetype_ai import suggest_matter_archetype
 from ..services.priority_inbox import (
     load_priority_inbox_config,
     save_priority_inbox_config,
@@ -354,6 +355,33 @@ def register_admin_settings_routes(app):
             form_data=form_data,
             template_usage_map=template_usage_map,
         )
+
+    @app.post("/admin/templates/matters/ai/suggest")
+    @login_required
+    def admin_templates_matters_ai_suggest():
+        _admin_required()
+        payload = request.get_json(silent=True) if request.is_json else request.form
+        prompt = " ".join(str(payload.get("prompt") or "").split()).strip() if payload else ""
+        if len(prompt) < 20:
+            return jsonify({"ok": False, "error": "Provide at least 20 characters describing the archetype."}), 400
+
+        legal_category_hint = " ".join(str(payload.get("legal_category_hint") or "").split()).strip() if payload else ""
+        name_hint = " ".join(str(payload.get("name_hint") or "").split()).strip() if payload else ""
+        suggestion = suggest_matter_archetype(
+            prompt=prompt,
+            legal_category_hint=legal_category_hint,
+            name_hint=name_hint,
+        )
+        audit(
+            "matter_template_ai_suggest",
+            "MatterTemplate",
+            None,
+            {
+                "source": suggestion.get("source"),
+                "required_fields": len(suggestion.get("required_fields") or []),
+            },
+        )
+        return jsonify({"ok": True, "suggestion": suggestion})
 
     @app.route("/admin/templates/tasks", methods=["GET", "POST"])
     @login_required

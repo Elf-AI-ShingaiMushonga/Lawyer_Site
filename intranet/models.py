@@ -1359,6 +1359,49 @@ class BurnoutSignal(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# AI Platform Foundations (Phase 0 / Phase 1)
+# ---------------------------------------------------------------------------
+
+
+class AIOperationLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    operation_type = db.Column(db.String(80), nullable=False, index=True)
+    provider = db.Column(db.String(40), nullable=False, default="openai")
+    model = db.Column(db.String(120), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="ok", index=True)
+    request_chars = db.Column(db.Integer, nullable=False, default=0)
+    response_units = db.Column(db.Integer, nullable=True)
+    latency_ms = db.Column(db.Integer, nullable=True)
+    redaction_applied = db.Column(db.Boolean, nullable=False, default=False)
+    metadata_json = db.Column(db.Text, nullable=True)
+    error_message = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow, index=True)
+
+
+class SemanticIndexEntry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    source_type = db.Column(db.String(40), nullable=False, index=True)
+    source_id = db.Column(db.Integer, nullable=False, index=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True, index=True)
+    chunk_index = db.Column(db.Integer, nullable=False, default=0)
+    title = db.Column(db.String(255), nullable=True)
+    content_text = db.Column(db.Text, nullable=False)
+    content_sha256 = db.Column(db.String(64), nullable=False, index=True)
+    embedding_json = db.Column(db.Text, nullable=False)
+    embedding_model = db.Column(db.String(120), nullable=True)
+    embedding_dim = db.Column(db.Integer, nullable=False, default=0)
+    provider = db.Column(db.String(40), nullable=True)
+    redaction_meta_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("source_type", "source_id", "chunk_index", name="uq_semantic_index_source_chunk"),
+        db.Index("ix_semantic_index_matter_source", "matter_id", "source_type", "source_id"),
+        db.Index("ix_semantic_index_source_updated", "source_type", "source_id", "updated_at"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Job Queue and Operations
 # ---------------------------------------------------------------------------
 

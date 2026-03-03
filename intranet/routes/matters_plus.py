@@ -6,7 +6,7 @@ import os
 import uuid
 from collections import defaultdict
 
-from flask import abort, current_app, flash, redirect, request, url_for
+from flask import abort, current_app, flash, jsonify, redirect, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.utils import secure_filename
@@ -43,12 +43,36 @@ from ..services.archetypes import (
     load_required_fields,
     validate_required_field_values,
 )
+from ..services.intake_ai import suggest_matter_intake
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..services.notification_engine import NotificationEngine
 from ..templates import page
 
 
 def register_matters_plus_routes(app):
+    @app.post("/matters/intake/ai/parse")
+    @login_required
+    def matters_intake_ai_parse():
+        payload = request.get_json(silent=True) or {}
+        prompt = " ".join(str(payload.get("prompt") or "").split()).strip()
+        if len(prompt) < 20:
+            return jsonify({"ok": False, "error": "Provide at least 20 characters describing the matter intake."}), 400
+
+        templates = MatterTemplate.query.order_by(MatterTemplate.name.asc()).all()
+        suggestion = suggest_matter_intake(prompt=prompt, templates=templates)
+        template_id = suggestion.get("template_id")
+        try:
+            template_id = int(template_id) if template_id is not None else None
+        except (TypeError, ValueError):
+            template_id = None
+        audit(
+            "matter_intake_ai_parse",
+            "MatterTemplate",
+            template_id,
+            {"source": suggestion.get("source"), "legal_category": suggestion.get("legal_category")},
+        )
+        return jsonify({"ok": True, "suggestion": suggestion})
+
     @app.route("/matters/intake", methods=["GET", "POST"])
     @login_required
     def matters_intake():

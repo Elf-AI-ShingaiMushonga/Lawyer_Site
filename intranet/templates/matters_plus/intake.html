@@ -2,8 +2,27 @@
 {% block content %}
 <div class="card p-3">
   <h3>Matter Intake</h3>
-  <form method="post" class="row g-2">
+  <form
+    method="post"
+    class="row g-2"
+    data-form-draft-key="matter-intake-wizard"
+    data-form-draft-status="matter-intake-draft-status"
+  >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-12">
+      <label class="muted small" for="intake-ai-prompt">AI Intake Assistant</label>
+      <textarea
+        class="form-control"
+        id="intake-ai-prompt"
+        rows="3"
+        placeholder="Describe the matter intake in plain language. Include client, dispute context, dates, amounts, and counterparties."
+      ></textarea>
+      <div class="d-flex align-items-center gap-2 mt-2">
+        <button class="btn btn-outline-light btn-sm" id="intake-ai-generate" type="button">Parse Intake with AI</button>
+        <span class="form-help" id="intake-ai-status"></span>
+      </div>
+      <div class="form-help mt-1">Tip: press Ctrl/Cmd + Enter while focused in the prompt to run parsing.</div>
+    </div>
     <div class="col-md-4"><input class="form-control" name="matter_no" placeholder="Matter Number" required></div>
     <div class="col-md-8"><input class="form-control" name="title" placeholder="Matter Title" required></div>
     <div class="col-md-6"><input class="form-control" name="client_name" placeholder="Client Name" required></div>
@@ -36,17 +55,22 @@
       <div id="intake-archetype-required-fields" class="row g-2"></div>
       <div id="intake-archetype-help" class="form-help mt-2">Select an archetype to load required fields.</div>
     </div>
-    <div class="col-12 d-grid"><button class="btn btn-light">Create Intake</button></div>
+    <div class="col-12 d-grid"><button class="btn btn-light" data-submitting-text="Creating Intake...">Create Intake</button></div>
+    <div class="col-12"><div id="matter-intake-draft-status" class="form-help mt-1"></div></div>
   </form>
 </div>
 <script>
   (() => {
     const templatePayload = {{ template_payload|tojson }};
+    const csrfInput = document.querySelector('input[name="csrf_token"]');
     const categoryInput = document.querySelector('input[name="legal_category"]');
     const archetypeSelect = document.querySelector('select[name="template_id"]');
     const requiredFieldsContainer = document.getElementById("intake-archetype-required-fields");
     const requiredHelp = document.getElementById("intake-archetype-help");
-    if (!templatePayload || !categoryInput || !archetypeSelect || !requiredFieldsContainer || !requiredHelp) {
+    const aiPrompt = document.getElementById("intake-ai-prompt");
+    const aiButton = document.getElementById("intake-ai-generate");
+    const aiStatus = document.getElementById("intake-ai-status");
+    if (!templatePayload || !csrfInput || !categoryInput || !archetypeSelect || !requiredFieldsContainer || !requiredHelp) {
       return;
     }
 
@@ -54,6 +78,27 @@
 
     const setHelpText = (text) => {
       requiredHelp.textContent = text;
+    };
+
+    const setInputValue = (name, value) => {
+      const input = document.querySelector(`[name="${name}"]`);
+      if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement)) {
+        return;
+      }
+      const next = String(value || "").trim();
+      if (!next) {
+        return;
+      }
+      input.value = next;
+    };
+
+    const setAiStatus = (message, isError = false) => {
+      if (!aiStatus) {
+        return;
+      }
+      aiStatus.textContent = message || "";
+      aiStatus.classList.toggle("text-danger", isError);
+      aiStatus.classList.toggle("text-success", !!message && !isError);
     };
 
     const renderRequiredFields = () => {
@@ -113,6 +158,77 @@
       renderRequiredFields();
     };
 
+    const applySuggestion = (suggestion) => {
+      if (!suggestion || typeof suggestion !== "object") {
+        return;
+      }
+      setInputValue("matter_no", suggestion.matter_no);
+      setInputValue("title", suggestion.title);
+      setInputValue("client_name", suggestion.client_name);
+      setInputValue("legal_category", suggestion.legal_category);
+      setInputValue("jurisdiction", suggestion.jurisdiction);
+      setInputValue("stage", suggestion.stage);
+      setInputValue("practice_area", suggestion.practice_area);
+      setInputValue("case_type", suggestion.case_type);
+      setInputValue("description", suggestion.description);
+      setInputValue("objective", suggestion.objective);
+      setInputValue("risk_level", suggestion.risk_level);
+      setInputValue("budget_status", suggestion.budget_status);
+
+      if (suggestion.template_id && byId.has(String(suggestion.template_id))) {
+        archetypeSelect.value = String(suggestion.template_id);
+      }
+      filterByCategory();
+
+      const values = suggestion.archetype_required_values || {};
+      Object.entries(values).forEach(([key, value]) => {
+        const normalizedKey = String(key || "").trim();
+        if (!normalizedKey) {
+          return;
+        }
+        setInputValue(`field_${normalizedKey}`, value);
+      });
+    };
+
+    const runAiAssist = async () => {
+      if (!aiPrompt || !aiButton) {
+        return;
+      }
+      const prompt = String(aiPrompt.value || "").trim();
+      if (prompt.length < 20) {
+        setAiStatus("Add at least 20 characters for intake parsing.", true);
+        return;
+      }
+      aiButton.disabled = true;
+      setAiStatus("Parsing intake...");
+      try {
+        const response = await fetch("/matters/intake/ai/parse", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrfInput.value
+          },
+          body: JSON.stringify({ prompt })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload || payload.ok !== true) {
+          const errorText = String((payload && payload.error) || "Unable to parse intake.");
+          setAiStatus(errorText, true);
+          return;
+        }
+        const suggestion = (payload && payload.suggestion) || {};
+        applySuggestion(suggestion);
+        const source = String((suggestion && suggestion.source) || "fallback");
+        const templateName = String((suggestion && suggestion.template_name) || "");
+        const suffix = templateName ? ` | archetype: ${templateName}` : "";
+        setAiStatus(`Intake fields populated (${source})${suffix}`);
+      } catch (_error) {
+        setAiStatus("Network error while parsing intake.", true);
+      } finally {
+        aiButton.disabled = false;
+      }
+    };
+
     categoryInput.addEventListener("input", filterByCategory);
     archetypeSelect.addEventListener("change", () => {
       const selected = byId.get(String(archetypeSelect.value));
@@ -121,6 +237,18 @@
       }
       filterByCategory();
     });
+
+    if (aiButton) {
+      aiButton.addEventListener("click", runAiAssist);
+    }
+    if (aiPrompt) {
+      aiPrompt.addEventListener("keydown", (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+          event.preventDefault();
+          runAiAssist();
+        }
+      });
+    }
 
     filterByCategory();
   })();
