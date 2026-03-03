@@ -47,12 +47,22 @@
             <input class="form-control" id="rate-client-name" name="client_name" placeholder="Client name">
           </div>
           <div class="col-md-6">
-            <label class="form-label" for="rate-matter-id">Matter ID</label>
-            <input class="form-control" id="rate-matter-id" name="matter_id" type="number" min="1" placeholder="Optional">
+            <label class="form-label" for="rate-matter-id">Matter</label>
+            <select class="form-select" id="rate-matter-id" name="matter_id">
+              <option value="">Optional</option>
+              {% for matter in matters %}
+                <option value="{{ matter.id }}">{{ matter.id }} - {{ matter.matter_no }} - {{ matter.title }}</option>
+              {% endfor %}
+            </select>
           </div>
           <div class="col-md-6">
-            <label class="form-label" for="rate-user-id">User ID</label>
-            <input class="form-control" id="rate-user-id" name="user_id" type="number" min="1" placeholder="Optional">
+            <label class="form-label" for="rate-user-id">User</label>
+            <select class="form-select" id="rate-user-id" name="user_id">
+              <option value="">Optional</option>
+              {% for user in assignable_users %}
+                <option value="{{ user.id }}">{{ user.id }} - {{ user.full_name }} ({{ user.email }})</option>
+              {% endfor %}
+            </select>
           </div>
           <div class="col-md-6">
             <label class="form-label" for="rate-currency">Currency</label>
@@ -76,8 +86,13 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="action" value="fee_arrangement">
           <div class="col-md-6">
-            <label class="form-label" for="arr-matter-id">Matter ID</label>
-            <input class="form-control" id="arr-matter-id" name="matter_id" type="number" min="1" placeholder="Required" required>
+            <label class="form-label" for="arr-matter-id">Matter</label>
+            <select class="form-select" id="arr-matter-id" name="matter_id" required>
+              <option value="">Select matter</option>
+              {% for matter in matters %}
+                <option value="{{ matter.id }}">{{ matter.id }} - {{ matter.matter_no }} - {{ matter.title }}</option>
+              {% endfor %}
+            </select>
           </div>
           <div class="col-md-6">
             <label class="form-label" for="arr-type">Arrangement Type</label>
@@ -133,12 +148,26 @@
       </thead>
       <tbody>
         {% for rate in rates %}
-          <tr data-table-row data-search="{{ rate.id }} {{ rate.name or '' }} {{ rate.client_name or '' }} {{ rate.matter_id or '' }} {{ rate.user_id or '' }}">
+          {% set rate_matter = matter_lookup.get(rate.matter_id) if matter_lookup and rate.matter_id else None %}
+          {% set rate_user = user_lookup.get(rate.user_id) if user_lookup and rate.user_id else None %}
+          <tr data-table-row data-search="{{ rate.id }} {{ rate.name or '' }} {{ rate.client_name or '' }} {{ rate.matter_id or '' }} {{ (rate_matter.matter_no if rate_matter else '') }} {{ (rate_matter.title if rate_matter else '') }} {{ rate.user_id or '' }} {{ (rate_user.full_name if rate_user else '') }} {{ (rate_user.email if rate_user else '') }}">
             <td>{{ rate.id }}</td>
             <td>{{ rate.name or "-" }}</td>
             <td>{{ rate.client_name or "-" }}</td>
-            <td>{{ rate.matter_id or "-" }}</td>
-            <td>{{ rate.user_id or "-" }}</td>
+            <td>
+              {% if rate_matter %}
+                {{ rate.matter_id }} - {{ rate_matter.matter_no }} - {{ rate_matter.title }}
+              {% else %}
+                {{ rate.matter_id or "-" }}
+              {% endif %}
+            </td>
+            <td>
+              {% if rate_user %}
+                {{ rate.user_id }} - {{ rate_user.full_name }}
+              {% else %}
+                {{ rate.user_id or "-" }}
+              {% endif %}
+            </td>
             <td>{{ "%.2f"|format(rate.rate_per_hour or 0) }} {{ rate.currency }}</td>
           </tr>
         {% endfor %}
@@ -171,12 +200,19 @@
       </thead>
       <tbody>
         {% for arrangement in arrangements %}
+          {% set arrangement_matter = matter_lookup.get(arrangement.matter_id) if matter_lookup and arrangement.matter_id else None %}
           <tr
             data-table-row
-            data-search="{{ arrangement.id }} {{ arrangement.matter_id }} {{ arrangement.arrangement_type }} {{ arrangement.notes or '' }}"
+            data-search="{{ arrangement.id }} {{ arrangement.matter_id }} {{ (arrangement_matter.matter_no if arrangement_matter else '') }} {{ (arrangement_matter.title if arrangement_matter else '') }} {{ arrangement.arrangement_type }} {{ arrangement.notes or '' }}"
           >
             <td>{{ arrangement.id }}</td>
-            <td>{{ arrangement.matter_id }}</td>
+            <td>
+              {% if arrangement_matter %}
+                {{ arrangement.matter_id }} - {{ arrangement_matter.matter_no }} - {{ arrangement_matter.title }}
+              {% else %}
+                {{ arrangement.matter_id }}
+              {% endif %}
+            </td>
             <td>{{ arrangement.arrangement_type }}</td>
             <td>{{ "%.2f"|format(arrangement.fixed_amount or 0) if arrangement.fixed_amount is not none else "-" }}</td>
             <td>{{ "%.2f"|format(arrangement.cap_amount or 0) if arrangement.cap_amount is not none else "-" }}</td>

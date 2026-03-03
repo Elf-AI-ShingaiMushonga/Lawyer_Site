@@ -124,11 +124,6 @@
       opacity: 0.98;
     }
 
-    .navbar.has-active-matter.is-collapsed {
-      transform: translateY(0);
-      box-shadow: 0 8px 22px rgba(115, 28, 28, 0.1);
-    }
-
     .nav-head {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -138,23 +133,6 @@
       align-items: center;
       column-gap: 10px;
       row-gap: 8px;
-      max-height: 900px;
-      opacity: 1;
-      overflow: visible;
-      transition: max-height 0.22s ease, opacity 0.18s ease, margin 0.22s ease, padding 0.22s ease;
-    }
-
-    .navbar.has-active-matter.is-collapsed .nav-head {
-      max-height: 0;
-      opacity: 0;
-      overflow: hidden;
-      margin: 0;
-      padding: 0;
-      pointer-events: none;
-    }
-
-    .navbar.has-active-matter.is-collapsed .context-rail {
-      margin-top: 0;
     }
 
     .nav-brand {
@@ -1693,6 +1671,145 @@
       flex-wrap: wrap;
     }
 
+    .calendar-month-nav {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .calendar-month-title {
+      font-size: 18px;
+      line-height: 1.15;
+      font-weight: 800;
+      color: #4e2928;
+      letter-spacing: 0.01em;
+    }
+
+    .calendar-month-wrap {
+      margin-top: 10px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .calendar-month-grid {
+      min-width: 860px;
+      display: grid;
+      grid-template-columns: repeat(7, minmax(118px, 1fr));
+      gap: 8px;
+    }
+
+    .calendar-weekday {
+      border: 1px solid rgba(225, 6, 0, 0.24);
+      border-radius: 10px;
+      background: #fff4f4;
+      color: #8c5452;
+      font-size: 11px;
+      line-height: 1.1;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 800;
+      padding: 7px 8px;
+      text-align: center;
+    }
+
+    .calendar-day {
+      border: 1px solid rgba(225, 6, 0, 0.2);
+      border-radius: 12px;
+      background: #fffdfd;
+      min-height: 128px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .calendar-day.is-outside {
+      background: #fff7f7;
+      border-color: rgba(201, 168, 168, 0.38);
+      opacity: 0.84;
+    }
+
+    .calendar-day.is-today {
+      border-color: rgba(225, 6, 0, 0.72);
+      box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.14);
+      background: #fff2f2;
+    }
+
+    .calendar-day-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .calendar-day-num {
+      font-size: 13px;
+      font-weight: 800;
+      color: #5f3433;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .calendar-day-count {
+      border: 1px solid rgba(225, 6, 0, 0.3);
+      border-radius: 999px;
+      background: rgba(225, 6, 0, 0.1);
+      color: #772624;
+      padding: 2px 7px;
+      font-size: 11px;
+      line-height: 1;
+      font-weight: 800;
+    }
+
+    .calendar-day-items {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 0;
+    }
+
+    .calendar-day-item {
+      display: block;
+      border: 1px solid rgba(225, 6, 0, 0.23);
+      border-radius: 9px;
+      padding: 4px 6px;
+      background: #fff5f5;
+      text-decoration: none;
+      color: #6a2f2d;
+      font-size: 11px;
+      line-height: 1.25;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .calendar-day-item:hover {
+      border-color: rgba(225, 6, 0, 0.58);
+      background: #ffe8e8;
+      color: #5c1714;
+    }
+
+    .calendar-day-item.is-critical {
+      border-color: rgba(225, 6, 0, 0.62);
+      background: rgba(225, 6, 0, 0.16);
+      color: #731e1b;
+    }
+
+    .calendar-day-item.is-ack {
+      border-color: rgba(53, 146, 81, 0.36);
+      background: rgba(33, 131, 70, 0.1);
+      color: #2e6a45;
+    }
+
+    .calendar-day-more {
+      font-size: 11px;
+      color: #8b7171;
+      font-weight: 700;
+      padding-left: 2px;
+    }
+
     .deadline-actions {
       display: flex;
       gap: 6px;
@@ -2213,9 +2330,28 @@
         justify-content: flex-start;
       }
 
+      .calendar-month-grid {
+        min-width: 780px;
+        grid-template-columns: repeat(7, minmax(108px, 1fr));
+      }
+
     }
 
     @media (max-width: 768px) {
+      .calendar-month-grid {
+        min-width: 700px;
+        grid-template-columns: repeat(7, minmax(96px, 1fr));
+      }
+
+      .calendar-day {
+        min-height: 110px;
+        padding: 7px;
+      }
+
+      .calendar-day-item {
+        font-size: 10px;
+      }
+
       .table-mobile-cards {
         border: 0;
         background: transparent;
@@ -2354,6 +2490,10 @@
       .nav-auth {
         width: auto;
         justify-content: flex-end;
+      }
+
+      .calendar-month-title {
+        font-size: 16px;
       }
 
       .nav-auth .btn,
@@ -2606,9 +2746,9 @@
     {% set section_meta = "Deadlines, acknowledgements, and milestone visibility" %}
     {% set section_href = url_for('calendar_my') %}
   {% elif endpoint in workflow_endpoints %}
-    {% set section_label = "Workflow Automation" %}
+    {% set section_label = "Automation Studio" %}
     {% set section_meta = "Templates, dependencies, approvals, and recurrence" %}
-    {% set section_href = url_for('task_templates') %}
+    {% set section_href = url_for('admin_automation') if is_admin_role else url_for('matters') %}
   {% elif endpoint in automation_endpoints %}
     {% set section_label = "Automation Studio" %}
     {% set section_meta = "All template builders for archetypes, contracts, tasks, and documents" %}
@@ -2647,7 +2787,6 @@
     {% set section_href = url_for('search') %}
   {% endif %}
   {% set more_active = endpoint in more_endpoints
-    and not (is_support_role and endpoint in workflow_endpoints)
     and not (is_lawyer_role and endpoint in billing_endpoints)
     and not ((is_support_role or is_admin_role) and endpoint in crm_endpoints) %}
   <nav class="navbar px-3 py-2 mb-3{% if current_user.is_authenticated and active_matter %} has-active-matter{% endif %}" data-collapsible-nav>
@@ -2693,9 +2832,6 @@
               <div class="nav-menu-grid">
                 <div class="nav-menu-section">
                   <span class="nav-menu-label">Case Tools</span>
-                  {% if not is_support_role %}
-                    <a class="nav-menu-item {{ 'is-active' if endpoint in workflow_endpoints else '' }}" href="{{ url_for('task_templates') }}">Workflow Templates</a>
-                  {% endif %}
                   <a class="nav-menu-item {{ 'is-active' if endpoint == 'search' else '' }}" href="{{ url_for('search') }}">Global Search</a>
                   <a class="nav-menu-item {{ 'is-active' if endpoint == 'contacts' else '' }}" href="{{ url_for('contacts') }}">Contacts</a>
                   <a class="nav-menu-item {{ 'is-active' if endpoint in ['kb', 'kb_view'] else '' }}" href="{{ url_for('kb') }}">Knowledge Base</a>
@@ -2777,7 +2913,6 @@
               <option value="Knowledge Base">
               <option value="Contacts">
               <option value="Portal Messages">
-              <option value="Workflow Console">
               <option value="/matters">
               <option value="/search">
             </datalist>
@@ -2912,15 +3047,6 @@
             </span>
             <span class="code-like">Go</span>
           </a>
-          {% if is_case_role or is_support_role %}
-            <a class="command-item" href="{{ url_for('task_templates') }}" data-command-item data-keywords="workflow templates dependencies approvals">
-              <span>
-                <span class="command-item-title">Workflow Console</span>
-                <span class="command-item-meta">Task templates, dependencies, approvals</span>
-              </span>
-              <span class="code-like">Go</span>
-            </a>
-          {% endif %}
           <a class="command-item" href="{{ url_for('dms_home') }}" data-command-item data-keywords="dms documents versions productions bates ocr">
             <span>
               <span class="command-item-title">DMS Workspace</span>

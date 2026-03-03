@@ -31,6 +31,7 @@ from ..models import (
 from ..services.archetypes import load_required_fields, parse_required_fields_definition
 from ..services.archetype_ai import suggest_matter_archetype
 from ..services.matter_option_lists import legal_category_options, practice_area_options
+from ..services.template_ai import suggest_contract_template, suggest_document_template
 from ..services.priority_inbox import (
     load_priority_inbox_config,
     save_priority_inbox_config,
@@ -474,6 +475,44 @@ def register_admin_settings_routes(app):
         items = TaskTemplateItem.query.order_by(TaskTemplateItem.task_template_id.asc(), TaskTemplateItem.position.asc()).all()
         return page("Task Templates", "admin_settings/templates_tasks.html", templates=rows, items=items)
 
+    @app.post("/admin/templates/documents/ai/suggest")
+    @login_required
+    def admin_templates_documents_ai_suggest():
+        _admin_required()
+        payload = request.get_json(silent=True) if request.is_json else request.form
+        prompt = " ".join(str(payload.get("prompt") or "").split()).strip() if payload else ""
+        if len(prompt) < 20:
+            return jsonify({"ok": False, "error": "Provide at least 20 characters describing the document template."}), 400
+
+        name_hint = " ".join(str(payload.get("name_hint") or "").split()).strip() if payload else ""
+        template_type_hint = " ".join(str(payload.get("template_type_hint") or "").split()).strip() if payload else ""
+        started = time.perf_counter()
+        suggestion = suggest_document_template(
+            prompt=prompt,
+            name_hint=name_hint,
+            template_type_hint=template_type_hint,
+        )
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        audit(
+            "document_template_ai_suggest",
+            "DocumentTemplate",
+            None,
+            {
+                "source": suggestion.get("source"),
+                "fallback_reason": suggestion.get("fallback_reason"),
+                "elapsed_ms": elapsed_ms,
+            },
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "suggestion": suggestion,
+                "elapsed_ms": elapsed_ms,
+                "fallback_reason": suggestion.get("fallback_reason"),
+                "fallback_detail": suggestion.get("fallback_detail"),
+            }
+        )
+
     @app.route("/admin/templates/documents", methods=["GET", "POST"])
     @login_required
     def admin_templates_documents():
@@ -499,6 +538,47 @@ def register_admin_settings_routes(app):
 
         rows = DocumentTemplate.query.order_by(DocumentTemplate.created_at.desc()).all()
         return page("Document Templates", "admin_settings/templates_documents.html", templates=rows)
+
+    @app.post("/admin/templates/contracts/ai/suggest")
+    @login_required
+    def admin_templates_contracts_ai_suggest():
+        _admin_required()
+        payload = request.get_json(silent=True) if request.is_json else request.form
+        prompt = " ".join(str(payload.get("prompt") or "").split()).strip() if payload else ""
+        if len(prompt) < 20:
+            return jsonify({"ok": False, "error": "Provide at least 20 characters describing the contract template."}), 400
+
+        legal_category_hint = " ".join(str(payload.get("legal_category_hint") or "").split()).strip() if payload else ""
+        name_hint = " ".join(str(payload.get("name_hint") or "").split()).strip() if payload else ""
+        contract_type_hint = " ".join(str(payload.get("contract_type_hint") or "").split()).strip() if payload else ""
+        started = time.perf_counter()
+        suggestion = suggest_contract_template(
+            prompt=prompt,
+            legal_category_hint=legal_category_hint,
+            name_hint=name_hint,
+            contract_type_hint=contract_type_hint,
+        )
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        audit(
+            "contract_template_ai_suggest",
+            "ContractTemplate",
+            None,
+            {
+                "source": suggestion.get("source"),
+                "fallback_reason": suggestion.get("fallback_reason"),
+                "required_fields": len(suggestion.get("required_fields") or []),
+                "elapsed_ms": elapsed_ms,
+            },
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "suggestion": suggestion,
+                "elapsed_ms": elapsed_ms,
+                "fallback_reason": suggestion.get("fallback_reason"),
+                "fallback_detail": suggestion.get("fallback_detail"),
+            }
+        )
 
     @app.route("/admin/templates/contracts", methods=["GET", "POST"])
     @login_required

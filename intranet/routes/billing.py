@@ -271,7 +271,46 @@ def register_billing_routes(app):
         rates = rate_query.order_by(RateCard.id.desc()).limit(300).all()
         arrangements = arrangement_query.order_by(FeeArrangement.id.desc()).limit(300).all()
         matters = matter_query.order_by(Matter.opened_at.desc()).limit(200).all()
-        return page("Billing Rates", "billing/rates.html", rates=rates, arrangements=arrangements, matters=matters)
+        matter_lookup = {matter.id: matter for matter in matters}
+        matter_ids_from_rows = {
+            int(rate.matter_id)
+            for rate in rates
+            if rate.matter_id is not None and int(rate.matter_id) not in matter_lookup
+        }
+        matter_ids_from_rows.update(
+            int(arrangement.matter_id)
+            for arrangement in arrangements
+            if arrangement.matter_id is not None and int(arrangement.matter_id) not in matter_lookup
+        )
+        if matter_ids_from_rows:
+            for row in Matter.query.filter(Matter.id.in_(sorted(matter_ids_from_rows))).all():
+                matter_lookup[row.id] = row
+
+        assignable_users = (
+            User.query.filter(User.is_active.is_(True)).order_by(User.full_name.asc(), User.email.asc()).limit(300).all()
+            if is_admin()
+            else []
+        )
+        user_lookup = {user.id: user for user in assignable_users}
+        missing_user_ids = {
+            int(rate.user_id)
+            for rate in rates
+            if rate.user_id is not None and int(rate.user_id) not in user_lookup
+        }
+        if missing_user_ids:
+            for row in User.query.filter(User.id.in_(sorted(missing_user_ids))).all():
+                user_lookup[row.id] = row
+
+        return page(
+            "Billing Rates",
+            "billing/rates.html",
+            rates=rates,
+            arrangements=arrangements,
+            matters=matters,
+            assignable_users=assignable_users,
+            matter_lookup=matter_lookup,
+            user_lookup=user_lookup,
+        )
 
     @app.route("/billing/invoices", methods=["GET", "POST"])
     @login_required

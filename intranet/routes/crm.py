@@ -12,7 +12,7 @@ from flask_login import current_user, login_required
 from ..extensions import db
 from ..helpers import audit, can_access_matter, get_active_matter_id, is_admin, normalize_query, set_active_matter_context
 from ..reports import export_conflict_report_csv
-from ..models import CRMFollowUp, CRMLead, ConflictCheck, ConflictSemanticHit, EngagementLetter, IntakeForm, LeadQuote, Matter
+from ..models import CRMFollowUp, CRMLead, ConflictCheck, ConflictSemanticHit, EngagementLetter, IntakeForm, LeadQuote, Matter, User
 from ..policies import enforce_permission, visible_matter_ids
 from ..services.workflow_automation import create_engagement_signed_tasks
 from ..services.conflict_engine import ConflictEngine
@@ -108,6 +108,7 @@ def register_crm_routes(app):
         for stage, count in base.with_entities(CRMLead.stage, sa.func.count(CRMLead.id)).group_by(CRMLead.stage).all():
             if stage in stage_counts:
                 stage_counts[stage] = int(count)
+        assignable_users = User.query.filter(User.is_active.is_(True)).order_by(User.full_name.asc(), User.email.asc()).limit(300).all()
         return page(
             "CRM Leads",
             "crm/leads.html",
@@ -117,6 +118,7 @@ def register_crm_routes(app):
             pagination=pagination,
             stage_counts=stage_counts,
             total_leads=pagination.total,
+            assignable_users=assignable_users,
         )
 
     @app.route("/crm/leads/<int:lead_id>", methods=["GET", "POST"])

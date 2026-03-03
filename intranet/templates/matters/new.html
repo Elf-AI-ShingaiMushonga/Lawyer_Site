@@ -24,6 +24,42 @@
         </div>
       </div>
     {% endif %}
+    <div class="col-12">
+      <div class="form-section">
+        <div class="muted small mb-2"><strong>Step 1:</strong> Select legal category and archetype first. Required fields will load automatically.</div>
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="muted small">Legal Category</label>
+            <select class="form-select" name="legal_category" required>
+              <option value="">Select legal category...</option>
+              {% for category in legal_categories %}
+                <option value="{{ category }}">{{ category }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-8">
+            <label class="muted small">Archetype</label>
+            <select class="form-select" name="archetype_id" required>
+              <option value="">Select archetype...</option>
+              <option value="custom">Custom (No Archetype)</option>
+              {% for t in archetype_templates %}
+                <option value="{{ t.id }}" data-category="{{ t.legal_category or '' }}">{{ t.name }}{% if t.legal_category %} ({{ t.legal_category }}){% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="muted small">Archetype Required Fields</label>
+            <div id="archetype-required-fields" class="row g-2"></div>
+            <div id="archetype-required-help" class="form-help mt-2">Select an archetype to load its required matter-specific fields.</div>
+          </div>
+          <div class="col-12">
+            <label class="muted small">Contract Autofill Fields</label>
+            <div id="contract-required-fields" class="row g-2"></div>
+            <div id="contract-required-help" class="form-help mt-2">Select an archetype to load contract fields for auto-generated drafts.</div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="col-md-3">
       <label class="muted small">Matter Number</label>
       <input class="form-control" name="matter_no" placeholder="e.g. 2026-AC-0142" required>
@@ -37,36 +73,28 @@
       <input class="form-control" name="client_name" placeholder="e.g. Smith Family Trust" required>
     </div>
     <div class="col-md-6">
-      <label class="muted small">Assign Lawyers</label>
-      <select class="form-select" name="lawyer_user_ids" multiple size="5" {% if not assignable_lawyers %}disabled{% endif %}>
-        {% for u in assignable_lawyers %}
-          <option value="{{ u.id }}">{{ u.full_name }} ({{ u.email }})</option>
-        {% endfor %}
-      </select>
       {% if assignable_lawyers %}
-        <div class="form-help mt-1">Optional. Hold Ctrl/Cmd and click to assign one or more lawyers while creating the matter.</div>
+        <label class="muted small" for="matter-lawyer-search">Assign Lawyers</label>
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-1">
+          <input class="form-control flex-grow-1" id="matter-lawyer-search" type="search" placeholder="Search lawyers by name or email">
+          <button class="btn btn-sm btn-outline-light" type="button" id="matter-lawyer-select-visible">Select Visible</button>
+          <button class="btn btn-sm btn-outline-light" type="button" id="matter-lawyer-clear-all">Clear All</button>
+        </div>
+        <div class="assignee-checklist" id="matter-lawyer-checklist" role="group" aria-label="Lawyer assignments">
+          {% for u in assignable_lawyers %}
+            <label class="assignee-checklist-item" data-assignee-item data-assignee-search="{{ (u.full_name ~ ' ' ~ u.email)|lower }}">
+              <input class="form-check-input" type="checkbox" name="lawyer_user_ids" value="{{ u.id }}" data-assignee-checkbox>
+              <span class="assignee-checklist-main">{{ u.full_name }}</span>
+              <span class="assignee-checklist-sub">{{ u.email }}</span>
+            </label>
+          {% endfor %}
+        </div>
+        <div class="muted small mt-1" id="matter-lawyer-selection-meta">No lawyers selected.</div>
+        <div class="muted small mt-1" id="matter-lawyer-search-empty" hidden>No lawyers match your search.</div>
       {% else %}
-        <div class="form-help mt-1">No active lawyers are currently available for assignment.</div>
+        <label class="muted small">Assign Lawyers</label>
+        <div class="muted small mt-1">No active lawyers are currently available for assignment.</div>
       {% endif %}
-    </div>
-    <div class="col-md-4">
-      <label class="muted small">Legal Category</label>
-      <select class="form-select" name="legal_category" required>
-        <option value="">Select legal category...</option>
-        {% for category in legal_categories %}
-          <option value="{{ category }}">{{ category }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-8">
-      <label class="muted small">Archetype</label>
-      <select class="form-select" name="archetype_id" required>
-        <option value="">Select archetype...</option>
-        <option value="custom">Custom (No Archetype)</option>
-        {% for t in archetype_templates %}
-          <option value="{{ t.id }}" data-category="{{ t.legal_category or '' }}">{{ t.name }}{% if t.legal_category %} ({{ t.legal_category }}){% endif %}</option>
-        {% endfor %}
-      </select>
     </div>
     <div class="col-md-6">
       <label class="muted small">Status</label>
@@ -104,16 +132,6 @@
       <label class="muted small">Latest Update Note</label>
       <textarea class="form-control" name="last_update_note" rows="2" placeholder="Current context for stakeholders"></textarea>
     </div>
-    <div class="col-12">
-      <label class="muted small">Archetype Required Fields</label>
-      <div id="archetype-required-fields" class="row g-2"></div>
-      <div id="archetype-required-help" class="form-help mt-2">Select an archetype to load its required matter-specific fields.</div>
-    </div>
-    <div class="col-12">
-      <label class="muted small">Contract Autofill Fields</label>
-      <div id="contract-required-fields" class="row g-2"></div>
-      <div id="contract-required-help" class="form-help mt-2">Select an archetype to load contract fields for auto-generated drafts.</div>
-    </div>
     <div class="col-12 d-grid">
       <button class="btn btn-light" data-submitting-text="Creating Matter...">Create</button>
     </div>
@@ -129,6 +147,12 @@
     const requiredHelp = document.getElementById("archetype-required-help");
     const contractFieldsContainer = document.getElementById("contract-required-fields");
     const contractHelp = document.getElementById("contract-required-help");
+    const lawyerSearchInput = document.getElementById("matter-lawyer-search");
+    const lawyerChecklist = document.getElementById("matter-lawyer-checklist");
+    const lawyerSelectVisibleButton = document.getElementById("matter-lawyer-select-visible");
+    const lawyerClearAllButton = document.getElementById("matter-lawyer-clear-all");
+    const lawyerSelectionMeta = document.getElementById("matter-lawyer-selection-meta");
+    const lawyerSearchEmpty = document.getElementById("matter-lawyer-search-empty");
     if (!categoryInput || !archetypeSelect || !requiredFieldsContainer || !requiredHelp || !contractFieldsContainer || !contractHelp) {
       return;
     }
@@ -281,7 +305,40 @@
       if (selectedOption && selectedOption.hidden) {
         archetypeSelect.value = "";
       }
+      if (!String(archetypeSelect.value || "").trim()) {
+        const firstVisibleTemplate = Array.from(archetypeSelect.options).find((option) => {
+          if (!(option instanceof HTMLOptionElement)) {
+            return false;
+          }
+          const value = String(option.value || "").trim();
+          return value && value !== "custom" && !option.hidden;
+        });
+        if (firstVisibleTemplate instanceof HTMLOptionElement) {
+          archetypeSelect.value = firstVisibleTemplate.value;
+        }
+      }
       renderRequiredFields();
+    };
+
+    const ensureInitialArchetypeSelection = () => {
+      if (String(archetypeSelect.value || "").trim()) {
+        return;
+      }
+      const firstTemplate = Array.from(archetypeSelect.options).find((option) => {
+        if (!(option instanceof HTMLOptionElement)) {
+          return false;
+        }
+        const value = String(option.value || "").trim();
+        return value && value !== "custom";
+      });
+      if (!(firstTemplate instanceof HTMLOptionElement)) {
+        return;
+      }
+      archetypeSelect.value = firstTemplate.value;
+      const selected = byId.get(String(firstTemplate.value));
+      if (selected && !String(categoryInput.value || "").trim() && selected.legal_category) {
+        categoryInput.value = selected.legal_category;
+      }
     };
 
     categoryInput.addEventListener("change", filterArchetypesByCategory);
@@ -292,6 +349,81 @@
       }
       filterArchetypesByCategory();
     });
+
+    if (
+      lawyerSearchInput instanceof HTMLInputElement &&
+      lawyerChecklist instanceof HTMLElement &&
+      lawyerSelectVisibleButton instanceof HTMLButtonElement &&
+      lawyerClearAllButton instanceof HTMLButtonElement
+    ) {
+      const assigneeItems = Array.from(lawyerChecklist.querySelectorAll("[data-assignee-item]"));
+      const assigneeCheckboxes = Array.from(lawyerChecklist.querySelectorAll("[data-assignee-checkbox]"));
+
+      const setSelectionMeta = () => {
+        if (!(lawyerSelectionMeta instanceof HTMLElement)) {
+          return;
+        }
+        const selectedCount = assigneeCheckboxes.filter((checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked).length;
+        if (selectedCount <= 0) {
+          lawyerSelectionMeta.textContent = "No lawyers selected.";
+        } else if (selectedCount === 1) {
+          lawyerSelectionMeta.textContent = "1 lawyer selected.";
+        } else {
+          lawyerSelectionMeta.textContent = `${selectedCount} lawyers selected.`;
+        }
+      };
+
+      const applyAssigneeFilter = () => {
+        const query = String(lawyerSearchInput.value || "").trim().toLowerCase();
+        let visibleCount = 0;
+        assigneeItems.forEach((item) => {
+          if (!(item instanceof HTMLElement)) {
+            return;
+          }
+          const haystack = String(item.dataset.assigneeSearch || "").toLowerCase();
+          const isVisible = !query || haystack.includes(query);
+          item.hidden = !isVisible;
+          if (isVisible) {
+            visibleCount += 1;
+          }
+        });
+        if (lawyerSearchEmpty instanceof HTMLElement) {
+          lawyerSearchEmpty.hidden = visibleCount > 0;
+        }
+      };
+
+      lawyerSearchInput.addEventListener("input", applyAssigneeFilter);
+      assigneeCheckboxes.forEach((checkbox) => {
+        if (checkbox instanceof HTMLInputElement) {
+          checkbox.addEventListener("change", setSelectionMeta);
+        }
+      });
+      lawyerSelectVisibleButton.addEventListener("click", () => {
+        assigneeItems.forEach((item) => {
+          if (!(item instanceof HTMLElement) || item.hidden) {
+            return;
+          }
+          const checkbox = item.querySelector("[data-assignee-checkbox]");
+          if (checkbox instanceof HTMLInputElement) {
+            checkbox.checked = true;
+          }
+        });
+        setSelectionMeta();
+      });
+      lawyerClearAllButton.addEventListener("click", () => {
+        assigneeCheckboxes.forEach((checkbox) => {
+          if (checkbox instanceof HTMLInputElement) {
+            checkbox.checked = false;
+          }
+        });
+        setSelectionMeta();
+      });
+
+      setSelectionMeta();
+      applyAssigneeFilter();
+    }
+
+    ensureInitialArchetypeSelection();
     filterArchetypesByCategory();
   })();
 </script>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar as pycalendar
 import datetime as dt
 from urllib.parse import urlparse
 
@@ -73,12 +74,96 @@ def _parse_date_arg(value: str | None, fallback: dt.date) -> dt.date:
         return fallback
 
 
+def _month_start(value: dt.date) -> dt.date:
+    return value.replace(day=1)
+
+
+def _shift_month(month_start: dt.date, months: int) -> dt.date:
+    month_index = (month_start.year * 12) + (month_start.month - 1) + int(months)
+    year = month_index // 12
+    month = (month_index % 12) + 1
+    return dt.date(year, month, 1)
+
+
+def _parse_month_arg(value: str | None, fallback: dt.date) -> dt.date:
+    raw = (value or "").strip()
+    if not raw:
+        return _month_start(fallback)
+    try:
+        if len(raw) == 7:
+            year_text, month_text = raw.split("-", 1)
+            return dt.date(int(year_text), int(month_text), 1)
+        parsed = dt.date.fromisoformat(raw)
+        return _month_start(parsed)
+    except (ValueError, TypeError):
+        return _month_start(fallback)
+
+
+def _build_month_calendar(
+    *,
+    month_start: dt.date,
+    today: dt.date,
+    deadlines: list[Deadline],
+    matter_by_id: dict[int, Matter],
+) -> list[list[dict]]:
+    _, days_in_month = pycalendar.monthrange(month_start.year, month_start.month)
+    month_end = dt.date(month_start.year, month_start.month, days_in_month)
+    grid_start = month_start - dt.timedelta(days=month_start.weekday())
+    grid_end = month_end + dt.timedelta(days=(6 - month_end.weekday()))
+
+    by_day: dict[dt.date, list[dict]] = {}
+    for deadline in deadlines:
+        matter = matter_by_id.get(int(deadline.matter_id)) if deadline.matter_id is not None else None
+        by_day.setdefault(deadline.due_at, []).append(
+            {
+                "id": int(deadline.id),
+                "matter_id": int(deadline.matter_id) if deadline.matter_id is not None else None,
+                "matter_no": str(matter.matter_no) if matter else f"#{deadline.matter_id}",
+                "matter_title": str(matter.title) if matter else "",
+                "title": str(deadline.title or "").strip(),
+                "status": str(deadline.status or "").strip().lower(),
+                "is_critical": bool(deadline.is_critical),
+            }
+        )
+
+    for rows in by_day.values():
+        rows.sort(
+            key=lambda row: (
+                0 if row["status"] != "acknowledged" else 1,
+                0 if row["is_critical"] else 1,
+                row["title"].lower(),
+            )
+        )
+
+    weeks: list[list[dict]] = []
+    cursor = grid_start
+    while cursor <= grid_end:
+        week: list[dict] = []
+        for _ in range(7):
+            day_items = by_day.get(cursor, [])
+            week.append(
+                {
+                    "date": cursor,
+                    "iso": cursor.isoformat(),
+                    "day": cursor.day,
+                    "in_month": cursor.month == month_start.month,
+                    "is_today": cursor == today,
+                    "is_past": cursor < today,
+                    "items": day_items,
+                }
+            )
+            cursor += dt.timedelta(days=1)
+        weeks.append(week)
+    return weeks
+
+
 def register_calendar_routes(app):
     @app.get("/calendar/my")
     @login_required
     def calendar_my():
         today = dt.date.today()
         week_end = today + dt.timedelta(days=7)
+        month_start = _parse_month_arg(request.args.get("month"), today)
         active_filter = _normalize_calendar_filter(request.args.get("filter"))
         matter_ids = visible_matter_ids()
         all_deadlines = (
@@ -97,6 +182,16 @@ def register_calendar_routes(app):
             if matter_ids_for_view
             else {}
         )
+        calendar_weeks = _build_month_calendar(
+            month_start=month_start,
+            today=today,
+            deadlines=deadlines,
+            matter_by_id=matter_by_id,
+        )
+        month_prev = _shift_month(month_start, -1).strftime("%Y-%m")
+        month_next = _shift_month(month_start, 1).strftime("%Y-%m")
+        month_key = month_start.strftime("%Y-%m")
+        month_label = month_start.strftime("%B %Y")
         return page(
             "My Calendar",
             "calendar/my.html",
@@ -105,6 +200,11 @@ def register_calendar_routes(app):
             stats=stats,
             today=today,
             matter_by_id=matter_by_id,
+            month_prev=month_prev,
+            month_next=month_next,
+            month_key=month_key,
+            month_label=month_label,
+            calendar_weeks=calendar_weeks,
         )
 
     @app.get("/calendar/team")

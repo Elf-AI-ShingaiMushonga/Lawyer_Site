@@ -40,13 +40,61 @@
   </div>
 
   <div class="filter-chip-row mt-3">
-    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'all' else '' }}" href="{{ url_for('calendar_my', filter='all') }}">All <span class="code-like">{{ stats.total }}</span></a>
-    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'overdue' else '' }}" href="{{ url_for('calendar_my', filter='overdue') }}">Overdue <span class="code-like">{{ stats.overdue }}</span></a>
-    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'today' else '' }}" href="{{ url_for('calendar_my', filter='today') }}">Today <span class="code-like">{{ stats.today }}</span></a>
-    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'next7' else '' }}" href="{{ url_for('calendar_my', filter='next7') }}">Next 7d <span class="code-like">{{ stats.next7 }}</span></a>
-    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'critical' else '' }}" href="{{ url_for('calendar_my', filter='critical') }}">Critical <span class="code-like">{{ stats.critical }}</span></a>
-    <a class="filter-chip-btn calendar-state-filter-chip {{ 'is-active' if active_filter == 'open' else '' }}" href="{{ url_for('calendar_my', filter='open') }}">Open <span class="code-like">{{ stats.open }}</span></a>
-    <a class="filter-chip-btn calendar-state-filter-chip {{ 'is-active' if active_filter == 'ack' else '' }}" href="{{ url_for('calendar_my', filter='ack') }}">Acknowledged <span class="code-like">{{ stats.ack }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'all' else '' }}" href="{{ url_for('calendar_my', filter='all', month=month_key) }}">All <span class="code-like">{{ stats.total }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'overdue' else '' }}" href="{{ url_for('calendar_my', filter='overdue', month=month_key) }}">Overdue <span class="code-like">{{ stats.overdue }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'today' else '' }}" href="{{ url_for('calendar_my', filter='today', month=month_key) }}">Today <span class="code-like">{{ stats.today }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'next7' else '' }}" href="{{ url_for('calendar_my', filter='next7', month=month_key) }}">Next 7d <span class="code-like">{{ stats.next7 }}</span></a>
+    <a class="filter-chip-btn {{ 'is-active' if active_filter == 'critical' else '' }}" href="{{ url_for('calendar_my', filter='critical', month=month_key) }}">Critical <span class="code-like">{{ stats.critical }}</span></a>
+    <a class="filter-chip-btn calendar-state-filter-chip {{ 'is-active' if active_filter == 'open' else '' }}" href="{{ url_for('calendar_my', filter='open', month=month_key) }}">Open <span class="code-like">{{ stats.open }}</span></a>
+    <a class="filter-chip-btn calendar-state-filter-chip {{ 'is-active' if active_filter == 'ack' else '' }}" href="{{ url_for('calendar_my', filter='ack', month=month_key) }}">Acknowledged <span class="code-like">{{ stats.ack }}</span></a>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <div class="calendar-month-nav">
+    <div>
+      <h4 class="mb-0">Month View</h4>
+      <div class="muted small">Deadlines by day for the current filter.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_my', filter=active_filter, month=month_prev) }}">Prev Month</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_my', filter=active_filter, month=today.strftime('%Y-%m')) }}">Current Month</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_my', filter=active_filter, month=month_next) }}">Next Month</a>
+    </div>
+  </div>
+  <div class="calendar-month-title mt-2">{{ month_label }}</div>
+  <div class="calendar-month-wrap">
+    <div class="calendar-month-grid">
+      {% for weekday in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] %}
+        <div class="calendar-weekday">{{ weekday }}</div>
+      {% endfor %}
+      {% for week in calendar_weeks %}
+        {% for day in week %}
+          <div class="calendar-day{% if not day['in_month'] %} is-outside{% endif %}{% if day['is_today'] %} is-today{% endif %}">
+            <div class="calendar-day-head">
+              <span class="calendar-day-num">{{ day['day'] }}</span>
+              {% if day['items'] %}
+                <span class="calendar-day-count">{{ day['items']|length }}</span>
+              {% endif %}
+            </div>
+            <div class="calendar-day-items">
+              {% for item in day['items'][:3] %}
+                <a
+                  class="calendar-day-item{% if item.is_critical %} is-critical{% endif %}{% if item.status == 'acknowledged' %} is-ack{% endif %}"
+                  href="{{ url_for('calendar_matter', matter_id=item.matter_id) }}"
+                  title="{{ item.matter_no }} - {{ item.matter_title }} | {{ item.title }}"
+                >
+                  {{ item.matter_no }}: {{ item.title }}
+                </a>
+              {% endfor %}
+              {% if day['items']|length > 3 %}
+                <div class="calendar-day-more">+{{ day['items']|length - 3 }} more</div>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      {% endfor %}
+    </div>
   </div>
 </div>
 

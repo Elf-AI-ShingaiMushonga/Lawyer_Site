@@ -57,9 +57,14 @@
       <label class="form-label" for="crm-source">Source</label>
       <input class="form-control" id="crm-source" name="source" placeholder="Referral / Web / Event">
     </div>
-    <div class="col-md-2">
-      <label class="form-label" for="crm-assigned-to">Assigned User ID</label>
-      <input class="form-control" id="crm-assigned-to" name="assigned_to" type="number" min="1" placeholder="Optional">
+    <div class="col-md-3">
+      <label class="form-label" for="crm-assigned-to">Assigned User</label>
+      <select class="form-select" id="crm-assigned-to" name="assigned_to">
+        <option value="">Unassigned</option>
+        {% for u in assignable_users %}
+          <option value="{{ u.id }}">{{ u.id }} - {{ u.full_name }} ({{ u.email }})</option>
+        {% endfor %}
+      </select>
     </div>
     <div class="col-md-7">
       <label class="form-label" for="crm-notes">Notes</label>

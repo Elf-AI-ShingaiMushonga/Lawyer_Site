@@ -34,10 +34,10 @@
           <div class="metric-value">{{ stats.due_this_week }}</div>
           <div class="metric-link-hint">Open Next 7 Days Calendar</div>
         </a>
-        <a class="metric-card metric-card-link" href="{{ url_for('task_templates') }}">
+        <a class="metric-card metric-card-link" href="{{ url_for('admin_automation') if current_user.role == 'admin' else url_for('matters') }}">
           <div class="metric-label">Urgent Unassigned</div>
           <div class="metric-value">{{ stats.urgent_unassigned }}</div>
-          <div class="metric-link-hint">Open Workflow Controls</div>
+          <div class="metric-link-hint">{{ "Open Automation Studio" if current_user.role == "admin" else "Open Matter Directory" }}</div>
         </a>
       </div>
     </div>

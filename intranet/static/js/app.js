@@ -837,6 +837,49 @@
     });
   };
 
+  const describeAIFallbackReason = (reasonCode) => {
+    const code = String(reasonCode || "").trim().toLowerCase();
+    if (code === "ai_disabled") {
+      return "AI is disabled in server configuration";
+    }
+    if (code === "missing_api_key") {
+      return "OpenAI API key is not configured";
+    }
+    if (code === "unsupported_provider") {
+      return "Configured AI provider is unsupported for this draft flow";
+    }
+    if (code === "openai_error") {
+      return "OpenAI request failed";
+    }
+    if (code) {
+      return code.replace(/_/g, " ");
+    }
+    return "fallback reason unavailable";
+  };
+
+  const fillDraftControl = (control, value) => {
+    if (
+      !(
+        control instanceof HTMLInputElement ||
+        control instanceof HTMLTextAreaElement ||
+        control instanceof HTMLSelectElement
+      )
+    ) {
+      return;
+    }
+    control.value = String(value || "");
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  const fillDraftCheckbox = (control, value) => {
+    if (!(control instanceof HTMLInputElement) || control.type !== "checkbox") {
+      return;
+    }
+    control.checked = Boolean(value);
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
   const initArchetypeAIDraftGenerator = () => {
     const root = document.querySelector("[data-archetype-ai-widget]");
     if (!(root instanceof HTMLElement)) {
@@ -886,44 +929,9 @@
       return key;
     };
 
-    const fillControl = (control, value) => {
-      if (
-        !(
-          control instanceof HTMLInputElement ||
-          control instanceof HTMLTextAreaElement ||
-          control instanceof HTMLSelectElement
-        )
-      ) {
-        return;
-      }
-      control.value = String(value || "");
-      control.dispatchEvent(new Event("input", { bubbles: true }));
-      control.dispatchEvent(new Event("change", { bubbles: true }));
-    };
-
     const setStatus = (text, tone = "muted") => {
       statusEl.className = `small ${tone}`;
       statusEl.textContent = text;
-    };
-
-    const describeFallbackReason = (reasonCode) => {
-      const code = String(reasonCode || "").trim().toLowerCase();
-      if (code === "ai_disabled") {
-        return "AI is disabled in server configuration";
-      }
-      if (code === "missing_api_key") {
-        return "OpenAI API key is not configured";
-      }
-      if (code === "unsupported_provider") {
-        return "Configured AI provider is unsupported for this draft flow";
-      }
-      if (code === "openai_error") {
-        return "OpenAI request failed";
-      }
-      if (code) {
-        return code.replace(/_/g, " ");
-      }
-      return "fallback reason unavailable";
     };
 
     const defaultButtonText = String(generateButton.textContent || "Generate Draft with AI").trim();
@@ -970,7 +978,10 @@
           },
           body: JSON.stringify({
             prompt,
-            legal_category_hint: controls.legalCategory instanceof HTMLInputElement ? controls.legalCategory.value : "",
+            legal_category_hint:
+              controls.legalCategory instanceof HTMLInputElement || controls.legalCategory instanceof HTMLSelectElement
+                ? controls.legalCategory.value
+                : "",
             name_hint: controls.name instanceof HTMLInputElement ? controls.name.value : "",
           }),
           signal: controller.signal,
@@ -995,24 +1006,24 @@
         }
 
         const suggestion = payload.suggestion || {};
-        fillControl(controls.name, suggestion.name);
-        fillControl(controls.legalCategory, suggestion.legal_category);
-        fillControl(controls.practiceArea, suggestion.practice_area);
-        fillControl(controls.defaultStage, suggestion.default_stage);
-        fillControl(controls.defaultRiskLevel, suggestion.default_risk_level);
-        fillControl(controls.checklist, Array.isArray(suggestion.checklist) ? suggestion.checklist.join("\n") : "");
-        fillControl(
+        fillDraftControl(controls.name, suggestion.name);
+        fillDraftControl(controls.legalCategory, suggestion.legal_category);
+        fillDraftControl(controls.practiceArea, suggestion.practice_area);
+        fillDraftControl(controls.defaultStage, suggestion.default_stage);
+        fillDraftControl(controls.defaultRiskLevel, suggestion.default_risk_level);
+        fillDraftControl(controls.checklist, Array.isArray(suggestion.checklist) ? suggestion.checklist.join("\n") : "");
+        fillDraftControl(
           controls.requiredFields,
           Array.isArray(suggestion.required_fields) ? suggestion.required_fields.map(fieldLine).filter(Boolean).join("\n") : ""
         );
-        fillControl(controls.boilerplateTemplate, suggestion.boilerplate_template || "");
+        fillDraftControl(controls.boilerplateTemplate, suggestion.boilerplate_template || "");
 
         const source = String(suggestion.source || "fallback").trim() || "fallback";
         const elapsedMs = Math.max(0, Number.parseInt(String(payload.elapsed_ms || ""), 10) || Date.now() - startedAtMs);
         const elapsedText = `${Math.max(1, Math.round(elapsedMs / 1000))}s`;
         if (source === "fallback") {
           const reasonCode = String(suggestion.fallback_reason || payload.fallback_reason || "").trim();
-          const reasonText = describeFallbackReason(reasonCode);
+          const reasonText = describeAIFallbackReason(reasonCode);
           const rawDetail = String(suggestion.fallback_detail || payload.fallback_detail || "").trim();
           const detail = rawDetail && rawDetail.length <= 180 ? rawDetail : "";
           const reasonMessage = detail ? `${reasonText}: ${detail}` : reasonText;
@@ -1020,6 +1031,316 @@
           return;
         }
         setStatus(`Archetype draft generated (${source}) in ${elapsedText}. Review and save.`, "text-success");
+      } catch (error) {
+        if (error && typeof error === "object" && String(error.name || "") === "AbortError") {
+          setStatus("AI draft timed out. Check AI connectivity/configuration and try again.", "text-warning");
+        } else {
+          setStatus("AI draft service is unavailable right now. Please retry.", "text-warning");
+        }
+      } finally {
+        window.clearTimeout(timeoutHandle);
+        window.clearInterval(progressHandle);
+        generateButton.removeAttribute("aria-busy");
+        generateButton.disabled = false;
+        generateButton.textContent = defaultButtonText;
+        requestInFlight = false;
+      }
+    });
+  };
+
+  const initContractAIDraftGenerator = () => {
+    const root = document.querySelector("[data-contract-ai-widget]");
+    if (!(root instanceof HTMLElement)) {
+      return;
+    }
+
+    const promptInput = root.querySelector("[data-ai-contract-prompt]");
+    const generateButton = root.querySelector("[data-ai-contract-generate]");
+    const statusEl = root.querySelector("[data-ai-contract-status]");
+    const csrfInput = document.querySelector("form input[name='csrf_token']");
+    const endpoint = String(root.dataset.endpoint || "").trim();
+    const timeoutMs = Math.max(15000, Number.parseInt(String(root.dataset.timeoutMs || "90000"), 10) || 90000);
+    if (
+      !(promptInput instanceof HTMLTextAreaElement) ||
+      !(generateButton instanceof HTMLButtonElement) ||
+      !(statusEl instanceof HTMLElement) ||
+      !(csrfInput instanceof HTMLInputElement) ||
+      !endpoint
+    ) {
+      return;
+    }
+
+    const controls = {
+      name: document.getElementById("contract-template-name"),
+      legalCategory: document.getElementById("contract-template-category"),
+      contractType: document.getElementById("contract-template-type"),
+      requiredFields: document.getElementById("contract-template-required-fields"),
+      body: document.getElementById("contract-template-body"),
+      requiresSignature: document.getElementById("contract-template-signature"),
+      autoCreateOnMatterOpen: document.getElementById("contract-template-auto"),
+      isActive: document.getElementById("contract-template-active"),
+    };
+
+    const fieldLine = (field) => {
+      const key = String((field && field.key) || "").trim();
+      const label = String((field && field.label) || "").trim();
+      const helpText = String((field && field.help) || "").trim();
+      if (!key) {
+        return "";
+      }
+      if (helpText) {
+        return `${key}|${label || key}|${helpText}`;
+      }
+      if (label) {
+        return `${key}|${label}`;
+      }
+      return key;
+    };
+
+    const setStatus = (text, tone = "muted") => {
+      statusEl.className = `small ${tone}`;
+      statusEl.textContent = text;
+    };
+
+    const defaultButtonText = String(generateButton.textContent || "Generate Draft with AI").trim();
+    let requestInFlight = false;
+
+    generateButton.addEventListener("click", async () => {
+      if (requestInFlight) {
+        return;
+      }
+      const prompt = String(promptInput.value || "").trim();
+      if (prompt.length < 20) {
+        setStatus("Provide at least 20 characters in the prompt.", "text-warning");
+        promptInput.focus();
+        return;
+      }
+
+      requestInFlight = true;
+      generateButton.disabled = true;
+      generateButton.setAttribute("aria-busy", "true");
+
+      const startedAtMs = Date.now();
+      let elapsedSeconds = 0;
+      const renderProgress = () => {
+        const phasePrefix = elapsedSeconds < 8 ? "Generating contract draft..." : "Still generating draft...";
+        generateButton.textContent = `${phasePrefix} ${elapsedSeconds}s`;
+        setStatus(`${phasePrefix} ${elapsedSeconds}s elapsed.`, "text-muted");
+      };
+      renderProgress();
+      const progressHandle = window.setInterval(() => {
+        elapsedSeconds = Math.floor((Date.now() - startedAtMs) / 1000);
+        renderProgress();
+      }, 1000);
+
+      const controller = new AbortController();
+      const timeoutHandle = window.setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-CSRF-Token": csrfInput.value,
+          },
+          body: JSON.stringify({
+            prompt,
+            legal_category_hint:
+              controls.legalCategory instanceof HTMLInputElement || controls.legalCategory instanceof HTMLSelectElement
+                ? controls.legalCategory.value
+                : "",
+            name_hint: controls.name instanceof HTMLInputElement ? controls.name.value : "",
+            contract_type_hint: controls.contractType instanceof HTMLInputElement ? controls.contractType.value : "",
+          }),
+          signal: controller.signal,
+        });
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        const payload = contentType.includes("application/json") ? await response.json().catch(() => ({})) : {};
+        if (!response.ok || payload.ok !== true) {
+          let errorMessage = String(payload.error || "").trim();
+          if (!errorMessage) {
+            if (response.status === 400) {
+              errorMessage = "Request rejected. Check prompt length and refresh the page to renew CSRF/session.";
+            } else if (response.status === 401 || response.status === 403 || response.redirected) {
+              errorMessage = "Session or permissions invalid. Sign in as admin and try again.";
+            } else if (response.status >= 500) {
+              errorMessage = "Server error while generating draft. Check AI configuration and retry.";
+            } else {
+              errorMessage = "AI draft failed.";
+            }
+          }
+          setStatus(errorMessage, "text-warning");
+          return;
+        }
+
+        const suggestion = payload.suggestion || {};
+        fillDraftControl(controls.name, suggestion.name);
+        fillDraftControl(controls.legalCategory, suggestion.legal_category);
+        fillDraftControl(controls.contractType, suggestion.contract_type);
+        fillDraftControl(
+          controls.requiredFields,
+          Array.isArray(suggestion.required_fields) ? suggestion.required_fields.map(fieldLine).filter(Boolean).join("\n") : ""
+        );
+        fillDraftControl(controls.body, suggestion.body || "");
+        fillDraftCheckbox(controls.requiresSignature, suggestion.requires_signature);
+        fillDraftCheckbox(controls.autoCreateOnMatterOpen, suggestion.auto_create_on_matter_open);
+        fillDraftCheckbox(controls.isActive, suggestion.is_active);
+
+        const source = String(suggestion.source || "fallback").trim() || "fallback";
+        const elapsedMs = Math.max(0, Number.parseInt(String(payload.elapsed_ms || ""), 10) || Date.now() - startedAtMs);
+        const elapsedText = `${Math.max(1, Math.round(elapsedMs / 1000))}s`;
+        if (source === "fallback") {
+          const reasonCode = String(suggestion.fallback_reason || payload.fallback_reason || "").trim();
+          const reasonText = describeAIFallbackReason(reasonCode);
+          const rawDetail = String(suggestion.fallback_detail || payload.fallback_detail || "").trim();
+          const detail = rawDetail && rawDetail.length <= 180 ? rawDetail : "";
+          const reasonMessage = detail ? `${reasonText}: ${detail}` : reasonText;
+          setStatus(`Contract draft generated (fallback) in ${elapsedText}. Reason: ${reasonMessage}. Review and save.`, "text-warning");
+          return;
+        }
+        setStatus(`Contract draft generated (${source}) in ${elapsedText}. Review and save.`, "text-success");
+      } catch (error) {
+        if (error && typeof error === "object" && String(error.name || "") === "AbortError") {
+          setStatus("AI draft timed out. Check AI connectivity/configuration and try again.", "text-warning");
+        } else {
+          setStatus("AI draft service is unavailable right now. Please retry.", "text-warning");
+        }
+      } finally {
+        window.clearTimeout(timeoutHandle);
+        window.clearInterval(progressHandle);
+        generateButton.removeAttribute("aria-busy");
+        generateButton.disabled = false;
+        generateButton.textContent = defaultButtonText;
+        requestInFlight = false;
+      }
+    });
+  };
+
+  const initDocumentAIDraftGenerator = () => {
+    const root = document.querySelector("[data-document-ai-widget]");
+    if (!(root instanceof HTMLElement)) {
+      return;
+    }
+
+    const promptInput = root.querySelector("[data-ai-document-prompt]");
+    const generateButton = root.querySelector("[data-ai-document-generate]");
+    const statusEl = root.querySelector("[data-ai-document-status]");
+    const csrfInput = document.querySelector("form input[name='csrf_token']");
+    const endpoint = String(root.dataset.endpoint || "").trim();
+    const timeoutMs = Math.max(15000, Number.parseInt(String(root.dataset.timeoutMs || "90000"), 10) || 90000);
+    if (
+      !(promptInput instanceof HTMLTextAreaElement) ||
+      !(generateButton instanceof HTMLButtonElement) ||
+      !(statusEl instanceof HTMLElement) ||
+      !(csrfInput instanceof HTMLInputElement) ||
+      !endpoint
+    ) {
+      return;
+    }
+
+    const controls = {
+      name: document.getElementById("doc-template-name"),
+      templateType: document.getElementById("doc-template-type"),
+      body: document.getElementById("doc-template-body"),
+      requiresSignature: document.getElementById("requires_signature"),
+    };
+
+    const setStatus = (text, tone = "muted") => {
+      statusEl.className = `small ${tone}`;
+      statusEl.textContent = text;
+    };
+
+    const defaultButtonText = String(generateButton.textContent || "Generate Draft with AI").trim();
+    let requestInFlight = false;
+
+    generateButton.addEventListener("click", async () => {
+      if (requestInFlight) {
+        return;
+      }
+      const prompt = String(promptInput.value || "").trim();
+      if (prompt.length < 20) {
+        setStatus("Provide at least 20 characters in the prompt.", "text-warning");
+        promptInput.focus();
+        return;
+      }
+
+      requestInFlight = true;
+      generateButton.disabled = true;
+      generateButton.setAttribute("aria-busy", "true");
+
+      const startedAtMs = Date.now();
+      let elapsedSeconds = 0;
+      const renderProgress = () => {
+        const phasePrefix = elapsedSeconds < 8 ? "Generating document draft..." : "Still generating draft...";
+        generateButton.textContent = `${phasePrefix} ${elapsedSeconds}s`;
+        setStatus(`${phasePrefix} ${elapsedSeconds}s elapsed.`, "text-muted");
+      };
+      renderProgress();
+      const progressHandle = window.setInterval(() => {
+        elapsedSeconds = Math.floor((Date.now() - startedAtMs) / 1000);
+        renderProgress();
+      }, 1000);
+
+      const controller = new AbortController();
+      const timeoutHandle = window.setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-CSRF-Token": csrfInput.value,
+          },
+          body: JSON.stringify({
+            prompt,
+            name_hint: controls.name instanceof HTMLInputElement ? controls.name.value : "",
+            template_type_hint:
+              controls.templateType instanceof HTMLInputElement || controls.templateType instanceof HTMLSelectElement
+                ? controls.templateType.value
+                : "",
+          }),
+          signal: controller.signal,
+        });
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        const payload = contentType.includes("application/json") ? await response.json().catch(() => ({})) : {};
+        if (!response.ok || payload.ok !== true) {
+          let errorMessage = String(payload.error || "").trim();
+          if (!errorMessage) {
+            if (response.status === 400) {
+              errorMessage = "Request rejected. Check prompt length and refresh the page to renew CSRF/session.";
+            } else if (response.status === 401 || response.status === 403 || response.redirected) {
+              errorMessage = "Session or permissions invalid. Sign in as admin and try again.";
+            } else if (response.status >= 500) {
+              errorMessage = "Server error while generating draft. Check AI configuration and retry.";
+            } else {
+              errorMessage = "AI draft failed.";
+            }
+          }
+          setStatus(errorMessage, "text-warning");
+          return;
+        }
+
+        const suggestion = payload.suggestion || {};
+        fillDraftControl(controls.name, suggestion.name);
+        fillDraftControl(controls.templateType, suggestion.template_type);
+        fillDraftControl(controls.body, suggestion.body || "");
+        fillDraftCheckbox(controls.requiresSignature, suggestion.requires_signature);
+
+        const source = String(suggestion.source || "fallback").trim() || "fallback";
+        const elapsedMs = Math.max(0, Number.parseInt(String(payload.elapsed_ms || ""), 10) || Date.now() - startedAtMs);
+        const elapsedText = `${Math.max(1, Math.round(elapsedMs / 1000))}s`;
+        if (source === "fallback") {
+          const reasonCode = String(suggestion.fallback_reason || payload.fallback_reason || "").trim();
+          const reasonText = describeAIFallbackReason(reasonCode);
+          const rawDetail = String(suggestion.fallback_detail || payload.fallback_detail || "").trim();
+          const detail = rawDetail && rawDetail.length <= 180 ? rawDetail : "";
+          const reasonMessage = detail ? `${reasonText}: ${detail}` : reasonText;
+          setStatus(`Document draft generated (fallback) in ${elapsedText}. Reason: ${reasonMessage}. Review and save.`, "text-warning");
+          return;
+        }
+        setStatus(`Document draft generated (${source}) in ${elapsedText}. Review and save.`, "text-success");
       } catch (error) {
         if (error && typeof error === "object" && String(error.name || "") === "AbortError") {
           setStatus("AI draft timed out. Check AI connectivity/configuration and try again.", "text-warning");
@@ -2372,14 +2693,6 @@
       return;
     }
 
-    const hasActiveMatter = nav.classList.contains("has-active-matter");
-    if (hasActiveMatter) {
-      // Keep the active-matter rail stable; collapsing a sticky container here
-      // causes layout shifts that can produce scroll flicker.
-      nav.classList.remove("is-collapsed");
-      return;
-    }
-
     const minDelta = 8;
     let lastY = window.scrollY;
     let isCollapsed = false;
@@ -3016,6 +3329,8 @@
     initMatterQuickFilters();
     initTimePrompts();
     initArchetypeAIDraftGenerator();
+    initContractAIDraftGenerator();
+    initDocumentAIDraftGenerator();
     initTimeCodeAssist();
     initTimerPresenceGuard();
     initLiveBillingCue();

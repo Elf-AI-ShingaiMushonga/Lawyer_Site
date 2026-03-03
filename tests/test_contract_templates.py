@@ -9,6 +9,7 @@ from intranet.models import (
     ContractTemplate,
     DocumentOCRText,
     DocumentRecord,
+    DocumentTemplate,
     DocumentVersion,
     Matter,
     MatterTemplate,
@@ -34,6 +35,20 @@ def _seed_admin() -> User:
         password_hash="x",
         mfa_enabled=True,
         mfa_secret="TESTMFATESTMFATESTMFATESTMFATEST12",
+    )
+    row.set_password("TestPassword123!")
+    db.session.add(row)
+    db.session.commit()
+    return row
+
+
+def _seed_non_admin() -> User:
+    row = User(
+        email="contracts-lawyer@example.com",
+        full_name="Contracts Lawyer",
+        role="lawyer",
+        password_hash="x",
+        mfa_enabled=True,
     )
     row.set_password("TestPassword123!")
     db.session.add(row)
@@ -249,3 +264,126 @@ def test_matter_intake_autogenerates_attached_contract_document(app_ctx):
     document = DocumentRecord.query.filter_by(matter_id=matter.id).first()
     assert document is not None
     assert document.document_type == "Service Contract"
+
+
+def test_admin_can_generate_ai_contract_template_draft_payload(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=False)
+    admin = _seed_admin()
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, admin.id)
+
+    response = client.post(
+        "/admin/templates/contracts/ai/suggest",
+        json={
+            "prompt": "Create a labour law employment contract template with payment terms, confidentiality, and termination obligations.",
+            "legal_category_hint": "Labour Law",
+            "name_hint": "Employment Contract",
+            "contract_type_hint": "Employment Agreement",
+        },
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None and payload.get("ok") is True
+    suggestion = payload.get("suggestion") or {}
+    assert suggestion.get("name")
+    assert suggestion.get("contract_type")
+    assert suggestion.get("body")
+    assert isinstance(suggestion.get("required_fields"), list)
+    assert suggestion.get("source") == "fallback"
+    assert suggestion.get("fallback_reason") == "ai_disabled"
+    assert payload.get("fallback_reason") == "ai_disabled"
+
+
+def test_contract_template_builder_renders_ai_widget_markers(app_ctx):
+    app = app_ctx
+    admin = _seed_admin()
+    client = app.test_client()
+    _set_internal_session(client, admin.id)
+
+    response = client.get("/admin/templates/contracts")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "data-contract-ai-widget" in body
+    assert "data-ai-contract-generate" in body
+    assert "data-ai-contract-status" in body
+
+
+def test_non_admin_cannot_generate_ai_contract_template_draft(app_ctx):
+    app = app_ctx
+    non_admin = _seed_non_admin()
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, non_admin.id)
+
+    response = client.post(
+        "/admin/templates/contracts/ai/suggest",
+        json={"prompt": "Generate a contract template for services with indemnity and confidentiality terms."},
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert response.status_code == 403
+
+
+def test_admin_can_generate_ai_document_template_draft_payload(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=False)
+    admin = _seed_admin()
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, admin.id)
+
+    response = client.post(
+        "/admin/templates/documents/ai/suggest",
+        json={
+            "prompt": "Create a legal memorandum template with background, issue, analysis, and recommendation sections.",
+            "name_hint": "Legal Memo",
+            "template_type_hint": "memorandum",
+        },
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None and payload.get("ok") is True
+    suggestion = payload.get("suggestion") or {}
+    assert suggestion.get("name")
+    assert suggestion.get("template_type")
+    assert suggestion.get("body")
+    assert suggestion.get("source") == "fallback"
+    assert suggestion.get("fallback_reason") == "ai_disabled"
+    assert payload.get("fallback_reason") == "ai_disabled"
+
+
+def test_document_template_builder_renders_ai_widget_markers(app_ctx):
+    app = app_ctx
+    admin = _seed_admin()
+    db.session.add(
+        DocumentTemplate(
+            name="Seed Template",
+            template_type="general",
+            body="Seed body",
+            created_by=admin.id,
+        )
+    )
+    db.session.commit()
+    client = app.test_client()
+    _set_internal_session(client, admin.id)
+
+    response = client.get("/admin/templates/documents")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "data-document-ai-widget" in body
+    assert "data-ai-document-generate" in body
+    assert "data-ai-document-status" in body
+
+
+def test_non_admin_cannot_generate_ai_document_template_draft(app_ctx):
+    app = app_ctx
+    non_admin = _seed_non_admin()
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, non_admin.id)
+
+    response = client.post(
+        "/admin/templates/documents/ai/suggest",
+        json={"prompt": "Generate a document template for affidavit drafting and review."},
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert response.status_code == 403

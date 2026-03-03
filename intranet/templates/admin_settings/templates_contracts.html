@@ -2,6 +2,30 @@
 {% block content %}
 <div class="card p-3 mb-3">
   <h3 class="mb-1">{{ "Edit Contract Template" if edit_template_id else "Contract Template Builder" }}</h3>
+  <div
+    class="form-section mt-3"
+    data-contract-ai-widget
+    data-endpoint="{{ url_for('admin_templates_contracts_ai_suggest') }}"
+    data-timeout-ms="90000"
+  >
+    <label class="form-label" for="contract-template-ai-prompt">AI Draft Prompt</label>
+    <textarea
+      class="form-control"
+      id="contract-template-ai-prompt"
+      data-ai-contract-prompt
+      rows="3"
+      placeholder="Describe the contract template purpose, legal context, key terms, and required placeholders."
+    ></textarea>
+    <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+      <button type="button" id="contract-template-ai-generate" data-ai-contract-generate class="btn btn-outline-light btn-sm">Generate Draft with AI</button>
+      <span
+        id="contract-template-ai-status"
+        data-ai-contract-status
+        class="muted small"
+        aria-live="polite"
+      >Uses OpenAI when enabled, with deterministic fallback.</span>
+    </div>
+  </div>
   <form method="post" class="mt-3" data-form-draft-key="admin-contract-template-builder" data-form-draft-status="contract-template-draft-status">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="save">
