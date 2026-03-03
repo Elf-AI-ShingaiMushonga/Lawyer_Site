@@ -103,7 +103,7 @@
                   <span>Opened {{ m.opened_at.strftime("%Y-%m-%d") }}</span>
                   {% if is_pinned %}<span class="tag-chip">Pinned</span>{% endif %}
                   <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }}</span>
-                  <span>{{ m.budget_status }}</span>
+                  {% if m.budget_status %}<span class="badge status-badge status-{{ m.budget_status|lower|replace(' ', '-') }}">{{ m.budget_status }}</span>{% endif %}
                 </div>
               </div>
               <div class="list-actions">

@@ -22,6 +22,22 @@
       --focus-ring: rgba(225, 6, 0, 0.2);
       --ok: #218346;
       --warn: #9a6200;
+      --chip-radius: 999px;
+      --tone-accent-border: rgba(225, 6, 0, 0.42);
+      --tone-accent-bg: rgba(225, 6, 0, 0.1);
+      --tone-accent-text: #6e1f1c;
+      --tone-positive-border: rgba(46, 140, 77, 0.48);
+      --tone-positive-bg: rgba(33, 131, 70, 0.12);
+      --tone-positive-text: #23633a;
+      --tone-warning-border: rgba(188, 136, 52, 0.48);
+      --tone-warning-bg: rgba(182, 128, 40, 0.16);
+      --tone-warning-text: #704c1a;
+      --tone-danger-border: rgba(225, 6, 0, 0.56);
+      --tone-danger-bg: rgba(225, 6, 0, 0.18);
+      --tone-danger-text: #7a201d;
+      --tone-neutral-border: rgba(170, 153, 153, 0.45);
+      --tone-neutral-bg: rgba(224, 216, 216, 0.48);
+      --tone-neutral-text: #5d5454;
       --status-chip-min-width: 10ch;
       --risk-chip-min-width: 9ch;
       --category-chip-min-width: 11ch;
@@ -534,6 +550,17 @@
     .btn {
       border-radius: 11px;
       font-weight: 700;
+      min-height: 36px;
+      transition: transform .12s ease, box-shadow .12s ease, background .15s ease, color .15s ease, border-color .15s ease;
+    }
+
+    .btn.btn-sm {
+      min-height: 32px;
+    }
+
+    .btn:focus-visible {
+      outline: 0;
+      box-shadow: 0 0 0 .2rem var(--focus-ring);
     }
 
     .btn-light {
@@ -560,6 +587,7 @@
       border-color: rgba(225, 6, 0, 0.75);
       color: #ffffff;
       background: var(--accent);
+      transform: translateY(-1px);
     }
 
     .form-control,
@@ -1155,6 +1183,10 @@
       align-items: center;
       justify-content: center;
       min-width: var(--status-chip-min-width);
+      border-radius: var(--chip-radius);
+      padding: 4px 10px;
+      font-size: 11px;
+      line-height: 1;
       border: 1px solid transparent;
       font-weight: 700;
       letter-spacing: 0.02em;
@@ -1173,49 +1205,154 @@
       text-align: center;
     }
 
+    .status-badge.tone-accent,
+    .risk-chip.tone-accent,
+    .tag-chip.tone-accent,
+    .filter-chip-btn.tone-accent,
+    .nav-pill.tone-accent,
+    .matter-status-filter-badge.tone-accent,
+    .task-status-cycler.tone-accent,
+    .badge-soft.tone-accent {
+      border-color: var(--tone-accent-border);
+      background: var(--tone-accent-bg);
+      color: var(--tone-accent-text);
+    }
+
+    .status-badge.tone-positive,
+    .risk-chip.tone-positive,
+    .tag-chip.tone-positive,
+    .filter-chip-btn.tone-positive,
+    .nav-pill.tone-positive,
+    .matter-status-filter-badge.tone-positive,
+    .task-status-cycler.tone-positive,
+    .badge-soft.tone-positive {
+      border-color: var(--tone-positive-border);
+      background: var(--tone-positive-bg);
+      color: var(--tone-positive-text);
+    }
+
+    .status-badge.tone-warning,
+    .risk-chip.tone-warning,
+    .tag-chip.tone-warning,
+    .filter-chip-btn.tone-warning,
+    .nav-pill.tone-warning,
+    .matter-status-filter-badge.tone-warning,
+    .task-status-cycler.tone-warning,
+    .badge-soft.tone-warning {
+      border-color: var(--tone-warning-border);
+      background: var(--tone-warning-bg);
+      color: var(--tone-warning-text);
+    }
+
+    .status-badge.tone-danger,
+    .risk-chip.tone-danger,
+    .tag-chip.tone-danger,
+    .filter-chip-btn.tone-danger,
+    .nav-pill.tone-danger,
+    .matter-status-filter-badge.tone-danger,
+    .task-status-cycler.tone-danger,
+    .badge-soft.tone-danger {
+      border-color: var(--tone-danger-border);
+      background: var(--tone-danger-bg);
+      color: var(--tone-danger-text);
+    }
+
+    .status-badge.tone-neutral,
+    .risk-chip.tone-neutral,
+    .tag-chip.tone-neutral,
+    .filter-chip-btn.tone-neutral,
+    .nav-pill.tone-neutral,
+    .matter-status-filter-badge.tone-neutral,
+    .task-status-cycler.tone-neutral,
+    .badge-soft.tone-neutral {
+      border-color: var(--tone-neutral-border);
+      background: var(--tone-neutral-bg);
+      color: var(--tone-neutral-text);
+    }
+
     .status-open,
-    .status-todo {
-      border-color: rgba(225, 6, 0, 0.42);
-      background: rgba(225, 6, 0, 0.1);
-      color: #6e1f1c;
+    .status-todo,
+    .status-new,
+    .status-draft,
+    .status-queued,
+    .status-running,
+    .status-active,
+    .status-in-progress,
+    .status-submitted {
+      border-color: var(--tone-accent-border);
+      background: var(--tone-accent-bg);
+      color: var(--tone-accent-text);
     }
 
     .status-on-hold,
-    .status-doing {
-      border-color: rgba(181, 128, 46, 0.48);
-      background: rgba(223, 186, 131, 0.22);
-      color: #6c4a18;
+    .status-doing,
+    .status-pending,
+    .status-due,
+    .status-paused,
+    .status-processing,
+    .status-in-review,
+    .status-under-review {
+      border-color: var(--tone-warning-border);
+      background: var(--tone-warning-bg);
+      color: var(--tone-warning-text);
     }
 
     .status-closed,
-    .status-done {
-      border-color: rgba(170, 153, 153, 0.45);
-      background: rgba(224, 216, 216, 0.48);
-      color: #5d5454;
-    }
-
-    .status-admin {
-      border-color: rgba(225, 6, 0, 0.52);
-      background: rgba(225, 6, 0, 0.14);
-      color: #6d1f1c;
-    }
-
-    .status-lawyer {
-      border-color: rgba(225, 6, 0, 0.5);
-      background: rgba(225, 6, 0, 0.12);
-      color: #7b2825;
-    }
-
-    .status-paralegal {
-      border-color: rgba(170, 57, 53, 0.5);
-      background: rgba(225, 6, 0, 0.08);
-      color: #7c2b28;
-    }
-
+    .status-done,
+    .status-cancelled,
+    .status-canceled,
+    .status-archived,
+    .status-inactive,
     .status-staff {
-      border-color: rgba(186, 162, 162, 0.56);
-      background: rgba(241, 234, 234, 0.72);
-      color: #6d6161;
+      border-color: var(--tone-neutral-border);
+      background: var(--tone-neutral-bg);
+      color: var(--tone-neutral-text);
+    }
+
+    .status-on-track,
+    .status-approved,
+    .status-accepted,
+    .status-qualified,
+    .status-retained,
+    .status-paid,
+    .status-settled,
+    .status-resolved,
+    .status-complete,
+    .status-completed,
+    .status-signed,
+    .status-ack,
+    .status-acknowledged,
+    .status-success {
+      border-color: var(--tone-positive-border);
+      background: var(--tone-positive-bg);
+      color: var(--tone-positive-text);
+    }
+
+    .status-critical,
+    .status-high,
+    .status-high-risk,
+    .status-overdue,
+    .status-failed,
+    .status-rejected,
+    .status-declined,
+    .status-blocked,
+    .status-exception,
+    .status-at-risk,
+    .status-breach,
+    .status-error,
+    .status-alert {
+      border-color: var(--tone-danger-border);
+      background: var(--tone-danger-bg);
+      color: var(--tone-danger-text);
+    }
+
+    .status-admin,
+    .status-lawyer,
+    .status-paralegal,
+    .status-partner {
+      border-color: var(--tone-accent-border);
+      background: var(--tone-accent-bg);
+      color: var(--tone-accent-text);
     }
 
     .matter-status-filter-badge {
@@ -1435,6 +1572,36 @@
       box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.15);
     }
 
+    .filter-chip-btn.tone-accent:not(.is-active) {
+      border-color: var(--tone-accent-border);
+      background: var(--tone-accent-bg);
+      color: var(--tone-accent-text);
+    }
+
+    .filter-chip-btn.tone-positive:not(.is-active) {
+      border-color: var(--tone-positive-border);
+      background: var(--tone-positive-bg);
+      color: var(--tone-positive-text);
+    }
+
+    .filter-chip-btn.tone-warning:not(.is-active) {
+      border-color: var(--tone-warning-border);
+      background: var(--tone-warning-bg);
+      color: var(--tone-warning-text);
+    }
+
+    .filter-chip-btn.tone-danger:not(.is-active) {
+      border-color: var(--tone-danger-border);
+      background: var(--tone-danger-bg);
+      color: var(--tone-danger-text);
+    }
+
+    .filter-chip-btn.tone-neutral:not(.is-active) {
+      border-color: var(--tone-neutral-border);
+      background: var(--tone-neutral-bg);
+      color: var(--tone-neutral-text);
+    }
+
     .deadline-meta {
       display: flex;
       align-items: center;
@@ -1491,15 +1658,20 @@
     }
 
     .tag-chip {
-      display: inline-block;
-      border-radius: 999px;
-      border: 1px solid rgba(225, 6, 0, 0.34);
-      background: rgba(225, 6, 0, 0.1);
-      color: #7a2c29;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--chip-radius);
+      border: 1px solid var(--tone-accent-border);
+      background: var(--tone-accent-bg);
+      color: var(--tone-accent-text);
       font-size: 11px;
       line-height: 1;
-      padding: 5px 9px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 4px 10px;
       margin: 3px 5px 0 0;
+      white-space: nowrap;
     }
 
     .empty-state {
@@ -1583,8 +1755,8 @@
       align-items: center;
       justify-content: center;
       min-width: var(--risk-chip-min-width);
-      border-radius: 999px;
-      padding: 4px 8px;
+      border-radius: var(--chip-radius);
+      padding: 4px 10px;
       font-size: 11px;
       line-height: 1;
       border: 1px solid transparent;
@@ -1606,22 +1778,39 @@
     }
 
     .risk-low {
-      border-color: rgba(46, 140, 77, 0.48);
-      background: rgba(33, 131, 70, 0.12);
-      color: #23633a;
+      border-color: var(--tone-positive-border);
+      background: var(--tone-positive-bg);
+      color: var(--tone-positive-text);
     }
 
-    .risk-medium {
-      border-color: rgba(188, 136, 52, 0.48);
-      background: rgba(182, 128, 40, 0.16);
-      color: #704c1a;
+    .risk-medium,
+    .risk-watch,
+    .risk-review {
+      border-color: var(--tone-warning-border);
+      background: var(--tone-warning-bg);
+      color: var(--tone-warning-text);
     }
 
     .risk-high,
-    .risk-critical {
-      border-color: rgba(225, 6, 0, 0.56);
-      background: rgba(225, 6, 0, 0.14);
-      color: #7a201d;
+    .risk-critical,
+    .risk-overdue,
+    .risk-at-risk {
+      border-color: var(--tone-danger-border);
+      background: var(--tone-danger-bg);
+      color: var(--tone-danger-text);
+    }
+
+    .risk-on-track {
+      border-color: var(--tone-positive-border);
+      background: var(--tone-positive-bg);
+      color: var(--tone-positive-text);
+    }
+
+    .risk-none,
+    .risk-unknown {
+      border-color: var(--tone-neutral-border);
+      background: var(--tone-neutral-bg);
+      color: var(--tone-neutral-text);
     }
 
     .activity-item {
@@ -2361,7 +2550,7 @@
         </a>
         {% if current_user.is_authenticated %}
           <div class="nav-brand-meta">
-            <span class="badge badge-soft">{{ current_user.role }}</span>
+            <span class="badge status-badge status-{{ current_user.role|lower|replace(' ', '-') }}">{{ current_user.role }}</span>
             <span class="muted small">{{ current_user.email }}</span>
           </div>
         {% endif %}

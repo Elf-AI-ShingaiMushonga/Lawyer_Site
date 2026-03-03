@@ -22,7 +22,7 @@
             <td>{{ users_by_id[r.user_id].full_name if users_by_id and users_by_id.get(r.user_id) else ('User #' ~ r.user_id) }}</td>
             <td>{{ r.score }}</td>
             <td>{{ r.reason or '-' }}</td>
-            <td>{{ r.status }}</td>
+            <td><span class="badge status-badge status-{{ r.status|lower|replace(' ', '-') }}">{{ r.status }}</span></td>
           </tr>
         {% else %}
           <tr><td colspan="5" class="muted">No burnout signals.</td></tr>

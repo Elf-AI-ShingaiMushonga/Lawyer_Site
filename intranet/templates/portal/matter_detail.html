@@ -57,7 +57,7 @@
       <h4 class="mt-3 mb-1">Invoices</h4>
       {% if invoices %}
         {% for i in invoices %}
-          <div class="activity-item">#{{ i.id }} • {{ i.total }} • {{ i.status }}</div>
+          <div class="activity-item">#{{ i.id }} • {{ i.total }} • <span class="badge status-badge status-{{ i.status|lower|replace(' ', '-') }}">{{ i.status }}</span></div>
         {% endfor %}
       {% else %}
         <div class="muted">No invoices.</div>

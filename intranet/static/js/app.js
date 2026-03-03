@@ -44,6 +44,185 @@
     });
   };
 
+  const initStatusToneSystem = () => {
+    const toneClasses = ["tone-accent", "tone-positive", "tone-warning", "tone-danger", "tone-neutral"];
+
+    const accentTokens = new Set([
+      "open",
+      "todo",
+      "new",
+      "draft",
+      "queued",
+      "running",
+      "in-progress",
+      "active",
+      "submitted",
+    ]);
+    const dangerTokens = new Set([
+      "critical",
+      "high",
+      "high-risk",
+      "overdue",
+      "failed",
+      "failure",
+      "rejected",
+      "declined",
+      "blocked",
+      "exception",
+      "at-risk",
+      "breach",
+      "error",
+      "alert",
+      "risk-high",
+      "risk-critical",
+    ]);
+    const positiveTokens = new Set([
+      "on-track",
+      "low",
+      "low-risk",
+      "approved",
+      "accepted",
+      "qualified",
+      "retained",
+      "paid",
+      "settled",
+      "resolved",
+      "complete",
+      "completed",
+      "signed",
+      "ack",
+      "acknowledged",
+      "success",
+      "healthy",
+      "ready",
+    ]);
+    const warningTokens = new Set([
+      "on-hold",
+      "hold",
+      "pending",
+      "due",
+      "paused",
+      "processing",
+      "review",
+      "in-review",
+      "under-review",
+      "medium",
+      "medium-risk",
+    ]);
+    const neutralTokens = new Set([
+      "closed",
+      "done",
+      "cancelled",
+      "canceled",
+      "archived",
+      "inactive",
+      "unknown",
+      "none",
+      "expired",
+      "n-a",
+      "na",
+    ]);
+
+    const normalizeToken = (value) =>
+      String(value || "")
+        .toLowerCase()
+        .trim()
+        .replace(/[_/]+/g, "-")
+        .replace(/[^a-z0-9 -]+/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+
+    const toneFromToken = (rawToken) => {
+      const token = normalizeToken(rawToken).replace(/^(status|risk|stage)-/, "");
+      if (!token) {
+        return null;
+      }
+      if (dangerTokens.has(token)) {
+        return "tone-danger";
+      }
+      if (positiveTokens.has(token)) {
+        return "tone-positive";
+      }
+      if (warningTokens.has(token)) {
+        return "tone-warning";
+      }
+      if (neutralTokens.has(token)) {
+        return "tone-neutral";
+      }
+      if (accentTokens.has(token)) {
+        return "tone-accent";
+      }
+      return null;
+    };
+
+    const semanticTokensFromText = (value) => {
+      const clean = String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+      if (!clean) {
+        return [];
+      }
+      const words = clean.split(/\s+/).filter((item) => item.length > 0);
+      const pairs = [];
+      for (let index = 0; index < words.length - 1; index += 1) {
+        pairs.push(`${words[index]}-${words[index + 1]}`);
+      }
+      return [...pairs, ...words];
+    };
+
+    const firstPrefixedToken = (element, prefix, ignored) => {
+      const classes = Array.from(element.classList);
+      for (const className of classes) {
+        if (!className.startsWith(prefix) || ignored.has(className)) {
+          continue;
+        }
+        return className.slice(prefix.length);
+      }
+      return "";
+    };
+
+    const applyTone = (element, fallbackTone = null) => {
+      if (!(element instanceof HTMLElement)) {
+        return;
+      }
+      toneClasses.forEach((tone) => element.classList.remove(tone));
+
+      const explicitStatus = firstPrefixedToken(element, "status-", new Set(["status-badge"]));
+      const explicitRisk = firstPrefixedToken(element, "risk-", new Set(["risk-chip"]));
+      const tokens = [];
+      if (explicitStatus) {
+        tokens.push(explicitStatus);
+      }
+      if (explicitRisk) {
+        tokens.push(explicitRisk);
+      }
+      tokens.push(...semanticTokensFromText(element.textContent || ""));
+
+      let tone = null;
+      for (const token of tokens) {
+        tone = toneFromToken(token);
+        if (tone) {
+          break;
+        }
+      }
+      if (!tone && fallbackTone) {
+        tone = fallbackTone;
+      }
+      if (tone) {
+        element.classList.add(tone);
+      }
+    };
+
+    document.querySelectorAll(".status-badge").forEach((element) => applyTone(element, "tone-accent"));
+    document.querySelectorAll(".risk-chip").forEach((element) => applyTone(element, "tone-warning"));
+    document.querySelectorAll(".tag-chip").forEach((element) => applyTone(element, "tone-accent"));
+    document
+      .querySelectorAll(".filter-chip-btn, .nav-pill[data-matter-filter], .matter-status-filter-badge")
+      .forEach((element) => applyTone(element));
+  };
+
   const initGlobalOmnibox = () => {
     const form = document.getElementById("global-omnibox-form");
     const input = document.getElementById("global-nav-search");
@@ -2561,6 +2740,7 @@
   const run = () => {
     initFlashDismiss();
     initPasswordToggles();
+    initStatusToneSystem();
     initGlobalOmnibox();
     initCommandPalette();
     initNavMenus();

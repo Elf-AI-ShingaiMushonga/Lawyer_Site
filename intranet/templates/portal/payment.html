@@ -4,7 +4,7 @@
   <div class="toolbar-row">
     <div>
       <h3 class="section-title">Invoice #{{ invoice.id }} Payment</h3>
-      <div class="page-intro mt-1">Total {{ invoice.total }} • Outstanding {{ "%.2f"|format(outstanding_amount or 0.0) }} • Status {{ invoice.status }}</div>
+      <div class="page-intro mt-1">Total {{ invoice.total }} • Outstanding {{ "%.2f"|format(outstanding_amount or 0.0) }} • <span class="badge status-badge status-{{ invoice.status|lower|replace(' ', '-') }}">{{ invoice.status }}</span></div>
     </div>
     <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_invoices') }}">Back to Invoices</a>
   </div>
@@ -59,7 +59,7 @@
           <tr data-table-row data-search="{{ r.amount }} {{ r.currency }} {{ r.status }} {{ r.reference or '' }} {{ r.created_at }}">
             <td>{{ r.amount }}</td>
             <td>{{ r.currency }}</td>
-            <td>{{ r.status }}</td>
+            <td><span class="badge status-badge status-{{ r.status|lower|replace(' ', '-') }}">{{ r.status }}</span></td>
             <td>{{ r.reference or '-' }}</td>
             <td>{{ r.created_at }}</td>
           </tr>

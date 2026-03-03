@@ -85,7 +85,7 @@
             <td>{{ a.client_ledger_id }}</td>
             <td>{{ a.threshold_amount }}</td>
             <td>{{ a.current_balance }}</td>
-            <td>{{ a.status }}</td>
+            <td><span class="badge status-badge status-{{ a.status|lower|replace(' ', '-') }}">{{ a.status }}</span></td>
           </tr>
         {% else %}
           <tr><td colspan="5" class="muted">No alerts.</td></tr>

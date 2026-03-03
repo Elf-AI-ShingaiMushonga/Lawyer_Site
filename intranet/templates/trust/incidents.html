@@ -90,7 +90,7 @@
                   <div class="list-meta mt-1">
                     <span>{{ i.incident_type }}</span>
                     <span class="risk-chip risk-{{ i.severity|lower }}">{{ i.severity }}</span>
-                    <span>{{ i.status }}</span>
+                    <span class="badge status-badge status-{{ i.status|lower|replace(' ', '-') }}">{{ i.status }}</span>
                     <span>Opened {{ i.opened_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>
                     {% if i.closed_at %}<span>Closed {{ i.closed_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>{% endif %}
                   </div>
