@@ -71,7 +71,7 @@ def _distinct_values(column) -> list[str]:
     rows = (
         db.session.query(column)
         .filter(column.isnot(None))
-        .distinct()
+        .group_by(column)
         .order_by(func.lower(column).asc())
         .all()
     )

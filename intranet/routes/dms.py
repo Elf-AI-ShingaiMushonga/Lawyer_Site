@@ -199,6 +199,7 @@ def _safe_load_dms_option_lists() -> dict[str, list[str]]:
     try:
         payload = load_dms_option_lists()
     except Exception:  # pragma: no cover - defensive fallback for runtime config/schema drift
+        db.session.rollback()
         current_app.logger.exception("Failed to load DMS option lists; falling back to defaults.")
         payload = {}
     normalized: dict[str, list[str]] = {}
