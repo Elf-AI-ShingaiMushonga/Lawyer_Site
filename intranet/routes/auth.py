@@ -33,10 +33,9 @@ from ..models import (
     UserMFABackupCode,
 )
 from ..policies import visible_matter_ids
+from ..roles import role_requires_mfa
 from ..services.priority_inbox import build_priority_inbox
 from ..templates import page
-
-MFA_REQUIRED_ROLES = {"admin", "lawyer", "paralegal", "staff"}
 
 
 def has_any_users() -> bool:
@@ -63,7 +62,7 @@ def register_auth_routes(app):
             return redirect(url_for("login"))
 
         if request.method == "POST":
-            full_name = (request.form.get("full_name") or "").strip() or "Admin User"
+            full_name = (request.form.get("full_name") or "").strip() or "Finance Administrator"
             email = (request.form.get("email") or "").strip().lower()
             password = request.form.get("password") or ""
             confirm_password = request.form.get("confirm_password") or ""
@@ -78,7 +77,7 @@ def register_auth_routes(app):
                 flash("Passwords do not match.", "warning")
                 return redirect(url_for("register"))
 
-            user = User(email=email, full_name=full_name, role="admin", password_hash="x")
+            user = User(email=email, full_name=full_name, role="finance_cost_admin", password_hash="x")
             user.set_password(password)
             user.last_login_at = dt.datetime.utcnow()
             db.session.add(user)
@@ -92,7 +91,7 @@ def register_auth_routes(app):
             login_user(user)
             session.permanent = True
             audit("bootstrap_admin_create", "User", user.id, {"email": email})
-            flash("Administrator account created.", "info")
+            flash("Finance administrator account created.", "info")
             return redirect(url_for("dashboard"))
 
         return page("Register", "auth/register.html")
@@ -129,7 +128,7 @@ def register_auth_routes(app):
                 flash("Invalid credentials.", "warning")
                 return redirect(url_for("login"))
 
-            if user.role in MFA_REQUIRED_ROLES and not user.mfa_enabled:
+            if role_requires_mfa(user.role) and not user.mfa_enabled:
                 login_user(user)
                 session.permanent = True
                 user.last_login_at = dt.datetime.utcnow()

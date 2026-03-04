@@ -1,20 +1,27 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import Any
 
 from flask import abort, current_app, flash, jsonify, redirect, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import and_, or_
+from werkzeug.utils import secure_filename
 
 from ..extensions import db
 from ..helpers import audit, can_access_matter, get_active_matter_id, is_admin, set_active_matter_context
 from ..models import FeeArrangement, Matter, RateCard, TimeEntry, TimeRoundingPolicy, TimeTimer, TimeValidationEvent
 from ..policies import enforce_permission, visible_matter_ids
+from ..services.assist_ai import suggest_time_entry_narrative
+from ..services.timesheet_ai import parse_timesheet_image_entries
 from ..services.workflow_automation import (
     capture_timer_to_draft_time_entry,
     ensure_draft_billing_item_for_time_entry,
 )
 from ..templates import page
+
+_TIMESHEET_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+_TIMESHEET_IMAGE_MIME_PREFIX = "image/"
 
 
 def _active_timer_for_user(user_id: int) -> TimeTimer | None:
@@ -133,6 +140,16 @@ def _parse_iso_datetime(raw: str | None) -> tuple[dt.datetime | None, str | None
         return dt.datetime.fromisoformat(candidate), None
     except ValueError:
         return None, "Invalid datetime format. Use ISO format such as 2026-03-01T09:00:00."
+
+
+def _parse_time_hhmm(raw: str | None) -> dt.time | None:
+    candidate = (raw or "").strip()
+    if not candidate:
+        return None
+    try:
+        return dt.time.fromisoformat(candidate)
+    except ValueError:
+        return None
 
 
 def _as_bool(raw: str | None, default: bool = True) -> bool:
@@ -519,6 +536,320 @@ def register_timekeeping_routes(app):
             "fee_preview": preview,
         }
         return jsonify(payload), 200
+
+    @app.post("/time/ai/narrative")
+    @login_required
+    def time_ai_narrative():
+        payload_raw = request.get_json(silent=True) if request.is_json else request.form
+        if isinstance(payload_raw, dict):
+            payload = payload_raw
+        elif hasattr(payload_raw, "to_dict"):
+            payload = payload_raw.to_dict(flat=True)
+        else:
+            payload = {}
+
+        matter_id_value = payload.get("matter_id")
+        try:
+            matter_id = int(matter_id_value)
+        except (TypeError, ValueError):
+            matter_id = 0
+        if matter_id <= 0:
+            return jsonify({"ok": False, "error": "matter_id is required."}), 400
+        if not can_access_matter(matter_id):
+            abort(403)
+
+        matter = db.session.get(Matter, matter_id)
+        if matter is None:
+            return jsonify({"ok": False, "error": "Matter not found."}), 404
+
+        start_at, start_error = _parse_iso_datetime(payload.get("start_at"))
+        end_at, end_error = _parse_iso_datetime(payload.get("end_at"))
+        if start_error or end_error:
+            return jsonify({"ok": False, "error": start_error or end_error}), 400
+        if start_at and end_at and end_at <= start_at:
+            return jsonify({"ok": False, "error": "End time must be after start time."}), 400
+
+        duration_hours: float | None = None
+        if start_at and end_at:
+            duration_hours = max(0.0, (end_at - start_at).total_seconds() / 3600.0)
+
+        task_code = " ".join(str(payload.get("task_code") or "").split()).strip()[:40]
+        activity_code = " ".join(str(payload.get("activity_code") or "").split()).strip()[:40]
+        current_narrative = " ".join(str(payload.get("narrative") or "").split()).strip()[:500]
+        matter_context = {
+            "matter_id": int(matter.id),
+            "matter_no": matter.matter_no or "",
+            "title": matter.title or "",
+            "client_name": matter.client_name or "",
+            "status": matter.status or "",
+            "risk_level": matter.risk_level or "",
+            "budget_status": matter.budget_status or "",
+            "objective": matter.objective or "",
+        }
+
+        started = dt.datetime.utcnow()
+        suggestion = suggest_time_entry_narrative(
+            matter_context=matter_context,
+            duration_hours=duration_hours,
+            task_code=task_code,
+            activity_code=activity_code,
+            current_narrative=current_narrative,
+        )
+        elapsed_ms = int((dt.datetime.utcnow() - started).total_seconds() * 1000)
+        audit(
+            "time_narrative_ai_suggest",
+            "Matter",
+            matter.id,
+            {
+                "source": suggestion.get("source"),
+                "fallback_reason": suggestion.get("fallback_reason"),
+                "elapsed_ms": elapsed_ms,
+            },
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "suggestion": suggestion,
+                "elapsed_ms": elapsed_ms,
+                "fallback_reason": suggestion.get("fallback_reason"),
+                "fallback_detail": suggestion.get("fallback_detail"),
+            }
+        )
+
+    @app.post("/time/entries/import-photo")
+    @login_required
+    def time_entries_import_photo():
+        upload = request.files.get("timesheet_photo")
+        default_matter_id = request.form.get("default_matter_id", type=int)
+        if default_matter_id and not can_access_matter(default_matter_id):
+            abort(403)
+
+        if upload is None or not (upload.filename or "").strip():
+            flash("Select a timesheet image to upload.", "warning")
+            return redirect(url_for("time_entries"))
+
+        filename = secure_filename(upload.filename or "").strip()
+        extension = filename.rsplit(".", 1)[1].lower() if "." in filename else ""
+        content_type = (upload.mimetype or "").strip().lower()
+        if extension not in _TIMESHEET_IMAGE_EXTENSIONS:
+            flash("Timesheet photo must be PNG, JPG, JPEG, or WEBP.", "warning")
+            return redirect(url_for("time_entries"))
+        if not content_type.startswith(_TIMESHEET_IMAGE_MIME_PREFIX):
+            flash("Uploaded file is not recognized as an image.", "warning")
+            return redirect(url_for("time_entries"))
+
+        image_bytes = upload.read()
+        if not image_bytes:
+            flash("Uploaded image is empty.", "warning")
+            return redirect(url_for("time_entries"))
+        if len(image_bytes) > 12 * 1024 * 1024:
+            flash("Image is too large. Please upload a file smaller than 12MB.", "warning")
+            return redirect(url_for("time_entries"))
+
+        parse_result = parse_timesheet_image_entries(
+            image_bytes=image_bytes,
+            mime_type=content_type,
+            filename=filename,
+        )
+        parsed_entries_raw = parse_result.get("entries") if isinstance(parse_result, dict) else None
+        parsed_entries = parsed_entries_raw if isinstance(parsed_entries_raw, list) else []
+        source = str(parse_result.get("source") or "fallback") if isinstance(parse_result, dict) else "fallback"
+        fallback_reason = str(parse_result.get("fallback_reason") or "") if isinstance(parse_result, dict) else ""
+        fallback_detail = str(parse_result.get("fallback_detail") or "") if isinstance(parse_result, dict) else ""
+
+        if not parsed_entries:
+            if source == "fallback":
+                reason = fallback_reason.replace("_", " ").strip() if fallback_reason else "no rows recognized"
+                detail = f" ({fallback_detail})" if fallback_detail else ""
+                flash(
+                    f"No rows were imported from the timesheet image. Reason: {reason}{detail}.",
+                    "warning",
+                )
+            else:
+                flash("No legible timesheet rows were detected in the uploaded image.", "warning")
+            return redirect(url_for("time_entries"))
+
+        scoped_matters = _scoped_matters_for_current_user(limit=500)
+        matter_by_id = {int(matter.id): matter for matter in scoped_matters}
+        matter_by_no = {str(matter.matter_no or "").upper(): matter for matter in scoped_matters if matter.matter_no}
+
+        if default_matter_id and default_matter_id not in matter_by_id:
+            default_matter = db.session.get(Matter, default_matter_id)
+            if default_matter and can_access_matter(default_matter.id):
+                matter_by_id[int(default_matter.id)] = default_matter
+                if default_matter.matter_no:
+                    matter_by_no[str(default_matter.matter_no).upper()] = default_matter
+
+        created = 0
+        skipped = 0
+        needs_review = 0
+        skipped_reasons: list[str] = []
+        last_matter_id: int | None = None
+        now = dt.datetime.utcnow()
+
+        for index, item in enumerate(parsed_entries, start=1):
+            row = item if isinstance(item, dict) else {}
+
+            matter: Matter | None = None
+            matter_id_raw = row.get("matter_id")
+            try:
+                matter_id_candidate = int(matter_id_raw) if matter_id_raw is not None else None
+            except (TypeError, ValueError):
+                matter_id_candidate = None
+            if matter_id_candidate and matter_id_candidate in matter_by_id:
+                matter = matter_by_id[matter_id_candidate]
+            if matter is None:
+                matter_no = " ".join(str(row.get("matter_no") or "").split()).strip().upper()
+                if matter_no and matter_no in matter_by_no:
+                    matter = matter_by_no[matter_no]
+            if matter is None and default_matter_id and default_matter_id in matter_by_id:
+                matter = matter_by_id[default_matter_id]
+            if matter is None:
+                skipped += 1
+                skipped_reasons.append(f"row {index}: matter not resolved")
+                continue
+            if _matter_is_closed(matter.id):
+                skipped += 1
+                skipped_reasons.append(f"row {index}: matter {matter.matter_no} is closed")
+                continue
+
+            date_text = " ".join(str(row.get("date") or "").split()).strip()
+            try:
+                work_date = dt.date.fromisoformat(date_text) if date_text else now.date()
+            except ValueError:
+                work_date = now.date()
+
+            start_time = _parse_time_hhmm(str(row.get("start_time") or ""))
+            if start_time is None:
+                start_time = dt.time(hour=9, minute=0)
+            end_time = _parse_time_hhmm(str(row.get("end_time") or ""))
+
+            hours_value: float | None = None
+            try:
+                if row.get("hours") is not None:
+                    parsed_hours = float(row.get("hours"))
+                    if parsed_hours > 0:
+                        hours_value = min(parsed_hours, 24.0)
+            except (TypeError, ValueError):
+                hours_value = None
+
+            start_at = dt.datetime.combine(work_date, start_time)
+            if end_time is not None:
+                end_at = dt.datetime.combine(work_date, end_time)
+            elif hours_value is not None:
+                end_at = start_at + dt.timedelta(hours=hours_value)
+            else:
+                skipped += 1
+                skipped_reasons.append(f"row {index}: missing end time and hours")
+                continue
+
+            if end_at <= start_at:
+                if hours_value is not None:
+                    end_at = start_at + dt.timedelta(hours=hours_value)
+                else:
+                    skipped += 1
+                    skipped_reasons.append(f"row {index}: invalid time range")
+                    continue
+
+            raw_hours = max(0.0, (end_at - start_at).total_seconds() / 3600.0)
+            if raw_hours <= 0:
+                skipped += 1
+                skipped_reasons.append(f"row {index}: zero-duration entry")
+                continue
+
+            narrative = " ".join(str(row.get("narrative") or "").split()).strip()
+            task_code = " ".join(str(row.get("task_code") or "").split()).strip() or None
+            activity_code = " ".join(str(row.get("activity_code") or "").split()).strip() or None
+            is_billable_raw: Any = row.get("is_billable")
+            if isinstance(is_billable_raw, str):
+                is_billable = is_billable_raw.strip().lower() in {"1", "true", "yes", "on", "billable"}
+            else:
+                is_billable = bool(is_billable_raw) if is_billable_raw is not None else True
+
+            duplicate = (
+                TimeEntry.query.filter(
+                    TimeEntry.user_id == current_user.id,
+                    TimeEntry.matter_id == matter.id,
+                    TimeEntry.start_at == start_at,
+                    TimeEntry.end_at == end_at,
+                    TimeEntry.narrative == (narrative or None),
+                )
+                .limit(1)
+                .first()
+            )
+            if duplicate is not None:
+                skipped += 1
+                skipped_reasons.append(f"row {index}: duplicate existing entry #{duplicate.id}")
+                continue
+
+            policy = _policy_for_matter(matter.id)
+            rounded = _round_hours(raw_hours, float(policy.increment_hours if policy else 0.1))
+            entry = TimeEntry(
+                user_id=current_user.id,
+                matter_id=matter.id,
+                task_id=None,
+                start_at=start_at,
+                end_at=end_at,
+                hours=round(raw_hours, 4),
+                rounded_hours=rounded,
+                narrative=narrative or None,
+                task_code=task_code,
+                activity_code=activity_code,
+                is_billable=is_billable,
+                status="draft",
+            )
+            db.session.add(entry)
+            db.session.flush()
+            issues = _validate_time_entry(entry, policy)
+            for issue in issues:
+                db.session.add(TimeValidationEvent(time_entry_id=entry.id, event_type="validation", message=issue))
+            if source == "fallback":
+                reason = fallback_reason or "fallback_used"
+                db.session.add(
+                    TimeValidationEvent(
+                        time_entry_id=entry.id,
+                        event_type="import_note",
+                        message=f"Timesheet AI fallback used during import ({reason}).",
+                    )
+                )
+            if issues:
+                entry.status = "needs_review"
+                needs_review += 1
+
+            created += 1
+            last_matter_id = matter.id
+
+        if created > 0:
+            db.session.commit()
+            if last_matter_id:
+                set_active_matter_context(last_matter_id)
+        else:
+            db.session.rollback()
+
+        audit(
+            "time_entries_import_photo",
+            "TimeEntry",
+            None,
+            {
+                "filename": filename,
+                "source": source,
+                "fallback_reason": fallback_reason,
+                "created": created,
+                "needs_review": needs_review,
+                "skipped": skipped,
+            },
+        )
+
+        if created > 0:
+            review_suffix = f", {needs_review} flagged for review" if needs_review > 0 else ""
+            flash(f"Imported {created} time entr{'y' if created == 1 else 'ies'}{review_suffix}.", "info")
+        else:
+            flash("No time entries were imported from the uploaded timesheet photo.", "warning")
+        if skipped > 0:
+            preview = "; ".join(skipped_reasons[:4])
+            flash(f"Skipped {skipped} row(s): {preview}", "warning")
+
+        return redirect(url_for("time_entries"))
 
     @app.get("/time/timers")
     @login_required

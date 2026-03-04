@@ -22,6 +22,7 @@ from ..extensions import db
 from ..helpers import audit
 from ..models import BackupRun, DRTarget, RestoreVerification
 from ..policies import enforce_data_residency
+from ..roles import role_is_admin
 from ..templates import page
 
 BACKUP_ENCRYPTION_MAGIC = b"LFBK1"
@@ -30,7 +31,7 @@ BACKUP_ENCRYPTION_TAG_SIZE = 16
 
 
 def _ops_admin_required() -> None:
-    if current_user.role != "admin":
+    if not role_is_admin(getattr(current_user, "role", None)):
         abort(403)
 
 

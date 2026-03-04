@@ -16,7 +16,7 @@
       <tbody>
         {% for r in rows %}
           <tr>
-            <td>{{ r.user.full_name }} ({{ r.user.role }})</td>
+            <td>{{ r.user.full_name }} ({{ role_display_name(r.user.role) }})</td>
             <td>{{ r.open_tasks }}</td>
             <td>{{ r.hours_7d }}</td>
           </tr>

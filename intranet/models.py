@@ -29,7 +29,7 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     full_name = db.Column(db.String(255), nullable=False, default="(Unnamed)")
-    role = db.Column(db.String(40), nullable=False, default="lawyer")
+    role = db.Column(db.String(40), nullable=False, default="junior_attorney")
     password_hash = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
@@ -51,6 +51,19 @@ class User(UserMixin, db.Model):
 
     def get_id(self):
         return str(self.id)
+
+
+class DirectorTeamMember(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    director_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    member_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    assigned_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("director_id", "member_user_id", name="uq_director_team_member"),
+        db.UniqueConstraint("member_user_id", name="uq_director_team_member_user"),
+        db.Index("ix_director_team_director_member", "director_id", "member_user_id"),
+    )
 
 
 class Announcement(db.Model):

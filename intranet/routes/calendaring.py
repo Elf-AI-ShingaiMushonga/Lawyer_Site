@@ -11,6 +11,7 @@ from ..extensions import db
 from ..helpers import audit, can_access_matter
 from ..models import Deadline, Matter, MatterTimelineEvent
 from ..policies import visible_matter_ids
+from ..roles import role_is_admin
 from ..templates import page
 
 
@@ -213,7 +214,7 @@ def register_calendar_routes(app):
         today = dt.date.today()
         week_end = today + dt.timedelta(days=7)
         active_filter = _normalize_calendar_filter(request.args.get("filter"))
-        if current_user.role == "admin":
+        if role_is_admin(getattr(current_user, "role", None)):
             all_deadlines = Deadline.query.order_by(Deadline.due_at.asc()).limit(300).all()
         else:
             matter_ids = visible_matter_ids()
@@ -252,10 +253,11 @@ def register_calendar_routes(app):
             range_end = range_start
 
         requested_scope = (request.args.get("scope") or "my").strip().lower()
-        scope = "team" if requested_scope == "team" and current_user.role == "admin" else "my"
+        is_admin_user = role_is_admin(getattr(current_user, "role", None))
+        scope = "team" if requested_scope == "team" and is_admin_user else "my"
 
         matter_query = Matter.query
-        if scope == "my" or current_user.role != "admin":
+        if scope == "my" or not is_admin_user:
             scoped_ids = visible_matter_ids()
             if scoped_ids:
                 matter_query = matter_query.filter(Matter.id.in_(scoped_ids))

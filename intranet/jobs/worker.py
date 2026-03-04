@@ -3,8 +3,10 @@ from __future__ import annotations
 import datetime as dt
 import json
 
+from ..config import VALID_ROLES
 from ..db_context import set_db_access_context
 from ..extensions import db
+from ..roles import role_is_admin
 from .queue import complete_job, fail_job, lease_job
 
 
@@ -139,7 +141,7 @@ def _handle_priority_inbox_digest(payload: dict) -> str:
         return "priority inbox digest disabled"
 
     now_utc = dt.datetime.utcnow()
-    eligible_roles = {"admin", "lawyer", "paralegal", "staff"}
+    eligible_roles = {str(role).strip().lower() for role in VALID_ROLES if str(role).strip()}
     raw_roles = payload.get("roles")
     selected_roles = sorted(eligible_roles)
     if isinstance(raw_roles, list):
@@ -163,7 +165,11 @@ def _handle_priority_inbox_digest(payload: dict) -> str:
     if not users:
         return "queued digests: 0"
 
-    non_admin_user_ids = [int(user.id) for user in users if user.role != "admin"]
+    non_admin_user_ids = [
+        int(user.id)
+        for user in users
+        if not role_is_admin(getattr(user, "role", None))
+    ]
     matter_scope_by_user: dict[int, list[int]] = {}
     if non_admin_user_ids:
         rows = (
@@ -179,7 +185,11 @@ def _handle_priority_inbox_digest(payload: dict) -> str:
     window_start = _digest_window_start(now_utc, interval_minutes)
     queued = 0
     for user in users:
-        matter_scope = None if user.role == "admin" else matter_scope_by_user.get(int(user.id), [])
+        matter_scope = (
+            None
+            if role_is_admin(getattr(user, "role", None))
+            else matter_scope_by_user.get(int(user.id), [])
+        )
         priority_inbox = build_priority_inbox(
             user,
             now_utc=now_utc,

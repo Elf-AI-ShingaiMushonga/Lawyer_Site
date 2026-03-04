@@ -14,6 +14,7 @@ from ..extensions import db
 from ..helpers import allowed_doc, audit, can_access_matter, is_admin, sha256_file
 from ..models import ExpenseEntry, Matter
 from ..policies import visible_matter_ids
+from ..roles import role_is_lawyer
 from ..templates import page
 
 
@@ -164,7 +165,7 @@ def register_expenses_routes(app):
             abort(404)
         if not can_access_matter(row.matter_id):
             abort(403)
-        if current_user.role not in {"admin", "lawyer"}:
+        if not role_is_lawyer(getattr(current_user, "role", None)):
             abort(403)
 
         row.status = "approved"

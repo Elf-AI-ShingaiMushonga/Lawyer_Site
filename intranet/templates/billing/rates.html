@@ -30,7 +30,7 @@
   </div>
 </div>
 
-{% if current_user.role == "admin" %}
+{% if is_admin_role %}
   <div class="row g-3">
     <div class="col-lg-6">
       <div class="card p-3 mb-3">

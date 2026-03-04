@@ -10,7 +10,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-md-6">
       <label class="muted small">User email</label>
-      <input class="form-control" name="email" list="emails" placeholder="lawyer@dm-inc.co.za" required>
+      <input class="form-control" name="email" list="emails" placeholder="attorney@dm-inc.co.za" required>
       <datalist id="emails">
         {% for u in users %}
           <option value="{{ u.email }}">{{ u.full_name }}</option>
@@ -35,7 +35,7 @@
         </div>
         <div class="text-end">
           <div class="badge badge-soft">{{ mm.role_in_matter }}</div>
-          <div class="muted small">{{ u.role }}</div>
+          <div class="muted small">{{ role_display_name(u.role) }}</div>
         </div>
       </div>
     {% endfor %}

@@ -25,10 +25,9 @@
         <div class="col-md-4">
           <label class="form-label" for="admin-user-role">Role</label>
           <select class="form-select" id="admin-user-role" name="role">
-            <option>lawyer</option>
-            <option>paralegal</option>
-            <option>staff</option>
-            <option>admin</option>
+            {% for role_value, role_label in role_options %}
+              <option value="{{ role_value }}">{{ role_label }}</option>
+            {% endfor %}
           </select>
         </div>
       </div>
@@ -74,7 +73,8 @@
             <tr>
               <td class="fw-semibold">{{ u.email }}</td>
               <td class="muted">{{ u.full_name }}</td>
-              <td><span class="badge status-badge status-{{ u.role|lower|replace(' ', '-') }}">{{ u.role }}</span></td>
+              {% set user_role_slug = canonical_role(u.role)|replace('_', '-') %}
+              <td><span class="badge status-badge status-{{ user_role_slug }}">{{ role_display_name(u.role) }}</span></td>
               <td class="muted">{{ "yes" if u.is_active else "no" }}</td>
               <td class="muted">{{ u.created_at.strftime("%Y-%m-%d") }}</td>
               <td>
@@ -92,10 +92,10 @@
                     <input type="hidden" name="user_id" value="{{ u.id }}">
                     <label class="visually-hidden" for="role-{{ u.id }}">Role</label>
                     <select class="form-select form-select-sm" id="role-{{ u.id }}" name="role">
-                      <option value="lawyer" {% if u.role == "lawyer" %}selected{% endif %}>lawyer</option>
-                      <option value="paralegal" {% if u.role == "paralegal" %}selected{% endif %}>paralegal</option>
-                      <option value="staff" {% if u.role == "staff" %}selected{% endif %}>staff</option>
-                      <option value="admin" {% if u.role == "admin" %}selected{% endif %}>admin</option>
+                      {% set canonical_user_role = canonical_role(u.role) %}
+                      {% for role_value, role_label in role_options %}
+                        <option value="{{ role_value }}" {% if canonical_user_role == role_value %}selected{% endif %}>{{ role_label }}</option>
+                      {% endfor %}
                     </select>
                     <button class="btn btn-sm btn-outline-light">Set Role</button>
                   </form>

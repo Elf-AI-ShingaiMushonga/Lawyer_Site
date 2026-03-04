@@ -41,7 +41,7 @@ def register_trust_routes(app):
             },
         ]
         access_controls = [
-            "Role-based access control (admin, lawyer, paralegal, staff).",
+            "Role-based access control (directors, attorneys, candidate attorneys, operations, and finance admin).",
             "Matter-level membership restrictions for non-admin users.",
             "Session hardening (secure cookies, CSRF, rate limiting).",
             "Document retrieval events captured in audit trail.",

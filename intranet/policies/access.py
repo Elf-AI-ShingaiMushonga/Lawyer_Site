@@ -9,11 +9,22 @@ from flask_login import current_user
 
 from ..extensions import db
 from ..helpers import is_admin
+from ..roles import canonical_role
 from ..types import AccessDecision
 
 ROLE_ALIASES = {
+    "director": "admin",
+    "finance_cost_admin": "admin",
+    "senior_attorney": "lawyer",
+    "junior_attorney": "lawyer",
+    "candidate_attorney": "paralegal",
+    "operations_staff": "staff",
     "partner": "lawyer",
     "associate": "lawyer",
+    "admin": "admin",
+    "lawyer": "lawyer",
+    "paralegal": "paralegal",
+    "staff": "staff",
 }
 
 # Default route-level permissions. PermissionGrant rows can override these.
@@ -42,8 +53,8 @@ def _models():
 
 
 def _normalized_role() -> str:
-    raw = str(getattr(current_user, "role", "") or "").strip().lower()
-    return ROLE_ALIASES.get(raw, raw)
+    canonical = canonical_role(getattr(current_user, "role", ""))
+    return ROLE_ALIASES.get(canonical, canonical)
 
 
 def _default_permission_allows(role: str, resource: str, action: str) -> bool:

@@ -32,6 +32,7 @@ from ..models import (
     PortalUser,
 )
 from ..policies import enforce_data_residency
+from ..roles import role_is_admin
 from ..services.notification_engine import NotificationEngine
 from ..services.workflow_automation import create_portal_upload_review_task
 from ..templates import page
@@ -679,7 +680,7 @@ def register_portal_routes(app):
     @app.route("/admin/portal/users", methods=["GET", "POST"])
     @login_required
     def admin_portal_users():
-        if current_user.role != "admin":
+        if not role_is_admin(getattr(current_user, "role", None)):
             abort(403)
 
         if request.method == "POST":

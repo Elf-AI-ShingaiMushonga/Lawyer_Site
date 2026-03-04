@@ -50,7 +50,7 @@
           <div class="row g-2">
             <div class="col-md-4">
               <label class="form-label">Status</label>
-              <select class="form-select" name="status">
+              <select class="form-select" id="matter-summary-status" name="status">
                 {% for status in matter_statuses %}
                   <option value="{{ status }}" {% if status == m.status %}selected{% endif %}>{{ status }}</option>
                 {% endfor %}
@@ -58,7 +58,7 @@
             </div>
             <div class="col-md-4">
               <label class="form-label">Risk Level</label>
-              <select class="form-select" name="risk_level">
+              <select class="form-select" id="matter-summary-risk" name="risk_level">
                 {% for risk in risk_levels %}
                   <option value="{{ risk }}" {% if risk == m.risk_level %}selected{% endif %}>{{ risk }}</option>
                 {% endfor %}
@@ -66,7 +66,7 @@
             </div>
             <div class="col-md-4">
               <label class="form-label">Budget Status</label>
-              <select class="form-select" name="budget_status">
+              <select class="form-select" id="matter-summary-budget" name="budget_status">
                 {% for budget in budget_statuses %}
                   <option value="{{ budget }}" {% if budget == m.budget_status %}selected{% endif %}>{{ budget }}</option>
                 {% endfor %}
@@ -79,15 +79,15 @@
           <div class="row g-2">
             <div class="col-12">
               <label class="form-label">Matter Objective</label>
-              <textarea class="form-control" name="objective" rows="2" placeholder="What outcome are we driving?">{{ m.objective or "" }}</textarea>
+              <textarea class="form-control" id="matter-summary-objective" name="objective" rows="2" placeholder="What outcome are we driving?">{{ m.objective or "" }}</textarea>
             </div>
             <div class="col-12">
               <label class="form-label">Latest Update</label>
-              <textarea class="form-control" name="last_update_note" rows="2" placeholder="Latest stakeholder-ready update">{{ m.last_update_note or "" }}</textarea>
+              <textarea class="form-control" id="matter-summary-last-update" name="last_update_note" rows="2" placeholder="Latest stakeholder-ready update">{{ m.last_update_note or "" }}</textarea>
             </div>
             <div class="col-12">
               <label class="form-label">Outcome / Business Impact</label>
-              <textarea class="form-control" name="outcome_summary" rows="2" placeholder="Value delivered or expected value">{{ m.outcome_summary or "" }}</textarea>
+              <textarea class="form-control" id="matter-summary-outcome" name="outcome_summary" rows="2" placeholder="Value delivered or expected value">{{ m.outcome_summary or "" }}</textarea>
             </div>
           </div>
         </div>
@@ -95,6 +95,46 @@
           <button class="btn btn-light">Save Executive Summary</button>
         </div>
       </form>
+
+      <div
+        class="form-section mt-2"
+        data-matter-ai-widget
+        data-summary-endpoint="{{ url_for('matter_ai_summary_draft', matter_id=m.id) }}"
+        data-client-update-endpoint="{{ url_for('matter_ai_client_update_draft', matter_id=m.id) }}"
+        data-timeout-ms="90000"
+      >
+        <div class="toolbar-row">
+          <div>
+            <div class="small fw-semibold text-uppercase muted">AI Assistant</div>
+            <div class="form-help">Draft executive summary text and a client-facing update from current matter activity.</div>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-light" type="button" data-ai-matter-summary-generate>Draft Executive Summary</button>
+            <button class="btn btn-sm btn-outline-light" type="button" data-ai-matter-client-update-generate>Draft Client Update</button>
+          </div>
+        </div>
+        <div class="form-help mt-2" data-ai-matter-summary-status></div>
+        <div class="mt-2">
+          <label class="form-label" for="matter-ai-client-update-subject">Client Update Subject</label>
+          <input class="form-control" id="matter-ai-client-update-subject" type="text" readonly>
+        </div>
+        <div class="mt-2">
+          <label class="form-label" for="matter-ai-client-update-body">Client Update Draft</label>
+          <textarea class="form-control" id="matter-ai-client-update-body" rows="5" readonly></textarea>
+          <div class="d-flex gap-2 align-items-center mt-2">
+            <button
+              class="btn btn-sm btn-outline-light"
+              type="button"
+              data-copy-target="matter-ai-client-update-body"
+              data-copy-success-text="Copied"
+            >
+              Copy Update
+            </button>
+            <span class="form-help" data-copy-feedback-for="matter-ai-client-update-body"></span>
+          </div>
+          <div class="form-help mt-1" data-ai-matter-client-update-status></div>
+        </div>
+      </div>
 
       <div class="list-meta mt-2">
         <span>Opened {{ m.opened_at.strftime("%Y-%m-%d") }}</span>
@@ -314,7 +354,7 @@
             </div>
             <div class="text-end">
               <div class="badge badge-soft">{{ mm.role_in_matter }}</div>
-              <div class="muted small">{{ u.role }}</div>
+              <div class="muted small">{{ role_display_name(u.role) }}</div>
             </div>
           </div>
         {% endfor %}

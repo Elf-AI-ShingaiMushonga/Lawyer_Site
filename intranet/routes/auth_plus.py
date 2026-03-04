@@ -13,6 +13,7 @@ from ..extensions import db, limiter
 from ..helpers import audit, register_user_session, revoke_trusted_device, revoke_user_session
 from ..mfa import build_otpauth_uri, check_backup_code, generate_backup_codes, generate_totp_secret, hash_backup_code, verify_totp
 from ..models import SSOApplication, SSOAuthorizationCode, SSOToken, TrustedDevice, User, UserMFABackupCode, UserSession
+from ..roles import role_is_admin
 from ..templates import page
 
 
@@ -251,7 +252,7 @@ def register_auth_plus_routes(app):
     @app.route("/admin/settings/sso-apps", methods=["GET", "POST"])
     @login_required
     def admin_sso_apps():
-        if current_user.role != "admin":
+        if not role_is_admin(getattr(current_user, "role", None)):
             return page("Forbidden", "errors/403.html"), 403
 
         if request.method == "POST":

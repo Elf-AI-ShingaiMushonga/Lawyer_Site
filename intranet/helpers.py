@@ -12,12 +12,13 @@ from flask_login import current_user
 from .config import ALLOWED_AUDIO_EXT, ALLOWED_DOC_EXT
 from .extensions import db
 from .models import AuditLog, MatterActivity, MatterMember, TrustedDevice, UserSession
+from .roles import role_is_admin
 
 ACTIVE_MATTER_SESSION_KEY = "active_matter_id"
 
 
 def is_admin() -> bool:
-    return getattr(current_user, "role", None) == "admin"
+    return role_is_admin(getattr(current_user, "role", None))
 
 
 def _coerce_positive_int(value) -> int | None:

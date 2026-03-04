@@ -15,6 +15,7 @@ from pathlib import Path
 from intranet import create_app
 from intranet.cli import create_user, init_db, run_server, seed_demo_data
 from intranet.config import env_int
+from intranet.roles import ROLE_LABELS
 from intranet.jobs.scheduler import DEFAULT_PERIODIC_JOBS, schedule_due_jobs
 from intranet.jobs.worker import run_worker_once
 from intranet.models import ScheduledJob
@@ -62,7 +63,7 @@ def main() -> None:
     cu = sub.add_parser("create-user")
     cu.add_argument("--email", required=True)
     cu.add_argument("--password", required=True)
-    cu.add_argument("--role", default="lawyer", choices=["admin", "lawyer", "staff", "paralegal"])
+    cu.add_argument("--role", default="junior_attorney", choices=sorted(ROLE_LABELS.keys()))
     cu.add_argument("--name", default="(Unnamed)")
 
     seed_cmd = sub.add_parser("seed-demo")
@@ -127,11 +128,12 @@ def main() -> None:
         for key in extra_keys:
             print(f"  {key}={summary[key]}")
         print("Login credentials:")
-        print("  admin@dm-inc.co.za")
-        print("  partner@dm-inc.co.za")
-        print("  associate@dm-inc.co.za")
-        print("  paralegal@dm-inc.co.za")
-        print("  staff@dm-inc.co.za")
+        print("  director@dm-inc.co.za")
+        print("  senior.attorney@dm-inc.co.za")
+        print("  junior.attorney@dm-inc.co.za")
+        print("  candidate.attorney@dm-inc.co.za")
+        print("  operations@dm-inc.co.za")
+        print("  finance.admin@dm-inc.co.za")
         print(f"  password={summary['password']}")
     elif args.cmd == "run":
         run_server(app, host=args.host, port=args.port, debug=args.debug)

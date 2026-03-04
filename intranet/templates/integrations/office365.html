@@ -35,7 +35,7 @@
       <p class="form-help mb-2">Subscribe to a live iCalendar feed for legal deadlines and hearing events.</p>
       <div class="d-grid gap-2">
         <a class="btn btn-light" href="{{ url_for('integrations_office365_outlook_feed') }}">Download My Outlook Feed (.ics)</a>
-        {% if current_user.role == "admin" %}
+        {% if is_admin_role %}
           <a class="btn btn-outline-light" href="{{ url_for('integrations_office365_outlook_feed', scope='team') }}">Download Team Outlook Feed (.ics)</a>
         {% endif %}
       </div>
@@ -74,7 +74,7 @@
   </form>
 </div>
 
-{% if current_user.role == "admin" %}
+{% if is_admin_role %}
   <div class="card p-3 mt-3">
     <h4 class="mb-2">Connection Profile</h4>
     <p class="form-help mb-2">Store Office365 tenant metadata used by infrastructure and sync jobs.</p>

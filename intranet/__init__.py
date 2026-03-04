@@ -26,6 +26,16 @@ from .extensions import (
 from .helpers import ACTIVE_MATTER_SESSION_KEY, resolve_active_matter, set_active_matter_context
 from .models import Matter, TimeTimer, User
 from .routes import register_routes
+from .roles import (
+    canonical_role,
+    role_can_access_finance,
+    role_display_name,
+    role_is_admin,
+    role_is_case,
+    role_is_director,
+    role_is_lawyer,
+    role_is_support,
+)
 from .schema_sync import sync_schema_compatibility
 from .security import register_security_handlers
 
@@ -232,6 +242,27 @@ def create_app() -> Flask:
     def inject_ui_state():
         active_matter = resolve_active_matter()
         active_timer_cue = None
+        raw_role = ""
+        role_value = ""
+        role_label = ""
+        role_slug = ""
+        is_admin_role = False
+        is_director_role = False
+        is_lawyer_role = False
+        is_case_role = False
+        is_support_role = False
+        can_access_finance = False
+        if current_user.is_authenticated:
+            raw_role = str(getattr(current_user, "role", "") or "")
+            role_value = canonical_role(raw_role) or raw_role
+            role_label = role_display_name(role_value) or role_value
+            role_slug = role_value.lower().replace(" ", "-").replace("_", "-")
+            is_admin_role = role_is_admin(raw_role)
+            is_director_role = role_is_director(raw_role)
+            is_lawyer_role = role_is_lawyer(raw_role)
+            is_case_role = role_is_case(raw_role)
+            is_support_role = role_is_support(raw_role)
+            can_access_finance = role_can_access_finance(raw_role)
         ai_status = {
             "available": False,
             "label": "AI Off",
@@ -311,6 +342,17 @@ def create_app() -> Flask:
             "active_matter": active_matter,
             "active_timer_cue": active_timer_cue,
             "ai_status": ai_status,
+            "current_user_role": role_value,
+            "current_user_role_label": role_label,
+            "current_user_role_slug": role_slug,
+            "is_admin_role": is_admin_role,
+            "is_director_role": is_director_role,
+            "is_lawyer_role": is_lawyer_role,
+            "is_case_role": is_case_role,
+            "is_support_role": is_support_role,
+            "can_access_finance": can_access_finance,
+            "role_display_name": role_display_name,
+            "canonical_role": canonical_role,
         }
 
     db.init_app(app)

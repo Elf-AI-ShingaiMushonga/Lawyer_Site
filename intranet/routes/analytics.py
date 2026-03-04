@@ -20,12 +20,13 @@ from ..models import (
     WorkloadForecast,
 )
 from ..policies import visible_matter_ids
+from ..roles import role_is_lawyer
 from ..services.analytics_engine import AnalyticsEngine
 from ..templates import page
 
 
 def _analytics_allowed() -> None:
-    if current_user.role not in {"admin", "lawyer"}:
+    if not role_is_lawyer(getattr(current_user, "role", None)):
         abort(403)
 
 

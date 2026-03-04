@@ -30,12 +30,13 @@ from ..reports.trust import (
     generate_trust_reconciliation_report,
     generate_trust_trial_balance,
 )
+from ..roles import role_is_lawyer
 from ..services.trust_engine import TrustEngine
 from ..templates import page
 
 
 def _trust_admin_required() -> None:
-    if current_user.role not in {"admin", "lawyer"}:
+    if not role_is_lawyer(getattr(current_user, "role", None)):
         abort(403)
 
 

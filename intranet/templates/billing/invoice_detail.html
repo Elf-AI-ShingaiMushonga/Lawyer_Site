@@ -148,7 +148,7 @@
 
 <div class="card p-3">
   <h4 class="mb-2">Payments</h4>
-  {% if current_user.role in ["admin", "lawyer"] %}
+  {% if can_access_finance %}
     <form method="post" action="{{ url_for('billing_invoice_payment_capture', invoice_id=inv.id) }}" class="row g-3 align-items-end mb-3">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="col-md-2">
@@ -219,7 +219,7 @@
             <td>{{ payment.allocated_at }}</td>
             <td>{{ payment.settled_at or "-" }}</td>
             <td class="text-end">
-              {% if payment_status != "settled" and current_user.role in ["admin", "lawyer"] %}
+              {% if payment_status != "settled" and can_access_finance %}
                 <form method="post" action="{{ url_for('billing_payment_settle', payment_id=payment.id) }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Settling...">Settle</button>

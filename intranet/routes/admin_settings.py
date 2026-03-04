@@ -37,10 +37,11 @@ from ..services.priority_inbox import (
     save_priority_inbox_config,
 )
 from ..templates import page
+from ..roles import role_is_admin
 
 
 def _admin_required() -> None:
-    if getattr(current_user, "role", None) != "admin":
+    if not role_is_admin(getattr(current_user, "role", None)):
         abort(403)
 
 

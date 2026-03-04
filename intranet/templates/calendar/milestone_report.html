@@ -17,7 +17,7 @@
       <label class="form-label" for="milestone-scope">Scope</label>
       <select class="form-select" id="milestone-scope" name="scope">
         <option value="my" {{ 'selected' if scope == 'my' else '' }}>My access</option>
-        {% if current_user.role == 'admin' %}
+        {% if is_admin_role %}
           <option value="team" {{ 'selected' if scope == 'team' else '' }}>Team (firm-wide)</option>
         {% endif %}
       </select>

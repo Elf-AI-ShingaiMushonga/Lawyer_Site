@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Personnel Management</h3>
+      <p class="page-intro mb-0">Assign attorneys to your director team and monitor workload, utilization, and delivery risk.</p>
+    </div>
+    <a class="btn btn-sm btn-outline-light" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+  </div>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Team Headcount</div>
+      <div class="value">{{ totals.headcount }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Open Tasks</div>
+      <div class="value">{{ totals.open_tasks }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Overdue Tasks</div>
+      <div class="value">{{ totals.overdue_tasks }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Hours (7d)</div>
+      <div class="value">{{ totals.hours_7d }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Avg Utilization (30d)</div>
+      <div class="value">{{ totals.avg_utilization_pct_30d }}%</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card p-3">
+      <h4 class="mb-2">Assign Team Members</h4>
+      <p class="form-help mb-2">Each attorney can belong to one director team at a time.</p>
+      <form method="post" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="assign_member">
+        <div class="col-12">
+          <label class="form-label" for="director-member-user-id">Attorney</label>
+          <select class="form-select" id="director-member-user-id" name="member_user_id" required>
+            <option value="">Select attorney</option>
+            {% for user in available_candidates %}
+              <option value="{{ user.id }}">{{ user.full_name }} - {{ role_display_name(user.role) }} ({{ user.email }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 d-grid">
+          <button class="btn btn-light" type="submit">Assign to Team</button>
+        </div>
+      </form>
+      <div class="form-help mt-2">
+        {% if available_candidates %}
+          {{ available_candidates|length }} unassigned attorney{{ "" if available_candidates|length == 1 else "s" }} available.
+        {% else %}
+          No unassigned attorneys available.
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card p-3 mt-3">
+      <h4 class="mb-2">Current Team</h4>
+      <div class="entry-scroll">
+        {% for team_row, user in team_pairs %}
+          <div class="activity-item">
+            <div class="d-flex justify-content-between gap-2">
+              <div>
+                <div class="fw-semibold">{{ user.full_name }}</div>
+                <div class="muted small">{{ user.email }}</div>
+                <div class="muted small">{{ role_display_name(user.role) }}</div>
+              </div>
+              <form method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="remove_member">
+                <input type="hidden" name="team_row_id" value="{{ team_row.id }}">
+                <button class="btn btn-sm btn-outline-light" type="submit">Remove</button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+        {% if not team_pairs %}
+          <div class="muted">No attorneys assigned to your team yet.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card p-3">
+      <h4 class="mb-2">Personnel Analytics</h4>
+      <div class="table-tools" data-table-tools data-table-target="director-personnel-table">
+        <input class="form-control" type="search" data-table-search placeholder="Filter by name, role, or workload...">
+        <div class="table-count" data-table-count aria-live="polite"></div>
+      </div>
+      <div class="table-responsive">
+        <table class="table" id="director-personnel-table">
+          <thead>
+            <tr>
+              <th data-sort-index="0">Team Member</th>
+              <th data-sort-index="1" data-sort-type="number">Active Matters</th>
+              <th data-sort-index="2" data-sort-type="number">Open Tasks</th>
+              <th data-sort-index="3" data-sort-type="number">Overdue</th>
+              <th data-sort-index="4" data-sort-type="number">Due 7d</th>
+              <th data-sort-index="5" data-sort-type="number">Hours 7d</th>
+              <th data-sort-index="6" data-sort-type="number">Hours 30d</th>
+              <th data-sort-index="7" data-sort-type="number">Utilization</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in personnel_rows %}
+              <tr data-table-row data-search="{{ row.user.full_name }} {{ role_display_name(row.user.role) }} {{ row.open_tasks }} {{ row.overdue_tasks }}">
+                <td>
+                  <div class="fw-semibold">{{ row.user.full_name }}</div>
+                  <div class="muted small">{{ role_display_name(row.user.role) }}</div>
+                </td>
+                <td>{{ row.active_matters }}</td>
+                <td>{{ row.open_tasks }}</td>
+                <td>
+                  <span class="badge status-badge {{ 'status-critical' if row.overdue_tasks > 0 else 'status-on-track' }}">
+                    {{ row.overdue_tasks }}
+                  </span>
+                </td>
+                <td>{{ row.due_7d }}</td>
+                <td>{{ row.hours_7d }}</td>
+                <td>{{ row.hours_30d }}</td>
+                <td>
+                  <span class="badge status-badge {{ 'status-critical' if row.utilization_pct_30d > 115 else 'status-on-hold' if row.utilization_pct_30d < 60 else 'status-on-track' }}">
+                    {{ row.utilization_pct_30d }}%
+                  </span>
+                </td>
+              </tr>
+            {% endfor %}
+            {% if not personnel_rows %}
+              <tr><td colspan="8" class="muted">No personnel data available until team members are assigned.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

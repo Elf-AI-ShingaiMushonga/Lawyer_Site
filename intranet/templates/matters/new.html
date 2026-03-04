@@ -74,13 +74,13 @@
     </div>
     <div class="col-md-6">
       {% if assignable_lawyers %}
-        <label class="muted small" for="matter-lawyer-search">Assign Lawyers</label>
+        <label class="muted small" for="matter-lawyer-search">Assign Attorneys</label>
         <div class="d-flex flex-wrap gap-2 align-items-center mb-1">
-          <input class="form-control flex-grow-1" id="matter-lawyer-search" type="search" placeholder="Search lawyers by name or email">
+          <input class="form-control flex-grow-1" id="matter-lawyer-search" type="search" placeholder="Search attorneys by name or email">
           <button class="btn btn-sm btn-outline-light" type="button" id="matter-lawyer-select-visible">Select Visible</button>
           <button class="btn btn-sm btn-outline-light" type="button" id="matter-lawyer-clear-all">Clear All</button>
         </div>
-        <div class="assignee-checklist" id="matter-lawyer-checklist" role="group" aria-label="Lawyer assignments">
+        <div class="assignee-checklist" id="matter-lawyer-checklist" role="group" aria-label="Attorney assignments">
           {% for u in assignable_lawyers %}
             <label class="assignee-checklist-item" data-assignee-item data-assignee-search="{{ (u.full_name ~ ' ' ~ u.email)|lower }}">
               <input class="form-check-input" type="checkbox" name="lawyer_user_ids" value="{{ u.id }}" data-assignee-checkbox>
@@ -89,11 +89,11 @@
             </label>
           {% endfor %}
         </div>
-        <div class="muted small mt-1" id="matter-lawyer-selection-meta">No lawyers selected.</div>
-        <div class="muted small mt-1" id="matter-lawyer-search-empty" hidden>No lawyers match your search.</div>
+        <div class="muted small mt-1" id="matter-lawyer-selection-meta">No attorneys selected.</div>
+        <div class="muted small mt-1" id="matter-lawyer-search-empty" hidden>No attorneys match your search.</div>
       {% else %}
         <label class="muted small">Assign Lawyers</label>
-        <div class="muted small mt-1">No active lawyers are currently available for assignment.</div>
+        <div class="muted small mt-1">No active attorneys are currently available for assignment.</div>
       {% endif %}
     </div>
     <div class="col-md-6">
@@ -365,11 +365,11 @@
         }
         const selectedCount = assigneeCheckboxes.filter((checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked).length;
         if (selectedCount <= 0) {
-          lawyerSelectionMeta.textContent = "No lawyers selected.";
+          lawyerSelectionMeta.textContent = "No attorneys selected.";
         } else if (selectedCount === 1) {
-          lawyerSelectionMeta.textContent = "1 lawyer selected.";
+          lawyerSelectionMeta.textContent = "1 attorney selected.";
         } else {
-          lawyerSelectionMeta.textContent = `${selectedCount} lawyers selected.`;
+          lawyerSelectionMeta.textContent = `${selectedCount} attorneys selected.`;
         }
       };
 

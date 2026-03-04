@@ -58,6 +58,7 @@ from ..services.intake_ai import suggest_matter_intake
 from ..services.matter_option_lists import legal_category_options, practice_area_options
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..services.notification_engine import NotificationEngine
+from ..roles import role_is_admin
 from ..templates import page
 
 CUSTOM_ARCHETYPE_SENTINEL = "custom"
@@ -468,7 +469,7 @@ def register_matters_plus_routes(app):
             return redirect(url_for("matter_notes", matter_id=matter_id))
 
         notes = MatterNote.query.filter_by(matter_id=matter_id).order_by(MatterNote.created_at.desc()).limit(200).all()
-        if current_user.role != "admin" and notes:
+        if not role_is_admin(getattr(current_user, "role", None)) and notes:
             note_ids = [note.id for note in notes]
             acl_rows = (
                 MatterNoteACL.query.filter(

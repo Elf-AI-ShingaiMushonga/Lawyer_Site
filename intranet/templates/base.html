@@ -1411,7 +1411,13 @@
     .status-admin,
     .status-lawyer,
     .status-paralegal,
-    .status-partner {
+    .status-partner,
+    .status-director,
+    .status-senior-attorney,
+    .status-junior-attorney,
+    .status-candidate-attorney,
+    .status-operations-staff,
+    .status-finance-cost-admin {
       border-color: var(--tone-accent-border);
       background: var(--tone-accent-bg);
       color: var(--tone-accent-text);
@@ -2719,15 +2725,13 @@
   {% set knowledge_endpoints = ["contacts", "kb", "kb_view", "search"] %}
   {% set integration_endpoints = ["integrations_office365", "integrations_office365_outlook_feed", "integrations_office365_excel_time_entries", "integrations_office365_excel_invoices", "integrations_office365_word_matter_summary", "integrations_office365_word_matter_summary_query", "integrations_third_party", "integrations_export_cost_recovery", "integrations_export_conveyancing", "integrations_import_cost_recovery", "integrations_import_conveyancing", "mobile_hub"] %}
   {% set analytics_endpoints = ["analytics_utilization", "analytics_realization", "analytics_ehr", "analytics_workload", "analytics_profitability", "analytics_forecast", "analytics_burnout"] %}
+  {% set personnel_endpoints = ["director_personnel"] %}
   {% set ops_endpoints = ["ops_backup_status", "ops_restore_verify", "ops_dr_targets"] %}
   {% set trust_account_endpoints = ["trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
   {% set billing_ops_endpoints = ["billing_rates", "billing_ar_aging", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses"] %}
-  {% set more_endpoints = workflow_endpoints + crm_endpoints + portal_endpoints + integration_endpoints + analytics_endpoints + trust_endpoints + ops_endpoints + admin_endpoints + automation_endpoints + knowledge_endpoints + trust_account_endpoints + billing_ops_endpoints %}
-  {% set role = current_user.role if current_user.is_authenticated else "" %}
-  {% set is_admin_role = role == "admin" %}
-  {% set is_lawyer_role = role in ["admin", "lawyer", "partner"] %}
-  {% set is_case_role = role in ["admin", "lawyer", "partner", "paralegal"] %}
-  {% set is_support_role = role in ["paralegal", "staff"] %}
+  {% set more_endpoints = workflow_endpoints + crm_endpoints + portal_endpoints + integration_endpoints + analytics_endpoints + personnel_endpoints + trust_endpoints + ops_endpoints + admin_endpoints + automation_endpoints + knowledge_endpoints + trust_account_endpoints + billing_ops_endpoints %}
+  {% set role = current_user_role if current_user.is_authenticated else "" %}
+  {% set role_label = current_user_role_label if current_user.is_authenticated else "" %}
   {% set matter_workspace_href = url_for('matter_workspace', matter_id=active_matter.id) if active_matter else url_for('matters') %}
   {% set matter_dms_href = url_for('matter_dms', matter_id=active_matter.id) if active_matter else url_for('dms_home') %}
   {% set matter_deadlines_href = url_for('calendar_matter', matter_id=active_matter.id) if active_matter else url_for('calendar_my', filter='today') %}
@@ -2777,10 +2781,14 @@
     {% set section_label = "Analytics and Forecasting" %}
     {% set section_meta = "Utilization, realization, profitability, and burnout signals" %}
     {% set section_href = url_for('analytics_utilization') %}
+  {% elif endpoint in personnel_endpoints %}
+    {% set section_label = "Personnel Management" %}
+    {% set section_meta = "Director team assignments and personnel analytics" %}
+    {% set section_href = url_for('director_personnel') %}
   {% elif endpoint in admin_endpoints or endpoint in ops_endpoints or endpoint in trust_endpoints %}
     {% set section_label = "Governance and Operations" %}
     {% set section_meta = "Security policy, auditability, backups, and DR readiness" %}
-    {% set section_href = url_for('admin') if current_user.is_authenticated and current_user.role == "admin" else url_for('trust_security') %}
+    {% set section_href = url_for('admin') if current_user.is_authenticated and is_admin_role else url_for('trust_security') %}
   {% elif endpoint in knowledge_endpoints %}
     {% set section_label = "Knowledge and Search" %}
     {% set section_meta = "Cross-matter retrieval and structured know-how" %}
@@ -2801,7 +2809,7 @@
         </a>
         {% if current_user.is_authenticated %}
           <div class="nav-brand-meta">
-            <span class="badge status-badge status-{{ current_user.role|lower|replace(' ', '-') }}">{{ current_user.role }}</span>
+            <span class="badge status-badge status-{{ current_user_role_slug }}">{{ role_label or role }}</span>
             <span class="badge status-badge {{ ai_status.tone }}" title="{{ ai_status.tooltip }}">{{ ai_status.label }}</span>
             <span class="muted small">{{ current_user.email }}</span>
           </div>
@@ -2865,6 +2873,9 @@
                   {% if is_lawyer_role %}
                     <a class="nav-menu-item {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_utilization') }}">Analytics</a>
                   {% endif %}
+                  {% if is_director_role %}
+                    <a class="nav-menu-item {{ 'is-active' if endpoint in personnel_endpoints else '' }}" href="{{ url_for('director_personnel') }}">Personnel</a>
+                  {% endif %}
                   <a class="nav-menu-item {{ 'is-active' if endpoint in integration_endpoints else '' }}" href="{{ url_for('integrations_office365') }}">Integrations</a>
                   <a class="nav-menu-item {{ 'is-active' if endpoint == 'mobile_hub' else '' }}" href="{{ url_for('mobile_hub') }}">Mobile Hub</a>
                   <a class="nav-menu-item {{ 'is-active' if endpoint in trust_endpoints else '' }}" href="{{ url_for('trust_policy') }}">Trust & Security</a>
@@ -2908,6 +2919,9 @@
               {% endif %}
               {% if is_admin_role %}
                 <option value="Automation Studio">
+              {% endif %}
+              {% if is_director_role %}
+                <option value="Personnel Management">
               {% endif %}
               <option value="Global Search">
               <option value="Knowledge Base">
@@ -3131,6 +3145,15 @@
               <span class="code-like">Go</span>
             </a>
           {% endif %}
+          {% if is_director_role %}
+            <a class="command-item" href="{{ url_for('director_personnel') }}" data-command-item data-keywords="personnel team management director lawyers utilization">
+              <span>
+                <span class="command-item-title">Personnel Management</span>
+                <span class="command-item-meta">Manage your attorneys and track team capacity</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+          {% endif %}
           <a class="command-item" href="{{ url_for('portal_login') }}" data-command-item data-keywords="portal client messages uploads invoices">
             <span>
               <span class="command-item-title">Client Portal</span>
@@ -3152,7 +3175,7 @@
             </span>
             <span class="code-like">Go</span>
           </a>
-          {% if current_user.role == "admin" %}
+          {% if is_admin_role %}
             <div class="command-section">Admin</div>
             <a class="command-item" href="{{ url_for('admin_automation') }}" data-command-item data-keywords="automation templates archetype contract document task builder">
               <span>

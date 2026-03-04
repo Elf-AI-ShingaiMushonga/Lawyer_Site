@@ -3,11 +3,12 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import time
 import uuid
 from urllib.parse import urlsplit
 
 import sqlalchemy as sa
-from flask import Response, abort, flash, redirect, request, send_from_directory, url_for
+from flask import Response, abort, flash, jsonify, redirect, request, send_from_directory, url_for
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
@@ -28,6 +29,7 @@ from ..models import (
     Matter,
     MatterActivity,
     MatterMember,
+    MatterNote,
     MatterPin,
     MatterRecentView,
     MatterTemplate,
@@ -39,6 +41,7 @@ from ..models import (
     User,
 )
 from ..policies import enforce_data_residency, enforce_permission, visible_matter_ids
+from ..roles import role_is_director, role_query_values_for_legal_team
 from ..services.archetypes import (
     build_document_context,
     collect_required_field_values,
@@ -55,6 +58,8 @@ from ..services.contracts import (
     render_contract_template_for_matter,
     validate_contract_field_values,
 )
+from ..services.assist_ai import suggest_matter_client_update, suggest_matter_executive_summary
+from ..services.director_team import director_team_member_ids, user_in_director_scope
 from ..services.matter_option_lists import legal_category_options
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..templates import page
@@ -144,6 +149,85 @@ def _generate_archetype_document(matter: Matter, template: MatterTemplate | None
     matter_specific_values = parse_matter_archetype_values(matter.archetype_data_json)
     context = build_document_context(matter, archetype=template, required_values=matter_specific_values)
     return render_template_text(template.boilerplate_template, context)
+
+
+def _build_matter_ai_context(
+    *,
+    matter: Matter,
+    tasks: list[Task],
+    timeline: list[MatterTimelineEvent],
+    docs: list[DocumentFile],
+    notes: list[MatterNote],
+    activity_items: list[MatterActivity] | None = None,
+) -> dict[str, object]:
+    today = dt.date.today()
+    open_tasks = [task for task in tasks if (task.status or "").strip().lower() != "done"]
+    overdue_tasks = [task for task in open_tasks if task.due_date and task.due_date < today]
+    next_due_task_row = (
+        sorted(
+            [task for task in open_tasks if task.due_date],
+            key=lambda task: (task.due_date, task.id),
+        )[0]
+        if open_tasks
+        else None
+    )
+
+    recent_timeline = [
+        {
+            "date": row.event_date.isoformat() if row.event_date else "",
+            "type": row.event_type or "",
+            "title": (row.title or "")[:180],
+        }
+        for row in timeline[:8]
+    ]
+    recent_notes = [
+        (row.body or "").strip().replace("\n", " ")[:260]
+        for row in notes[:6]
+        if (row.body or "").strip()
+    ]
+    recent_docs = [
+        {
+            "filename": (row.original_filename or "")[:180],
+            "category": row.category or "",
+            "uploaded_at": row.uploaded_at.isoformat() if row.uploaded_at else "",
+        }
+        for row in docs[:8]
+    ]
+    recent_activity = [
+        {
+            "action": (row.action or "")[:140],
+            "details": (row.details or "")[:220],
+            "created_at": row.created_at.isoformat() if row.created_at else "",
+        }
+        for row in (activity_items or [])[:8]
+    ]
+
+    next_due_task = ""
+    if next_due_task_row is not None:
+        due_text = next_due_task_row.due_date.isoformat() if next_due_task_row.due_date else ""
+        next_due_task = f"{next_due_task_row.title or 'Task'} ({due_text})"
+
+    return {
+        "matter_id": int(matter.id),
+        "matter_no": matter.matter_no or "",
+        "title": matter.title or "",
+        "client_name": matter.client_name or "",
+        "status": matter.status or "",
+        "risk_level": matter.risk_level or "Medium",
+        "budget_status": matter.budget_status or "On Track",
+        "legal_category": matter.legal_category or "",
+        "objective": matter.objective or "",
+        "last_update_note": matter.last_update_note or "",
+        "outcome_summary": matter.outcome_summary or "",
+        "open_task_count": len(open_tasks),
+        "overdue_task_count": len(overdue_tasks),
+        "next_due_task": next_due_task,
+        "latest_timeline_title": recent_timeline[0]["title"] if recent_timeline else "",
+        "recent_timeline": recent_timeline,
+        "recent_notes": recent_notes,
+        "recent_documents": recent_docs,
+        "recent_activity": recent_activity,
+    }
 
 
 def register_matter_routes(app):
@@ -262,14 +346,18 @@ def register_matter_routes(app):
                 continue
             key = int(contract_template.archetype_id)
             contract_templates_by_archetype.setdefault(key, []).append(contract_template)
+        legal_team_role_values = tuple(sorted(role_query_values_for_legal_team()))
         assignable_lawyers = (
             User.query.filter(
                 User.is_active.is_(True),
-                sa.func.lower(User.role).in_(("admin", "lawyer", "partner")),
+                sa.func.lower(User.role).in_(legal_team_role_values),
             )
             .order_by(User.full_name.asc(), User.email.asc())
             .all()
         )
+        if role_is_director(getattr(current_user, "role", None)):
+            scoped_ids = director_team_member_ids(int(current_user.id))
+            assignable_lawyers = [user for user in assignable_lawyers if int(user.id) in scoped_ids]
         assignable_lawyer_ids = {int(user.id) for user in assignable_lawyers}
         if request.method == "POST":
             matter_no = normalize_query(request.form.get("matter_no", "")).upper()
@@ -564,6 +652,166 @@ def register_matter_routes(app):
         flash("Matter summary updated.", "info")
         return redirect(url_for("matter_detail", matter_id=m.id))
 
+    @app.post("/matters/<int:matter_id>/ai/summary")
+    @login_required
+    def matter_ai_summary_draft(matter_id: int):
+        if not can_access_matter(matter_id):
+            abort(403)
+        matter = db.session.get(Matter, matter_id)
+        if matter is None:
+            abort(404)
+
+        payload_raw = request.get_json(silent=True) or {}
+        payload = payload_raw if isinstance(payload_raw, dict) else {}
+        tasks = (
+            Task.query.filter_by(matter_id=matter_id)
+            .order_by(Task.status.asc(), Task.due_date.asc().nullslast(), Task.id.desc())
+            .limit(180)
+            .all()
+        )
+        timeline = (
+            MatterTimelineEvent.query.filter_by(matter_id=matter_id)
+            .order_by(MatterTimelineEvent.event_date.desc(), MatterTimelineEvent.created_at.desc())
+            .limit(40)
+            .all()
+        )
+        docs = (
+            DocumentFile.query.filter_by(matter_id=matter_id)
+            .order_by(DocumentFile.uploaded_at.desc())
+            .limit(30)
+            .all()
+        )
+        notes = (
+            MatterNote.query.filter_by(matter_id=matter_id)
+            .order_by(MatterNote.updated_at.desc(), MatterNote.id.desc())
+            .limit(20)
+            .all()
+        )
+        activity_rows = (
+            MatterActivity.query.filter_by(matter_id=matter_id)
+            .order_by(MatterActivity.created_at.desc())
+            .limit(20)
+            .all()
+        )
+        matter_context = _build_matter_ai_context(
+            matter=matter,
+            tasks=tasks,
+            timeline=timeline,
+            docs=docs,
+            notes=notes,
+            activity_items=activity_rows,
+        )
+        current_values = {
+            "objective": (payload.get("objective") or "").strip()[:900],
+            "last_update_note": (payload.get("last_update_note") or "").strip()[:900],
+            "outcome_summary": (payload.get("outcome_summary") or "").strip()[:900],
+            "risk_level": (payload.get("risk_level") or "").strip()[:60],
+            "budget_status": (payload.get("budget_status") or "").strip()[:60],
+        }
+
+        started = time.perf_counter()
+        suggestion = suggest_matter_executive_summary(
+            matter_context=matter_context,
+            current_values=current_values,
+        )
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        audit(
+            "matter_ai_summary_draft",
+            "Matter",
+            matter.id,
+            {
+                "source": suggestion.get("source"),
+                "fallback_reason": suggestion.get("fallback_reason"),
+                "elapsed_ms": elapsed_ms,
+            },
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "suggestion": suggestion,
+                "elapsed_ms": elapsed_ms,
+                "fallback_reason": suggestion.get("fallback_reason"),
+                "fallback_detail": suggestion.get("fallback_detail"),
+            }
+        )
+
+    @app.post("/matters/<int:matter_id>/ai/client-update")
+    @login_required
+    def matter_ai_client_update_draft(matter_id: int):
+        if not can_access_matter(matter_id):
+            abort(403)
+        matter = db.session.get(Matter, matter_id)
+        if matter is None:
+            abort(404)
+
+        payload_raw = request.get_json(silent=True) or {}
+        payload = payload_raw if isinstance(payload_raw, dict) else {}
+        tone_hint = " ".join(str(payload.get("tone_hint") or "").split()).strip()[:120]
+        tasks = (
+            Task.query.filter_by(matter_id=matter_id)
+            .order_by(Task.status.asc(), Task.due_date.asc().nullslast(), Task.id.desc())
+            .limit(180)
+            .all()
+        )
+        timeline = (
+            MatterTimelineEvent.query.filter_by(matter_id=matter_id)
+            .order_by(MatterTimelineEvent.event_date.desc(), MatterTimelineEvent.created_at.desc())
+            .limit(40)
+            .all()
+        )
+        docs = (
+            DocumentFile.query.filter_by(matter_id=matter_id)
+            .order_by(DocumentFile.uploaded_at.desc())
+            .limit(30)
+            .all()
+        )
+        notes = (
+            MatterNote.query.filter_by(matter_id=matter_id)
+            .order_by(MatterNote.updated_at.desc(), MatterNote.id.desc())
+            .limit(20)
+            .all()
+        )
+        activity_rows = (
+            MatterActivity.query.filter_by(matter_id=matter_id)
+            .order_by(MatterActivity.created_at.desc())
+            .limit(20)
+            .all()
+        )
+        matter_context = _build_matter_ai_context(
+            matter=matter,
+            tasks=tasks,
+            timeline=timeline,
+            docs=docs,
+            notes=notes,
+            activity_items=activity_rows,
+        )
+
+        started = time.perf_counter()
+        suggestion = suggest_matter_client_update(
+            matter_context=matter_context,
+            tone_hint=tone_hint,
+        )
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        audit(
+            "matter_ai_client_update_draft",
+            "Matter",
+            matter.id,
+            {
+                "source": suggestion.get("source"),
+                "fallback_reason": suggestion.get("fallback_reason"),
+                "elapsed_ms": elapsed_ms,
+            },
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "suggestion": suggestion,
+                "elapsed_ms": elapsed_ms,
+                "fallback_reason": suggestion.get("fallback_reason"),
+                "fallback_detail": suggestion.get("fallback_detail"),
+            }
+        )
+
     @app.post("/matters/<int:matter_id>/timeline")
     @login_required
     def matter_timeline_add(matter_id: int):
@@ -771,6 +1019,12 @@ def register_matter_routes(app):
             if not u:
                 flash("No such user. Admin must create them first.", "warning")
                 return redirect(url_for("matter_team", matter_id=matter_id))
+            if role_is_director(getattr(current_user, "role", None)) and not user_in_director_scope(
+                int(current_user.id),
+                int(u.id),
+            ):
+                flash("Directors can only add attorneys from their own team.", "warning")
+                return redirect(url_for("matter_team", matter_id=matter_id))
             if MatterMember.query.filter_by(matter_id=matter_id, user_id=u.id).first():
                 flash("User already in team.", "warning")
                 return redirect(url_for("matter_team", matter_id=matter_id))
@@ -787,7 +1041,14 @@ def register_matter_routes(app):
             .filter(MatterMember.matter_id == matter_id)
             .all()
         )
-        users = User.query.order_by(User.full_name.asc()).limit(500).all()
+        users_query = User.query.order_by(User.full_name.asc())
+        if role_is_director(getattr(current_user, "role", None)):
+            scoped_ids = director_team_member_ids(int(current_user.id)).union({int(current_user.id)})
+            if scoped_ids:
+                users_query = users_query.filter(User.id.in_(scoped_ids))
+            else:
+                users_query = users_query.filter(User.id == -1)
+        users = users_query.limit(500).all()
 
         return page("Matter Team", "matters/team.html", m=m, members=members, users=users)
 

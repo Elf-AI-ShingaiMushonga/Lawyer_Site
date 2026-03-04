@@ -4,7 +4,7 @@
   <div class="col-lg-5">
     <div class="card p-4 h-100">
       <div class="code-like">INITIAL SETUP</div>
-      <h2 class="mt-2 mb-2">Create the first administrator</h2>
+      <h2 class="mt-2 mb-2">Create the first finance administrator</h2>
       <p class="page-intro mb-3">
         This account will manage users, announcements, and firm-wide content.
       </p>
@@ -16,12 +16,12 @@
         </div>
         <div class="metric-card">
           <div class="metric-label">Role</div>
-          <div class="metric-value">Admin</div>
+          <div class="metric-value">Finance & Cost and Admin</div>
         </div>
       </div>
       <div class="card mt-3 p-3">
         <div class="small muted">
-          After setup, add lawyers and staff from <strong>Admin -> Users</strong> and then import or create active matters.
+          After setup, add directors, attorneys, operations staff, and finance staff from <strong>Admin -> Users</strong>.
         </div>
       </div>
     </div>
@@ -29,7 +29,7 @@
 
   <div class="col-lg-7">
     <div class="card p-4 h-100">
-      <h3 class="mb-1">Administrator Registration</h3>
+      <h3 class="mb-1">Finance Administrator Registration</h3>
       <div class="page-intro mb-3">No users exist yet. Complete this once to unlock the portal.</div>
       <form method="post" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -39,7 +39,7 @@
         </div>
         <div class="col-md-6">
           <label class="muted small mb-1">Email</label>
-          <input class="form-control" name="email" type="email" placeholder="admin@dm-inc.co.za" required>
+          <input class="form-control" name="email" type="email" placeholder="finance.admin@dm-inc.co.za" required>
         </div>
         <div class="col-md-6">
           <label class="muted small mb-1">Password</label>
@@ -50,7 +50,7 @@
           <input class="form-control" name="confirm_password" type="password" placeholder="Repeat password" required>
         </div>
         <div class="col-12 d-grid">
-          <button class="btn btn-light">Create Administrator Account</button>
+          <button class="btn btn-light">Create Finance Administrator Account</button>
         </div>
       </form>
     </div>

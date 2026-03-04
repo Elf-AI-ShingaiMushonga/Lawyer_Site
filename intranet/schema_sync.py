@@ -664,7 +664,10 @@ def _apply_postgres_rls_policies(bind, table_names: set[str]) -> None:
                 )
             )
 
-        trust_predicate = "(app_service_account() OR app_is_admin() OR app_user_role() = 'lawyer')"
+        trust_predicate = (
+            "(app_service_account() OR app_is_admin() OR "
+            "app_user_role() IN ('lawyer', 'senior_attorney', 'junior_attorney'))"
+        )
         for trust_table in ["trust_account", "trust_client_ledger", "trust_ledger_entry", "trust_reconciliation_run", "trust_threshold_alert"]:
             if trust_table not in table_names:
                 continue

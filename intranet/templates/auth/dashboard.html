@@ -10,6 +10,9 @@
         </div>
         <div class="d-flex gap-2">
           <a class="btn btn-sm btn-light" href="{{ url_for('matter_create') }}">Open New Matter</a>
+          {% if is_director_role %}
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('director_personnel') }}">Manage Team</a>
+          {% endif %}
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('search') }}">Global Search</a>
         </div>
       </div>
@@ -34,10 +37,10 @@
           <div class="metric-value">{{ stats.due_this_week }}</div>
           <div class="metric-link-hint">Open Next 7 Days Calendar</div>
         </a>
-        <a class="metric-card metric-card-link" href="{{ url_for('admin_automation') if current_user.role == 'admin' else url_for('matters') }}">
+        <a class="metric-card metric-card-link" href="{{ url_for('admin_automation') if is_admin_role else url_for('matters') }}">
           <div class="metric-label">Urgent Unassigned</div>
           <div class="metric-value">{{ stats.urgent_unassigned }}</div>
-          <div class="metric-link-hint">{{ "Open Automation Studio" if current_user.role == "admin" else "Open Matter Directory" }}</div>
+          <div class="metric-link-hint">{{ "Open Automation Studio" if is_admin_role else "Open Matter Directory" }}</div>
         </a>
       </div>
     </div>

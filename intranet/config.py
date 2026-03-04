@@ -12,7 +12,26 @@ ALLOWED_AUDIO_EXT = {"m4a", "mp3", "wav", "ogg", "webm"}
 MATTER_STATUSES = {"Open", "On Hold", "Closed"}
 RISK_LEVELS = ("Low", "Medium", "High", "Critical")
 BUDGET_STATUSES = ("On Track", "Watch", "Over Budget", "Needs Review")
-VALID_ROLES = {"admin", "lawyer", "staff", "paralegal"}
+ROLE_OPTIONS = (
+    ("director", "Directors"),
+    ("senior_attorney", "Senior Attorneys"),
+    ("junior_attorney", "Junior Attorneys"),
+    ("candidate_attorney", "Candidate Attorneys"),
+    ("operations_staff", "Operations Staff"),
+    ("finance_cost_admin", "Finance & Cost and Admin"),
+)
+LEGACY_COMPAT_ROLES = {
+    "admin",
+    "lawyer",
+    "staff",
+    "paralegal",
+    "partner",
+    "associate",
+    "directors",
+    "finance and cost and admin",
+    "finance_and_cost_and_admin",
+}
+VALID_ROLES = {value for value, _label in ROLE_OPTIONS}.union(LEGACY_COMPAT_ROLES)
 PRODUCTION_ENV_VALUES = {"prod", "production"}
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")

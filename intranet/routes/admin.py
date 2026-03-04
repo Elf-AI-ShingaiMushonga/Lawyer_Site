@@ -4,10 +4,11 @@ from flask import abort, flash, redirect, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import IntegrityError
 
-from ..config import VALID_ROLES, is_valid_email
+from ..config import ROLE_OPTIONS, VALID_ROLES, is_valid_email
 from ..extensions import db
 from ..helpers import audit, is_admin, normalize_query
 from ..models import Announcement, AuditLog, User
+from ..roles import canonical_role, role_display_name
 from ..templates import page
 
 
@@ -30,7 +31,7 @@ def register_admin_routes(app):
             if action == "create":
                 email = normalize_query(request.form.get("email", "")).lower()
                 full_name = normalize_query(request.form.get("full_name", "")) or "(Unnamed)"
-                role = normalize_query(request.form.get("role", "lawyer")) or "lawyer"
+                role = canonical_role(normalize_query(request.form.get("role", "junior_attorney")) or "junior_attorney")
                 password = request.form.get("password") or ""
                 confirm_password = request.form.get("confirm_password") or ""
                 is_active = (request.form.get("is_active") or "").strip().lower() in {"1", "true", "yes", "on"}
@@ -76,7 +77,7 @@ def register_admin_routes(app):
                 flash("User status updated.", "info")
             elif action == "set_role":
                 user_id = request.form.get("user_id", type=int)
-                role = normalize_query(request.form.get("role", ""))
+                role = canonical_role(normalize_query(request.form.get("role", "")))
                 user = db.session.get(User, user_id) if user_id else None
                 if not user or role not in VALID_ROLES:
                     flash("Invalid user or role.", "warning")
@@ -90,7 +91,13 @@ def register_admin_routes(app):
             return redirect(url_for("admin_users"))
 
         users = User.query.order_by(User.created_at.desc()).limit(500).all()
-        return page("Admin Users", "admin/users.html", users=users)
+        return page(
+            "Admin Users",
+            "admin/users.html",
+            users=users,
+            role_options=ROLE_OPTIONS,
+            role_display_name=role_display_name,
+        )
 
     @app.route("/admin/announcements", methods=["GET", "POST"])
     @login_required

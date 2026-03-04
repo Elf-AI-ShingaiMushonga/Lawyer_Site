@@ -35,6 +35,7 @@ from ..services.workflow_automation import (
     schedule_invoice_collection_followups,
 )
 from ..templates import page
+from ..roles import role_is_admin
 
 
 def _build_lines_pdf(text_lines: list[str]) -> bytes:
@@ -193,7 +194,7 @@ def register_billing_routes(app):
     @login_required
     def billing_rates():
         if request.method == "POST":
-            if current_user.role != "admin":
+            if not role_is_admin(getattr(current_user, "role", None)):
                 abort(403)
             action = (request.form.get("action") or "rate").strip().lower()
             if action == "fee_arrangement":

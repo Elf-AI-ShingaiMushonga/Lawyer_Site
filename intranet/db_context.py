@@ -4,6 +4,7 @@ from flask_login import current_user
 from sqlalchemy import text
 
 from .extensions import db
+from .roles import canonical_role, role_is_admin
 
 
 def _is_postgres() -> bool:
@@ -51,10 +52,11 @@ def apply_request_db_context() -> None:
         set_db_access_context(user_id=None, role=None, is_admin=False, service_account=False)
         return
 
-    role = str(getattr(current_user, "role", "") or "")
+    raw_role = str(getattr(current_user, "role", "") or "")
+    role = canonical_role(raw_role) or raw_role
     set_db_access_context(
         user_id=int(current_user.id),
         role=role,
-        is_admin=(role == "admin"),
+        is_admin=role_is_admin(raw_role),
         service_account=False,
     )

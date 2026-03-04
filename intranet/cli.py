@@ -30,6 +30,7 @@ from .models import (
     DataResidencyPolicy,
     Deadline,
     DeadlineRule,
+    DirectorTeamMember,
     DocumentFile,
     DocumentLock,
     DocumentOCRText,
@@ -355,41 +356,49 @@ def seed_demo_data(app, password: str, reset: bool = False):
         users = {}
         user_specs = [
             {
-                "email": "admin@dm-inc.co.za",
+                "email": "director@dm-inc.co.za",
                 "full_name": "Alicia Mokoena",
-                "role": "admin",
+                "role": "director",
                 "mfa_enabled": True,
                 "mfa_secret": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
                 "failed_login_attempts": 0,
             },
             {
-                "email": "partner@dm-inc.co.za",
+                "email": "senior.attorney@dm-inc.co.za",
                 "full_name": "Daniel Naidoo",
-                "role": "lawyer",
+                "role": "senior_attorney",
                 "mfa_enabled": True,
                 "mfa_secret": "KRUGS4ZANFZSAYJAON2XEZLSON2XEZLS",
                 "failed_login_attempts": 0,
             },
             {
-                "email": "associate@dm-inc.co.za",
+                "email": "junior.attorney@dm-inc.co.za",
                 "full_name": "Nandi Maseko",
-                "role": "lawyer",
+                "role": "junior_attorney",
                 "mfa_enabled": False,
                 "mfa_secret": None,
                 "failed_login_attempts": 0,
             },
             {
-                "email": "paralegal@dm-inc.co.za",
+                "email": "candidate.attorney@dm-inc.co.za",
                 "full_name": "Sipho Khumalo",
-                "role": "paralegal",
+                "role": "candidate_attorney",
                 "mfa_enabled": False,
                 "mfa_secret": None,
                 "failed_login_attempts": 1,
             },
             {
-                "email": "staff@dm-inc.co.za",
+                "email": "operations@dm-inc.co.za",
                 "full_name": "Leah Pillay",
-                "role": "staff",
+                "role": "operations_staff",
+                "mfa_enabled": False,
+                "mfa_secret": None,
+                "failed_login_attempts": 0,
+            },
+            {
+                "email": "finance.admin@dm-inc.co.za",
+                "full_name": "Nomsa Dlamini",
+                "role": "finance_cost_admin",
                 "mfa_enabled": False,
                 "mfa_secret": None,
                 "failed_login_attempts": 0,
@@ -420,11 +429,33 @@ def seed_demo_data(app, password: str, reset: bool = False):
 
         db.session.flush()
 
-        admin_id = users["admin@dm-inc.co.za"].id
-        partner_id = users["partner@dm-inc.co.za"].id
-        associate_id = users["associate@dm-inc.co.za"].id
-        paralegal_id = users["paralegal@dm-inc.co.za"].id
-        staff_id = users["staff@dm-inc.co.za"].id
+        admin_id = users["finance.admin@dm-inc.co.za"].id
+        partner_id = users["director@dm-inc.co.za"].id
+        senior_attorney_id = users["senior.attorney@dm-inc.co.za"].id
+        associate_id = users["junior.attorney@dm-inc.co.za"].id
+        paralegal_id = users["candidate.attorney@dm-inc.co.za"].id
+        staff_id = users["operations@dm-inc.co.za"].id
+        director_team_rows = [
+            DirectorTeamMember(
+                director_id=partner_id,
+                member_user_id=senior_attorney_id,
+                assigned_by=admin_id,
+                created_at=now - dt.timedelta(days=29),
+            ),
+            DirectorTeamMember(
+                director_id=partner_id,
+                member_user_id=associate_id,
+                assigned_by=admin_id,
+                created_at=now - dt.timedelta(days=29),
+            ),
+            DirectorTeamMember(
+                director_id=partner_id,
+                member_user_id=paralegal_id,
+                assigned_by=admin_id,
+                created_at=now - dt.timedelta(days=29),
+            ),
+        ]
+        db.session.add_all(director_team_rows)
 
         announcements = [
             (
@@ -3809,6 +3840,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
             )
             existing_task_assignee_pairs.add(pair)
         expanded_counts["task_assignees"] = len(existing_task_assignee_pairs)
+        expanded_counts["director_team_members"] = len(director_team_rows)
 
         db.session.commit()
         summary = {
@@ -3846,6 +3878,7 @@ def _reset_demo_dataset(app):
         Contact,
         DRTarget,
         DataResidencyPolicy,
+        DirectorTeamMember,
         Deadline,
         DeadlineRule,
         DocumentFile,
@@ -3992,6 +4025,7 @@ def _reset_demo_dataset(app):
             PortalMessageThread,
             PortalMatterAccess,
             PortalUser,
+            DirectorTeamMember,
             EngagementLetter,
             ConflictSemanticHit,
             ConflictCheck,

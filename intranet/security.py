@@ -7,9 +7,9 @@ from .extensions import db
 from sqlalchemy.exc import OperationalError
 
 from .helpers import audit, revoke_current_session, validate_user_session
+from .roles import role_requires_mfa
 from .templates import page
 
-MFA_REQUIRED_ROLES = {"admin", "lawyer", "paralegal", "staff"}
 MFA_ENROLLMENT_ALLOWLIST = {
     "auth_mfa_setup",
     "auth_mfa_backup_codes",
@@ -67,7 +67,7 @@ def register_security_handlers(app):
     def enforce_mfa_enrollment():
         if not current_user.is_authenticated:
             return None
-        if getattr(current_user, "role", "") not in MFA_REQUIRED_ROLES:
+        if not role_requires_mfa(getattr(current_user, "role", "")):
             return None
         if bool(getattr(current_user, "mfa_enabled", False)):
             return None

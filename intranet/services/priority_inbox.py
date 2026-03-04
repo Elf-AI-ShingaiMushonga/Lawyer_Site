@@ -18,6 +18,7 @@ from ..models import (
     TimeEntry,
     User,
 )
+from ..roles import canonical_role, role_is_admin
 
 PRIORITY_INBOX_CONFIG_KEY = "priority_inbox"
 DEFAULT_PRIORITY_INBOX_CONFIG = {
@@ -117,7 +118,7 @@ def save_priority_inbox_config(raw: dict, *, updated_by: int | None) -> dict:
 
 
 def _matter_scope_for_user(user: User, *, scoped_matter_ids: list[int] | None) -> list[int] | None:
-    if user.role == "admin":
+    if role_is_admin(getattr(user, "role", None)):
         return None
     if scoped_matter_ids is not None:
         scoped: list[int] = []
@@ -144,7 +145,7 @@ def build_priority_inbox(
     now_utc = now_utc or dt.datetime.utcnow()
     cfg = normalize_priority_inbox_config(config or load_priority_inbox_config())
     matter_scope = _matter_scope_for_user(user, scoped_matter_ids=scoped_matter_ids)
-    is_admin_user = user.role == "admin"
+    is_admin_user = role_is_admin(getattr(user, "role", None))
 
     followup_query = (
         db.session.query(CRMFollowUp, CRMLead)
@@ -227,7 +228,7 @@ def build_priority_inbox(
             unbilled_time_query = unbilled_time_query.filter(TimeEntry.matter_id.in_(matter_scope))
         else:
             unbilled_time_query = unbilled_time_query.filter(TimeEntry.id == -1)
-    if user.role in {"staff", "paralegal"}:
+    if canonical_role(getattr(user, "role", None)) in {"operations_staff", "candidate_attorney"}:
         unbilled_time_query = unbilled_time_query.filter(TimeEntry.user_id == user.id)
     unbilled_rows = unbilled_time_query.order_by(TimeEntry.end_at.asc()).limit(limit).all()
     unbilled_time_watchlist = []

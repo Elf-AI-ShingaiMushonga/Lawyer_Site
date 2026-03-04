@@ -11,6 +11,7 @@ from ..extensions import db
 from ..helpers import audit, is_admin, normalize_query
 from ..models import Contact, DocumentFile, JobQueue, KnowledgeBase, Matter, Task
 from ..policies import visible_matter_ids
+from ..roles import role_is_admin
 from ..services.semantic_search import SemanticSearchService
 from ..templates import page
 
@@ -202,7 +203,7 @@ def register_content_routes(app):
                 except (TypeError, ValueError):
                     requested_by = None
 
-        if current_user.role != "admin" and requested_by and int(current_user.id) != requested_by:
+        if not role_is_admin(getattr(current_user, "role", None)) and requested_by and int(current_user.id) != requested_by:
             abort(403)
 
         return jsonify(

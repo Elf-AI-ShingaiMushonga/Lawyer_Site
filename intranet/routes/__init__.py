@@ -8,6 +8,7 @@ from .calendaring import register_calendar_routes
 from .content import register_content_routes
 from .crm import register_crm_routes
 from .dms import register_dms_routes
+from .director_personnel import register_director_personnel_routes
 from .expenses import register_expenses_routes
 from .integrations import register_integration_routes
 from .matters import register_matter_routes
@@ -32,6 +33,7 @@ def register_routes(app):
     register_calendar_routes(app)
     register_workflow_routes(app)
     register_dms_routes(app)
+    register_director_personnel_routes(app)
     register_timekeeping_routes(app)
     register_integration_routes(app)
     register_billing_routes(app)

@@ -38,6 +38,9 @@
     data-time-prompt-form
     data-time-prompt-endpoint="{{ url_for('time_prompts') }}"
     data-time-code-assist="{{ time_code_assist | tojson | forceescape }}"
+    data-time-narrative-widget
+    data-time-narrative-endpoint="{{ url_for('time_ai_narrative') }}"
+    data-time-narrative-timeout-ms="90000"
   >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="col-md-4">
@@ -99,8 +102,12 @@
       </div>
     </div>
     <div class="col-12">
-      <label class="form-label" for="entry-narrative">Narrative</label>
+      <div class="d-flex justify-content-between align-items-center">
+        <label class="form-label mb-0" for="entry-narrative">Narrative</label>
+        <button class="btn btn-sm btn-outline-light" type="button" data-ai-time-narrative-generate>Draft Narrative with AI</button>
+      </div>
       <textarea class="form-control" id="entry-narrative" name="narrative" rows="3" placeholder="Describe work completed">{{ prefill_narrative or '' }}</textarea>
+      <div class="form-help mt-1" data-ai-time-narrative-status></div>
     </div>
     <div class="col-12">
       <div class="time-prompts" data-time-prompts hidden>
@@ -110,6 +117,43 @@
     </div>
     <div class="col-12 d-grid d-md-flex justify-content-md-end">
       <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Entry</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Import Physical Timesheet Photo</h4>
+  <div class="form-help mb-2">
+    Upload a photo of a handwritten/printed timesheet. AI will extract entries and save them as draft time entries.
+  </div>
+  <form method="post" action="{{ url_for('time_entries_import_photo') }}" enctype="multipart/form-data" class="row g-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-6">
+      <label class="form-label" for="timesheet-photo-file">Timesheet Photo</label>
+      <input
+        class="form-control"
+        id="timesheet-photo-file"
+        name="timesheet_photo"
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        required
+      >
+      <div class="form-help mt-1">Supported formats: PNG, JPG/JPEG, WEBP. Max 12MB.</div>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="timesheet-default-matter">Default Matter (optional)</label>
+      <select class="form-select" id="timesheet-default-matter" name="default_matter_id">
+        <option value="">Resolve per row from matter number in image...</option>
+        {% for matter in matters %}
+          <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+        {% endfor %}
+      </select>
+      <div class="form-help mt-1">
+        If the photo does not clearly include matter numbers, choose a default matter for unresolved rows.
+      </div>
+    </div>
+    <div class="col-12 d-grid d-md-flex justify-content-md-end">
+      <button class="btn btn-outline-light" type="submit" data-submitting-text="Importing...">Import Timesheet Photo</button>
     </div>
   </form>
 </div>

@@ -994,7 +994,7 @@
             if (response.status === 400) {
               errorMessage = "Request rejected. Check prompt length and refresh the page to renew CSRF/session.";
             } else if (response.status === 401 || response.status === 403 || response.redirected) {
-              errorMessage = "Session or permissions invalid. Sign in as admin and try again.";
+              errorMessage = "Session or permissions invalid. Sign in with director or finance-admin privileges and try again.";
             } else if (response.status >= 500) {
               errorMessage = "Server error while generating draft. Check AI configuration and retry.";
             } else {
@@ -1163,7 +1163,7 @@
             if (response.status === 400) {
               errorMessage = "Request rejected. Check prompt length and refresh the page to renew CSRF/session.";
             } else if (response.status === 401 || response.status === 403 || response.redirected) {
-              errorMessage = "Session or permissions invalid. Sign in as admin and try again.";
+              errorMessage = "Session or permissions invalid. Sign in with director or finance-admin privileges and try again.";
             } else if (response.status >= 500) {
               errorMessage = "Server error while generating draft. Check AI configuration and retry.";
             } else {
@@ -1311,7 +1311,7 @@
             if (response.status === 400) {
               errorMessage = "Request rejected. Check prompt length and refresh the page to renew CSRF/session.";
             } else if (response.status === 401 || response.status === 403 || response.redirected) {
-              errorMessage = "Session or permissions invalid. Sign in as admin and try again.";
+              errorMessage = "Session or permissions invalid. Sign in with director or finance-admin privileges and try again.";
             } else if (response.status >= 500) {
               errorMessage = "Server error while generating draft. Check AI configuration and retry.";
             } else {
@@ -1355,6 +1355,345 @@
         generateButton.textContent = defaultButtonText;
         requestInFlight = false;
       }
+    });
+  };
+
+  const initMatterAIAssist = () => {
+    const root = document.querySelector("[data-matter-ai-widget]");
+    if (!(root instanceof HTMLElement)) {
+      return;
+    }
+
+    const summaryEndpoint = String(root.dataset.summaryEndpoint || "").trim();
+    const clientUpdateEndpoint = String(root.dataset.clientUpdateEndpoint || "").trim();
+    const timeoutMs = Math.max(15000, Number.parseInt(String(root.dataset.timeoutMs || "90000"), 10) || 90000);
+    const csrfInput = document.querySelector("form input[name='csrf_token']");
+    if (!(csrfInput instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const controls = {
+      status: document.getElementById("matter-summary-status"),
+      risk: document.getElementById("matter-summary-risk"),
+      budget: document.getElementById("matter-summary-budget"),
+      objective: document.getElementById("matter-summary-objective"),
+      lastUpdate: document.getElementById("matter-summary-last-update"),
+      outcome: document.getElementById("matter-summary-outcome"),
+      clientUpdateSubject: document.getElementById("matter-ai-client-update-subject"),
+      clientUpdateBody: document.getElementById("matter-ai-client-update-body"),
+    };
+
+    const summaryButton = root.querySelector("[data-ai-matter-summary-generate]");
+    const summaryStatus = root.querySelector("[data-ai-matter-summary-status]");
+    const clientUpdateButton = root.querySelector("[data-ai-matter-client-update-generate]");
+    const clientUpdateStatus = root.querySelector("[data-ai-matter-client-update-status]");
+    if (
+      !(summaryButton instanceof HTMLButtonElement) ||
+      !(summaryStatus instanceof HTMLElement) ||
+      !(clientUpdateButton instanceof HTMLButtonElement) ||
+      !(clientUpdateStatus instanceof HTMLElement)
+    ) {
+      return;
+    }
+
+    const setStatus = (target, text, tone = "muted") => {
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      target.className = `form-help ${tone}`;
+      target.textContent = text;
+    };
+
+    const withProgress = async (button, statusNode, loadingPrefix, handler) => {
+      const defaultButtonText = String(button.textContent || "").trim() || "Generate";
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+
+      const startedAtMs = Date.now();
+      let elapsedSeconds = 0;
+      const renderProgress = () => {
+        button.textContent = `${loadingPrefix} ${elapsedSeconds}s`;
+        setStatus(statusNode, `${loadingPrefix} ${elapsedSeconds}s elapsed.`, "text-muted");
+      };
+      renderProgress();
+
+      const progressHandle = window.setInterval(() => {
+        elapsedSeconds = Math.floor((Date.now() - startedAtMs) / 1000);
+        renderProgress();
+      }, 1000);
+      const controller = new AbortController();
+      const timeoutHandle = window.setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        await handler({ controller, startedAtMs });
+      } catch (error) {
+        if (error && typeof error === "object" && String(error.name || "") === "AbortError") {
+          setStatus(statusNode, "AI request timed out. Check connectivity/configuration and retry.", "text-warning");
+        } else {
+          setStatus(statusNode, "AI service is unavailable right now. Please retry.", "text-warning");
+        }
+      } finally {
+        window.clearInterval(progressHandle);
+        window.clearTimeout(timeoutHandle);
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        button.textContent = defaultButtonText;
+      }
+    };
+
+    let summaryInFlight = false;
+    summaryButton.addEventListener("click", async () => {
+      if (summaryInFlight || !summaryEndpoint) {
+        return;
+      }
+      summaryInFlight = true;
+      await withProgress(summaryButton, summaryStatus, "Generating summary draft...", async ({ controller, startedAtMs }) => {
+        const response = await fetch(summaryEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-CSRF-Token": csrfInput.value,
+          },
+          body: JSON.stringify({
+            objective:
+              controls.objective instanceof HTMLTextAreaElement || controls.objective instanceof HTMLInputElement
+                ? controls.objective.value
+                : "",
+            last_update_note:
+              controls.lastUpdate instanceof HTMLTextAreaElement || controls.lastUpdate instanceof HTMLInputElement
+                ? controls.lastUpdate.value
+                : "",
+            outcome_summary:
+              controls.outcome instanceof HTMLTextAreaElement || controls.outcome instanceof HTMLInputElement
+                ? controls.outcome.value
+                : "",
+            risk_level:
+              controls.risk instanceof HTMLSelectElement || controls.risk instanceof HTMLInputElement
+                ? controls.risk.value
+                : "",
+            budget_status:
+              controls.budget instanceof HTMLSelectElement || controls.budget instanceof HTMLInputElement
+                ? controls.budget.value
+                : "",
+          }),
+          signal: controller.signal,
+        });
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        const payload = contentType.includes("application/json") ? await response.json().catch(() => ({})) : {};
+        if (!response.ok || payload.ok !== true) {
+          const fallbackError = response.status >= 500 ? "Server error while generating summary draft." : "AI summary draft failed.";
+          setStatus(summaryStatus, String(payload.error || fallbackError), "text-warning");
+          return;
+        }
+
+        const suggestion = payload.suggestion || {};
+        fillDraftControl(controls.objective, suggestion.objective);
+        fillDraftControl(controls.lastUpdate, suggestion.last_update_note);
+        fillDraftControl(controls.outcome, suggestion.outcome_summary);
+        fillDraftControl(controls.risk, suggestion.risk_level);
+        fillDraftControl(controls.budget, suggestion.budget_status);
+
+        const source = String(suggestion.source || "fallback").trim() || "fallback";
+        const elapsedMs = Math.max(0, Number.parseInt(String(payload.elapsed_ms || ""), 10) || Date.now() - startedAtMs);
+        const elapsedText = `${Math.max(1, Math.round(elapsedMs / 1000))}s`;
+        if (source === "fallback") {
+          const reasonCode = String(suggestion.fallback_reason || payload.fallback_reason || "").trim();
+          const reasonText = describeAIFallbackReason(reasonCode);
+          const rawDetail = String(suggestion.fallback_detail || payload.fallback_detail || "").trim();
+          const detail = rawDetail && rawDetail.length <= 180 ? rawDetail : "";
+          const reasonMessage = detail ? `${reasonText}: ${detail}` : reasonText;
+          setStatus(summaryStatus, `Summary draft generated (fallback) in ${elapsedText}. Reason: ${reasonMessage}.`, "text-warning");
+          return;
+        }
+        setStatus(summaryStatus, `Summary draft generated (${source}) in ${elapsedText}. Review and save.`, "text-success");
+      });
+      summaryInFlight = false;
+    });
+
+    let clientUpdateInFlight = false;
+    clientUpdateButton.addEventListener("click", async () => {
+      if (clientUpdateInFlight || !clientUpdateEndpoint) {
+        return;
+      }
+      clientUpdateInFlight = true;
+      await withProgress(clientUpdateButton, clientUpdateStatus, "Generating client update...", async ({ controller, startedAtMs }) => {
+        const response = await fetch(clientUpdateEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-CSRF-Token": csrfInput.value,
+          },
+          body: JSON.stringify({
+            tone_hint: "Professional, clear, and concise for external client communication",
+          }),
+          signal: controller.signal,
+        });
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        const payload = contentType.includes("application/json") ? await response.json().catch(() => ({})) : {};
+        if (!response.ok || payload.ok !== true) {
+          const fallbackError = response.status >= 500 ? "Server error while generating client update." : "AI client update failed.";
+          setStatus(clientUpdateStatus, String(payload.error || fallbackError), "text-warning");
+          return;
+        }
+
+        const suggestion = payload.suggestion || {};
+        fillDraftControl(controls.clientUpdateSubject, suggestion.subject);
+        fillDraftControl(controls.clientUpdateBody, suggestion.body);
+
+        const source = String(suggestion.source || "fallback").trim() || "fallback";
+        const elapsedMs = Math.max(0, Number.parseInt(String(payload.elapsed_ms || ""), 10) || Date.now() - startedAtMs);
+        const elapsedText = `${Math.max(1, Math.round(elapsedMs / 1000))}s`;
+        if (source === "fallback") {
+          const reasonCode = String(suggestion.fallback_reason || payload.fallback_reason || "").trim();
+          const reasonText = describeAIFallbackReason(reasonCode);
+          const rawDetail = String(suggestion.fallback_detail || payload.fallback_detail || "").trim();
+          const detail = rawDetail && rawDetail.length <= 180 ? rawDetail : "";
+          const reasonMessage = detail ? `${reasonText}: ${detail}` : reasonText;
+          setStatus(clientUpdateStatus, `Client update generated (fallback) in ${elapsedText}. Reason: ${reasonMessage}.`, "text-warning");
+          return;
+        }
+        setStatus(clientUpdateStatus, `Client update generated (${source}) in ${elapsedText}.`, "text-success");
+      });
+      clientUpdateInFlight = false;
+    });
+  };
+
+  const initTimeNarrativeAIDraft = () => {
+    const forms = Array.from(document.querySelectorAll("form[data-time-narrative-widget]"));
+    if (forms.length === 0) {
+      return;
+    }
+
+    forms.forEach((form) => {
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+      const endpoint = String(form.getAttribute("data-time-narrative-endpoint") || "").trim();
+      const timeoutMs = Math.max(
+        15000,
+        Number.parseInt(String(form.getAttribute("data-time-narrative-timeout-ms") || "90000"), 10) || 90000
+      );
+      if (!endpoint) {
+        return;
+      }
+
+      const csrfInput = form.querySelector("input[name='csrf_token']");
+      const narrativeInput = form.querySelector("[name='narrative']");
+      const matterSelect = form.querySelector("[name='matter_id']");
+      const startInput = form.querySelector("[name='start_at']");
+      const endInput = form.querySelector("[name='end_at']");
+      const taskCodeInput = form.querySelector("[name='task_code']");
+      const activityCodeInput = form.querySelector("[name='activity_code']");
+      const button = form.querySelector("[data-ai-time-narrative-generate]");
+      const statusNode = form.querySelector("[data-ai-time-narrative-status]");
+      if (
+        !(csrfInput instanceof HTMLInputElement) ||
+        !(narrativeInput instanceof HTMLTextAreaElement) ||
+        !(matterSelect instanceof HTMLSelectElement) ||
+        !(button instanceof HTMLButtonElement) ||
+        !(statusNode instanceof HTMLElement)
+      ) {
+        return;
+      }
+
+      const setStatus = (text, tone = "muted") => {
+        statusNode.className = `form-help mt-1 ${tone}`;
+        statusNode.textContent = text;
+      };
+
+      const defaultButtonText = String(button.textContent || "Draft Narrative with AI").trim();
+      let requestInFlight = false;
+
+      button.addEventListener("click", async () => {
+        if (requestInFlight) {
+          return;
+        }
+        if (!matterSelect.value) {
+          setStatus("Select a matter before generating a narrative.", "text-warning");
+          matterSelect.focus();
+          return;
+        }
+
+        requestInFlight = true;
+        button.disabled = true;
+        button.setAttribute("aria-busy", "true");
+
+        const startedAtMs = Date.now();
+        let elapsedSeconds = 0;
+        const renderProgress = () => {
+          button.textContent = `Generating narrative... ${elapsedSeconds}s`;
+          setStatus(`Generating narrative... ${elapsedSeconds}s elapsed.`, "text-muted");
+        };
+        renderProgress();
+        const progressHandle = window.setInterval(() => {
+          elapsedSeconds = Math.floor((Date.now() - startedAtMs) / 1000);
+          renderProgress();
+        }, 1000);
+
+        const controller = new AbortController();
+        const timeoutHandle = window.setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              "X-CSRF-Token": csrfInput.value,
+            },
+            body: JSON.stringify({
+              matter_id: matterSelect.value,
+              start_at: startInput instanceof HTMLInputElement ? startInput.value : "",
+              end_at: endInput instanceof HTMLInputElement ? endInput.value : "",
+              task_code: taskCodeInput instanceof HTMLInputElement ? taskCodeInput.value : "",
+              activity_code: activityCodeInput instanceof HTMLInputElement ? activityCodeInput.value : "",
+              narrative: narrativeInput.value,
+            }),
+            signal: controller.signal,
+          });
+          const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+          const payload = contentType.includes("application/json") ? await response.json().catch(() => ({})) : {};
+          if (!response.ok || payload.ok !== true) {
+            let errorMessage = String(payload.error || "").trim();
+            if (!errorMessage) {
+              errorMessage = response.status >= 500 ? "Server error while generating narrative." : "AI narrative draft failed.";
+            }
+            setStatus(errorMessage, "text-warning");
+            return;
+          }
+
+          const suggestion = payload.suggestion || {};
+          fillDraftControl(narrativeInput, suggestion.narrative);
+          const source = String(suggestion.source || "fallback").trim() || "fallback";
+          const elapsedMs = Math.max(0, Number.parseInt(String(payload.elapsed_ms || ""), 10) || Date.now() - startedAtMs);
+          const elapsedText = `${Math.max(1, Math.round(elapsedMs / 1000))}s`;
+          if (source === "fallback") {
+            const reasonCode = String(suggestion.fallback_reason || payload.fallback_reason || "").trim();
+            const reasonText = describeAIFallbackReason(reasonCode);
+            const rawDetail = String(suggestion.fallback_detail || payload.fallback_detail || "").trim();
+            const detail = rawDetail && rawDetail.length <= 180 ? rawDetail : "";
+            const reasonMessage = detail ? `${reasonText}: ${detail}` : reasonText;
+            setStatus(`Narrative draft generated (fallback) in ${elapsedText}. Reason: ${reasonMessage}.`, "text-warning");
+            return;
+          }
+          setStatus(`Narrative draft generated (${source}) in ${elapsedText}.`, "text-success");
+        } catch (error) {
+          if (error && typeof error === "object" && String(error.name || "") === "AbortError") {
+            setStatus("AI narrative request timed out. Check connectivity/configuration and retry.", "text-warning");
+          } else {
+            setStatus("AI narrative service is unavailable right now. Please retry.", "text-warning");
+          }
+        } finally {
+          window.clearTimeout(timeoutHandle);
+          window.clearInterval(progressHandle);
+          button.removeAttribute("aria-busy");
+          button.disabled = false;
+          button.textContent = defaultButtonText;
+          requestInFlight = false;
+        }
+      });
     });
   };
 
@@ -3331,6 +3670,8 @@
     initArchetypeAIDraftGenerator();
     initContractAIDraftGenerator();
     initDocumentAIDraftGenerator();
+    initMatterAIAssist();
+    initTimeNarrativeAIDraft();
     initTimeCodeAssist();
     initTimerPresenceGuard();
     initLiveBillingCue();

@@ -31,6 +31,7 @@ from ..models import (
 )
 from ..policies import visible_matter_ids
 from ..policies.residency import enforce_data_residency
+from ..roles import role_is_admin
 from ..services.notification_engine import NotificationEngine
 from ..services.semantic_search import SemanticSearchService
 from ..templates import page
@@ -651,7 +652,7 @@ def register_dms_routes(app):
             abort(403)
 
         active = DocumentLock.query.filter_by(document_id=document_id, released_at=None).first()
-        if active and (active.locked_by == current_user.id or current_user.role == "admin"):
+        if active and (active.locked_by == current_user.id or role_is_admin(getattr(current_user, "role", None))):
             active.released_at = dt.datetime.utcnow()
             db.session.commit()
             audit("dms_unlock", "DocumentRecord", document_id)
