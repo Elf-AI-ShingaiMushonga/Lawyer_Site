@@ -1,5 +1,38 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+  .matter-detail-jumpbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid rgba(225, 6, 0, 0.2);
+    border-radius: 12px;
+    background: rgba(255, 250, 250, 0.9);
+  }
+
+  .matter-detail-jumpbar .nav-pill {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .matter-detail-jumpbar .nav-pill.is-active {
+    border-color: rgba(225, 6, 0, 0.68);
+    background: rgba(225, 6, 0, 0.14);
+    color: #5f1f1c;
+    box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.1);
+  }
+
+  .matter-detail-anchor {
+    scroll-margin-top: 110px;
+  }
+
+  .matter-detail-list-tools {
+    margin-top: 8px;
+    margin-bottom: 8px;
+  }
+</style>
 <div class="row g-3">
   <div class="col-lg-8">
     <div class="card p-3">
@@ -44,60 +77,74 @@
         </div>
       </div>
 
-      <form method="post" action="{{ url_for('matter_summary_update', matter_id=m.id) }}" class="mt-2">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="form-section">
-          <div class="row g-2">
-            <div class="col-md-4">
-              <label class="form-label">Status</label>
-              <select class="form-select" id="matter-summary-status" name="status">
-                {% for status in matter_statuses %}
-                  <option value="{{ status }}" {% if status == m.status %}selected{% endif %}>{{ status }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Risk Level</label>
-              <select class="form-select" id="matter-summary-risk" name="risk_level">
-                {% for risk in risk_levels %}
-                  <option value="{{ risk }}" {% if risk == m.risk_level %}selected{% endif %}>{{ risk }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Budget Status</label>
-              <select class="form-select" id="matter-summary-budget" name="budget_status">
-                {% for budget in budget_statuses %}
-                  <option value="{{ budget }}" {% if budget == m.budget_status %}selected{% endif %}>{{ budget }}</option>
-                {% endfor %}
-              </select>
-            </div>
-          </div>
-        </div>
-        <div class="form-section mt-2">
-          <div class="form-help mb-2">Keep this concise and stakeholder-ready. These notes are used in client and partner summaries.</div>
-          <div class="row g-2">
-            <div class="col-12">
-              <label class="form-label">Matter Objective</label>
-              <textarea class="form-control" id="matter-summary-objective" name="objective" rows="2" placeholder="What outcome are we driving?">{{ m.objective or "" }}</textarea>
-            </div>
-            <div class="col-12">
-              <label class="form-label">Latest Update</label>
-              <textarea class="form-control" id="matter-summary-last-update" name="last_update_note" rows="2" placeholder="Latest stakeholder-ready update">{{ m.last_update_note or "" }}</textarea>
-            </div>
-            <div class="col-12">
-              <label class="form-label">Outcome / Business Impact</label>
-              <textarea class="form-control" id="matter-summary-outcome" name="outcome_summary" rows="2" placeholder="Value delivered or expected value">{{ m.outcome_summary or "" }}</textarea>
-            </div>
-          </div>
-        </div>
-        <div class="d-grid mt-2">
-          <button class="btn btn-light">Save Executive Summary</button>
-        </div>
-      </form>
+      <div class="matter-detail-jumpbar mt-3" data-matter-detail-jumpbar>
+        <a class="nav-pill is-active" href="#matter-summary-section">Summary</a>
+        <a class="nav-pill" href="#matter-ai-section">AI Assistant</a>
+        <a class="nav-pill" href="#matter-archetype-section">Archetype</a>
+        <a class="nav-pill" href="#matter-timeline-section">Timeline</a>
+        <a class="nav-pill" href="#matter-activity-section">Activity</a>
+        <a class="nav-pill" href="#matter-tasks-section">Tasks</a>
+        <a class="nav-pill" href="#matter-documents-section">Documents</a>
+        <a class="nav-pill" href="#matter-team-section">Team</a>
+      </div>
 
-      <div
-        class="form-section mt-2"
+      <section id="matter-summary-section" class="matter-detail-anchor">
+        <form method="post" action="{{ url_for('matter_summary_update', matter_id=m.id) }}" class="mt-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="form-section">
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label class="form-label">Status</label>
+                <select class="form-select" id="matter-summary-status" name="status">
+                  {% for status in matter_statuses %}
+                    <option value="{{ status }}" {% if status == m.status %}selected{% endif %}>{{ status }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Risk Level</label>
+                <select class="form-select" id="matter-summary-risk" name="risk_level">
+                  {% for risk in risk_levels %}
+                    <option value="{{ risk }}" {% if risk == m.risk_level %}selected{% endif %}>{{ risk }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Budget Status</label>
+                <select class="form-select" id="matter-summary-budget" name="budget_status">
+                  {% for budget in budget_statuses %}
+                    <option value="{{ budget }}" {% if budget == m.budget_status %}selected{% endif %}>{{ budget }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="form-section mt-2">
+            <div class="form-help mb-2">Keep this concise and stakeholder-ready. These notes are used in client and partner summaries.</div>
+            <div class="row g-2">
+              <div class="col-12">
+                <label class="form-label">Matter Objective</label>
+                <textarea class="form-control" id="matter-summary-objective" name="objective" rows="2" placeholder="What outcome are we driving?">{{ m.objective or "" }}</textarea>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Latest Update</label>
+                <textarea class="form-control" id="matter-summary-last-update" name="last_update_note" rows="2" placeholder="Latest stakeholder-ready update">{{ m.last_update_note or "" }}</textarea>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Outcome / Business Impact</label>
+                <textarea class="form-control" id="matter-summary-outcome" name="outcome_summary" rows="2" placeholder="Value delivered or expected value">{{ m.outcome_summary or "" }}</textarea>
+              </div>
+            </div>
+          </div>
+          <div class="d-grid mt-2">
+            <button class="btn btn-light">Save Executive Summary</button>
+          </div>
+        </form>
+      </section>
+
+      <section
+        id="matter-ai-section"
+        class="form-section mt-2 matter-detail-anchor"
         data-matter-ai-widget
         data-summary-endpoint="{{ url_for('matter_ai_summary_draft', matter_id=m.id) }}"
         data-client-update-endpoint="{{ url_for('matter_ai_client_update_draft', matter_id=m.id) }}"
@@ -134,7 +181,7 @@
           </div>
           <div class="form-help mt-1" data-ai-matter-client-update-status></div>
         </div>
-      </div>
+      </section>
 
       <div class="list-meta mt-2">
         <span>Opened {{ m.opened_at.strftime("%Y-%m-%d") }}</span>
@@ -161,9 +208,9 @@
         </div>
       </div>
 
-      <div class="form-section mt-3">
+      <section id="matter-archetype-section" class="form-section mt-3 matter-detail-anchor">
         <div class="toolbar-row">
-          <div>
+          <div class="row g-2">
             <div class="small fw-semibold text-uppercase muted">Legal Category and Archetype</div>
             {% if archetype %}
               <div class="list-meta mt-1">
@@ -255,10 +302,10 @@
         {% else %}
           <div class="muted small mt-1">No legal archetype is linked to this matter.</div>
         {% endif %}
-      </div>
+      </section>
     </div>
 
-    <div class="card p-3 mt-3">
+    <div class="card p-3 mt-3 matter-detail-anchor" id="matter-timeline-section">
       <div class="toolbar-row">
         <div>
           <h4 class="mb-0">Timeline</h4>
@@ -300,10 +347,18 @@
         </div>
       </form>
 
-      <div class="timeline-list mt-3">
-        {% if timeline %}
+      {% if timeline %}
+        <div class="table-tools matter-detail-list-tools" data-list-filter data-list-filter-target="matter-timeline-list">
+          <input class="form-control" type="search" data-list-filter-search placeholder="Filter timeline by title, type, date, or notes...">
+          <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
+        </div>
+        <div class="timeline-list mt-2" id="matter-timeline-list">
           {% for e in timeline %}
-            <div class="timeline-item">
+            <div
+              class="timeline-item"
+              data-list-item
+              data-search="{{ e.title }} {{ e.event_date }} {{ e.event_type }} {{ e.description or '' }}"
+            >
               <div class="list-row">
                 <div>
                   <div class="list-title">{{ e.title }}</div>
@@ -319,21 +374,30 @@
               </div>
             </div>
           {% endfor %}
-        {% else %}
-          <div class="empty-state">No timeline events yet.</div>
-        {% endif %}
-      </div>
+        </div>
+        <div class="empty-state mt-2" data-list-filter-empty hidden>No timeline events match your filter.</div>
+      {% else %}
+        <div class="empty-state">No timeline events yet.</div>
+      {% endif %}
     </div>
   </div>
 
   <div class="col-lg-4">
-    <div class="card p-3">
+    <div class="card p-3 matter-detail-anchor" id="matter-activity-section">
       <h4 class="mb-1">Matter Activity Feed</h4>
       <div class="muted small">Human-readable actions for quick stakeholder updates.</div>
-      <div class="entry-scroll mt-2">
-        {% if activity_items %}
+      {% if activity_items %}
+        <div class="table-tools matter-detail-list-tools" data-list-filter data-list-filter-target="matter-activity-list">
+          <input class="form-control" type="search" data-list-filter-search placeholder="Filter activity by action, actor, or details...">
+          <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
+        </div>
+        <div class="entry-scroll mt-2" id="matter-activity-list">
           {% for activity, actor in activity_items %}
-            <div class="activity-item">
+            <div
+              class="activity-item"
+              data-list-item
+              data-search="{{ activity.action }} {{ actor.full_name if actor else 'System' }} {{ activity.details or '' }} {{ activity.created_at }}"
+            >
               <div class="d-flex justify-content-between">
                 <div class="fw-semibold">{{ activity.action }}</div>
                 <div class="muted small">{{ activity.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
@@ -341,21 +405,30 @@
               <div class="muted small">{{ actor.full_name if actor else "System" }}{% if activity.details %} • {{ activity.details }}{% endif %}</div>
             </div>
           {% endfor %}
-        {% else %}
-          <div class="muted small">No activity yet.</div>
-        {% endif %}
-      </div>
+        </div>
+        <div class="empty-state mt-2" data-list-filter-empty hidden>No activity entries match your filter.</div>
+      {% else %}
+        <div class="muted small mt-2">No activity yet.</div>
+      {% endif %}
     </div>
 
-    <div class="card p-3 mt-3">
+    <div class="card p-3 mt-3 matter-detail-anchor" id="matter-tasks-section">
       <div class="toolbar-row">
         <h4 class="mb-0">Tasks</h4>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Manage</a>
       </div>
-      <div class="mt-2 entry-scroll">
-        {% if tasks %}
+      {% if tasks %}
+        <div class="table-tools matter-detail-list-tools" data-list-filter data-list-filter-target="matter-tasks-list">
+          <input class="form-control" type="search" data-list-filter-search placeholder="Filter tasks by title, status, due date, or ID...">
+          <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
+        </div>
+        <div class="mt-2 entry-scroll" id="matter-tasks-list">
           {% for t in tasks[:8] %}
-            <div class="activity-item">
+            <div
+              class="activity-item"
+              data-list-item
+              data-search="{{ t.title }} {{ t.status }} {{ t.due_date or '' }} {{ t.id }}"
+            >
               <div class="d-flex justify-content-between">
                 <div class="fw-semibold">{{ t.title }}</div>
                 <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
@@ -363,21 +436,30 @@
               <div class="muted small">{% if t.due_date %}Due {{ t.due_date }}{% else %}No due date{% endif %} • Task #{{ t.id }}</div>
             </div>
           {% endfor %}
-        {% else %}
-          <div class="muted small">No tasks yet.</div>
-        {% endif %}
-      </div>
+        </div>
+        <div class="empty-state mt-2" data-list-filter-empty hidden>No tasks match your filter.</div>
+      {% else %}
+        <div class="muted small mt-2">No tasks yet.</div>
+      {% endif %}
     </div>
 
-    <div class="card p-3 mt-3">
+    <div class="card p-3 mt-3 matter-detail-anchor" id="matter-documents-section">
       <div class="toolbar-row">
         <h4 class="mb-0">Documents</h4>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_documents', matter_id=m.id) }}">Open</a>
       </div>
-      <div class="mt-2 entry-scroll">
-        {% if docs %}
+      {% if docs %}
+        <div class="table-tools matter-detail-list-tools" data-list-filter data-list-filter-target="matter-documents-list">
+          <input class="form-control" type="search" data-list-filter-search placeholder="Filter documents by name, category, stage, or version...">
+          <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
+        </div>
+        <div class="mt-2 entry-scroll" id="matter-documents-list">
           {% for d in docs[:8] %}
-            <div class="activity-item">
+            <div
+              class="activity-item"
+              data-list-item
+              data-search="{{ d.original_filename }} {{ d.category or 'General' }} {{ d.lifecycle_stage }} {{ d.doc_version or '' }} {{ 'Privileged' if d.is_privileged else '' }}"
+            >
               <div class="d-flex justify-content-between">
                 <div class="fw-semibold">{{ d.original_filename }}</div>
                 <a href="{{ url_for('doc_download', doc_id=d.id) }}">download</a>
@@ -388,34 +470,45 @@
               </div>
             </div>
           {% endfor %}
-        {% else %}
-          <div class="muted small">No documents uploaded.</div>
-        {% endif %}
-      </div>
+        </div>
+        <div class="empty-state mt-2" data-list-filter-empty hidden>No documents match your filter.</div>
+      {% else %}
+        <div class="muted small mt-2">No documents uploaded.</div>
+      {% endif %}
     </div>
 
-    <div class="card p-3 mt-3">
+    <div class="card p-3 mt-3 matter-detail-anchor" id="matter-team-section">
       <div class="toolbar-row">
         <h4 class="mb-0">Matter Team</h4>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_team', matter_id=m.id) }}">Edit</a>
       </div>
-      <div class="mt-2 entry-scroll">
-        {% for u, mm in members %}
-          <div class="activity-item d-flex justify-content-between">
-            <div>
-              <div class="fw-semibold">{{ u.full_name }}</div>
-              <div class="muted small">{{ u.email }}</div>
+      {% if members %}
+        <div class="table-tools matter-detail-list-tools" data-list-filter data-list-filter-target="matter-team-list">
+          <input class="form-control" type="search" data-list-filter-search placeholder="Filter team by name, email, role, or matter responsibility...">
+          <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
+        </div>
+        <div class="mt-2 entry-scroll" id="matter-team-list">
+          {% for u, mm in members %}
+            <div
+              class="activity-item d-flex justify-content-between"
+              data-list-item
+              data-search="{{ u.full_name }} {{ u.email }} {{ mm.role_in_matter }} {{ role_display_name(u.role) }}"
+            >
+              <div>
+                <div class="fw-semibold">{{ u.full_name }}</div>
+                <div class="muted small">{{ u.email }}</div>
+              </div>
+              <div class="text-end">
+                <div class="badge badge-soft">{{ mm.role_in_matter }}</div>
+                <div class="muted small">{{ role_display_name(u.role) }}</div>
+              </div>
             </div>
-            <div class="text-end">
-              <div class="badge badge-soft">{{ mm.role_in_matter }}</div>
-              <div class="muted small">{{ role_display_name(u.role) }}</div>
-            </div>
-          </div>
-        {% endfor %}
-        {% if not members %}
-          <div class="muted small">No team members assigned.</div>
-        {% endif %}
-      </div>
+          {% endfor %}
+        </div>
+        <div class="empty-state mt-2" data-list-filter-empty hidden>No team members match your filter.</div>
+      {% else %}
+        <div class="muted small mt-2">No team members assigned.</div>
+      {% endif %}
     </div>
   </div>
 </div>

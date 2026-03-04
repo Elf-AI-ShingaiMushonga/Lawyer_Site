@@ -800,12 +800,47 @@
     .assignee-checklist {
       display: grid;
       gap: 8px;
-      max-height: 220px;
+      max-height: 180px;
       overflow: auto;
       border: 1px solid rgba(225, 6, 0, 0.24);
       border-radius: 11px;
       background: #fff9f9;
       padding: 8px;
+    }
+
+    .assignee-picker {
+      position: relative;
+    }
+
+    .assignee-picker-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      text-align: left;
+    }
+
+    .assignee-picker-toggle[aria-expanded="true"] {
+      border-color: rgba(225, 6, 0, 0.62);
+      box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.14);
+      background: #fff4f4;
+    }
+
+    .assignee-picker-toggle-hint {
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #8e6a6a;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .assignee-picker-panel {
+      border: 1px solid rgba(225, 6, 0, 0.22);
+      border-radius: 11px;
+      background: #fffefe;
+      padding: 9px;
     }
 
     .assignee-checklist-item {

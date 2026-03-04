@@ -681,6 +681,158 @@
     applyFilters();
   };
 
+  const initPriorityInbox = () => {
+    const root = document.querySelector("[data-priority-inbox]");
+    if (!(root instanceof HTMLElement)) {
+      return;
+    }
+    const toggles = Array.from(root.querySelectorAll("[data-priority-toggle]")).filter(
+      (item) => item instanceof HTMLButtonElement
+    );
+    const panes = Array.from(root.querySelectorAll("[data-priority-pane]")).filter(
+      (item) => item instanceof HTMLElement
+    );
+    if (!toggles.length || !panes.length) {
+      return;
+    }
+
+    const normalizeFilter = (value) => {
+      return String(value || "")
+        .trim()
+        .toLowerCase() || "all";
+    };
+
+    const applyFilter = (rawFilter) => {
+      const filter = normalizeFilter(rawFilter);
+      root.setAttribute("data-priority-filter", filter);
+      toggles.forEach((button) => {
+        const buttonFilter = normalizeFilter(button.getAttribute("data-priority-toggle"));
+        const isActive = buttonFilter === filter;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+      panes.forEach((pane) => {
+        const paneType = normalizeFilter(pane.getAttribute("data-priority-pane"));
+        const shouldShow = filter === "all" || paneType === filter;
+        pane.hidden = !shouldShow;
+        pane.setAttribute("aria-hidden", shouldShow ? "false" : "true");
+      });
+    };
+
+    toggles.forEach((button) => {
+      button.addEventListener("click", () => {
+        applyFilter(button.getAttribute("data-priority-toggle"));
+      });
+    });
+
+    const defaultFilter = normalizeFilter(
+      toggles.find((button) => button.classList.contains("is-active"))?.getAttribute("data-priority-toggle")
+    );
+    applyFilter(defaultFilter || "all");
+  };
+
+  const initMatterDetailJumpbar = () => {
+    const bar = document.querySelector("[data-matter-detail-jumpbar]");
+    if (!(bar instanceof HTMLElement)) {
+      return;
+    }
+    const links = Array.from(bar.querySelectorAll("a[href^='#']")).filter(
+      (item) => item instanceof HTMLAnchorElement
+    );
+    if (!links.length) {
+      return;
+    }
+
+    const sections = [];
+    const linkBySectionId = new Map();
+    links.forEach((link) => {
+      const rawHref = String(link.getAttribute("href") || "");
+      const sectionId = rawHref.startsWith("#") ? rawHref.slice(1) : "";
+      if (!sectionId) {
+        return;
+      }
+      const target = document.getElementById(sectionId);
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      sections.push(target);
+      linkBySectionId.set(sectionId, link);
+    });
+
+    if (!sections.length || !linkBySectionId.size) {
+      return;
+    }
+
+    const setActive = (sectionId) => {
+      links.forEach((link) => {
+        const href = String(link.getAttribute("href") || "");
+        const active = href === `#${sectionId}`;
+        link.classList.toggle("is-active", active);
+        link.setAttribute("aria-current", active ? "location" : "false");
+      });
+    };
+
+    const defaultHref = String(
+      links.find((link) => link.classList.contains("is-active"))?.getAttribute("href") || ""
+    );
+    const defaultSectionId = defaultHref.startsWith("#") ? defaultHref.slice(1) : sections[0].id;
+    if (defaultSectionId) {
+      setActive(defaultSectionId);
+    }
+
+    links.forEach((link) => {
+      link.addEventListener("click", () => {
+        const href = String(link.getAttribute("href") || "");
+        const sectionId = href.startsWith("#") ? href.slice(1) : "";
+        if (sectionId) {
+          setActive(sectionId);
+        }
+      });
+    });
+
+    if ("IntersectionObserver" in window) {
+      const observer = new window.IntersectionObserver(
+        (entries) => {
+          let nextSectionId = "";
+          let bestRatio = 0;
+          entries.forEach((entry) => {
+            if (!(entry.target instanceof HTMLElement) || !entry.isIntersecting) {
+              return;
+            }
+            if (entry.intersectionRatio >= bestRatio) {
+              bestRatio = entry.intersectionRatio;
+              nextSectionId = entry.target.id;
+            }
+          });
+          if (nextSectionId) {
+            setActive(nextSectionId);
+          }
+        },
+        {
+          threshold: [0.2, 0.35, 0.5, 0.65],
+          rootMargin: "-115px 0px -52% 0px",
+        }
+      );
+      sections.forEach((section) => observer.observe(section));
+      return;
+    }
+
+    const onScroll = () => {
+      const viewportAnchor = 138;
+      let current = sections[0].id;
+      sections.forEach((section) => {
+        const rect = section.getBoundingClientRect();
+        if (rect.top <= viewportAnchor) {
+          current = section.id;
+        }
+      });
+      setActive(current);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  };
+
   const initNavMenus = () => {
     const menus = Array.from(document.querySelectorAll("[data-nav-menu]")).filter(
       (menu) => menu instanceof HTMLDetailsElement
@@ -3035,10 +3187,19 @@
     const collapsibleSection = navBody instanceof HTMLElement ? navBody : nav;
 
     const minDelta = 8;
+    const expandDebounceMs = 260;
     let lastY = window.scrollY;
     let isCollapsed = false;
     let ticking = false;
     let expandedHeight = collapsibleSection.offsetHeight;
+    let suppressExpandUntil = 0;
+
+    const nowMs = () => {
+      if (window.performance && typeof window.performance.now === "function") {
+        return window.performance.now();
+      }
+      return Date.now();
+    };
 
     const measureExpandedHeight = () => {
       const wasCollapsed = nav.classList.contains("is-collapsed");
@@ -3059,6 +3220,11 @@
       }
       isCollapsed = nextState;
       nav.classList.toggle("is-collapsed", nextState);
+      if (nextState) {
+        suppressExpandUntil = nowMs() + expandDebounceMs;
+      } else {
+        suppressExpandUntil = 0;
+      }
     };
 
     const update = () => {
@@ -3070,7 +3236,10 @@
       } else {
         if (delta > minDelta && y > collapseStart()) {
           setCollapsed(true);
-        } else if (delta < -minDelta) {
+        } else if (
+          delta < -minDelta &&
+          (!isCollapsed || nowMs() >= suppressExpandUntil)
+        ) {
           setCollapsed(false);
         }
       }
@@ -3135,6 +3304,10 @@
     const lawyerClearAllButton = form.querySelector("#matter-lawyer-clear-all");
     const lawyerSelectionMeta = form.querySelector("#matter-lawyer-selection-meta");
     const lawyerSearchEmpty = form.querySelector("#matter-lawyer-search-empty");
+    const lawyerPicker = form.querySelector("[data-assignee-picker]");
+    const lawyerToggleButton = form.querySelector("#matter-lawyer-toggle");
+    const lawyerToggleLabel = form.querySelector("#matter-lawyer-toggle-label");
+    const lawyerPanel = form.querySelector("#matter-lawyer-panel");
 
     if (
       !(categoryInput instanceof HTMLSelectElement) ||
@@ -3382,19 +3555,58 @@
         lawyerChecklist.querySelectorAll("[data-assignee-checkbox]")
       );
 
-      const setSelectionMeta = () => {
-        if (!(lawyerSelectionMeta instanceof HTMLElement)) {
+      const setPickerOpen = (nextOpen) => {
+        if (
+          !(lawyerPanel instanceof HTMLElement) ||
+          !(lawyerToggleButton instanceof HTMLButtonElement)
+        ) {
           return;
         }
-        const selectedCount = assigneeCheckboxes.filter(
+        const isOpen = Boolean(nextOpen);
+        lawyerPanel.hidden = !isOpen;
+        lawyerToggleButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        const hint = lawyerToggleButton.querySelector(".assignee-picker-toggle-hint");
+        if (hint instanceof HTMLElement) {
+          hint.textContent = isOpen ? "Collapse" : "Expand";
+        }
+      };
+
+      const setSelectionMeta = () => {
+        const selectedCheckboxes = assigneeCheckboxes.filter(
           (checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked
-        ).length;
+        );
+        const selectedCount = selectedCheckboxes.length;
+        const selectedNames = selectedCheckboxes
+          .map((checkbox) => {
+            const row = checkbox.closest("[data-assignee-item]");
+            if (!(row instanceof HTMLElement)) {
+              return "";
+            }
+            const nameNode = row.querySelector(".assignee-checklist-main");
+            return String(nameNode instanceof HTMLElement ? nameNode.textContent || "" : "").trim();
+          })
+          .filter(Boolean);
         if (selectedCount <= 0) {
-          lawyerSelectionMeta.textContent = "No attorneys selected.";
+          if (lawyerSelectionMeta instanceof HTMLElement) {
+            lawyerSelectionMeta.textContent = "No attorneys selected.";
+          }
+          if (lawyerToggleLabel instanceof HTMLElement) {
+            lawyerToggleLabel.textContent = "Choose attorneys";
+          }
         } else if (selectedCount === 1) {
-          lawyerSelectionMeta.textContent = "1 attorney selected.";
+          if (lawyerSelectionMeta instanceof HTMLElement) {
+            lawyerSelectionMeta.textContent = "1 attorney selected.";
+          }
+          if (lawyerToggleLabel instanceof HTMLElement) {
+            lawyerToggleLabel.textContent = selectedNames[0] || "1 attorney selected";
+          }
         } else {
-          lawyerSelectionMeta.textContent = `${selectedCount} attorneys selected.`;
+          if (lawyerSelectionMeta instanceof HTMLElement) {
+            lawyerSelectionMeta.textContent = `${selectedCount} attorneys selected.`;
+          }
+          if (lawyerToggleLabel instanceof HTMLElement) {
+            lawyerToggleLabel.textContent = `${selectedCount} attorneys selected`;
+          }
         }
       };
 
@@ -3444,8 +3656,46 @@
         setSelectionMeta();
       });
 
+      if (lawyerToggleButton instanceof HTMLButtonElement) {
+        lawyerToggleButton.addEventListener("click", () => {
+          const isExpanded = lawyerToggleButton.getAttribute("aria-expanded") === "true";
+          setPickerOpen(!isExpanded);
+          if (!isExpanded && lawyerSearchInput instanceof HTMLInputElement) {
+            lawyerSearchInput.focus();
+          }
+        });
+      }
+
+      const closePickerOnOutsideClick = (event) => {
+        if (
+          !(lawyerPanel instanceof HTMLElement) ||
+          lawyerPanel.hidden ||
+          !(lawyerPicker instanceof HTMLElement) ||
+          !(event.target instanceof Node)
+        ) {
+          return;
+        }
+        if (!lawyerPicker.contains(event.target)) {
+          setPickerOpen(false);
+        }
+      };
+      document.addEventListener("pointerdown", closePickerOnOutsideClick);
+      form.addEventListener(
+        "submit",
+        () => {
+          document.removeEventListener("pointerdown", closePickerOnOutsideClick);
+        },
+        { once: true }
+      );
+      form.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          setPickerOpen(false);
+        }
+      });
+
       setSelectionMeta();
       applyAssigneeFilter();
+      setPickerOpen(false);
     }
 
     ensureInitialArchetypeSelection();
@@ -4015,6 +4265,8 @@
     initCommandPalette();
     initNavMenus();
     initMatterQuickFilters();
+    initPriorityInbox();
+    initMatterDetailJumpbar();
     initTimePrompts();
     initArchetypeAIDraftGenerator();
     initContractAIDraftGenerator();

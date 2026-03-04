@@ -3,71 +3,104 @@
 {% set done_checklist = checklist | selectattr('is_done') | list | length %}
 {% set open_checklist = (checklist | length) - done_checklist %}
 {% set archetype_missing = archetype_compliance.required_missing_labels if archetype_compliance else [] %}
+<style>
+  .workspace-overview-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 9px;
+  }
+
+  .workspace-title-meta {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .workspace-section {
+    height: 100%;
+  }
+
+  .workspace-section-title {
+    margin-bottom: 8px;
+  }
+
+  .workspace-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .workspace-actions-grid .matter-workspace-link-btn {
+    width: 100%;
+  }
+
+  .workspace-metric-strip {
+    margin-top: 12px;
+  }
+
+  .workspace-kpi-label {
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 991.98px) {
+    .workspace-actions-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
 
 <div class="row g-3">
-  <div class="col-lg-7">
-    <div class="card p-3 mb-3">
-      <h3 class="mb-1">{{ m.matter_no }} Workspace</h3>
-      <div class="muted">{{ m.title }} • {{ m.client_name }}</div>
-      <div class="kpi-strip mt-3">
+  <div class="col-lg-8">
+    <div class="card p-3 mb-3 workspace-section">
+      <div class="workspace-overview-title">
+        <h3 class="mb-0">{{ m.matter_no }} Workspace</h3>
+        <span class="workspace-title-meta">{{ m.title }} • {{ m.client_name }}</span>
+      </div>
+      <div class="list-meta mt-2">
+        <span class="badge status-badge status-{{ (m.status or 'open')|lower|replace(' ', '-') }}">{{ m.status or "Open" }}</span>
+        <span class="risk-chip risk-{{ (m.risk_level or 'medium')|lower }}">{{ m.risk_level or "Medium" }}</span>
+        <span>Stage: {{ m.stage or "-" }}</span>
+      </div>
+      <div class="kpi-strip workspace-metric-strip">
         <div class="kpi-pill">
-          <div class="label">Stage</div>
+          <div class="label workspace-kpi-label">Stage</div>
           <div class="value" style="font-size: 17px;">{{ m.stage or '-' }}</div>
         </div>
         <div class="kpi-pill">
-          <div class="label">Open Tasks</div>
+          <div class="label workspace-kpi-label">Open Tasks</div>
           <div class="value">{{ stats.open_tasks }}</div>
         </div>
         <div class="kpi-pill">
-          <div class="label">Deadlines</div>
+          <div class="label workspace-kpi-label">Deadlines</div>
           <div class="value">{{ stats.deadlines }}</div>
         </div>
         <div class="kpi-pill">
-          <div class="label">Documents</div>
+          <div class="label workspace-kpi-label">Documents</div>
           <div class="value">{{ stats.documents }}</div>
         </div>
         <div class="kpi-pill">
-          <div class="label">Notes</div>
+          <div class="label workspace-kpi-label">Notes</div>
           <div class="value">{{ stats.notes }}</div>
         </div>
         {% if archetype %}
           <div class="kpi-pill">
-            <div class="label">Archetype</div>
+            <div class="label workspace-kpi-label">Archetype</div>
             <div class="value" style="font-size: 15px;">{{ archetype.name }}</div>
           </div>
           <div class="kpi-pill">
-            <div class="label">Compliance</div>
+            <div class="label workspace-kpi-label">Compliance</div>
             <div class="value">{{ archetype_compliance.compliance_pct }}%</div>
           </div>
         {% endif %}
       </div>
-
-      <form method="post" action="{{ url_for('matter_stage_update', matter_id=m.id) }}" class="row g-3 mt-2 align-items-end">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="col-md-5">
-          <label class="form-label" for="workspace-stage">Next Stage</label>
-          <input class="form-control" id="workspace-stage" name="stage" placeholder="Discovery" required>
-        </div>
-        <div class="col-md-5">
-          <label class="form-label" for="workspace-stage-reason">Reason</label>
-          <input class="form-control" id="workspace-stage-reason" name="reason" placeholder="Milestone reached">
-        </div>
-        <div class="col-md-2 d-grid">
-          <label class="form-label visually-hidden" for="workspace-stage-submit">Update</label>
-          <button class="btn btn-outline-light" id="workspace-stage-submit" type="submit" data-submitting-text="Updating...">Update</button>
-        </div>
-      </form>
-
-      <div class="mt-3 d-flex gap-2 flex-wrap">
-        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_parties', matter_id=m.id) }}">Parties</a>
-        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_notes', matter_id=m.id) }}">Notes</a>
-        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('calendar_matter', matter_id=m.id) }}">Calendar</a>
-        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_dms', matter_id=m.id) }}">DMS</a>
-      </div>
     </div>
 
-    <div class="card p-3">
-      <h4 class="mb-2">Stage History</h4>
+    <div class="card p-3 workspace-section">
+      <div class="toolbar-row">
+        <h4 class="mb-0 workspace-section-title">Stage History</h4>
+      </div>
       <div class="table-tools" data-table-tools data-table-target="matter-stage-history-table">
         <input class="form-control" type="search" data-table-search placeholder="Filter by stage or reason...">
         <div class="table-count" data-table-count aria-live="polite"></div>
@@ -100,9 +133,39 @@
     </div>
   </div>
 
-  <div class="col-lg-5">
+  <div class="col-lg-4">
+    <div class="card p-3 mb-3 workspace-section">
+      <h4 class="mb-2 workspace-section-title">Workspace Actions</h4>
+      <div class="workspace-actions-grid">
+        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_parties', matter_id=m.id) }}">Parties</a>
+        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_notes', matter_id=m.id) }}">Notes</a>
+        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('calendar_matter', matter_id=m.id) }}">Calendar</a>
+        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_dms', matter_id=m.id) }}">DMS</a>
+        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_detail', matter_id=m.id) }}">Summary</a>
+      </div>
+    </div>
+
+    <div class="card p-3 mb-3 workspace-section">
+      <h4 class="mb-2 workspace-section-title">Stage Transition</h4>
+      <form method="post" action="{{ url_for('matter_stage_update', matter_id=m.id) }}" class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-12">
+          <label class="form-label" for="workspace-stage">Next Stage</label>
+          <input class="form-control" id="workspace-stage" name="stage" placeholder="Discovery" required>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="workspace-stage-reason">Reason</label>
+          <input class="form-control" id="workspace-stage-reason" name="reason" placeholder="Milestone reached">
+        </div>
+        <div class="col-12 d-grid">
+          <label class="form-label visually-hidden" for="workspace-stage-submit">Update</label>
+          <button class="btn btn-outline-light" id="workspace-stage-submit" type="submit" data-submitting-text="Updating...">Update Stage</button>
+        </div>
+      </form>
+    </div>
+
     {% if archetype %}
-      <div class="card p-3 mb-3">
+      <div class="card p-3 mb-3 workspace-section">
         <div class="toolbar-row">
           <h4 class="mb-0">Archetype Compliance</h4>
           <form method="post" action="{{ url_for('matter_archetype_sync_checklist', matter_id=m.id) }}">
@@ -130,12 +193,11 @@
         {% if archetype_compliance.checklist_remaining > 0 %}
           <div class="form-help mt-1 text-danger">Checklist remaining: {{ archetype_compliance.checklist_remaining }} item(s).</div>
         {% endif %}
-        <a class="btn btn-sm btn-outline-light mt-2" href="{{ url_for('matter_detail', matter_id=m.id) }}">Open Matter Summary</a>
       </div>
     {% endif %}
 
-    <div class="card p-3">
-      <h4 class="mb-2">Closing Checklist</h4>
+    <div class="card p-3 workspace-section">
+      <h4 class="mb-2 workspace-section-title">Closing Checklist</h4>
       <div class="muted small mb-2">Open: {{ open_checklist }} • Done: {{ done_checklist }}</div>
       <form method="post" action="{{ url_for('matter_close', matter_id=m.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

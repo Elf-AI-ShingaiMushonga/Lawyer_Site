@@ -77,23 +77,37 @@
     </div>
     <div class="col-md-6">
       {% if assignable_lawyers %}
-        <label class="muted small" for="matter-lawyer-search">Assign Attorneys</label>
-        <div class="d-flex flex-wrap gap-2 align-items-center mb-1">
-          <input class="form-control flex-grow-1" id="matter-lawyer-search" type="search" placeholder="Search attorneys by name or email">
-          <button class="btn btn-sm btn-outline-light" type="button" id="matter-lawyer-select-visible">Select Visible</button>
-          <button class="btn btn-sm btn-outline-light" type="button" id="matter-lawyer-clear-all">Clear All</button>
-        </div>
-        <div class="assignee-checklist" id="matter-lawyer-checklist" role="group" aria-label="Attorney assignments">
-          {% for u in assignable_lawyers %}
-            <label class="assignee-checklist-item" data-assignee-item data-assignee-search="{{ (u.full_name ~ ' ' ~ u.email)|lower }}">
-              <input class="form-check-input" type="checkbox" name="lawyer_user_ids" value="{{ u.id }}" data-assignee-checkbox>
-              <span class="assignee-checklist-main">{{ u.full_name }}</span>
-              <span class="assignee-checklist-sub">{{ u.email }}</span>
-            </label>
-          {% endfor %}
+        <label class="muted small">Assign Attorneys</label>
+        <div class="assignee-picker" data-assignee-picker>
+          <button
+            class="btn btn-sm btn-outline-light assignee-picker-toggle"
+            type="button"
+            id="matter-lawyer-toggle"
+            aria-expanded="false"
+            aria-controls="matter-lawyer-panel"
+          >
+            <span id="matter-lawyer-toggle-label">Choose attorneys</span>
+            <span class="assignee-picker-toggle-hint">Expand</span>
+          </button>
+          <div class="assignee-picker-panel mt-2" id="matter-lawyer-panel" hidden>
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-1">
+              <input class="form-control flex-grow-1" id="matter-lawyer-search" type="search" placeholder="Search attorneys by name or email">
+              <button class="btn btn-sm btn-outline-light" type="button" id="matter-lawyer-select-visible">Select Visible</button>
+              <button class="btn btn-sm btn-outline-light" type="button" id="matter-lawyer-clear-all">Clear All</button>
+            </div>
+            <div class="assignee-checklist" id="matter-lawyer-checklist" role="group" aria-label="Attorney assignments">
+              {% for u in assignable_lawyers %}
+                <label class="assignee-checklist-item" data-assignee-item data-assignee-search="{{ (u.full_name ~ ' ' ~ u.email)|lower }}">
+                  <input class="form-check-input" type="checkbox" name="lawyer_user_ids" value="{{ u.id }}" data-assignee-checkbox>
+                  <span class="assignee-checklist-main">{{ u.full_name }}</span>
+                  <span class="assignee-checklist-sub">{{ u.email }}</span>
+                </label>
+              {% endfor %}
+            </div>
+            <div class="muted small mt-1" id="matter-lawyer-search-empty" hidden>No attorneys match your search.</div>
+          </div>
         </div>
         <div class="muted small mt-1" id="matter-lawyer-selection-meta">No attorneys selected.</div>
-        <div class="muted small mt-1" id="matter-lawyer-search-empty" hidden>No attorneys match your search.</div>
       {% else %}
         <label class="muted small">Assign Lawyers</label>
         <div class="muted small mt-1">No active attorneys are currently available for assignment.</div>
