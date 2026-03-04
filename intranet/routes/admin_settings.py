@@ -30,6 +30,7 @@ from ..models import (
 )
 from ..services.archetypes import load_required_fields, parse_required_fields_definition
 from ..services.archetype_ai import suggest_matter_archetype
+from ..services.dms_option_lists import load_dms_option_lists, save_dms_option_lists
 from ..services.matter_option_lists import legal_category_options, practice_area_options
 from ..services.template_ai import suggest_contract_template, suggest_document_template
 from ..services.priority_inbox import (
@@ -139,6 +140,30 @@ def register_admin_settings_routes(app):
                 flash("Priority Inbox settings updated.", "info")
                 return redirect(url_for("admin_settings_firm"))
 
+            if action == "dms_option_lists":
+                payload = save_dms_option_lists(
+                    {
+                        "document_types": request.form.get("document_types"),
+                        "confidentialities": request.form.get("confidentialities"),
+                        "privilege_labels": request.form.get("privilege_labels"),
+                        "retention_categories": request.form.get("retention_categories"),
+                    },
+                    updated_by=current_user.id,
+                )
+                audit(
+                    "dms_option_lists_update",
+                    "FirmSetting",
+                    None,
+                    {
+                        "document_types": len(payload.get("document_types", [])),
+                        "confidentialities": len(payload.get("confidentialities", [])),
+                        "privilege_labels": len(payload.get("privilege_labels", [])),
+                        "retention_categories": len(payload.get("retention_categories", [])),
+                    },
+                )
+                flash("DMS metadata option lists updated.", "info")
+                return redirect(url_for("admin_settings_firm"))
+
             setting_key = (request.form.get("setting_key") or "").strip()
             setting_value = (request.form.get("setting_value") or "").strip()
             if not setting_key:
@@ -157,11 +182,13 @@ def register_admin_settings_routes(app):
 
         rows = FirmSetting.query.order_by(FirmSetting.setting_key.asc()).all()
         priority_inbox_config = load_priority_inbox_config()
+        dms_option_lists = load_dms_option_lists()
         return page(
             "Firm Settings",
             "admin_settings/firm.html",
             settings=rows,
             priority_inbox_config=priority_inbox_config,
+            dms_option_lists=dms_option_lists,
         )
 
     @app.route("/admin/settings/offices", methods=["GET", "POST"])

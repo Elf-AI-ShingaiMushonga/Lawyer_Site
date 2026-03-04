@@ -1720,6 +1720,32 @@ def test_dms_template_generation_creates_document_version(app_ctx):
     assert os.path.isfile(os.path.join(app.config["UPLOAD_DIR"], version.stored_filename))
 
 
+def test_matter_dms_template_variable_requirements_payload(app_ctx):
+    app = app_ctx
+    user = _seed_user("dms-template-vars@example.com")
+    matter = _seed_matter(user, "2026-DMS-VARS-0001", "Template Variables Matter", "Variables Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    template = DocumentTemplate(
+        name="Variable Prompt Template",
+        template_type="Notice",
+        body="For {{matter_no}} and {{client_name}} include {{counterparty_name}} by {{hearing_date}}.",
+        created_by=user.id,
+    )
+    db.session.add(template)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/matters/{matter.id}/dms")
+    body = response.get_data(as_text=True)
+    compact_body = body.replace(" ", "").replace("\n", "")
+
+    assert response.status_code == 200
+    assert "Template variable requirements" in body
+    assert '"built_in_tokens":["client_name","matter_no"]' in compact_body
+    assert '"custom_tokens":["counterparty_name","hearing_date"]' in compact_body
+
+
 def test_matter_create_auto_generates_linked_archetype_document_templates(app_ctx):
     app = app_ctx
     user = _seed_user("archetype-doc-autogen@example.com")

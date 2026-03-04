@@ -6,7 +6,7 @@ import io
 from flask import g
 
 from intranet.extensions import db
-from intranet.models import CRMLead, Matter, MatterMember, PortalUser, TimeEntry, User
+from intranet.models import CRMLead, DocumentRecord, DocumentVersion, Matter, MatterMember, PortalUser, TimeEntry, User
 
 
 def _set_user_session(client, user_id: int, csrf_token: str = "test-csrf") -> None:
@@ -212,7 +212,7 @@ def test_staff_cannot_generate_invoices(app_ctx):
     assert response.status_code == 403
 
 
-def test_staff_cannot_upload_dms_documents(app_ctx):
+def test_staff_can_upload_dms_documents(app_ctx):
     app = app_ctx
     lawyer = _seed_user("dms-lawyer@example.com", role="lawyer")
     staff = _seed_user("dms-staff@example.com", role="staff")
@@ -228,14 +228,82 @@ def test_staff_cannot_upload_dms_documents(app_ctx):
         data={
             "csrf_token": "test-csrf",
             "action": "upload_document",
-            "title": "Restricted Upload",
+            "title": "Allowed Upload",
             "document_type": "General",
             "confidentiality": "Internal",
-            "file": (io.BytesIO(b"blocked"), "blocked.txt"),
+            "file": (io.BytesIO(b"allowed"), "allowed.txt"),
         },
         content_type="multipart/form-data",
     )
-    assert response.status_code == 403
+    assert response.status_code == 302
+    doc = DocumentRecord.query.filter_by(matter_id=matter.id, title="Allowed Upload").first()
+    assert doc is not None
+    version = DocumentVersion.query.filter_by(document_id=doc.id, version_no=1).first()
+    assert version is not None
+    assert version.document_file_id is not None
+
+    download_response = client.get(f"/documents/{version.document_file_id}/download")
+    assert download_response.status_code == 200
+    assert download_response.data == b"allowed"
+
+
+def test_only_director_or_admin_can_delete_dms_documents(app_ctx):
+    app = app_ctx
+    director = _seed_user("dms-director@example.com", role="director")
+    lawyer = _seed_user("dms-senior@example.com", role="lawyer")
+    staff = _seed_user("dms-staff-delete@example.com", role="staff")
+    admin = _seed_user("dms-admin@example.com", role="finance_cost_admin")
+    matter = _seed_matter(director, "2026-PERM-DMS-0002")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=director.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Team"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=staff.id, role_in_matter="Team"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=admin.id, role_in_matter="Team"))
+    db.session.commit()
+
+    director_client = app.test_client()
+    _set_user_session(director_client, director.id)
+    upload_response = director_client.post(
+        f"/matters/{matter.id}/dms",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "upload_document",
+            "title": "Delete Candidate",
+            "document_type": "General",
+            "confidentiality": "Internal",
+            "file": (io.BytesIO(b"delete me"), "delete-me.txt"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert upload_response.status_code == 302
+    delete_candidate = DocumentRecord.query.filter_by(matter_id=matter.id, title="Delete Candidate").first()
+    assert delete_candidate is not None
+
+    staff_client = app.test_client()
+    _set_user_session(staff_client, staff.id)
+    staff_delete = staff_client.post(
+        f"/documents/{delete_candidate.id}/delete",
+        data={"csrf_token": "test-csrf"},
+    )
+    assert staff_delete.status_code == 403
+    assert db.session.get(DocumentRecord, delete_candidate.id) is not None
+
+    lawyer_client = app.test_client()
+    _set_user_session(lawyer_client, lawyer.id)
+    lawyer_delete = lawyer_client.post(
+        f"/documents/{delete_candidate.id}/delete",
+        data={"csrf_token": "test-csrf"},
+    )
+    assert lawyer_delete.status_code == 403
+    assert db.session.get(DocumentRecord, delete_candidate.id) is not None
+
+    admin_client = app.test_client()
+    _set_user_session(admin_client, admin.id)
+    admin_delete = admin_client.post(
+        f"/documents/{delete_candidate.id}/delete",
+        data={"csrf_token": "test-csrf"},
+    )
+    assert admin_delete.status_code == 302
+    assert db.session.get(DocumentRecord, delete_candidate.id) is None
 
 
 def test_partner_role_alias_inherits_lawyer_permissions(app_ctx):

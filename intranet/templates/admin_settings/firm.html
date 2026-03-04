@@ -36,6 +36,34 @@
     </div>
 
     <div class="card p-3">
+      <h3 class="mb-1">DMS Metadata Lists</h3>
+      <div class="page-intro">Manage editable option lists used by DMS document forms.</div>
+
+      <form method="post" class="mt-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="dms_option_lists">
+        <div class="form-section">
+          <label class="form-label" for="dms-list-document-types">Document Types</label>
+          <textarea class="form-control" id="dms-list-document-types" name="document_types" rows="5" placeholder="One option per line">{{ '\n'.join(dms_option_lists["document_types"] or []) }}</textarea>
+        </div>
+        <div class="form-section mt-2">
+          <label class="form-label" for="dms-list-confidentialities">Confidentiality Levels</label>
+          <textarea class="form-control" id="dms-list-confidentialities" name="confidentialities" rows="5" placeholder="One option per line">{{ '\n'.join(dms_option_lists["confidentialities"] or []) }}</textarea>
+        </div>
+        <div class="form-section mt-2">
+          <label class="form-label" for="dms-list-privileges">Privilege Labels</label>
+          <textarea class="form-control" id="dms-list-privileges" name="privilege_labels" rows="5" placeholder="One option per line">{{ '\n'.join(dms_option_lists["privilege_labels"] or []) }}</textarea>
+        </div>
+        <div class="form-section mt-2">
+          <label class="form-label" for="dms-list-retention">Retention Categories</label>
+          <textarea class="form-control" id="dms-list-retention" name="retention_categories" rows="5" placeholder="One option per line">{{ '\n'.join(dms_option_lists["retention_categories"] or []) }}</textarea>
+        </div>
+        <div class="form-help mt-2">Each line becomes a selectable option. Existing values in records are preserved automatically.</div>
+        <div class="d-grid mt-2"><button class="btn btn-light">Save DMS Lists</button></div>
+      </form>
+    </div>
+
+    <div class="card p-3 mt-3">
       <h3 class="mb-1">Firm Setting</h3>
       <div class="page-intro">Add or update firm-level configuration values.</div>
 

@@ -6,6 +6,19 @@
 <div class="card p-3 mb-3">
   <h3 class="mb-1">Document Versions - {{ doc.title }}</h3>
   <p class="page-intro mb-0">Manage version chain integrity, document state transitions, and lock ownership.</p>
+  {% if can_delete_document %}
+    <form method="post" action="{{ url_for('document_delete', document_id=doc.id) }}" class="mt-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button
+        class="btn btn-sm btn-danger"
+        type="submit"
+        data-submitting-text="Deleting..."
+        onclick="return confirm('Delete this document and all versions? This action cannot be undone.');"
+      >
+        Delete Document
+      </button>
+    </form>
+  {% endif %}
   <div class="kpi-strip mt-3">
     <div class="kpi-pill">
       <div class="label">Versions</div>
@@ -107,6 +120,7 @@
               <th data-sort-index="1">State</th>
               <th data-sort-index="2">SHA</th>
               <th data-sort-index="3">Immutable</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -116,10 +130,20 @@
                 <td><span class="badge badge-soft status-badge">{{ version.state }}</span></td>
                 <td><code>{{ version.sha256[:16] }}...</code></td>
                 <td>{{ version.is_immutable }}</td>
+                <td class="text-nowrap">
+                  {% if version.document_file_id %}
+                    <div class="d-flex gap-1 justify-content-end flex-wrap">
+                      <a class="btn btn-sm btn-light" href="{{ url_for('doc_download', doc_id=version.document_file_id) }}">Download</a>
+                      <a class="btn btn-sm btn-outline-light" href="{{ url_for('doc_download', doc_id=version.document_file_id, inline=1) }}" target="_blank" rel="noopener">Preview</a>
+                    </div>
+                  {% else %}
+                    <span class="muted">No file</span>
+                  {% endif %}
+                </td>
               </tr>
             {% endfor %}
             <tr data-table-empty-row class="table-empty-row" {% if versions|length > 0 %}hidden{% endif %}>
-              <td colspan="4" class="muted">No versions yet.</td>
+              <td colspan="5" class="muted">No versions yet.</td>
             </tr>
           </tbody>
         </table>

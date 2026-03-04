@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import io
 import json
 
 from intranet.extensions import db
@@ -9,6 +10,7 @@ from intranet.jobs.worker import _handle_priority_inbox_digest
 from intranet.models import (
     CRMFollowUp,
     CRMLead,
+    DocumentRecord,
     FirmSetting,
     Matter,
     Notification,
@@ -96,6 +98,72 @@ def test_admin_priority_inbox_settings_persist_and_sync_schedule(app_ctx):
     assert digest_job is not None
     assert int(digest_job.interval_minutes or 0) == 45
     assert bool(digest_job.is_active) is True
+
+
+def test_admin_dms_option_lists_persist_and_validate_upload_choices(app_ctx):
+    app = app_ctx
+    admin = _seed_admin("dms-option-admin@example.com")
+    matter = _seed_matter(admin, "2026-DMS-OPT-0001")
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, admin.id)
+    response = client.post(
+        "/admin/settings/firm",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "dms_option_lists",
+            "document_types": "Affidavit\nNotice",
+            "confidentialities": "Internal\nConfidential",
+            "privilege_labels": "Attorney-Client\nWithout Prejudice",
+            "retention_categories": "Matter Lifecycle\nPermanent",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert response.headers.get("Location", "").endswith("/admin/settings/firm")
+
+    row = FirmSetting.query.filter_by(setting_key="dms_option_lists").first()
+    assert row is not None
+    payload = json.loads(row.setting_value_json or "{}")
+    assert payload.get("document_types") == ["Affidavit", "Notice"]
+    assert payload.get("confidentialities") == ["Internal", "Confidential"]
+    assert payload.get("privilege_labels") == ["Attorney-Client", "Without Prejudice"]
+    assert payload.get("retention_categories") == ["Matter Lifecycle", "Permanent"]
+
+    invalid_upload = client.post(
+        f"/matters/{matter.id}/dms",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "upload_document",
+            "title": "Invalid Metadata Upload",
+            "document_type": "General",
+            "confidentiality": "Internal",
+            "file": (io.BytesIO(b"invalid"), "invalid.txt"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert invalid_upload.status_code == 302
+    assert DocumentRecord.query.filter_by(matter_id=matter.id, title="Invalid Metadata Upload").first() is None
+
+    valid_upload = client.post(
+        f"/matters/{matter.id}/dms",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "upload_document",
+            "title": "Valid Metadata Upload",
+            "document_type": "Affidavit",
+            "confidentiality": "Internal",
+            "privilege_label": "Attorney-Client",
+            "retention_category": "Matter Lifecycle",
+            "file": (io.BytesIO(b"valid"), "valid.txt"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert valid_upload.status_code == 302
+    assert DocumentRecord.query.filter_by(matter_id=matter.id, title="Valid Metadata Upload").first() is not None
 
 
 def test_priority_inbox_digest_queues_and_dedupes(app_ctx):

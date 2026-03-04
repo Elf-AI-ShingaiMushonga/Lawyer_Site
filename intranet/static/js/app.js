@@ -3274,6 +3274,102 @@
     update();
   };
 
+  const initDmsTemplateRequirements = () => {
+    const templateSelect = document.getElementById("dms-template-id");
+    const panel = document.getElementById("dms-template-requirements-panel");
+    const builtinsContainer = document.getElementById("dms-template-builtins");
+    const customContainer = document.getElementById("dms-template-custom-tokens");
+    const customHelp = document.getElementById("dms-template-custom-help");
+    const customFieldsInput = document.getElementById("dms-generated-custom-fields");
+    const requirementsNode = document.getElementById("dms-template-requirements-data");
+    if (
+      !(templateSelect instanceof HTMLSelectElement) ||
+      !(panel instanceof HTMLElement) ||
+      !(builtinsContainer instanceof HTMLElement) ||
+      !(customContainer instanceof HTMLElement) ||
+      !(customHelp instanceof HTMLElement) ||
+      !(requirementsNode instanceof HTMLScriptElement)
+    ) {
+      return;
+    }
+
+    let payload = {};
+    try {
+      const parsed = JSON.parse(requirementsNode.textContent || "{}");
+      if (parsed && typeof parsed === "object") {
+        payload = parsed;
+      }
+    } catch (_error) {
+      payload = {};
+    }
+
+    const defaultPlaceholder =
+      customFieldsInput instanceof HTMLTextAreaElement ? customFieldsInput.placeholder : "";
+
+    const toTokenList = (value) =>
+      Array.isArray(value)
+        ? value
+            .map((token) => String(token || "").trim())
+            .filter((token) => token.length > 0)
+        : [];
+
+    const renderTokenList = (container, tokens, emptyMessage) => {
+      container.innerHTML = "";
+      if (!tokens.length) {
+        const empty = document.createElement("span");
+        empty.className = "muted small";
+        empty.textContent = emptyMessage;
+        container.appendChild(empty);
+        return;
+      }
+      tokens.forEach((token) => {
+        const pill = document.createElement("span");
+        pill.className = "code-like";
+        pill.textContent = `{{${token}}}`;
+        container.appendChild(pill);
+      });
+    };
+
+    const updateCustomPlaceholder = (customTokens) => {
+      if (!(customFieldsInput instanceof HTMLTextAreaElement)) {
+        return;
+      }
+      if (!customTokens.length) {
+        customFieldsInput.placeholder = defaultPlaceholder;
+        return;
+      }
+      if (String(customFieldsInput.value || "").trim()) {
+        return;
+      }
+      customFieldsInput.placeholder = customTokens.map((token) => `${token}=`).join("\n");
+    };
+
+    const renderRequirements = () => {
+      const selectedId = String(templateSelect.value || "").trim();
+      const selected = selectedId ? payload[selectedId] : null;
+      if (!selected || typeof selected !== "object") {
+        panel.hidden = true;
+        updateCustomPlaceholder([]);
+        return;
+      }
+
+      const builtInTokens = toTokenList(selected.built_in_tokens);
+      const customTokens = toTokenList(selected.custom_tokens);
+      renderTokenList(builtinsContainer, builtInTokens, "None");
+      renderTokenList(customContainer, customTokens, "None");
+      if (customTokens.length) {
+        customHelp.textContent = "Add these as key=value lines in Custom merge fields.";
+      } else {
+        customHelp.textContent = "No extra custom fields are required for this template.";
+      }
+      panel.hidden = false;
+      updateCustomPlaceholder(customTokens);
+    };
+
+    templateSelect.addEventListener("change", renderRequirements);
+    renderRequirements();
+  };
+
   const initMatterNewForm = () => {
     const form = document.querySelector("[data-matter-new-form]");
     if (!(form instanceof HTMLFormElement)) {
@@ -4287,6 +4383,7 @@
     initTableTools();
     initCollapsibleNav();
     initBackToTop();
+    initDmsTemplateRequirements();
     initMatterNewForm();
     initFormValidationUX();
     initSubmitState();

@@ -16,6 +16,7 @@ from ..extensions import db
 from ..helpers import allowed_doc, audit, can_access_matter, is_admin, sha256_file
 from ..models import (
     BatesRange,
+    ConflictSemanticHit,
     DocumentFile,
     DocumentLock,
     DocumentOCRText,
@@ -24,13 +25,16 @@ from ..models import (
     DocumentVersion,
     EmailCapture,
     Matter,
+    PortalLinkToken,
     ProductionItem,
     ProductionSet,
     SavedSearch,
+    TrustLedgerEntry,
 )
 from ..policies import enforce_permission, visible_matter_ids
 from ..policies.residency import enforce_data_residency
-from ..roles import role_is_admin
+from ..roles import role_is_admin, role_is_director
+from ..services.dms_option_lists import load_dms_option_lists
 from ..services.notification_engine import NotificationEngine
 from ..services.semantic_search import SemanticSearchService
 from ..services.storage_paths import build_matter_storage_name, resolve_upload_path
@@ -83,6 +87,43 @@ def _safe_remove_file(path: str) -> None:
             os.remove(path)
     except OSError:
         pass
+
+
+def _can_delete_document(role: str | None) -> bool:
+    return role_is_director(role) or role_is_admin(role)
+
+
+def _match_option(raw: str | None, options: list[str]) -> str:
+    value = str(raw or "").strip()
+    if not value:
+        return ""
+    lookup = {
+        str(option).strip().casefold(): str(option).strip()
+        for option in options
+        if str(option).strip()
+    }
+    return lookup.get(value.casefold(), "")
+
+
+def _coerce_option_value(
+    raw: str | None,
+    options: list[str],
+    *,
+    field_label: str,
+    default_value: str | None = None,
+    allow_blank: bool = False,
+) -> str | None:
+    candidate = str(raw or "").strip()
+    if not candidate and default_value:
+        candidate = str(default_value).strip()
+    if not candidate:
+        if allow_blank:
+            return None
+        raise ValueError(f"{field_label} is required.")
+    matched = _match_option(candidate, options)
+    if not matched:
+        raise ValueError(f"Invalid {field_label.lower()}. Select a value from the configured list.")
+    return matched
 
 
 def _parse_generation_fields(raw: str | None) -> dict[str, str]:
@@ -138,6 +179,22 @@ def _render_template_body(body: str, context: dict[str, str]) -> tuple[str, list
     return rendered, missing_sorted
 
 
+def _template_token_requirements(template_body: str | None, builtin_context_keys: set[str]) -> dict[str, list[str]]:
+    raw_tokens = {
+        (match.group(1) or "").strip().lower()
+        for match in TEMPLATE_TOKEN_PATTERN.finditer(template_body or "")
+        if (match.group(1) or "").strip()
+    }
+    all_tokens = sorted(raw_tokens)
+    built_in_tokens = [token for token in all_tokens if token in builtin_context_keys]
+    custom_tokens = [token for token in all_tokens if token not in builtin_context_keys]
+    return {
+        "all_tokens": all_tokens,
+        "built_in_tokens": built_in_tokens,
+        "custom_tokens": custom_tokens,
+    }
+
+
 def register_dms_routes(app):
     @app.get("/dms")
     @login_required
@@ -165,11 +222,18 @@ def register_dms_routes(app):
         m = db.session.get(Matter, matter_id)
         if not m:
             abort(404)
+        dms_option_lists = load_dms_option_lists()
+        document_type_options = list(dms_option_lists.get("document_types") or [])
+        confidentiality_options = list(dms_option_lists.get("confidentialities") or [])
+        privilege_label_options = list(dms_option_lists.get("privilege_labels") or [])
+        retention_category_options = list(dms_option_lists.get("retention_categories") or [])
+        default_document_type = document_type_options[0] if document_type_options else "General"
+        default_confidentiality = confidentiality_options[0] if confidentiality_options else "Internal"
 
         if request.method == "POST":
-            enforce_permission("dms", "write")
             action = (request.form.get("action") or "upload_document").strip().lower()
             if action == "generate_from_template":
+                enforce_permission("dms", "write")
                 template_id = request.form.get("template_id", type=int)
                 template = db.session.get(DocumentTemplate, template_id) if template_id else None
                 if template is None:
@@ -182,6 +246,34 @@ def register_dms_routes(app):
                 rendered_body, missing_tokens = _render_template_body(template.body, context)
                 if not rendered_body.strip():
                     flash("Generated document body is empty. Add template text or merge fields.", "warning")
+                    return redirect(url_for("matter_dms", matter_id=matter_id))
+                try:
+                    generated_document_type = _coerce_option_value(
+                        (request.form.get("generated_document_type") or template.template_type),
+                        document_type_options,
+                        field_label="Document type",
+                        default_value=default_document_type,
+                    )
+                    generated_confidentiality = _coerce_option_value(
+                        request.form.get("generated_confidentiality"),
+                        confidentiality_options,
+                        field_label="Confidentiality",
+                        default_value=default_confidentiality,
+                    )
+                    generated_privilege_label = _coerce_option_value(
+                        request.form.get("generated_privilege_label"),
+                        privilege_label_options,
+                        field_label="Privilege label",
+                        allow_blank=True,
+                    )
+                    generated_retention_category = _coerce_option_value(
+                        request.form.get("generated_retention_category"),
+                        retention_category_options,
+                        field_label="Retention category",
+                        allow_blank=True,
+                    )
+                except ValueError as exc:
+                    flash(str(exc), "warning")
                     return redirect(url_for("matter_dms", matter_id=matter_id))
 
                 enforce_data_residency("primary_storage")
@@ -206,11 +298,10 @@ def register_dms_routes(app):
                     container = DocumentRecord(
                         matter_id=matter_id,
                         title=generated_title,
-                        document_type=(request.form.get("generated_document_type") or template.template_type or "General").strip()
-                        or "General",
-                        confidentiality=(request.form.get("generated_confidentiality") or "Internal").strip() or "Internal",
-                        privilege_label=(request.form.get("generated_privilege_label") or "").strip() or None,
-                        retention_category=(request.form.get("generated_retention_category") or "").strip() or None,
+                        document_type=generated_document_type,
+                        confidentiality=generated_confidentiality,
+                        privilege_label=generated_privilege_label,
+                        retention_category=generated_retention_category,
                         legal_hold=(request.form.get("generated_legal_hold") or "").lower() in {"1", "true", "yes", "on"},
                         created_by=current_user.id,
                     )
@@ -285,6 +376,9 @@ def register_dms_routes(app):
                 else:
                     flash("Document generated from template.", "info")
                 return redirect(url_for("matter_dms", matter_id=matter_id))
+            if action != "upload_document":
+                flash("Unsupported DMS action.", "warning")
+                return redirect(url_for("matter_dms", matter_id=matter_id))
 
             title = (request.form.get("title") or "").strip()
             if not title:
@@ -299,6 +393,34 @@ def register_dms_routes(app):
                 flash("Unsupported file type.", "warning")
                 return redirect(url_for("matter_dms", matter_id=matter_id))
             enforce_data_residency("primary_storage")
+            try:
+                document_type = _coerce_option_value(
+                    request.form.get("document_type"),
+                    document_type_options,
+                    field_label="Document type",
+                    default_value=default_document_type,
+                )
+                confidentiality = _coerce_option_value(
+                    request.form.get("confidentiality"),
+                    confidentiality_options,
+                    field_label="Confidentiality",
+                    default_value=default_confidentiality,
+                )
+                privilege_label = _coerce_option_value(
+                    request.form.get("privilege_label"),
+                    privilege_label_options,
+                    field_label="Privilege label",
+                    allow_blank=True,
+                )
+                retention_category = _coerce_option_value(
+                    request.form.get("retention_category"),
+                    retention_category_options,
+                    field_label="Retention category",
+                    allow_blank=True,
+                )
+            except ValueError as exc:
+                flash(str(exc), "warning")
+                return redirect(url_for("matter_dms", matter_id=matter_id))
 
             safe_name = secure_filename(f.filename)
             if not safe_name:
@@ -316,10 +438,10 @@ def register_dms_routes(app):
                 container = DocumentRecord(
                     matter_id=matter_id,
                     title=title,
-                    document_type=(request.form.get("document_type") or "General").strip() or "General",
-                    confidentiality=(request.form.get("confidentiality") or "Internal").strip() or "Internal",
-                    privilege_label=(request.form.get("privilege_label") or "").strip() or None,
-                    retention_category=(request.form.get("retention_category") or "").strip() or None,
+                    document_type=document_type,
+                    confidentiality=confidentiality,
+                    privilege_label=privilege_label,
+                    retention_category=retention_category,
                     legal_hold=(request.form.get("legal_hold") or "").lower() in {"1", "true", "yes", "on"},
                     created_by=current_user.id,
                 )
@@ -379,18 +501,24 @@ def register_dms_routes(app):
             return redirect(url_for("matter_dms", matter_id=matter_id))
 
         q = (request.args.get("q") or "").strip().lower()
-        filter_type = (request.args.get("document_type") or "").strip().lower()
-        filter_confidentiality = (request.args.get("confidentiality") or "").strip().lower()
+        filter_type = _match_option(request.args.get("document_type"), document_type_options) or (
+            request.args.get("document_type") or ""
+        ).strip()
+        filter_confidentiality = _match_option(request.args.get("confidentiality"), confidentiality_options) or (
+            request.args.get("confidentiality") or ""
+        ).strip()
         page_number = request.args.get("page", default=1, type=int) or 1
         if page_number < 1:
             page_number = 1
 
         docs_query = DocumentRecord.query.filter(DocumentRecord.matter_id == matter_id)
         if filter_type:
-            docs_query = docs_query.filter(func.lower(func.coalesce(DocumentRecord.document_type, "")) == filter_type)
+            docs_query = docs_query.filter(
+                func.lower(func.coalesce(DocumentRecord.document_type, "")) == filter_type.lower()
+            )
         if filter_confidentiality:
             docs_query = docs_query.filter(
-                func.lower(func.coalesce(DocumentRecord.confidentiality, "")) == filter_confidentiality
+                func.lower(func.coalesce(DocumentRecord.confidentiality, "")) == filter_confidentiality.lower()
             )
         if q:
             like = f"%{q}%"
@@ -491,6 +619,11 @@ def register_dms_routes(app):
                     search_scores[doc.id] = score
 
         doc_templates = DocumentTemplate.query.order_by(DocumentTemplate.created_at.desc()).limit(300).all()
+        builtin_context_keys = set(_template_context(m).keys())
+        template_requirements_map = {
+            str(template.id): _template_token_requirements(template.body, builtin_context_keys)
+            for template in doc_templates
+        }
         audit("dms_repository_access", "Matter", matter_id)
         return page(
             "Matter DMS",
@@ -504,6 +637,13 @@ def register_dms_routes(app):
             search_scores=search_scores,
             doc_templates=doc_templates,
             pagination=pagination,
+            dms_document_types=document_type_options,
+            dms_confidentialities=confidentiality_options,
+            dms_privilege_labels=privilege_label_options,
+            dms_retention_categories=retention_category_options,
+            default_document_type=default_document_type,
+            default_confidentiality=default_confidentiality,
+            template_requirements_map=template_requirements_map,
         )
 
     @app.route("/documents/<int:document_id>/versions", methods=["GET", "POST"])
@@ -517,7 +657,6 @@ def register_dms_routes(app):
             abort(403)
 
         if request.method == "POST":
-            enforce_permission("dms", "write")
             lock = (
                 DocumentLock.query.filter_by(document_id=document_id, released_at=None)
                 .order_by(DocumentLock.locked_at.desc())
@@ -629,7 +768,85 @@ def register_dms_routes(app):
         versions = pagination.items
         locks = DocumentLock.query.filter_by(document_id=document_id).order_by(DocumentLock.locked_at.desc()).limit(10).all()
         audit("dms_version_access", "DocumentRecord", doc.id)
-        return page("Document Versions", "dms/versions.html", doc=doc, versions=versions, locks=locks, pagination=pagination)
+        return page(
+            "Document Versions",
+            "dms/versions.html",
+            doc=doc,
+            versions=versions,
+            locks=locks,
+            pagination=pagination,
+            can_delete_document=_can_delete_document(getattr(current_user, "role", None)),
+        )
+
+    @app.post("/documents/<int:document_id>/delete")
+    @login_required
+    def document_delete(document_id: int):
+        enforce_permission("dms", "read")
+        doc = db.session.get(DocumentRecord, document_id)
+        if not doc:
+            abort(404)
+        if not can_access_matter(doc.matter_id):
+            abort(403)
+        if not _can_delete_document(getattr(current_user, "role", None)):
+            abort(403)
+
+        matter_id = int(doc.matter_id)
+        versions = DocumentVersion.query.filter_by(document_id=document_id).all()
+        version_ids = [int(row.id) for row in versions]
+        ocr_rows = DocumentOCRText.query.filter(DocumentOCRText.document_version_id.in_(version_ids)).all() if version_ids else []
+        ocr_ids = [int(row.id) for row in ocr_rows]
+        document_file_ids = sorted({int(row.document_file_id) for row in versions if row.document_file_id})
+        stored_filenames = sorted({str(row.stored_filename) for row in versions if row.stored_filename})
+
+        try:
+            if version_ids:
+                (
+                    TrustLedgerEntry.query.filter(TrustLedgerEntry.supporting_document_id.in_(version_ids)).update(
+                        {TrustLedgerEntry.supporting_document_id: None},
+                        synchronize_session=False,
+                    )
+                )
+                PortalLinkToken.query.filter(PortalLinkToken.document_version_id.in_(version_ids)).delete(
+                    synchronize_session=False
+                )
+                ProductionItem.query.filter(ProductionItem.document_version_id.in_(version_ids)).delete(
+                    synchronize_session=False
+                )
+                hit_filters = [ConflictSemanticHit.document_version_id.in_(version_ids)]
+                if ocr_ids:
+                    hit_filters.append(ConflictSemanticHit.document_ocr_text_id.in_(ocr_ids))
+                ConflictSemanticHit.query.filter(or_(*hit_filters)).delete(synchronize_session=False)
+                DocumentOCRText.query.filter(DocumentOCRText.document_version_id.in_(version_ids)).delete(
+                    synchronize_session=False
+                )
+                DocumentVersion.query.filter(DocumentVersion.id.in_(version_ids)).delete(synchronize_session=False)
+            DocumentLock.query.filter(DocumentLock.document_id == document_id).delete(synchronize_session=False)
+            if document_file_ids:
+                DocumentFile.query.filter(DocumentFile.id.in_(document_file_ids)).delete(synchronize_session=False)
+            db.session.delete(doc)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash("Document delete failed. Please retry.", "warning")
+            return redirect(url_for("document_versions", document_id=document_id))
+
+        upload_dir = str(app.config.get("UPLOAD_DIR") or "").strip()
+        if upload_dir:
+            for stored_name in stored_filenames:
+                try:
+                    _, file_path = resolve_upload_path(upload_dir, stored_name)
+                except ValueError:
+                    continue
+                _safe_remove_file(file_path)
+
+        audit(
+            "dms_document_delete",
+            "DocumentRecord",
+            document_id,
+            {"matter_id": matter_id, "version_count": len(version_ids)},
+        )
+        flash("Document deleted.", "info")
+        return redirect(url_for("matter_dms", matter_id=matter_id))
 
     @app.post("/documents/<int:document_id>/lock")
     @login_required
