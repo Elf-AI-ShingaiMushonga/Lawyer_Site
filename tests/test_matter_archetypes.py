@@ -225,6 +225,21 @@ def test_matter_creation_requires_archetype_specific_fields(app_ctx):
     assert values.get("employment_role") == "Senior Analyst"
 
 
+def test_matter_create_page_embeds_archetype_payload_for_dynamic_required_fields(app_ctx):
+    app = app_ctx
+    admin = _seed_admin()
+    _seed_archetype(admin.id)
+    client = app.test_client()
+    _set_internal_session(client, admin.id)
+
+    response = client.get("/matters/new")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "data-matter-new-form" in body
+    assert "data-archetype-payload=" in body
+    assert "incident_date" in body
+
+
 def test_matter_creation_allows_custom_no_archetype(app_ctx):
     app = app_ctx
     admin = _seed_admin()

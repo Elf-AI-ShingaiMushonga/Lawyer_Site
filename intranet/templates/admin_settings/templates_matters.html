@@ -128,6 +128,7 @@
           <th>Category</th>
           <th>Archetype</th>
           <th>Required Fields</th>
+          <th>Attached Docs</th>
           <th>Stage</th>
           <th>Risk</th>
           <th>Actions</th>
@@ -150,6 +151,15 @@
                 <span class="muted">No custom fields</span>
               {% endif %}
             </td>
+            <td>
+              {% set linked_docs = template_document_map.get(t.id, []) if template_document_map else [] %}
+              {% if linked_docs %}
+                {{ linked_docs|length }} linked
+                <div class="small muted">{{ linked_docs|join(", ") }}</div>
+              {% else %}
+                <span class="muted">None</span>
+              {% endif %}
+            </td>
             <td>{{ t.default_stage or '-' }}</td>
             <td>{{ t.default_risk_level or '-' }}</td>
             <td>
@@ -168,7 +178,7 @@
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="6" class="muted">No templates.</td></tr>
+          <tr><td colspan="7" class="muted">No templates.</td></tr>
         {% endfor %}
       </tbody>
     </table>

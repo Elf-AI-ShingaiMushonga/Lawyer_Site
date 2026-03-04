@@ -196,7 +196,7 @@ def register_auth_routes(app):
         my_assignment_clause = or_(Task.assigned_to == current_user.id, has_current_user_assignee)
 
         my_tasks = (
-            Task.query.filter(my_assignment_clause)
+            Task.query.filter(my_assignment_clause, Task.status != "Done")
             .order_by(Task.status.asc(), Task.due_date.asc().nullslast(), Task.created_at.desc())
             .limit(8)
             .all()
@@ -312,19 +312,33 @@ def register_auth_routes(app):
             )
         }
 
-        at_risk_matters = []
-        for matter in risk_matter_scope.order_by(Matter.last_updated_at.desc(), Matter.opened_at.desc()).limit(40).all():
-            overdue_for_matter = overdue_counts.get(matter.id, 0)
-            if matter.risk_level in {"High", "Critical"} or overdue_for_matter > 0:
-                at_risk_matters.append(
-                    {
-                        "matter": matter,
-                        "overdue_tasks": overdue_for_matter,
-                        "risk_driver": "Overdue tasks" if overdue_for_matter else f"{matter.risk_level} risk",
-                    }
+        risk_rank = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
+        at_risk_candidates: list[tuple[tuple[int, int, dt.datetime], dict[str, object]]] = []
+        for matter in risk_matter_scope.order_by(Matter.last_updated_at.desc(), Matter.opened_at.desc()).limit(120).all():
+            overdue_for_matter = int(overdue_counts.get(matter.id, 0) or 0)
+            matter_risk = str(matter.risk_level or "").strip().title()
+            ranked_risk = int(risk_rank.get(matter_risk, 0))
+            if matter_risk in {"High", "Critical"} or overdue_for_matter > 0:
+                if overdue_for_matter > 0 and matter_risk in {"High", "Critical"}:
+                    risk_driver = f"{matter_risk} risk + {overdue_for_matter} overdue"
+                elif overdue_for_matter > 0:
+                    risk_driver = "Overdue tasks"
+                else:
+                    risk_driver = f"{matter_risk} risk"
+                recency_anchor = matter.last_updated_at or matter.opened_at or dt.datetime.min
+                at_risk_candidates.append(
+                    (
+                        (ranked_risk, overdue_for_matter, recency_anchor),
+                        {
+                            "matter": matter,
+                            "overdue_tasks": overdue_for_matter,
+                            "risk_driver": risk_driver,
+                        },
+                    )
                 )
-            if len(at_risk_matters) >= 8:
-                break
+
+        at_risk_candidates.sort(key=lambda row: row[0], reverse=True)
+        at_risk_matters = [payload for _, payload in at_risk_candidates[:8]]
 
         priority_inbox = build_priority_inbox(current_user, scoped_matter_ids=scoped_ids)
 

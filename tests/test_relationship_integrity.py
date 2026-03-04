@@ -42,9 +42,11 @@ from intranet.models import (
     RetentionPolicy,
     SavedSearch,
     Matter,
+    MatterClosingChecklistItem,
     MatterMember,
     MatterNote,
     MatterNoteACL,
+    MatterTemplate,
     MatterTimelineEvent,
     Notification,
     PaymentAllocation,
@@ -1716,6 +1718,208 @@ def test_dms_template_generation_creates_document_version(app_ctx):
     assert "2026-DMS-GEN-0001" in ocr.extracted_text
     assert "Acme Holdings" in ocr.extracted_text
     assert os.path.isfile(os.path.join(app.config["UPLOAD_DIR"], version.stored_filename))
+
+
+def test_matter_create_auto_generates_linked_archetype_document_templates(app_ctx):
+    app = app_ctx
+    user = _seed_user("archetype-doc-autogen@example.com")
+    archetype = MatterTemplate(
+        name="Archetype Linked Document",
+        legal_category="Commercial Litigation",
+        required_fields_json=json.dumps([]),
+        boilerplate_template="Baseline archetype boilerplate for {{ matter_no }}.",
+        created_by=user.id,
+    )
+    db.session.add(archetype)
+    db.session.flush()
+    linked_template = DocumentTemplate(
+        name="Linked Pleading Draft",
+        archetype_id=archetype.id,
+        template_type="Pleading",
+        body="Draft for {{matter_no}} and {{client_name}}.",
+        requires_signature=False,
+        created_by=user.id,
+    )
+    db.session.add(linked_template)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.post(
+        "/matters/new",
+        data={
+            "csrf_token": "test-csrf",
+            "matter_no": "2026-ARCH-DOC-0001",
+            "title": "Archetype Linked Matter",
+            "client_name": "Linked Client",
+            "status": "Open",
+            "risk_level": "Medium",
+            "budget_status": "On Track",
+            "legal_category": "Commercial Litigation",
+            "archetype_id": str(archetype.id),
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    matter = Matter.query.filter_by(matter_no="2026-ARCH-DOC-0001").first()
+    assert matter is not None
+
+    doc = DocumentRecord.query.filter_by(
+        matter_id=matter.id,
+        title="Linked Pleading Draft - 2026-ARCH-DOC-0001",
+    ).first()
+    assert doc is not None
+    version = DocumentVersion.query.filter_by(document_id=doc.id, version_no=1).first()
+    assert version is not None
+    ocr = DocumentOCRText.query.filter_by(document_version_id=version.id).first()
+    assert ocr is not None
+    assert "2026-ARCH-DOC-0001" in ocr.extracted_text
+    assert os.path.isfile(os.path.join(app.config["UPLOAD_DIR"], version.stored_filename))
+
+
+def test_matter_intake_seeds_archetype_playbook_and_linked_documents(app_ctx):
+    app = app_ctx
+    user = _seed_user("archetype-intake-standard@example.com")
+    archetype = MatterTemplate(
+        name="Archetype Intake Standard",
+        legal_category="Labour Law",
+        required_fields_json=json.dumps(
+            [
+                {"key": "claim_value", "label": "Claim Value"},
+            ]
+        ),
+        checklist_json=json.dumps(["Collect signed mandate", "Confirm key witness list"]),
+        created_by=user.id,
+    )
+    db.session.add(archetype)
+    db.session.flush()
+    linked_template = DocumentTemplate(
+        name="Labour Intake Memo",
+        archetype_id=archetype.id,
+        template_type="Memo",
+        body="Memo for {{matter_no}}. Claim value: {{claim_value}}.",
+        requires_signature=False,
+        created_by=user.id,
+    )
+    db.session.add(linked_template)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.post(
+        "/matters/intake",
+        data={
+            "csrf_token": "test-csrf",
+            "matter_no": "2026-ARCH-INTAKE-0001",
+            "title": "Intake Standard Matter",
+            "client_name": "Standard Client",
+            "legal_category": "Labour Law",
+            "template_id": str(archetype.id),
+            "field_claim_value": "R500000",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    matter = Matter.query.filter_by(matter_no="2026-ARCH-INTAKE-0001").first()
+    assert matter is not None
+
+    checklist_rows = (
+        MatterClosingChecklistItem.query.filter_by(matter_id=matter.id)
+        .order_by(MatterClosingChecklistItem.id.asc())
+        .all()
+    )
+    assert [row.item_text for row in checklist_rows] == [
+        "Collect signed mandate",
+        "Confirm key witness list",
+    ]
+
+    doc = DocumentRecord.query.filter_by(
+        matter_id=matter.id,
+        title="Labour Intake Memo - 2026-ARCH-INTAKE-0001",
+    ).first()
+    assert doc is not None
+    version = DocumentVersion.query.filter_by(document_id=doc.id, version_no=1).first()
+    assert version is not None
+    ocr = DocumentOCRText.query.filter_by(document_version_id=version.id).first()
+    assert ocr is not None
+    assert "R500000" in ocr.extracted_text
+
+
+def test_matter_archetype_sync_checklist_backfills_existing_matter(app_ctx):
+    app = app_ctx
+    user = _seed_user("archetype-sync-checklist@example.com")
+    archetype = MatterTemplate(
+        name="Archetype Sync Checklist",
+        legal_category="Commercial Litigation",
+        required_fields_json=json.dumps([]),
+        checklist_json=json.dumps(["Open case file", "Verify engagement letter"]),
+        created_by=user.id,
+    )
+    db.session.add(archetype)
+    db.session.flush()
+
+    matter = _seed_matter(user, "2026-ARCH-SYNC-0001", "Checklist Sync Matter", "Sync Client")
+    matter.archetype_id = archetype.id
+    matter.legal_category = archetype.legal_category
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    assert MatterClosingChecklistItem.query.filter_by(matter_id=matter.id).count() == 0
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.post(
+        f"/matters/{matter.id}/archetype/sync-checklist",
+        data={"csrf_token": "test-csrf"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    checklist_rows = (
+        MatterClosingChecklistItem.query.filter_by(matter_id=matter.id)
+        .order_by(MatterClosingChecklistItem.id.asc())
+        .all()
+    )
+    assert [row.item_text for row in checklist_rows] == [
+        "Open case file",
+        "Verify engagement letter",
+    ]
+
+
+def test_matter_close_blocks_when_archetype_required_fields_missing(app_ctx):
+    app = app_ctx
+    user = _seed_user("archetype-close-block@example.com", role="admin", mfa_enabled=True)
+    archetype = MatterTemplate(
+        name="Close Guard Archetype",
+        legal_category="Corporate",
+        required_fields_json=json.dumps([{"key": "counterparty_name", "label": "Counterparty Name"}]),
+        checklist_json=json.dumps([]),
+        created_by=user.id,
+    )
+    db.session.add(archetype)
+    db.session.flush()
+
+    matter = _seed_matter(user, "2026-ARCH-CLOSE-0001", "Close Guard Matter", "Close Guard Client")
+    matter.archetype_id = archetype.id
+    matter.legal_category = archetype.legal_category
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.post(
+        f"/matters/{matter.id}/close",
+        data={"csrf_token": "test-csrf"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    db.session.refresh(matter)
+    assert matter.status == "Open"
+    assert matter.closed_at is None
+    assert AuditLog.query.filter_by(action="matter_close", entity_type="Matter", entity_id=matter.id).count() == 0
 
 
 def test_email_capture_attachment_download_is_audited(app_ctx):

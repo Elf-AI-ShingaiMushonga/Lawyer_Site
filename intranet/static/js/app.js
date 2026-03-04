@@ -3031,19 +3031,21 @@
     if (!(nav instanceof HTMLElement)) {
       return;
     }
+    const navBody = nav.querySelector("[data-collapsible-nav-body]");
+    const collapsibleSection = navBody instanceof HTMLElement ? navBody : nav;
 
     const minDelta = 8;
     let lastY = window.scrollY;
     let isCollapsed = false;
     let ticking = false;
-    let expandedHeight = nav.offsetHeight;
+    let expandedHeight = collapsibleSection.offsetHeight;
 
     const measureExpandedHeight = () => {
       const wasCollapsed = nav.classList.contains("is-collapsed");
       if (wasCollapsed) {
         nav.classList.remove("is-collapsed");
       }
-      expandedHeight = Math.max(1, nav.offsetHeight);
+      expandedHeight = Math.max(1, collapsibleSection.offsetHeight);
       if (wasCollapsed) {
         nav.classList.add("is-collapsed");
       }
@@ -3101,6 +3103,353 @@
 
     measureExpandedHeight();
     update();
+  };
+
+  const initMatterNewForm = () => {
+    const form = document.querySelector("[data-matter-new-form]");
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
+
+    let templatePayload = {};
+    try {
+      const raw = String(form.getAttribute("data-archetype-payload") || "{}");
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        templatePayload = parsed;
+      }
+    } catch (_error) {
+      templatePayload = {};
+    }
+
+    const categoryInput = form.querySelector('select[name="legal_category"]');
+    const archetypeSelect = form.querySelector('select[name="archetype_id"]');
+    const requiredFieldsContainer = form.querySelector("#archetype-required-fields");
+    const requiredHelp = form.querySelector("#archetype-required-help");
+    const contractFieldsContainer = form.querySelector("#contract-required-fields");
+    const contractHelp = form.querySelector("#contract-required-help");
+    const linkedDocumentHelp = form.querySelector("#linked-document-help");
+    const lawyerSearchInput = form.querySelector("#matter-lawyer-search");
+    const lawyerChecklist = form.querySelector("#matter-lawyer-checklist");
+    const lawyerSelectVisibleButton = form.querySelector("#matter-lawyer-select-visible");
+    const lawyerClearAllButton = form.querySelector("#matter-lawyer-clear-all");
+    const lawyerSelectionMeta = form.querySelector("#matter-lawyer-selection-meta");
+    const lawyerSearchEmpty = form.querySelector("#matter-lawyer-search-empty");
+
+    if (
+      !(categoryInput instanceof HTMLSelectElement) ||
+      !(archetypeSelect instanceof HTMLSelectElement) ||
+      !(requiredFieldsContainer instanceof HTMLElement) ||
+      !(requiredHelp instanceof HTMLElement) ||
+      !(contractFieldsContainer instanceof HTMLElement) ||
+      !(contractHelp instanceof HTMLElement) ||
+      !(linkedDocumentHelp instanceof HTMLElement)
+    ) {
+      return;
+    }
+
+    const byId = new Map(
+      Object.entries(templatePayload).map(([id, value]) => [String(id), value])
+    );
+
+    const setHelpText = (text) => {
+      requiredHelp.textContent = text || "";
+    };
+
+    const setContractHelpText = (text) => {
+      contractHelp.textContent = text || "";
+    };
+
+    const renderContractRequiredFields = (selected) => {
+      contractFieldsContainer.innerHTML = "";
+      if (!selected || typeof selected !== "object") {
+        setContractHelpText("Select an archetype to load contract fields for auto-generated drafts.");
+        linkedDocumentHelp.textContent = "Linked document templates (if any) will auto-generate on matter creation.";
+        return;
+      }
+      const archetypeKeys = new Set(
+        (Array.isArray(selected.required_fields) ? selected.required_fields : [])
+          .map((field) => String((field && field.key) || "").trim())
+          .filter(Boolean)
+      );
+      const contractTemplates = Array.isArray(selected.contract_templates)
+        ? selected.contract_templates
+        : [];
+      const linkedDocumentTemplates = Array.isArray(selected.document_templates)
+        ? selected.document_templates
+        : [];
+      if (!linkedDocumentTemplates.length) {
+        linkedDocumentHelp.textContent = "No linked document templates configured for this archetype.";
+      } else {
+        const names = linkedDocumentTemplates
+          .map((template) => String((template && template.name) || "").trim())
+          .filter(Boolean);
+        linkedDocumentHelp.textContent = `Linked document drafts that will auto-generate: ${names.join(", ")}.`;
+      }
+      if (!contractTemplates.length) {
+        setContractHelpText("No auto-generated contracts are linked to this archetype.");
+        return;
+      }
+      const byKey = new Map();
+      contractTemplates.forEach((template) => {
+        const templateName = String((template && template.name) || "Contract");
+        const requiredFields = Array.isArray(template && template.required_fields)
+          ? template.required_fields
+          : [];
+        requiredFields.forEach((field) => {
+          const key = String((field && field.key) || "").trim();
+          if (!key || archetypeKeys.has(key)) {
+            return;
+          }
+          const label = String((field && field.label) || key);
+          const helpText = String((field && field.help) || "");
+          const existing = byKey.get(key);
+          if (existing) {
+            if (!existing.templates.includes(templateName)) {
+              existing.templates.push(templateName);
+            }
+            if (!existing.help && helpText) {
+              existing.help = helpText;
+            }
+            return;
+          }
+          byKey.set(key, {
+            key,
+            label,
+            help: helpText,
+            templates: [templateName],
+          });
+        });
+      });
+      if (!byKey.size) {
+        setContractHelpText("This archetype has auto-generated contracts, but no additional required contract fields.");
+        return;
+      }
+      setContractHelpText(`Complete these fields to auto-generate ${contractTemplates.length} contract draft(s).`);
+      Array.from(byKey.values()).forEach((field) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "col-md-6";
+        const labelNode = document.createElement("label");
+        labelNode.className = "muted small";
+        labelNode.textContent = field.label;
+        const inputNode = document.createElement("input");
+        inputNode.className = "form-control";
+        inputNode.name = `contract_field_${field.key}`;
+        inputNode.required = true;
+        wrapper.appendChild(labelNode);
+        wrapper.appendChild(inputNode);
+        const helper = document.createElement("div");
+        helper.className = "form-help mt-1";
+        const templateList = field.templates.join(", ");
+        helper.textContent = field.help
+          ? `${field.help} (${templateList})`
+          : `Required for: ${templateList}`;
+        wrapper.appendChild(helper);
+        contractFieldsContainer.appendChild(wrapper);
+      });
+    };
+
+    const renderRequiredFields = () => {
+      requiredFieldsContainer.innerHTML = "";
+      const selectedId = String(archetypeSelect.value || "").trim();
+      if (selectedId === "custom") {
+        setHelpText("Custom matter selected. No archetype-required fields are needed.");
+        renderContractRequiredFields(null);
+        return;
+      }
+      const selected = byId.get(selectedId);
+      if (!selected || typeof selected !== "object") {
+        setHelpText("Select an archetype to load its required matter-specific fields.");
+        renderContractRequiredFields(null);
+        return;
+      }
+      const fields = Array.isArray(selected.required_fields) ? selected.required_fields : [];
+      if (!fields.length) {
+        setHelpText("This archetype has no additional required fields.");
+        renderContractRequiredFields(selected);
+        return;
+      }
+      setHelpText("Complete all fields below. They are required for this archetype.");
+      fields.forEach((field) => {
+        const key = String((field && field.key) || "").trim();
+        if (!key) {
+          return;
+        }
+        const label = String((field && field.label) || key);
+        const helpText = String((field && field.help) || "");
+        const wrapper = document.createElement("div");
+        wrapper.className = "col-md-6";
+        const fieldLabel = document.createElement("label");
+        fieldLabel.className = "muted small";
+        fieldLabel.textContent = label;
+        const fieldInput = document.createElement("input");
+        fieldInput.className = "form-control";
+        fieldInput.name = `field_${key}`;
+        fieldInput.required = true;
+        wrapper.appendChild(fieldLabel);
+        wrapper.appendChild(fieldInput);
+        if (helpText) {
+          const helper = document.createElement("div");
+          helper.className = "form-help mt-1";
+          helper.textContent = helpText;
+          wrapper.appendChild(helper);
+        }
+        requiredFieldsContainer.appendChild(wrapper);
+      });
+      renderContractRequiredFields(selected);
+    };
+
+    const filterArchetypesByCategory = () => {
+      const category = String(categoryInput.value || "").trim().toLowerCase();
+      Array.from(archetypeSelect.options).forEach((option) => {
+        if (!(option instanceof HTMLOptionElement)) {
+          return;
+        }
+        if (!option.value || option.value === "custom") {
+          option.hidden = false;
+          return;
+        }
+        const optionCategory = String(option.dataset.category || "").trim().toLowerCase();
+        option.hidden = category ? optionCategory !== category : false;
+      });
+      const selectedOption = archetypeSelect.options[archetypeSelect.selectedIndex];
+      if (selectedOption instanceof HTMLOptionElement && selectedOption.hidden) {
+        archetypeSelect.value = "";
+      }
+      if (!String(archetypeSelect.value || "").trim()) {
+        const firstVisibleTemplate = Array.from(archetypeSelect.options).find((option) => {
+          if (!(option instanceof HTMLOptionElement)) {
+            return false;
+          }
+          const value = String(option.value || "").trim();
+          return value && value !== "custom" && !option.hidden;
+        });
+        if (firstVisibleTemplate instanceof HTMLOptionElement) {
+          archetypeSelect.value = firstVisibleTemplate.value;
+        }
+      }
+      renderRequiredFields();
+    };
+
+    const ensureInitialArchetypeSelection = () => {
+      if (String(archetypeSelect.value || "").trim()) {
+        return;
+      }
+      const firstTemplate = Array.from(archetypeSelect.options).find((option) => {
+        if (!(option instanceof HTMLOptionElement)) {
+          return false;
+        }
+        const value = String(option.value || "").trim();
+        return value && value !== "custom";
+      });
+      if (!(firstTemplate instanceof HTMLOptionElement)) {
+        return;
+      }
+      archetypeSelect.value = firstTemplate.value;
+      const selected = byId.get(String(firstTemplate.value));
+      if (
+        selected &&
+        typeof selected === "object" &&
+        !String(categoryInput.value || "").trim() &&
+        String(selected.legal_category || "").trim()
+      ) {
+        categoryInput.value = String(selected.legal_category || "").trim();
+      }
+    };
+
+    categoryInput.addEventListener("change", filterArchetypesByCategory);
+    archetypeSelect.addEventListener("change", () => {
+      const selected = byId.get(String(archetypeSelect.value || ""));
+      if (
+        selected &&
+        typeof selected === "object" &&
+        !String(categoryInput.value || "").trim() &&
+        String(selected.legal_category || "").trim()
+      ) {
+        categoryInput.value = String(selected.legal_category || "").trim();
+      }
+      filterArchetypesByCategory();
+    });
+
+    if (
+      lawyerSearchInput instanceof HTMLInputElement &&
+      lawyerChecklist instanceof HTMLElement &&
+      lawyerSelectVisibleButton instanceof HTMLButtonElement &&
+      lawyerClearAllButton instanceof HTMLButtonElement
+    ) {
+      const assigneeItems = Array.from(lawyerChecklist.querySelectorAll("[data-assignee-item]"));
+      const assigneeCheckboxes = Array.from(
+        lawyerChecklist.querySelectorAll("[data-assignee-checkbox]")
+      );
+
+      const setSelectionMeta = () => {
+        if (!(lawyerSelectionMeta instanceof HTMLElement)) {
+          return;
+        }
+        const selectedCount = assigneeCheckboxes.filter(
+          (checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked
+        ).length;
+        if (selectedCount <= 0) {
+          lawyerSelectionMeta.textContent = "No attorneys selected.";
+        } else if (selectedCount === 1) {
+          lawyerSelectionMeta.textContent = "1 attorney selected.";
+        } else {
+          lawyerSelectionMeta.textContent = `${selectedCount} attorneys selected.`;
+        }
+      };
+
+      const applyAssigneeFilter = () => {
+        const query = String(lawyerSearchInput.value || "").trim().toLowerCase();
+        let visibleCount = 0;
+        assigneeItems.forEach((item) => {
+          if (!(item instanceof HTMLElement)) {
+            return;
+          }
+          const haystack = String(item.dataset.assigneeSearch || "").toLowerCase();
+          const isVisible = !query || haystack.includes(query);
+          item.hidden = !isVisible;
+          if (isVisible) {
+            visibleCount += 1;
+          }
+        });
+        if (lawyerSearchEmpty instanceof HTMLElement) {
+          lawyerSearchEmpty.hidden = visibleCount > 0;
+        }
+      };
+
+      lawyerSearchInput.addEventListener("input", applyAssigneeFilter);
+      assigneeCheckboxes.forEach((checkbox) => {
+        if (checkbox instanceof HTMLInputElement) {
+          checkbox.addEventListener("change", setSelectionMeta);
+        }
+      });
+      lawyerSelectVisibleButton.addEventListener("click", () => {
+        assigneeItems.forEach((item) => {
+          if (!(item instanceof HTMLElement) || item.hidden) {
+            return;
+          }
+          const checkbox = item.querySelector("[data-assignee-checkbox]");
+          if (checkbox instanceof HTMLInputElement) {
+            checkbox.checked = true;
+          }
+        });
+        setSelectionMeta();
+      });
+      lawyerClearAllButton.addEventListener("click", () => {
+        assigneeCheckboxes.forEach((checkbox) => {
+          if (checkbox instanceof HTMLInputElement) {
+            checkbox.checked = false;
+          }
+        });
+        setSelectionMeta();
+      });
+
+      setSelectionMeta();
+      applyAssigneeFilter();
+    }
+
+    ensureInitialArchetypeSelection();
+    filterArchetypesByCategory();
   };
 
   const initFormValidationUX = () => {
@@ -3686,6 +4035,7 @@
     initTableTools();
     initCollapsibleNav();
     initBackToTop();
+    initMatterNewForm();
     initFormValidationUX();
     initSubmitState();
     initFormDrafts();

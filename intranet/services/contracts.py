@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import uuid
 from collections.abc import Iterable, Mapping
 
 from flask import current_app
@@ -15,11 +14,13 @@ from ..models import (
     DocumentFile,
     DocumentOCRText,
     DocumentRecord,
+    DocumentTemplate,
     DocumentVersion,
     Matter,
     MatterTemplate,
 )
 from .archetypes import build_document_context, load_required_fields, normalize_archetype_field_key, render_template_text
+from .storage_paths import build_matter_storage_name, resolve_upload_path
 
 
 def auto_contract_templates_for_archetype(archetype_id: int | None) -> list[ContractTemplate]:
@@ -103,31 +104,31 @@ def render_contract_template_for_matter(
     return render_template_text(template.body, context)
 
 
-def persist_generated_contract_document(
+def _persist_generated_text_document(
     *,
     matter: Matter,
-    template: ContractTemplate,
+    title: str,
+    document_type: str,
     rendered_body: str,
     actor_user_id: int,
     actor_full_name: str | None,
+    file_label: str,
+    notes: str,
 ) -> tuple[DocumentRecord, DocumentVersion, str]:
     upload_dir = str(current_app.config.get("UPLOAD_DIR") or "").strip()
     if not upload_dir:
         raise RuntimeError("UPLOAD_DIR is not configured.")
-    os.makedirs(upload_dir, exist_ok=True)
 
-    base_name = secure_filename(f"{matter.matter_no}_{template.name}_contract") or f"matter_{matter.id}_contract_{template.id}"
-    safe_name = f"{base_name[:80]}.txt"
-    stored_filename = f"dms_{matter.id}_{uuid.uuid4().hex}_{safe_name}"
-    file_path = os.path.join(upload_dir, stored_filename)
+    storage_name = build_matter_storage_name("dms", matter.id, f"{file_label}.txt")
+    stored_filename, file_path = resolve_upload_path(upload_dir, storage_name, create_parent=True)
     with open(file_path, "w", encoding="utf-8") as handle:
         handle.write(rendered_body)
 
     sha = sha256_file(file_path)
     document = DocumentRecord(
         matter_id=matter.id,
-        title=f"{template.name} - {matter.matter_no}",
-        document_type=(template.contract_type or "Contract").strip() or "Contract",
+        title=title,
+        document_type=(document_type or "General").strip() or "General",
         confidentiality="Internal",
         created_by=actor_user_id,
     )
@@ -136,7 +137,7 @@ def persist_generated_contract_document(
 
     legacy_file = DocumentFile(
         matter_id=matter.id,
-        original_filename=safe_name,
+        original_filename=os.path.basename(stored_filename),
         stored_filename=stored_filename,
         sha256=sha,
         content_type="text/plain",
@@ -155,13 +156,13 @@ def persist_generated_contract_document(
         document_id=document.id,
         document_file_id=legacy_file.id,
         version_no=1,
-        original_filename=safe_name,
+        original_filename=legacy_file.original_filename,
         stored_filename=stored_filename,
         sha256=sha,
         hash_chain_prev=None,
         hash_chain_current=chain_hash,
         state="draft",
-        notes=f"Auto-generated from contract template '{template.name}' on matter creation.",
+        notes=notes,
         uploaded_by=actor_user_id,
     )
     db.session.add(version)
@@ -174,6 +175,48 @@ def persist_generated_contract_document(
         )
     )
     return document, version, file_path
+
+
+def persist_generated_contract_document(
+    *,
+    matter: Matter,
+    template: ContractTemplate,
+    rendered_body: str,
+    actor_user_id: int,
+    actor_full_name: str | None,
+) -> tuple[DocumentRecord, DocumentVersion, str]:
+    base_name = secure_filename(f"{matter.matter_no}_{template.name}_contract") or f"matter_{matter.id}_contract_{template.id}"
+    return _persist_generated_text_document(
+        matter=matter,
+        title=f"{template.name} - {matter.matter_no}",
+        document_type=(template.contract_type or "Contract").strip() or "Contract",
+        rendered_body=rendered_body,
+        actor_user_id=actor_user_id,
+        actor_full_name=actor_full_name,
+        file_label=base_name[:80],
+        notes=f"Auto-generated from contract template '{template.name}' on matter creation.",
+    )
+
+
+def persist_generated_document_template_document(
+    *,
+    matter: Matter,
+    template: DocumentTemplate,
+    rendered_body: str,
+    actor_user_id: int,
+    actor_full_name: str | None,
+) -> tuple[DocumentRecord, DocumentVersion, str]:
+    base_name = secure_filename(f"{matter.matter_no}_{template.name}_template") or f"matter_{matter.id}_template_{template.id}"
+    return _persist_generated_text_document(
+        matter=matter,
+        title=f"{template.name} - {matter.matter_no}",
+        document_type=(template.template_type or "General").strip() or "General",
+        rendered_body=rendered_body,
+        actor_user_id=actor_user_id,
+        actor_full_name=actor_full_name,
+        file_label=base_name[:80],
+        notes=f"Auto-generated from linked document template '{template.name}' on matter creation.",
+    )
 
 
 def cleanup_generated_files(paths: Iterable[str]) -> None:

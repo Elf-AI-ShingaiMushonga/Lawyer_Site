@@ -241,6 +241,7 @@ def register_admin_settings_routes(app):
             "task_templates": TaskTemplate.query.count(),
             "document_templates": DocumentTemplate.query.count(),
             "linked_contract_templates": ContractTemplate.query.filter(ContractTemplate.archetype_id.isnot(None)).count(),
+            "linked_document_templates": DocumentTemplate.query.filter(DocumentTemplate.archetype_id.isnot(None)).count(),
             "auto_contract_templates": ContractTemplate.query.filter_by(
                 is_active=True,
                 auto_create_on_matter_open=True,
@@ -345,6 +346,17 @@ def register_admin_settings_routes(app):
 
         rows = MatterTemplate.query.order_by(MatterTemplate.created_at.desc()).all()
         template_fields_map = {row.id: load_required_fields(row.required_fields_json) for row in rows}
+        linked_document_rows = (
+            db.session.query(DocumentTemplate.archetype_id, DocumentTemplate.name)
+            .filter(DocumentTemplate.archetype_id.isnot(None))
+            .order_by(DocumentTemplate.name.asc())
+            .all()
+        )
+        template_document_map: dict[int, list[str]] = {}
+        for archetype_id, template_name in linked_document_rows:
+            if not archetype_id or not template_name:
+                continue
+            template_document_map.setdefault(int(archetype_id), []).append(str(template_name))
         categories = legal_category_options(extra_values=[edit_row.legal_category if edit_row else None])
         practice_areas = practice_area_options(extra_values=[edit_row.practice_area if edit_row else None])
         usage_rows = (
@@ -387,6 +399,7 @@ def register_admin_settings_routes(app):
             edit_template_id=(edit_row.id if edit_row else None),
             form_data=form_data,
             template_usage_map=template_usage_map,
+            template_document_map=template_document_map,
         )
 
     @app.post("/admin/templates/matters/ai/suggest")
@@ -521,11 +534,17 @@ def register_admin_settings_routes(app):
         if request.method == "POST":
             name = (request.form.get("name") or "").strip()
             body = (request.form.get("body") or "").strip()
+            archetype_id = request.form.get("archetype_id", type=int)
+            archetype = db.session.get(MatterTemplate, archetype_id) if archetype_id else None
             if not name or not body:
                 flash("Template name and body are required.", "warning")
                 return redirect(url_for("admin_templates_documents"))
+            if archetype_id and archetype is None:
+                flash("Selected archetype was not found.", "warning")
+                return redirect(url_for("admin_templates_documents"))
             row = DocumentTemplate(
                 name=name,
+                archetype_id=archetype.id if archetype else None,
                 template_type=(request.form.get("template_type") or "general").strip(),
                 body=body,
                 requires_signature=(request.form.get("requires_signature") or "").lower() in {"1", "true", "on", "yes"},
@@ -538,7 +557,15 @@ def register_admin_settings_routes(app):
             return redirect(url_for("admin_templates_documents"))
 
         rows = DocumentTemplate.query.order_by(DocumentTemplate.created_at.desc()).all()
-        return page("Document Templates", "admin_settings/templates_documents.html", templates=rows)
+        archetypes = MatterTemplate.query.order_by(MatterTemplate.name.asc()).all()
+        archetype_name_map = {int(row.id): row.name for row in archetypes}
+        return page(
+            "Document Templates",
+            "admin_settings/templates_documents.html",
+            templates=rows,
+            archetypes=archetypes,
+            archetype_name_map=archetype_name_map,
+        )
 
     @app.post("/admin/templates/contracts/ai/suggest")
     @login_required

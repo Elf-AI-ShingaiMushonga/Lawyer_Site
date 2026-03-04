@@ -510,6 +510,7 @@ class TaskTemplateItem(db.Model):
 class DocumentTemplate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False, unique=True)
+    archetype_id = db.Column(db.Integer, db.ForeignKey("matter_template.id"), nullable=True, index=True)
     template_type = db.Column(db.String(80), nullable=False)
     body = db.Column(db.Text, nullable=False)
     requires_signature = db.Column(db.Boolean, nullable=False, default=False)

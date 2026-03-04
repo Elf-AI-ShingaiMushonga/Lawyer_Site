@@ -32,3 +32,6 @@ uploads/
 build/
 dist/
 *.egg-info/
+
+# Local presentation notebooks (keep off VM/deploy)
+notebooks/dm_inc_director_pitch.ipynb

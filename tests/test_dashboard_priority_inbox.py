@@ -6,7 +6,7 @@ import time
 
 from intranet.extensions import db
 from intranet.mfa import _totp, generate_totp_secret
-from intranet.models import CRMFollowUp, CRMLead, FirmSetting, User
+from intranet.models import CRMFollowUp, CRMLead, FirmSetting, Matter, Task, User
 
 
 def _csrf_token_for(client, path: str = "/login") -> str:
@@ -126,3 +126,85 @@ def test_crm_followup_status_route_updates_status_and_blocks_external_next(app_c
     assert response.headers.get("Location", "").endswith(f"/crm/leads/{lead.id}")
     db.session.refresh(followup)
     assert followup.status == "done"
+
+
+def test_dashboard_at_risk_defaults_to_criticality_sorting(app_ctx):
+    user, password, secret = _seed_admin_with_mfa(email="risk-order-admin@example.com")
+    now = dt.datetime.utcnow()
+    high = Matter(
+        matter_no="2026-AR-HIGH",
+        title="High Matter",
+        client_name="Client High",
+        status="Open",
+        risk_level="High",
+        created_by=user.id,
+        opened_at=now - dt.timedelta(days=2),
+        last_updated_at=now,
+    )
+    critical = Matter(
+        matter_no="2026-AR-CRIT",
+        title="Critical Matter",
+        client_name="Client Critical",
+        status="Open",
+        risk_level="Critical",
+        created_by=user.id,
+        opened_at=now - dt.timedelta(days=5),
+        last_updated_at=now - dt.timedelta(days=1),
+    )
+    db.session.add_all([high, critical])
+    db.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, user.email, password, secret)
+    response = client.get("/dashboard")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+
+    critical_marker = "2026-AR-CRIT - Critical Matter"
+    high_marker = "2026-AR-HIGH - High Matter"
+    assert critical_marker in body
+    assert high_marker in body
+    assert body.index(critical_marker) < body.index(high_marker)
+
+
+def test_dashboard_my_tasks_hides_done_tasks(app_ctx):
+    user, password, secret = _seed_admin_with_mfa(email="task-visibility-admin@example.com")
+    now = dt.datetime.utcnow()
+    matter = Matter(
+        matter_no="2026-MY-TASKS-001",
+        title="My Task Visibility Matter",
+        client_name="Task Client",
+        status="Open",
+        created_by=user.id,
+        opened_at=now - dt.timedelta(days=1),
+        last_updated_at=now,
+    )
+    db.session.add(matter)
+    db.session.flush()
+    db.session.add_all(
+        [
+            Task(
+                matter_id=matter.id,
+                title="Active Dashboard Task",
+                status="Todo",
+                assigned_to=user.id,
+                created_by=user.id,
+            ),
+            Task(
+                matter_id=matter.id,
+                title="Done Dashboard Task",
+                status="Done",
+                assigned_to=user.id,
+                created_by=user.id,
+            ),
+        ]
+    )
+    db.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, user.email, password, secret)
+    response = client.get("/dashboard")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Active Dashboard Task" in body
+    assert "Done Dashboard Task" not in body

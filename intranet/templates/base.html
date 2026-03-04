@@ -124,6 +124,31 @@
       opacity: 0.98;
     }
 
+    .navbar.has-active-matter .nav-head {
+      overflow: hidden;
+      max-height: 420px;
+      opacity: 1;
+      transform: translateY(0);
+      transition: max-height 0.22s ease, opacity 0.2s ease, transform 0.22s ease;
+    }
+
+    .navbar.has-active-matter.is-collapsed {
+      transform: translateY(0);
+      box-shadow: 0 10px 24px rgba(123, 42, 42, 0.1);
+      opacity: 1;
+    }
+
+    .navbar.has-active-matter.is-collapsed .nav-head {
+      max-height: 0;
+      opacity: 0;
+      transform: translateY(-10px);
+      pointer-events: none;
+    }
+
+    .navbar.has-active-matter.is-collapsed .context-rail {
+      margin-top: 0;
+    }
+
     .nav-head {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -1584,6 +1609,21 @@
       flex-wrap: wrap;
     }
 
+    .matter-quick-action {
+      min-width: 92px;
+      text-align: center;
+      justify-content: center;
+      white-space: nowrap;
+    }
+
+    .matter-quick-action-form {
+      display: inline-flex;
+    }
+
+    .matter-quick-action-form .matter-quick-action {
+      width: 100%;
+    }
+
     .table-actions {
       display: flex;
       gap: 6px;
@@ -2596,6 +2636,10 @@
         flex: 1 1 auto;
       }
 
+      .list-actions .matter-quick-action-form {
+        flex: 1 1 auto;
+      }
+
       .table-actions form {
         display: flex;
         gap: 6px;
@@ -2798,7 +2842,7 @@
     and not (is_lawyer_role and endpoint in billing_endpoints)
     and not ((is_support_role or is_admin_role) and endpoint in crm_endpoints) %}
   <nav class="navbar px-3 py-2 mb-3{% if current_user.is_authenticated and active_matter %} has-active-matter{% endif %}" data-collapsible-nav>
-    <div class="nav-head">
+    <div class="nav-head" data-collapsible-nav-body>
       <div class="nav-brand">
         <a class="brand" href="{{ url_for('dashboard') }}">
           <span class="brand-mark">DM</span>

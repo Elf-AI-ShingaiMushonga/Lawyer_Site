@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 import re
-import uuid
 
 from flask import Response, abort, current_app, flash, redirect, request, send_from_directory, url_for
 from flask_login import current_user, login_required
@@ -29,11 +28,12 @@ from ..models import (
     ProductionSet,
     SavedSearch,
 )
-from ..policies import visible_matter_ids
+from ..policies import enforce_permission, visible_matter_ids
 from ..policies.residency import enforce_data_residency
 from ..roles import role_is_admin
 from ..services.notification_engine import NotificationEngine
 from ..services.semantic_search import SemanticSearchService
+from ..services.storage_paths import build_matter_storage_name, resolve_upload_path
 from ..templates import page
 
 DOCUMENT_STATES = {"draft", "reviewed", "final", "filed"}
@@ -142,6 +142,7 @@ def register_dms_routes(app):
     @app.get("/dms")
     @login_required
     def dms_home():
+        enforce_permission("dms", "read")
         matter_query = Matter.query
         if not is_admin():
             scoped_ids = visible_matter_ids()
@@ -158,6 +159,7 @@ def register_dms_routes(app):
     @app.route("/matters/<int:matter_id>/dms", methods=["GET", "POST"])
     @login_required
     def matter_dms(matter_id: int):
+        enforce_permission("dms", "read")
         if not can_access_matter(matter_id):
             abort(403)
         m = db.session.get(Matter, matter_id)
@@ -165,6 +167,7 @@ def register_dms_routes(app):
             abort(404)
 
         if request.method == "POST":
+            enforce_permission("dms", "write")
             action = (request.form.get("action") or "upload_document").strip().lower()
             if action == "generate_from_template":
                 template_id = request.form.get("template_id", type=int)
@@ -185,8 +188,12 @@ def register_dms_routes(app):
                 os.makedirs(app.config["UPLOAD_DIR"], exist_ok=True)
                 base_name = secure_filename(generated_title) or f"generated_{template.id}"
                 safe_name = f"{base_name[:80]}.txt"
-                stored = f"dms_{matter_id}_{uuid.uuid4().hex}_{safe_name}"
-                path = os.path.join(app.config["UPLOAD_DIR"], stored)
+                stored = build_matter_storage_name("dms", matter_id, safe_name)
+                try:
+                    stored, path = resolve_upload_path(app.config["UPLOAD_DIR"], stored, create_parent=True)
+                except ValueError:
+                    flash("Storage path validation failed for generated document.", "warning")
+                    return redirect(url_for("matter_dms", matter_id=matter_id))
                 try:
                     with open(path, "w", encoding="utf-8") as handle:
                         handle.write(rendered_body)
@@ -297,8 +304,12 @@ def register_dms_routes(app):
             if not safe_name:
                 flash("Invalid filename.", "warning")
                 return redirect(url_for("matter_dms", matter_id=matter_id))
-            stored = f"dms_{matter_id}_{uuid.uuid4().hex}_{safe_name}"
-            path = os.path.join(app.config["UPLOAD_DIR"], stored)
+            stored = build_matter_storage_name("dms", matter_id, safe_name)
+            try:
+                stored, path = resolve_upload_path(app.config["UPLOAD_DIR"], stored, create_parent=True)
+            except ValueError:
+                flash("Storage path validation failed for upload.", "warning")
+                return redirect(url_for("matter_dms", matter_id=matter_id))
             f.save(path)
             sha = sha256_file(path)
             try:
@@ -498,6 +509,7 @@ def register_dms_routes(app):
     @app.route("/documents/<int:document_id>/versions", methods=["GET", "POST"])
     @login_required
     def document_versions(document_id: int):
+        enforce_permission("dms", "read")
         doc = db.session.get(DocumentRecord, document_id)
         if not doc:
             abort(404)
@@ -505,6 +517,7 @@ def register_dms_routes(app):
             abort(403)
 
         if request.method == "POST":
+            enforce_permission("dms", "write")
             lock = (
                 DocumentLock.query.filter_by(document_id=document_id, released_at=None)
                 .order_by(DocumentLock.locked_at.desc())
@@ -532,8 +545,12 @@ def register_dms_routes(app):
             if not safe_name:
                 flash("Invalid filename.", "warning")
                 return redirect(url_for("document_versions", document_id=document_id))
-            stored = f"dms_{doc.matter_id}_{uuid.uuid4().hex}_{safe_name}"
-            path = os.path.join(app.config["UPLOAD_DIR"], stored)
+            stored = build_matter_storage_name("dms", doc.matter_id, safe_name)
+            try:
+                stored, path = resolve_upload_path(app.config["UPLOAD_DIR"], stored, create_parent=True)
+            except ValueError:
+                flash("Storage path validation failed for upload.", "warning")
+                return redirect(url_for("document_versions", document_id=document_id))
             f.save(path)
             sha = sha256_file(path)
 
@@ -617,6 +634,7 @@ def register_dms_routes(app):
     @app.post("/documents/<int:document_id>/lock")
     @login_required
     def document_lock(document_id: int):
+        enforce_permission("dms", "manage")
         doc = db.session.get(DocumentRecord, document_id)
         if not doc:
             abort(404)
@@ -645,6 +663,7 @@ def register_dms_routes(app):
     @app.post("/documents/<int:document_id>/unlock")
     @login_required
     def document_unlock(document_id: int):
+        enforce_permission("dms", "manage")
         doc = db.session.get(DocumentRecord, document_id)
         if not doc:
             abort(404)
@@ -664,6 +683,7 @@ def register_dms_routes(app):
     @app.post("/documents/<int:document_id>/state")
     @login_required
     def document_state(document_id: int):
+        enforce_permission("dms", "manage")
         doc = db.session.get(DocumentRecord, document_id)
         if not doc:
             abort(404)
@@ -694,7 +714,9 @@ def register_dms_routes(app):
     @app.route("/productions", methods=["GET", "POST"])
     @login_required
     def productions():
+        enforce_permission("dms", "read")
         if request.method == "POST":
+            enforce_permission("dms", "export")
             matter_id = request.form.get("matter_id", type=int)
             if not matter_id or not can_access_matter(matter_id):
                 abort(403)
@@ -735,6 +757,7 @@ def register_dms_routes(app):
     @app.get("/productions/<int:production_id>/export")
     @login_required
     def production_export(production_id: int):
+        enforce_permission("dms", "export")
         row = db.session.get(ProductionSet, production_id)
         if not row:
             abort(404)
@@ -776,7 +799,9 @@ def register_dms_routes(app):
     @app.route("/bates/ranges", methods=["GET", "POST"])
     @login_required
     def bates_ranges():
+        enforce_permission("dms", "read")
         if request.method == "POST":
+            enforce_permission("dms", "export")
             production_set_id = request.form.get("production_set_id", type=int)
             production = db.session.get(ProductionSet, production_set_id) if production_set_id else None
             if not production:
@@ -838,7 +863,9 @@ def register_dms_routes(app):
     @app.route("/dms/saved-searches", methods=["GET", "POST"])
     @login_required
     def dms_saved_searches():
+        enforce_permission("dms", "read")
         if request.method == "POST":
+            enforce_permission("dms", "write")
             name = (request.form.get("name") or "").strip()
             query_text = (request.form.get("query") or "").strip()
             matter_id = request.form.get("matter_id", type=int)
@@ -874,6 +901,7 @@ def register_dms_routes(app):
     @app.route("/matters/<int:matter_id>/email-capture", methods=["GET", "POST"])
     @login_required
     def matter_email_capture(matter_id: int):
+        enforce_permission("dms", "read")
         if not can_access_matter(matter_id):
             abort(403)
         m = db.session.get(Matter, matter_id)
@@ -881,6 +909,7 @@ def register_dms_routes(app):
             abort(404)
 
         if request.method == "POST":
+            enforce_permission("dms", "write")
             message_id = (request.form.get("message_id") or "").strip()
             if not message_id:
                 flash("Message id is required.", "warning")
@@ -915,8 +944,16 @@ def register_dms_routes(app):
                 if not safe_name:
                     flash("Invalid attachment filename.", "warning")
                     return redirect(url_for("matter_email_capture", matter_id=matter_id))
-                stored_filename = f"email_{matter_id}_{uuid.uuid4().hex}_{safe_name}"
-                attachment_path = os.path.join(app.config["UPLOAD_DIR"], stored_filename)
+                storage_name = build_matter_storage_name("email_capture", matter_id, safe_name)
+                try:
+                    stored_filename, attachment_path = resolve_upload_path(
+                        app.config["UPLOAD_DIR"],
+                        storage_name,
+                        create_parent=True,
+                    )
+                except ValueError:
+                    flash("Storage path validation failed for attachment.", "warning")
+                    return redirect(url_for("matter_email_capture", matter_id=matter_id))
                 f.save(attachment_path)
                 attachment_hash = sha256_file(attachment_path)
 
@@ -949,6 +986,7 @@ def register_dms_routes(app):
     @app.get("/email-capture/<int:capture_id>/attachment")
     @login_required
     def email_capture_attachment(capture_id: int):
+        enforce_permission("dms", "read")
         row = db.session.get(EmailCapture, capture_id)
         if row is None:
             abort(404)
@@ -957,13 +995,16 @@ def register_dms_routes(app):
         enforce_data_residency("exports")
         if not row.stored_filename:
             abort(404)
-        path = os.path.join(app.config["UPLOAD_DIR"], row.stored_filename)
+        try:
+            stored_filename, path = resolve_upload_path(app.config["UPLOAD_DIR"], row.stored_filename)
+        except ValueError:
+            abort(404)
         if not os.path.isfile(path):
             abort(404)
         audit("email_capture_attachment_access", "EmailCapture", row.id, {"matter_id": row.matter_id})
         return send_from_directory(
             app.config["UPLOAD_DIR"],
-            row.stored_filename,
+            stored_filename,
             as_attachment=True,
-            download_name=os.path.basename(row.stored_filename),
+            download_name=os.path.basename(stored_filename),
         )

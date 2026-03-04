@@ -71,7 +71,10 @@
   <div class="col-lg-6">
     <div class="card p-3 h-100">
       <h4 class="mb-1">Document Templates</h4>
-      <div class="form-help mb-2">Maintain reusable precedent text and merge fields for fast DMS draft generation.</div>
+      <div class="form-help mb-2">
+        Maintain reusable precedent text and merge fields for fast DMS draft generation.
+        Linked to archetypes: {{ stats.linked_document_templates }}.
+      </div>
       <div class="table-actions mt-auto">
         <a class="btn btn-light btn-sm" href="{{ url_for('admin_templates_documents') }}">Open Builder</a>
       </div>

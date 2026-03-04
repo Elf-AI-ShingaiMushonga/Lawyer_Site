@@ -4,7 +4,6 @@ import datetime as dt
 import json
 import os
 import time
-import uuid
 from urllib.parse import urlsplit
 
 import sqlalchemy as sa
@@ -26,6 +25,7 @@ from ..helpers import (
 from ..models import (
     ContractTemplate,
     DocumentFile,
+    DocumentTemplate,
     Matter,
     MatterActivity,
     MatterMember,
@@ -50,10 +50,15 @@ from ..services.archetypes import (
     render_template_text,
     validate_required_field_values,
 )
+from ..services.archetype_playbook import (
+    build_archetype_compliance_snapshot,
+    ensure_matter_closing_checklist_items,
+)
 from ..services.contracts import (
     cleanup_generated_files,
     collect_contract_field_values,
     contract_required_fields_union,
+    persist_generated_document_template_document,
     persist_generated_contract_document,
     render_contract_template_for_matter,
     validate_contract_field_values,
@@ -61,6 +66,7 @@ from ..services.contracts import (
 from ..services.assist_ai import suggest_matter_client_update, suggest_matter_executive_summary
 from ..services.director_team import director_team_member_ids, user_in_director_scope
 from ..services.matter_option_lists import legal_category_options
+from ..services.storage_paths import build_matter_storage_name, resolve_upload_path
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..templates import page
 
@@ -119,11 +125,14 @@ def _archetype_templates() -> list[MatterTemplate]:
 def _serialize_template_payload(
     templates: list[MatterTemplate],
     contract_templates_by_archetype: dict[int, list[ContractTemplate]] | None = None,
+    document_templates_by_archetype: dict[int, list[DocumentTemplate]] | None = None,
 ) -> dict[int, dict[str, object]]:
     contract_templates_by_archetype = contract_templates_by_archetype or {}
+    document_templates_by_archetype = document_templates_by_archetype or {}
     payload: dict[int, dict[str, object]] = {}
     for template in templates:
         linked_contract_templates = contract_templates_by_archetype.get(int(template.id), [])
+        linked_document_templates = document_templates_by_archetype.get(int(template.id), [])
         payload[template.id] = {
             "id": int(template.id),
             "name": template.name or "",
@@ -136,6 +145,14 @@ def _serialize_template_payload(
                     "required_fields": load_required_fields(contract_template.required_fields_json),
                 }
                 for contract_template in linked_contract_templates
+            ],
+            "document_templates": [
+                {
+                    "id": int(document_template.id),
+                    "name": document_template.name or "",
+                    "template_type": document_template.template_type or "",
+                }
+                for document_template in linked_document_templates
             ],
         }
     return payload
@@ -346,6 +363,21 @@ def register_matter_routes(app):
                 continue
             key = int(contract_template.archetype_id)
             contract_templates_by_archetype.setdefault(key, []).append(contract_template)
+        linked_document_templates = (
+            DocumentTemplate.query.filter(
+                DocumentTemplate.archetype_id.in_(archetype_ids),
+            )
+            .order_by(DocumentTemplate.name.asc())
+            .all()
+            if archetype_ids
+            else []
+        )
+        document_templates_by_archetype: dict[int, list[DocumentTemplate]] = {}
+        for document_template in linked_document_templates:
+            if not document_template.archetype_id:
+                continue
+            key = int(document_template.archetype_id)
+            document_templates_by_archetype.setdefault(key, []).append(document_template)
         legal_team_role_values = tuple(sorted(role_query_values_for_legal_team()))
         assignable_lawyers = (
             User.query.filter(
@@ -429,6 +461,11 @@ def register_matter_routes(app):
                 if archetype is not None
                 else []
             )
+            auto_document_templates = (
+                document_templates_by_archetype.get(int(archetype.id), [])
+                if archetype is not None
+                else []
+            )
             contract_required_defs = contract_required_fields_union(auto_contract_templates)
             contract_field_values = collect_contract_field_values(request.form, contract_required_defs)
             for key, value in matter_specific_values.items():
@@ -458,10 +495,13 @@ def register_matter_routes(app):
                 legal_category=legal_category or None,
                 archetype_id=archetype.id if archetype else None,
                 archetype_data_json=(json.dumps(matter_specific_values, ensure_ascii=True) if matter_specific_values else None),
+                stage=(archetype.default_stage if archetype and archetype.default_stage else None),
+                practice_area=(archetype.practice_area if archetype and archetype.practice_area else None),
             )
             db.session.add(m)
             db.session.flush()
             db.session.add(MatterMember(matter_id=m.id, user_id=current_user.id, role_in_matter="Responsible"))
+            checklist_seeded_count = ensure_matter_closing_checklist_items(m.id, archetype)
             team_member_ids = {current_user.id}
             for lawyer_user_id in selected_lawyer_ids:
                 if lawyer_user_id in team_member_ids:
@@ -471,6 +511,8 @@ def register_matter_routes(app):
             generated_contract_file_paths: list[str] = []
             generated_contract_template_ids: list[int] = []
             generated_contract_missing_tokens: list[tuple[str, list[str]]] = []
+            generated_document_template_ids: list[int] = []
+            generated_document_missing_tokens: list[tuple[str, list[str]]] = []
             for contract_template in auto_contract_templates:
                 rendered_contract, missing_tokens = render_contract_template_for_matter(
                     template=contract_template,
@@ -507,6 +549,42 @@ def register_matter_routes(app):
                 generated_contract_file_paths.append(file_path)
                 if missing_tokens:
                     generated_contract_missing_tokens.append((contract_template.name, missing_tokens))
+            for document_template in auto_document_templates:
+                context = build_document_context(
+                    m,
+                    archetype=archetype,
+                    required_values=matter_specific_values,
+                )
+                context["document_template_name"] = document_template.name or ""
+                rendered_document, missing_tokens = render_template_text(document_template.body, context)
+                if not rendered_document.strip():
+                    db.session.rollback()
+                    cleanup_generated_files(generated_contract_file_paths)
+                    flash(
+                        f"Document template '{document_template.name}' produced an empty document. Update the template and retry.",
+                        "warning",
+                    )
+                    return redirect(url_for("matter_create"))
+                try:
+                    _, _, file_path = persist_generated_document_template_document(
+                        matter=m,
+                        template=document_template,
+                        rendered_body=rendered_document,
+                        actor_user_id=current_user.id,
+                        actor_full_name=current_user.full_name,
+                    )
+                except Exception:
+                    db.session.rollback()
+                    cleanup_generated_files(generated_contract_file_paths)
+                    flash(
+                        f"Failed to generate document '{document_template.name}'. Matter was not created.",
+                        "warning",
+                    )
+                    return redirect(url_for("matter_create"))
+                generated_document_template_ids.append(int(document_template.id))
+                generated_contract_file_paths.append(file_path)
+                if missing_tokens:
+                    generated_document_missing_tokens.append((document_template.name, missing_tokens))
             db.session.add(
                 MatterTimelineEvent(
                     matter_id=m.id,
@@ -545,10 +623,18 @@ def register_matter_routes(app):
                     "archetype_id": m.archetype_id,
                     "assigned_lawyer_ids": sorted(user_id for user_id in team_member_ids if user_id != current_user.id),
                     "contract_template_ids": generated_contract_template_ids,
+                    "document_template_ids": generated_document_template_ids,
+                    "playbook_checklist_seeded": checklist_seeded_count,
                 },
             )
-            if generated_contract_template_ids:
-                flash(f"Matter created. {len(generated_contract_template_ids)} contract draft(s) were attached.", "info")
+            generated_contract_count = len(generated_contract_template_ids)
+            generated_document_count = len(generated_document_template_ids)
+            if generated_contract_count or generated_document_count:
+                flash(
+                    "Matter created. "
+                    f"{generated_contract_count} contract draft(s) and {generated_document_count} document draft(s) were attached.",
+                    "info",
+                )
             else:
                 flash("Matter created.", "info")
             if generated_contract_missing_tokens:
@@ -560,11 +646,23 @@ def register_matter_routes(app):
                     "Some contract merge fields were blank: " + "; ".join(warnings),
                     "warning",
                 )
+            if generated_document_missing_tokens:
+                warnings = [
+                    f"{template_name}: {', '.join(tokens[:4])}"
+                    for template_name, tokens in generated_document_missing_tokens[:3]
+                ]
+                flash(
+                    "Some document merge fields were blank: " + "; ".join(warnings),
+                    "warning",
+                )
+            if checklist_seeded_count > 0:
+                flash(f"Archetype playbook checklist seeded with {checklist_seeded_count} item(s).", "info")
             return redirect(url_for("matter_detail", matter_id=m.id))
 
         archetype_payload = _serialize_template_payload(
             archetype_templates,
             contract_templates_by_archetype=contract_templates_by_archetype,
+            document_templates_by_archetype=document_templates_by_archetype,
         )
         return page(
             "New Matter",
@@ -604,6 +702,31 @@ def register_matter_routes(app):
             return redirect(url_for("matter_detail", matter_id=matter_id))
 
         previous_status = m.status
+        archetype = db.session.get(MatterTemplate, m.archetype_id) if m.archetype_id else None
+        if previous_status != "Closed" and status == "Closed":
+            ensure_matter_closing_checklist_items(m.id, archetype)
+            compliance = build_archetype_compliance_snapshot(m, archetype)
+            close_blockers: list[str] = []
+            missing_labels = list(compliance.get("required_missing_labels") or [])
+            checklist_remaining = int(compliance.get("checklist_remaining") or 0)
+            if missing_labels:
+                preview = ", ".join(missing_labels[:5])
+                close_blockers.append(f"complete required archetype fields ({preview})")
+            if checklist_remaining > 0:
+                close_blockers.append(f"finish {checklist_remaining} archetype checklist item(s)")
+            if close_blockers:
+                m.objective = objective or None
+                m.risk_level = risk_level
+                m.budget_status = budget_status
+                m.status = previous_status
+                m.last_update_note = last_update_note or None
+                m.outcome_summary = outcome_summary or None
+                m.last_updated_at = dt.datetime.utcnow()
+                db.session.commit()
+                flash("Summary saved, but matter was not closed: " + "; ".join(close_blockers) + ".", "warning")
+                flash("Use Workspace close-out once archetype requirements are complete.", "info")
+                return redirect(url_for("matter_workspace", matter_id=m.id))
+
         m.objective = objective or None
         m.risk_level = risk_level
         m.budget_status = budget_status
@@ -896,6 +1019,42 @@ def register_matter_routes(app):
             headers={"Content-Disposition": f'attachment; filename="{filename_base}.txt"'},
         )
 
+    @app.post("/matters/<int:matter_id>/archetype-fields")
+    @login_required
+    def matter_archetype_fields_update(matter_id: int):
+        if not can_access_matter(matter_id):
+            abort(403)
+        m = db.session.get(Matter, matter_id)
+        if not m:
+            abort(404)
+        archetype = db.session.get(MatterTemplate, m.archetype_id) if m.archetype_id else None
+        if archetype is None:
+            flash("No archetype is linked to this matter.", "warning")
+            return redirect(url_for("matter_detail", matter_id=m.id))
+        field_defs = load_required_fields(archetype.required_fields_json)
+        if not field_defs:
+            flash("This archetype has no required fields to update.", "info")
+            return redirect(url_for("matter_detail", matter_id=m.id))
+
+        field_values = collect_required_field_values(request.form, field_defs)
+        m.archetype_data_json = json.dumps(field_values, ensure_ascii=True) if field_values else None
+        m.last_updated_at = dt.datetime.utcnow()
+        db.session.commit()
+
+        missing_labels = validate_required_field_values(field_defs, field_values)
+        audit(
+            "matter_archetype_fields_update",
+            "Matter",
+            m.id,
+            {"archetype_id": m.archetype_id, "missing_required_count": len(missing_labels)},
+        )
+        matter_activity(m.id, "Archetype fields updated")
+        if missing_labels:
+            flash("Archetype fields saved. Still missing: " + ", ".join(missing_labels[:5]) + ".", "warning")
+        else:
+            flash("Archetype fields updated and fully compliant.", "info")
+        return redirect(url_for("matter_detail", matter_id=m.id))
+
     @app.get("/matters/<int:matter_id>")
     @login_required
     def matter_detail(matter_id: int):
@@ -938,6 +1097,7 @@ def register_matter_routes(app):
         archetype_fields = load_required_fields(archetype.required_fields_json if archetype else None)
         archetype_values = parse_matter_archetype_values(m.archetype_data_json)
         archetype_document, archetype_missing_tokens = _generate_archetype_document(m, archetype)
+        archetype_compliance = build_archetype_compliance_snapshot(m, archetype)
 
         return page(
             f"Matter {m.matter_no}",
@@ -961,6 +1121,7 @@ def register_matter_routes(app):
             archetype_values=archetype_values,
             archetype_document=archetype_document,
             archetype_missing_tokens=archetype_missing_tokens,
+            archetype_compliance=archetype_compliance,
         )
 
     @app.post("/matters/<int:matter_id>/pin")
@@ -1358,8 +1519,12 @@ def register_matter_routes(app):
             if not safe:
                 flash("Invalid filename.", "warning")
                 return redirect(url_for("matter_documents", matter_id=matter_id))
-            stored = f"{matter_id}_{uuid.uuid4().hex}_{safe}"
-            dest = os.path.join(app.config["UPLOAD_DIR"], stored)
+            storage_name = build_matter_storage_name("matter_docs", matter_id, safe)
+            try:
+                stored, dest = resolve_upload_path(app.config["UPLOAD_DIR"], storage_name, create_parent=True)
+            except ValueError:
+                flash("Storage path validation failed.", "warning")
+                return redirect(url_for("matter_documents", matter_id=matter_id))
             f.save(dest)
 
             category = normalize_query(request.form.get("category", "General")) or "General"
@@ -1429,13 +1594,17 @@ def register_matter_routes(app):
     @app.get("/documents/<int:doc_id>/download")
     @login_required
     def doc_download(doc_id: int):
+        enforce_permission("dms", "read")
         d = db.session.get(DocumentFile, doc_id)
         if not d:
             abort(404)
         if not can_access_matter(d.matter_id):
             abort(403)
         enforce_data_residency("exports")
-        file_path = os.path.join(app.config["UPLOAD_DIR"], d.stored_filename)
+        try:
+            stored_filename, file_path = resolve_upload_path(app.config["UPLOAD_DIR"], d.stored_filename)
+        except ValueError:
+            abort(404)
         if not os.path.isfile(file_path):
             abort(404)
         inline = (request.args.get("inline") or "").strip().lower() in {"1", "true", "yes", "on"}
@@ -1444,11 +1613,16 @@ def register_matter_routes(app):
             matter_activity(d.matter_id, f"Document previewed: {d.original_filename}")
             return send_from_directory(
                 app.config["UPLOAD_DIR"],
-                d.stored_filename,
+                stored_filename,
                 as_attachment=False,
                 download_name=d.original_filename,
                 mimetype=d.content_type or None,
             )
         audit("document_download", "DocumentFile", d.id, {"matter_id": d.matter_id})
         matter_activity(d.matter_id, f"Document downloaded: {d.original_filename}")
-        return send_from_directory(app.config["UPLOAD_DIR"], d.stored_filename, as_attachment=True, download_name=d.original_filename)
+        return send_from_directory(
+            app.config["UPLOAD_DIR"],
+            stored_filename,
+            as_attachment=True,
+            download_name=d.original_filename,
+        )

@@ -35,13 +35,16 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, dict[str, set[str]]] = {
         "time_entry": {"review", "lock"},
         "crm": {"read", "write", "conflict_check", "override", "export", "sign_engagement"},
         "billing": {"generate", "approve", "adjust", "capture_payment", "settle_payment", "report", "audit"},
+        "dms": {"read", "write", "manage", "export"},
     },
     "paralegal": {
         "matter": {"create"},
         "crm": {"read", "write", "conflict_check"},
+        "dms": {"read", "write", "export"},
     },
     "staff": {
         "crm": {"read"},
+        "dms": {"read"},
     },
 }
 

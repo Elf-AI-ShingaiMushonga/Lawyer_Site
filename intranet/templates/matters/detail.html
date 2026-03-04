@@ -162,24 +162,78 @@
       </div>
 
       <div class="form-section mt-3">
-        <div class="small fw-semibold text-uppercase muted">Legal Category and Archetype</div>
-        {% if archetype %}
-          <div class="list-meta mt-1">
-            <span>Category: {{ m.legal_category or archetype.legal_category or "-" }}</span>
-            <span>Archetype: {{ archetype.name }}</span>
+        <div class="toolbar-row">
+          <div>
+            <div class="small fw-semibold text-uppercase muted">Legal Category and Archetype</div>
+            {% if archetype %}
+              <div class="list-meta mt-1">
+                <span>Category: {{ m.legal_category or archetype.legal_category or "-" }}</span>
+                <span>Archetype: {{ archetype.name }}</span>
+                {% if archetype_compliance %}
+                  <span class="tag-chip">Compliance {{ archetype_compliance.compliance_pct }}%</span>
+                {% endif %}
+              </div>
+            {% endif %}
           </div>
-          {% if archetype_fields %}
-            <div class="row g-2 mt-2">
-              {% for field in archetype_fields %}
-                <div class="col-md-6">
-                  <label class="form-label">{{ field.label }}</label>
-                  <input class="form-control" value="{{ archetype_values.get(field.key, '') }}" readonly>
-                  {% if field.help %}
-                    <div class="form-help mt-1">{{ field.help }}</div>
-                  {% endif %}
-                </div>
-              {% endfor %}
+          {% if archetype %}
+            <form method="post" action="{{ url_for('matter_archetype_sync_checklist', matter_id=m.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Syncing...">Sync Archetype Checklist</button>
+            </form>
+          {% endif %}
+        </div>
+        {% if archetype %}
+          <div class="kpi-strip mt-2">
+            <div class="kpi-pill">
+              <div class="label">Required Fields</div>
+              <div class="value">{{ archetype_compliance.required_filled }}/{{ archetype_compliance.required_total }}</div>
             </div>
+            <div class="kpi-pill">
+              <div class="label">Checklist</div>
+              <div class="value">{{ archetype_compliance.checklist_done }}/{{ archetype_compliance.checklist_total }}</div>
+            </div>
+            <div class="kpi-pill">
+              <div class="label">Unsynced Items</div>
+              <div class="value">{{ archetype_compliance.checklist_unsynced }}</div>
+            </div>
+            <div class="kpi-pill">
+              <div class="label">Compliance</div>
+              <div class="value">{{ archetype_compliance.compliance_pct }}%</div>
+            </div>
+          </div>
+          {% if archetype_compliance.required_missing_labels %}
+            <div class="form-help mt-2 text-danger">
+              Missing required fields: {{ archetype_compliance.required_missing_labels|join(", ") }}
+            </div>
+          {% endif %}
+          {% if archetype_compliance.checklist_remaining > 0 %}
+            <div class="form-help mt-1 text-danger">
+              Checklist remaining: {{ archetype_compliance.checklist_remaining }} item(s).
+            </div>
+          {% endif %}
+          {% if archetype_compliance.checklist_unsynced > 0 %}
+            <div class="form-help mt-1 text-danger">
+              Archetype playbook changed: {{ archetype_compliance.checklist_unsynced }} checklist item(s) are not yet on this matter.
+            </div>
+          {% endif %}
+          {% if archetype_fields %}
+            <form method="post" action="{{ url_for('matter_archetype_fields_update', matter_id=m.id) }}" class="mt-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="row g-2">
+                {% for field in archetype_fields %}
+                  <div class="col-md-6">
+                    <label class="form-label">{{ field.label }}</label>
+                    <input class="form-control" name="field_{{ field.key }}" value="{{ archetype_values.get(field.key, '') }}" required>
+                    {% if field.help %}
+                      <div class="form-help mt-1">{{ field.help }}</div>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+              <div class="d-grid mt-2">
+                <button class="btn btn-outline-light" type="submit" data-submitting-text="Saving...">Save Archetype Fields</button>
+              </div>
+            </form>
           {% endif %}
           {% if archetype_document %}
             <div class="mt-2">

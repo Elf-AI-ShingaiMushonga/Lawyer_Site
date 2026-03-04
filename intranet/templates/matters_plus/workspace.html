@@ -2,6 +2,7 @@
 {% block content %}
 {% set done_checklist = checklist | selectattr('is_done') | list | length %}
 {% set open_checklist = (checklist | length) - done_checklist %}
+{% set archetype_missing = archetype_compliance.required_missing_labels if archetype_compliance else [] %}
 
 <div class="row g-3">
   <div class="col-lg-7">
@@ -29,6 +30,16 @@
           <div class="label">Notes</div>
           <div class="value">{{ stats.notes }}</div>
         </div>
+        {% if archetype %}
+          <div class="kpi-pill">
+            <div class="label">Archetype</div>
+            <div class="value" style="font-size: 15px;">{{ archetype.name }}</div>
+          </div>
+          <div class="kpi-pill">
+            <div class="label">Compliance</div>
+            <div class="value">{{ archetype_compliance.compliance_pct }}%</div>
+          </div>
+        {% endif %}
       </div>
 
       <form method="post" action="{{ url_for('matter_stage_update', matter_id=m.id) }}" class="row g-3 mt-2 align-items-end">
@@ -90,6 +101,39 @@
   </div>
 
   <div class="col-lg-5">
+    {% if archetype %}
+      <div class="card p-3 mb-3">
+        <div class="toolbar-row">
+          <h4 class="mb-0">Archetype Compliance</h4>
+          <form method="post" action="{{ url_for('matter_archetype_sync_checklist', matter_id=m.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Syncing...">Sync Checklist</button>
+          </form>
+        </div>
+        <div class="kpi-strip mt-2">
+          <div class="kpi-pill">
+            <div class="label">Required Fields</div>
+            <div class="value">{{ archetype_compliance.required_filled }}/{{ archetype_compliance.required_total }}</div>
+          </div>
+          <div class="kpi-pill">
+            <div class="label">Checklist</div>
+            <div class="value">{{ archetype_compliance.checklist_done }}/{{ archetype_compliance.checklist_total }}</div>
+          </div>
+          <div class="kpi-pill">
+            <div class="label">Unsynced</div>
+            <div class="value">{{ archetype_compliance.checklist_unsynced }}</div>
+          </div>
+        </div>
+        {% if archetype_missing %}
+          <div class="form-help mt-2 text-danger">Missing required fields: {{ archetype_missing|join(", ") }}</div>
+        {% endif %}
+        {% if archetype_compliance.checklist_remaining > 0 %}
+          <div class="form-help mt-1 text-danger">Checklist remaining: {{ archetype_compliance.checklist_remaining }} item(s).</div>
+        {% endif %}
+        <a class="btn btn-sm btn-outline-light mt-2" href="{{ url_for('matter_detail', matter_id=m.id) }}">Open Matter Summary</a>
+      </div>
+    {% endif %}
+
     <div class="card p-3">
       <h4 class="mb-2">Closing Checklist</h4>
       <div class="muted small mb-2">Open: {{ open_checklist }} • Done: {{ done_checklist }}</div>

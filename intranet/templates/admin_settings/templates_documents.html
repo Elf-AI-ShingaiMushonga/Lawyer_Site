@@ -39,6 +39,16 @@
           <input class="form-control" id="doc-template-type" name="template_type" placeholder="Type" value="general">
         </div>
         <div class="col-md-4">
+          <label class="form-label" for="doc-template-archetype">Linked Archetype (Optional)</label>
+          <select class="form-select" id="doc-template-archetype" name="archetype_id">
+            <option value="">Standalone template</option>
+            {% for archetype in archetypes %}
+              <option value="{{ archetype.id }}">{{ archetype.name }}{% if archetype.legal_category %} ({{ archetype.legal_category }}){% endif %}</option>
+            {% endfor %}
+          </select>
+          <div class="form-help mt-1">Linked templates auto-generate in DMS when a matter is opened with that archetype.</div>
+        </div>
+        <div class="col-md-4">
           <div class="form-check mt-4">
             <input class="form-check-input" type="checkbox" name="requires_signature" value="1" id="requires_signature">
             <label class="form-check-label" for="requires_signature">Requires signature</label>
@@ -73,6 +83,7 @@
         <tr>
           <th>Name</th>
           <th>Type</th>
+          <th>Linked Archetype</th>
           <th>Signature</th>
         </tr>
       </thead>
@@ -81,10 +92,11 @@
           <tr>
             <td>{{ t.name }}</td>
             <td>{{ t.template_type }}</td>
+            <td>{{ archetype_name_map.get(t.archetype_id, "Standalone") }}</td>
             <td>{{ "Yes" if t.requires_signature else "No" }}</td>
           </tr>
         {% else %}
-          <tr><td colspan="3" class="muted">No templates.</td></tr>
+          <tr><td colspan="4" class="muted">No templates.</td></tr>
         {% endfor %}
       </tbody>
     </table>

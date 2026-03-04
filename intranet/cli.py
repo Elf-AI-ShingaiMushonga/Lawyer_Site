@@ -131,6 +131,7 @@ def _detect_schema_gaps():
     required = {
         "matter": {"objective", "risk_level", "budget_status", "outcome_summary", "last_update_note", "last_updated_at"},
         "document_file": {"category", "doc_version", "lifecycle_stage", "owner_name", "is_privileged"},
+        "document_template": {"archetype_id"},
         "payment_allocation": {"status", "settled_at", "settled_by", "external_txn_id", "processor_note"},
         "trust_reconciliation_run": {"bank_statement_import_id"},
         "matter_timeline_event": {"id", "matter_id", "event_date", "event_type", "title", "created_by"},
@@ -1649,6 +1650,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
         document_templates = [
             DocumentTemplate(
                 name="Engagement Letter ZA",
+                archetype_id=None,
                 template_type="engagement_letter",
                 body="This engagement letter confirms scope, fees, and obligations under South African law.",
                 requires_signature=True,
@@ -1657,6 +1659,7 @@ def seed_demo_data(app, password: str, reset: bool = False):
             ),
             DocumentTemplate(
                 name="Without Prejudice Offer",
+                archetype_id=None,
                 template_type="settlement_offer",
                 body="This communication is made without prejudice and for settlement purposes only.",
                 requires_signature=False,
@@ -1668,6 +1671,10 @@ def seed_demo_data(app, password: str, reset: bool = False):
         expanded_counts["document_templates"] = len(document_templates)
 
         db.session.flush()
+        if len(matter_templates) >= 2 and len(document_templates) >= 2:
+            document_templates[0].archetype_id = matter_templates[0].id
+            document_templates[1].archetype_id = matter_templates[1].id
+            expanded_counts["linked_document_templates"] = 2
 
         # -------------------------------------------------------------------
         # Matter graph, notes, stage history, closing checklist

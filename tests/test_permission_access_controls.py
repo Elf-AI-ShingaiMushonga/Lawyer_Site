@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import io
 
 from flask import g
 
@@ -207,6 +208,32 @@ def test_staff_cannot_generate_invoices(app_ctx):
             "period_start": dt.date.today().isoformat(),
             "period_end": dt.date.today().isoformat(),
         },
+    )
+    assert response.status_code == 403
+
+
+def test_staff_cannot_upload_dms_documents(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("dms-lawyer@example.com", role="lawyer")
+    staff = _seed_user("dms-staff@example.com", role="staff")
+    matter = _seed_matter(lawyer, "2026-PERM-DMS-0001")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=staff.id, role_in_matter="Team"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, staff.id)
+    response = client.post(
+        f"/matters/{matter.id}/dms",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "upload_document",
+            "title": "Restricted Upload",
+            "document_type": "General",
+            "confidentiality": "Internal",
+            "file": (io.BytesIO(b"blocked"), "blocked.txt"),
+        },
+        content_type="multipart/form-data",
     )
     assert response.status_code == 403
 

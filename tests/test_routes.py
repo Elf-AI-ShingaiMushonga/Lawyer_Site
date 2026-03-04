@@ -137,6 +137,7 @@ REQUIRED_ROUTES = {
     "/analytics/profitability",
     "/analytics/forecast",
     "/analytics/burnout",
+    "/director/personnel",
     "/ops/backup/status",
     "/ops/backup/run",
     "/ops/restore/verify",

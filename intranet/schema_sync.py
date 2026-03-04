@@ -51,6 +51,9 @@ COLUMN_PATCHES: dict[str, list[str]] = {
         "owner_name VARCHAR(255)",
         "is_privileged BOOLEAN NOT NULL DEFAULT 0",
     ],
+    "document_template": [
+        "archetype_id INTEGER",
+    ],
     "task": [
         "priority VARCHAR(20) NOT NULL DEFAULT 'Medium'",
         "sla_hours INTEGER",

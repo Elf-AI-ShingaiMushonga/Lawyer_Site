@@ -27,6 +27,7 @@ from ..models import (
     Deadline,
     DocumentFile,
     DocumentRecord,
+    DocumentTemplate,
     Entity,
     Matter,
     MatterClosingChecklistItem,
@@ -41,15 +42,22 @@ from ..models import (
     User,
 )
 from ..services.archetypes import (
+    build_document_context,
     collect_required_field_values,
     load_required_fields,
+    render_template_text,
     validate_required_field_values,
+)
+from ..services.archetype_playbook import (
+    build_archetype_compliance_snapshot,
+    ensure_matter_closing_checklist_items,
 )
 from ..services.contracts import (
     auto_contract_templates_for_archetype,
     cleanup_generated_files,
     collect_contract_field_values,
     contract_required_fields_union,
+    persist_generated_document_template_document,
     persist_generated_contract_document,
     render_contract_template_for_matter,
     validate_contract_field_values,
@@ -124,6 +132,13 @@ def register_matters_plus_routes(app):
                 return redirect(url_for("matters_intake"))
 
             auto_contract_templates = auto_contract_templates_for_archetype(template.id if template else None)
+            auto_document_templates = (
+                DocumentTemplate.query.filter(DocumentTemplate.archetype_id == int(template.id))
+                .order_by(DocumentTemplate.name.asc())
+                .all()
+                if template is not None
+                else []
+            )
             contract_required_defs = contract_required_fields_union(auto_contract_templates)
             contract_field_values = collect_contract_field_values(request.form, contract_required_defs)
             for key, value in matter_specific_values.items():
@@ -178,9 +193,12 @@ def register_matters_plus_routes(app):
             db.session.add(m)
             db.session.flush()
             db.session.add(MatterMember(matter_id=m.id, user_id=current_user.id, role_in_matter="Responsible"))
+            checklist_seeded_count = ensure_matter_closing_checklist_items(m.id, template)
             generated_contract_file_paths: list[str] = []
             generated_contract_template_ids: list[int] = []
             generated_contract_missing_tokens: list[tuple[str, list[str]]] = []
+            generated_document_template_ids: list[int] = []
+            generated_document_missing_tokens: list[tuple[str, list[str]]] = []
             for contract_template in auto_contract_templates:
                 rendered_contract, missing_tokens = render_contract_template_for_matter(
                     template=contract_template,
@@ -217,15 +235,42 @@ def register_matters_plus_routes(app):
                 generated_contract_file_paths.append(file_path)
                 if missing_tokens:
                     generated_contract_missing_tokens.append((contract_template.name, missing_tokens))
-
-            if template and template.checklist_json:
+            for document_template in auto_document_templates:
+                context = build_document_context(
+                    m,
+                    archetype=template,
+                    required_values=matter_specific_values,
+                )
+                context["document_template_name"] = document_template.name or ""
+                rendered_document, missing_tokens = render_template_text(document_template.body, context)
+                if not rendered_document.strip():
+                    db.session.rollback()
+                    cleanup_generated_files(generated_contract_file_paths)
+                    flash(
+                        f"Document template '{document_template.name}' produced an empty document. Intake was not created.",
+                        "warning",
+                    )
+                    return redirect(url_for("matters_intake"))
                 try:
-                    checklist_items = json.loads(template.checklist_json)
-                except json.JSONDecodeError:
-                    checklist_items = []
-                for item in checklist_items:
-                    if str(item).strip():
-                        db.session.add(MatterClosingChecklistItem(matter_id=m.id, item_text=str(item).strip()))
+                    _, _, file_path = persist_generated_document_template_document(
+                        matter=m,
+                        template=document_template,
+                        rendered_body=rendered_document,
+                        actor_user_id=current_user.id,
+                        actor_full_name=current_user.full_name,
+                    )
+                except Exception:
+                    db.session.rollback()
+                    cleanup_generated_files(generated_contract_file_paths)
+                    flash(
+                        f"Failed to generate document '{document_template.name}'. Intake was not created.",
+                        "warning",
+                    )
+                    return redirect(url_for("matters_intake"))
+                generated_document_template_ids.append(int(document_template.id))
+                generated_contract_file_paths.append(file_path)
+                if missing_tokens:
+                    generated_document_missing_tokens.append((document_template.name, missing_tokens))
 
             db.session.add(
                 MatterStageHistory(
@@ -250,12 +295,18 @@ def register_matters_plus_routes(app):
                 {
                     "matter_no": m.matter_no,
                     "contract_template_ids": generated_contract_template_ids,
+                    "document_template_ids": generated_document_template_ids,
+                    "playbook_checklist_seeded": checklist_seeded_count,
                 },
             )
             matter_activity(m.id, "Matter intake created", f"Stage {m.stage}")
-            if generated_contract_template_ids:
+            if generated_contract_template_ids or generated_document_template_ids:
                 flash(
-                    f"Matter intake created. {len(generated_contract_template_ids)} contract draft(s) were attached.",
+                    (
+                        "Matter intake created. "
+                        f"{len(generated_contract_template_ids)} contract draft(s) and "
+                        f"{len(generated_document_template_ids)} document draft(s) were attached."
+                    ),
                     "info",
                 )
             else:
@@ -266,6 +317,14 @@ def register_matters_plus_routes(app):
                     for template_name, tokens in generated_contract_missing_tokens[:3]
                 ]
                 flash("Some contract merge fields were blank: " + "; ".join(warnings), "warning")
+            if generated_document_missing_tokens:
+                warnings = [
+                    f"{template_name}: {', '.join(tokens[:4])}"
+                    for template_name, tokens in generated_document_missing_tokens[:3]
+                ]
+                flash("Some document merge fields were blank: " + "; ".join(warnings), "warning")
+            if checklist_seeded_count > 0:
+                flash(f"Archetype playbook checklist seeded with {checklist_seeded_count} item(s).", "info")
             return redirect(url_for("matter_workspace", matter_id=m.id))
 
         templates = MatterTemplate.query.order_by(MatterTemplate.name.asc()).all()
@@ -338,6 +397,8 @@ def register_matters_plus_routes(app):
             .all()
         )
         checklist = MatterClosingChecklistItem.query.filter_by(matter_id=matter_id).order_by(MatterClosingChecklistItem.id.asc()).all()
+        archetype = db.session.get(MatterTemplate, m.archetype_id) if m.archetype_id else None
+        archetype_compliance = build_archetype_compliance_snapshot(m, archetype)
 
         return page(
             f"Matter Workspace {m.matter_no}",
@@ -346,7 +407,37 @@ def register_matters_plus_routes(app):
             stats=stats,
             stage_history=stage_history,
             checklist=checklist,
+            archetype=archetype,
+            archetype_compliance=archetype_compliance,
         )
+
+    @app.post("/matters/<int:matter_id>/archetype/sync-checklist")
+    @login_required
+    def matter_archetype_sync_checklist(matter_id: int):
+        if not can_access_matter(matter_id):
+            abort(403)
+        m = db.session.get(Matter, matter_id)
+        if not m:
+            abort(404)
+        archetype = db.session.get(MatterTemplate, m.archetype_id) if m.archetype_id else None
+        if archetype is None:
+            flash("No archetype is linked to this matter.", "warning")
+            return redirect(url_for("matter_workspace", matter_id=m.id))
+
+        seeded = ensure_matter_closing_checklist_items(m.id, archetype)
+        db.session.commit()
+        audit(
+            "matter_archetype_sync_checklist",
+            "Matter",
+            m.id,
+            {"archetype_id": m.archetype_id, "seeded_count": seeded},
+        )
+        matter_activity(m.id, "Archetype checklist sync", f"{seeded} checklist item(s) added")
+        if seeded > 0:
+            flash(f"Archetype checklist synced: {seeded} item(s) added.", "info")
+        else:
+            flash("Archetype checklist already in sync.", "info")
+        return redirect(url_for("matter_workspace", matter_id=m.id))
 
     @app.route("/matters/<int:matter_id>/parties", methods=["GET", "POST"])
     @login_required
@@ -569,16 +660,31 @@ def register_matters_plus_routes(app):
         if not m:
             abort(404)
 
+        archetype = db.session.get(MatterTemplate, m.archetype_id) if m.archetype_id else None
+        ensure_matter_closing_checklist_items(m.id, archetype)
+
         for raw in request.form.getlist("checklist_done"):
-            item = db.session.get(MatterClosingChecklistItem, int(raw))
+            try:
+                item_id = int(str(raw).strip())
+            except (TypeError, ValueError):
+                continue
+            item = db.session.get(MatterClosingChecklistItem, item_id)
             if item and item.matter_id == m.id:
                 item.is_done = True
                 item.done_at = dt.datetime.utcnow()
                 item.done_by = current_user.id
 
         incomplete = MatterClosingChecklistItem.query.filter_by(matter_id=m.id, is_done=False).count()
-        if incomplete > 0:
-            flash(f"{incomplete} checklist item(s) remain before close.", "warning")
+        compliance = build_archetype_compliance_snapshot(m, archetype)
+        missing_labels = list(compliance.get("required_missing_labels") or [])
+        if incomplete > 0 or missing_labels:
+            if incomplete > 0:
+                flash(f"{incomplete} checklist item(s) remain before close.", "warning")
+            if missing_labels:
+                flash(
+                    "Required archetype fields still missing: " + ", ".join(missing_labels[:6]) + ".",
+                    "warning",
+                )
             db.session.commit()
             return redirect(url_for("matter_workspace", matter_id=m.id))
 
