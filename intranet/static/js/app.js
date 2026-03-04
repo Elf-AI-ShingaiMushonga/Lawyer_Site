@@ -841,11 +841,22 @@
       return;
     }
 
-    const closeAll = () => {
+    const closeAll = (exceptMenu = null) => {
       menus.forEach((menu) => {
+        if (exceptMenu && menu === exceptMenu) {
+          return;
+        }
         menu.open = false;
       });
     };
+
+    menus.forEach((menu) => {
+      menu.addEventListener("toggle", () => {
+        if (menu.open) {
+          closeAll(menu);
+        }
+      });
+    });
 
     document.addEventListener("click", (event) => {
       const target = event.target;
@@ -3186,13 +3197,17 @@
     const navBody = nav.querySelector("[data-collapsible-nav-body]");
     const collapsibleSection = navBody instanceof HTMLElement ? navBody : nav;
 
-    const minDelta = 8;
+    const minDelta = 10;
     const expandDebounceMs = 260;
+    const topLockY = 16;
+    const collapseOffset = 14;
+    const expandOffset = 22;
     let lastY = window.scrollY;
     let isCollapsed = false;
     let ticking = false;
     let expandedHeight = collapsibleSection.offsetHeight;
     let suppressExpandUntil = 0;
+    let pointerInside = false;
 
     const nowMs = () => {
       if (window.performance && typeof window.performance.now === "function") {
@@ -3214,6 +3229,11 @@
 
     const collapseStart = () => Math.max(72, expandedHeight + 18);
 
+    const hasOpenNavMenu = () => Boolean(nav.querySelector("[data-nav-menu][open]"));
+
+    const isInteractingWithNav = () =>
+      pointerInside || nav.contains(document.activeElement) || hasOpenNavMenu();
+
     const setCollapsed = (nextState) => {
       if (isCollapsed === nextState) {
         return;
@@ -3230,14 +3250,16 @@
     const update = () => {
       const y = Math.max(0, window.scrollY);
       const delta = y - lastY;
+      const collapseThreshold = collapseStart() + collapseOffset;
+      const expandThreshold = Math.max(0, collapseStart() - expandOffset);
 
-      if (y <= 10 || nav.contains(document.activeElement)) {
+      if (y <= topLockY || isInteractingWithNav()) {
         setCollapsed(false);
       } else {
-        if (delta > minDelta && y > collapseStart()) {
+        if (!isCollapsed && delta > minDelta && y > collapseThreshold) {
           setCollapsed(true);
         } else if (
-          delta < -minDelta &&
+          (delta < -minDelta || y < expandThreshold) &&
           (!isCollapsed || nowMs() >= suppressExpandUntil)
         ) {
           setCollapsed(false);
@@ -3257,6 +3279,20 @@
     };
 
     window.addEventListener("scroll", onScroll, { passive: true });
+    nav.addEventListener("pointerenter", () => {
+      pointerInside = true;
+      setCollapsed(false);
+    });
+    nav.addEventListener("pointerleave", () => {
+      pointerInside = false;
+    });
+    nav.querySelectorAll("[data-nav-menu]").forEach((menu) => {
+      menu.addEventListener("toggle", () => {
+        if (menu instanceof HTMLDetailsElement && menu.open) {
+          setCollapsed(false);
+        }
+      });
+    });
     window.addEventListener("resize", () => {
       measureExpandedHeight();
       if (window.scrollY <= collapseStart()) {
@@ -3264,6 +3300,14 @@
       }
       update();
     });
+    if (typeof window.ResizeObserver === "function") {
+      const observer = new window.ResizeObserver(() => {
+        if (!isCollapsed) {
+          measureExpandedHeight();
+        }
+      });
+      observer.observe(collapsibleSection);
+    }
     window.addEventListener("keydown", (event) => {
       if (event.key === "Tab") {
         setCollapsed(false);

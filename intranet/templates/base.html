@@ -116,6 +116,8 @@
       box-shadow: 0 12px 30px rgba(115, 28, 28, 0.12);
       transform: translateY(0);
       transition: transform 0.22s ease, box-shadow 0.22s ease, opacity 0.22s ease;
+      will-change: transform;
+      backface-visibility: hidden;
     }
 
     .navbar.is-collapsed {
@@ -535,6 +537,10 @@
       font-weight: 700;
       line-height: 1.2;
       transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 32px;
     }
 
     .context-rail-chip:hover {
@@ -651,6 +657,13 @@
       box-shadow: 0 0 0 .2rem var(--focus-ring);
     }
 
+    .btn:disabled,
+    .btn.disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
     .btn-light {
       border-color: rgba(225, 6, 0, 0.75);
       color: #ffffff;
@@ -716,16 +729,19 @@
     }
 
     .form-help {
-      display: none;
-    }
-
-    .form-help[data-copy-feedback-for],
-    .form-help[data-thread-matter-hint],
-    .form-help[data-quote-fee-hint] {
       display: block;
       margin-top: 4px;
       font-size: 12px;
+      line-height: 1.35;
       color: #8d7d7d;
+    }
+
+    .form-help:empty {
+      display: none;
+    }
+
+    .form-help[hidden] {
+      display: none !important;
     }
 
     form.row > [class*="col"].d-grid {

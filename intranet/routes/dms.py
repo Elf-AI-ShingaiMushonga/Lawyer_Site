@@ -231,7 +231,13 @@ def register_dms_routes(app):
     @app.route("/matters/<int:matter_id>/dms", methods=["GET", "POST"])
     @login_required
     def matter_dms(matter_id: int):
-        enforce_permission("dms", "read")
+        action = None
+        if request.method == "POST":
+            action = (request.form.get("action") or "upload_document").strip().lower()
+        # Uploading a document is intentionally available to any authenticated user
+        # with matter access, regardless of role-level DMS grants.
+        if request.method != "POST" or action != "upload_document":
+            enforce_permission("dms", "read")
         if not can_access_matter(matter_id):
             abort(403)
         m = db.session.get(Matter, matter_id)
@@ -246,7 +252,7 @@ def register_dms_routes(app):
         default_confidentiality = confidentiality_options[0] if confidentiality_options else "Internal"
 
         if request.method == "POST":
-            action = (request.form.get("action") or "upload_document").strip().lower()
+            action = action or "upload_document"
             if action == "generate_from_template":
                 enforce_permission("dms", "write")
                 template_id = request.form.get("template_id", type=int)
@@ -668,7 +674,10 @@ def register_dms_routes(app):
     @app.route("/documents/<int:document_id>/versions", methods=["GET", "POST"])
     @login_required
     def document_versions(document_id: int):
-        enforce_permission("dms", "read")
+        # Uploading a new version is intentionally available to any authenticated
+        # user with matter access, regardless of role-level DMS grants.
+        if request.method != "POST":
+            enforce_permission("dms", "read")
         doc = db.session.get(DocumentRecord, document_id)
         if not doc:
             abort(404)

@@ -247,6 +247,34 @@ def test_staff_can_upload_dms_documents(app_ctx):
     assert download_response.data == b"allowed"
 
 
+def test_any_matter_member_can_upload_dms_documents_even_without_dms_grants(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("dms-owner-any-role@example.com", role="lawyer")
+    analyst = _seed_user("dms-analyst-any-role@example.com", role="analyst")
+    matter = _seed_matter(lawyer, "2026-PERM-DMS-ANY-0001")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=analyst.id, role_in_matter="Team"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, analyst.id)
+    response = client.post(
+        f"/matters/{matter.id}/dms",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "upload_document",
+            "title": "Any Role Upload",
+            "document_type": "General",
+            "confidentiality": "Internal",
+            "file": (io.BytesIO(b"any-role-allowed"), "any-role.txt"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 302
+    doc = DocumentRecord.query.filter_by(matter_id=matter.id, title="Any Role Upload").first()
+    assert doc is not None
+
+
 def test_only_director_or_admin_can_delete_dms_documents(app_ctx):
     app = app_ctx
     director = _seed_user("dms-director@example.com", role="director")

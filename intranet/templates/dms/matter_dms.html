@@ -69,6 +69,14 @@
     margin: 0;
   }
 
+  @media (min-width: 768px) {
+    .dms-generate-meta-label {
+      min-height: 2.4rem;
+      display: flex;
+      align-items: flex-end;
+    }
+  }
+
   @media (max-width: 575.98px) {
     .matter-dms-filter-actions {
       flex-direction: column;
@@ -184,7 +192,7 @@
           </div>
         </div>
         <div class="col-md-4">
-          <label class="form-label" for="dms-generated-type">Type</label>
+          <label class="form-label dms-generate-meta-label" for="dms-generated-type">Type</label>
           <select class="form-select" id="dms-generated-type" name="generated_document_type">
             <option value="">Use template/default</option>
             {% for option in dms_document_types %}
@@ -193,7 +201,7 @@
           </select>
         </div>
         <div class="col-md-4">
-          <label class="form-label" for="dms-generated-confidentiality">Confidentiality</label>
+          <label class="form-label dms-generate-meta-label" for="dms-generated-confidentiality">Confidentiality</label>
           <select class="form-select" id="dms-generated-confidentiality" name="generated_confidentiality">
             {% for option in dms_confidentialities %}
               <option value="{{ option }}" {% if option == default_confidentiality %}selected{% endif %}>{{ option }}</option>
@@ -201,7 +209,7 @@
           </select>
         </div>
         <div class="col-md-4">
-          <label class="form-label" for="dms-generated-retention">Retention Category</label>
+          <label class="form-label dms-generate-meta-label" for="dms-generated-retention">Retention Category</label>
           <select class="form-select" id="dms-generated-retention" name="generated_retention_category">
             <option value="">None</option>
             {% for option in dms_retention_categories %}
