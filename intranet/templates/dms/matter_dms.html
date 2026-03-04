@@ -1,7 +1,40 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="row g-3">
-  <div class="col-lg-5">
+<style>
+  .matter-dms-filter-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .matter-dms-filter-actions > .btn {
+    flex: 1 1 0;
+    min-width: 110px;
+    white-space: nowrap;
+  }
+
+  .matter-dms-repo-table {
+    min-width: 820px;
+  }
+
+  .matter-dms-repo-table td,
+  .matter-dms-repo-table th {
+    white-space: nowrap;
+  }
+
+  .matter-dms-repo-table td:nth-child(2),
+  .matter-dms-repo-table th:nth-child(2) {
+    white-space: normal;
+    min-width: 240px;
+  }
+
+  @media (max-width: 575.98px) {
+    .matter-dms-filter-actions {
+      flex-direction: column;
+    }
+  }
+</style>
+<div class="row g-3 align-items-start">
+  <div class="col-12 col-xl-4">
     <div class="card p-3">
       <div class="toolbar-row">
         <div>
@@ -100,28 +133,42 @@
       </form>
     </div>
   </div>
-  <div class="col-lg-7">
+  <div class="col-12 col-xl-8">
     <div class="card p-3">
       <h3 class="mb-0">DMS Repository</h3>
       <form method="get" class="row g-2 mb-2 mt-1 align-items-end">
-        <div class="col-lg-4">
+        <div class="col-lg-5 col-xl-4">
           <label class="form-label" for="dms-q">Search</label>
           <input class="form-control" id="dms-q" name="q" value="{{ q or '' }}" placeholder="Search title, OCR, metadata">
         </div>
-        <div class="col-sm-6 col-lg-3">
+        <div class="col-sm-6 col-lg-3 col-xl-3">
           <label class="form-label" for="dms-filter-type">Type</label>
           <input class="form-control" id="dms-filter-type" name="document_type" value="{{ filter_type or '' }}" placeholder="Type">
         </div>
-        <div class="col-sm-6 col-lg-3">
+        <div class="col-sm-6 col-lg-4 col-xl-3">
           <label class="form-label" for="dms-filter-confidentiality">Confidentiality</label>
           <input class="form-control" id="dms-filter-confidentiality" name="confidentiality" value="{{ filter_confidentiality or '' }}" placeholder="Confidentiality">
         </div>
-        <div class="col-sm-6 col-lg-1 d-grid"><button class="btn btn-outline-light">Go</button></div>
-        <div class="col-sm-6 col-lg-1 d-grid"><a class="btn btn-outline-light" href="{{ url_for('matter_dms', matter_id=m.id) }}">Clear</a></div>
+        <div class="col-lg-12 col-xl-2">
+          <label class="form-label d-none d-xl-block">&nbsp;</label>
+          <div class="matter-dms-filter-actions">
+            <button class="btn btn-outline-light" type="submit">Go</button>
+            <a class="btn btn-outline-light" href="{{ url_for('matter_dms', matter_id=m.id) }}">Clear</a>
+          </div>
+        </div>
       </form>
       <div class="table-responsive">
-        <table class="table">
-          <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Latest Version</th><th>Score</th><th></th></tr></thead>
+        <table class="table matter-dms-repo-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Title</th>
+              <th>Type</th>
+              <th>Latest Version</th>
+              {% if q %}<th>Score</th>{% endif %}
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
             {% for d in docs %}
             <tr>
@@ -131,11 +178,11 @@
               </td>
               <td>{{ d.document_type or '-' }}</td>
               <td>{% set v = latest_versions.get(d.id) %}{% if v %}v{{ v.version_no }} • {{ v.state }}{% else %}-{% endif %}</td>
-              <td>{% if q %}{{ search_scores.get(d.id, 0) }}{% else %}-{% endif %}</td>
+              {% if q %}<td>{{ search_scores.get(d.id, 0) }}</td>{% endif %}
               <td><a class="btn btn-sm btn-outline-light" href="{{ url_for('document_versions', document_id=d.id) }}">Versions</a></td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="muted">No DMS records.</td></tr>
+            <tr><td colspan="{{ 6 if q else 5 }}" class="muted">No DMS records.</td></tr>
             {% endfor %}
           </tbody>
         </table>

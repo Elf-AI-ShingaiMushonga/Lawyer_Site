@@ -13,7 +13,7 @@ elif [[ -d ".venv" ]]; then
 fi
 
 if [[ $# -eq 0 ]]; then
-  set -- --reset --password "ClientDemo2026!"
+  set -- --reset --password "ClientDemo2026!" --scale 3
 fi
 
 python app.py seed-demo "$@"

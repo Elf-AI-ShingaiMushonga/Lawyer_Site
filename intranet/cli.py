@@ -182,7 +182,7 @@ def _schema_not_ready_error(app, missing_tables: list[str], missing_columns: lis
             "  2) Apply migrations:",
             "     flask --app app.py db upgrade -d migrations",
             "  3) Re-run seed:",
-            "     python app.py seed-demo --reset --password \"ClientDemo2026!\"",
+            "     python app.py seed-demo --reset --password \"ClientDemo2026!\" --scale 3",
             "",
             "If you intentionally use local SQLite and can reset it safely:",
             "  rm -f intranet.db",
@@ -329,9 +329,404 @@ def _build_minimal_docx(title: str, paragraphs: list[str]) -> bytes:
     return out.getvalue()
 
 
-def seed_demo_data(app, password: str, reset: bool = False):
+def _build_expanded_seed_payload(
+    scale: int,
+    now: dt.datetime,
+    *,
+    partner_id: int,
+    senior_attorney_id: int,
+    associate_id: int,
+    paralegal_id: int,
+    staff_id: int,
+    user_name_by_id: dict[int, str],
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "matter_specs": [],
+        "matter_metadata": {},
+        "memberships": [],
+        "task_specs": [],
+        "contacts": [],
+        "kb_specs": [],
+        "timeline_specs": [],
+        "activity_specs": [],
+        "doc_specs": [],
+    }
+    if scale <= 1:
+        return payload
+
+    blueprint_rows = [
+        {
+            "matter_code": "COM",
+            "title_suffix": "Supply Chain Recovery",
+            "client_name": "Northbridge Foods (Pty) Ltd",
+            "description": "Contract performance dispute linked to delayed inventory and service-level penalties.",
+            "objective": "Stabilize delivery commitments while containing contractual liability exposure.",
+            "practice_area": "Commercial Litigation",
+            "case_type": "Service Agreement Dispute",
+            "risk_taxonomy": "Counterparty-Performance",
+            "stage": "Pre-Litigation",
+            "court_name": "Gauteng Division, Johannesburg",
+            "judge_name": "Judge T. Maseko",
+            "jurisdiction": "ZA-GP",
+        },
+        {
+            "matter_code": "LAB",
+            "title_suffix": "Restructuring Labour Programme",
+            "client_name": "Kariba Metals",
+            "description": "Collective consultation and labour law compliance across phased workforce restructuring.",
+            "objective": "Complete restructuring consultations with procedural compliance and low dispute risk.",
+            "practice_area": "Employment Law",
+            "case_type": "Consultation and Retrenchment",
+            "risk_taxonomy": "Labour-Procedure",
+            "stage": "Consultation",
+            "court_name": "CCMA Johannesburg",
+            "judge_name": "Commissioner V. Sibiya",
+            "jurisdiction": "ZA-GP",
+        },
+        {
+            "matter_code": "REG",
+            "title_suffix": "Energy Licence Remediation",
+            "client_name": "Solar Axis Renewables",
+            "description": "Remediation package for licensing compliance findings and regulator undertakings.",
+            "objective": "Resolve notices and recover full operating licence status.",
+            "practice_area": "Regulatory",
+            "case_type": "Licensing Compliance",
+            "risk_taxonomy": "Regulatory-Enforcement",
+            "stage": "Regulatory Response",
+            "court_name": "NERSA Compliance Panel",
+            "judge_name": "Panel Chair D. Mnguni",
+            "jurisdiction": "ZA-GP",
+        },
+        {
+            "matter_code": "MNA",
+            "title_suffix": "Acquisition Integration Diligence",
+            "client_name": "Kitebridge Capital",
+            "description": "Post-signing diligence and closing conditions monitoring for regional acquisition.",
+            "objective": "Deliver board-ready diligence updates and complete closing condition tracking.",
+            "practice_area": "Corporate and M&A",
+            "case_type": "Acquisition",
+            "risk_taxonomy": "M&A-Closing-Risk",
+            "stage": "Integration",
+            "court_name": None,
+            "judge_name": None,
+            "jurisdiction": "ZA-WC",
+        },
+        {
+            "matter_code": "IP",
+            "title_suffix": "Trademark Enforcement",
+            "client_name": "Brightline Consumer Brands",
+            "description": "Enforcement action against passing-off and trademark misuse in digital channels.",
+            "objective": "Secure injunctive relief and negotiated undertakings from infringing parties.",
+            "practice_area": "Commercial Litigation",
+            "case_type": "IP Enforcement",
+            "risk_taxonomy": "Brand-IP",
+            "stage": "Enforcement",
+            "court_name": "Gauteng Division, Pretoria",
+            "judge_name": "Acting Judge L. Phiri",
+            "jurisdiction": "ZA-GP",
+        },
+        {
+            "matter_code": "EST",
+            "title_suffix": "Estate Distribution Advisory",
+            "client_name": "Mthembu Family Trust",
+            "description": "Estate distribution with cross-border assets and tax clearance dependencies.",
+            "objective": "Complete distributions with compliant trust and tax filings.",
+            "practice_area": "Estates",
+            "case_type": "Estate Administration",
+            "risk_taxonomy": "Probate-Distribution",
+            "stage": "Administration",
+            "court_name": "Master of the High Court, Durban",
+            "judge_name": None,
+            "jurisdiction": "ZA-KZN",
+        },
+        {
+            "matter_code": "COM",
+            "title_suffix": "Infrastructure Claims Programme",
+            "client_name": "Vulindlela Infrastructure",
+            "description": "Programme-level claims management tied to milestone delays and penalty notices.",
+            "objective": "Standardize claims defence and resolve critical disputes before quarter close.",
+            "practice_area": "Commercial Litigation",
+            "case_type": "Construction Claims",
+            "risk_taxonomy": "Programme-Delay",
+            "stage": "Claims Review",
+            "court_name": "KZN High Court (Durban)",
+            "judge_name": "Judge M. Naicker",
+            "jurisdiction": "ZA-KZN",
+        },
+        {
+            "matter_code": "REG",
+            "title_suffix": "Data Governance Remediation",
+            "client_name": "Savanna Connect",
+            "description": "Regulatory response to data governance findings and remedial controls programme.",
+            "objective": "Close regulator findings with demonstrable remediation controls.",
+            "practice_area": "Regulatory",
+            "case_type": "Data Compliance",
+            "risk_taxonomy": "Data-Regulatory",
+            "stage": "Control Validation",
+            "court_name": "Information Regulator SA",
+            "judge_name": "Panel Chair R. Dlamini",
+            "jurisdiction": "ZA-GP",
+        },
+    ]
+    status_cycle = ["Open", "Open", "On Hold", "Open", "Closed", "Open", "On Hold", "Open"]
+    risk_cycle = ["Medium", "High", "Critical", "High", "Low", "Medium", "High", "Critical"]
+    budget_cycle = ["On Track", "Watch", "Needs Review", "Watch", "On Track", "Watch", "Needs Review", "On Track"]
+    lead_cycle = [senior_attorney_id, associate_id, partner_id, associate_id, senior_attorney_id, partner_id, associate_id, senior_attorney_id]
+    support_cycle = [paralegal_id, staff_id, paralegal_id, staff_id, associate_id, paralegal_id, staff_id, paralegal_id]
+
+    for wave in range(1, scale):
+        for idx, blueprint in enumerate(blueprint_rows, start=1):
+            matter_no = f"2026-EXP-{wave}{idx:02d}"
+            status = status_cycle[(idx - 1) % len(status_cycle)]
+            risk_level = risk_cycle[(idx - 1) % len(risk_cycle)]
+            budget_status = budget_cycle[(idx - 1) % len(budget_cycle)]
+            lead_user_id = lead_cycle[(idx - 1) % len(lead_cycle)]
+            support_user_id = support_cycle[(idx - 1) % len(support_cycle)]
+            opened_at = now - dt.timedelta(days=14 + (wave * 5) + (idx * 2))
+            title = f"{blueprint['title_suffix']} Wave {wave}"
+
+            cast_payload = payload["matter_specs"]
+            if isinstance(cast_payload, list):
+                cast_payload.append(
+                    (
+                        matter_no,
+                        title,
+                        blueprint["client_name"],
+                        status,
+                        blueprint["description"],
+                        blueprint["objective"],
+                        risk_level,
+                        budget_status,
+                        f"Wave {wave} status pulse complete. Next checkpoint owner: {user_name_by_id.get(lead_user_id, 'Team Lead')}.",
+                        f"Expected outcome: controlled delivery against {blueprint['case_type'].lower()} exposure.",
+                        opened_at,
+                    )
+                )
+
+            cast_metadata = payload["matter_metadata"]
+            if isinstance(cast_metadata, dict):
+                cast_metadata[matter_no] = {
+                    "court_name": blueprint["court_name"],
+                    "judge_name": blueprint["judge_name"],
+                    "jurisdiction": blueprint["jurisdiction"],
+                    "stage": blueprint["stage"],
+                    "practice_area": blueprint["practice_area"],
+                    "case_type": blueprint["case_type"],
+                    "risk_taxonomy": blueprint["risk_taxonomy"],
+                    "archival_status": "ready_for_archive" if status == "Closed" else "active",
+                    "archival_due_at": (now + dt.timedelta(days=45 + idx)) if status == "Closed" else None,
+                    "closing_checklist": [
+                        "Client closeout summary",
+                        "Cost and billing reconciliation",
+                        "Archive governance review",
+                    ],
+                }
+
+            cast_memberships = payload["memberships"]
+            if isinstance(cast_memberships, list):
+                membership_candidates = [
+                    (partner_id, "Supervising Partner"),
+                    (lead_user_id, "Lead Attorney"),
+                    (support_user_id, "Case Support"),
+                ]
+                seen_member_ids: set[int] = set()
+                for member_user_id, role_in_matter in membership_candidates:
+                    if member_user_id in seen_member_ids:
+                        continue
+                    cast_memberships.append((matter_no, member_user_id, role_in_matter))
+                    seen_member_ids.add(member_user_id)
+
+            default_status = "Done" if status == "Closed" else "Todo"
+            default_due = -5 if status == "Closed" else 6
+            cast_tasks = payload["task_specs"]
+            if isinstance(cast_tasks, list):
+                cast_tasks.extend(
+                    [
+                        {
+                            "matter_no": matter_no,
+                            "title": "Initial strategy memorandum",
+                            "description": "Document factual matrix, risks, and strategy options.",
+                            "status": "Done" if status == "Closed" else "Doing",
+                            "due_in_days": -2 if status == "Closed" else 3,
+                            "assigned_to": lead_user_id,
+                            "priority": "High",
+                            "sla_hours": 24,
+                            "approval_state": "approved" if status == "Closed" else "pending",
+                            "requires_two_person_review": False,
+                        },
+                        {
+                            "matter_no": matter_no,
+                            "title": "Document and evidence review",
+                            "description": "Review source documents and log material findings.",
+                            "status": default_status,
+                            "due_in_days": default_due,
+                            "assigned_to": support_user_id,
+                            "priority": "Medium",
+                            "sla_hours": 36,
+                            "approval_state": "approved" if status == "Closed" else "draft",
+                            "requires_two_person_review": False,
+                        },
+                        {
+                            "matter_no": matter_no,
+                            "title": "Client checkpoint briefing",
+                            "description": "Prepare next checkpoint summary for client stakeholders.",
+                            "status": "Done" if status == "Closed" else "Todo",
+                            "due_in_days": -1 if status == "Closed" else 2,
+                            "assigned_to": lead_user_id,
+                            "priority": "High",
+                            "sla_hours": 16,
+                            "approval_state": "approved" if status == "Closed" else "pending",
+                            "requires_two_person_review": False,
+                        },
+                        {
+                            "matter_no": matter_no,
+                            "title": "Budget and risk checkpoint",
+                            "description": "Validate budget status and refresh risk controls for leadership review.",
+                            "status": default_status,
+                            "due_in_days": -3 if status == "Closed" else 4,
+                            "assigned_to": partner_id,
+                            "priority": "Critical" if risk_level == "Critical" else "High",
+                            "sla_hours": 12,
+                            "approval_state": "approved" if status == "Closed" else "pending",
+                            "requires_two_person_review": True,
+                        },
+                    ]
+                )
+
+            cast_contacts = payload["contacts"]
+            if isinstance(cast_contacts, list):
+                cast_contacts.append(
+                    (
+                        f"Client Liaison {wave}-{idx}",
+                        blueprint["client_name"],
+                        f"liaison{wave}{idx}@{blueprint['client_name'].lower().replace(' ', '').replace('(pty)', '').replace(')', '').replace('(', '').replace('.', '')[:18]}.co.za",
+                        f"+27 10 555 {3000 + (wave * 100) + idx:04d}",
+                        f"Primary commercial contact for {matter_no}.",
+                    )
+                )
+
+            cast_kb = payload["kb_specs"]
+            if isinstance(cast_kb, list):
+                cast_kb.append(
+                    (
+                        f"Playbook - {matter_no}",
+                        f"{blueprint['practice_area'].lower()}, playbook, {blueprint['matter_code'].lower()}",
+                        (
+                            f"Standard operating pattern for {matter_no}:\n"
+                            "- Validate intake facts and evidence lineage\n"
+                            "- Confirm stakeholder update cadence\n"
+                            "- Run weekly risk and budget checkpoint"
+                        ),
+                    )
+                )
+
+            cast_timeline = payload["timeline_specs"]
+            if isinstance(cast_timeline, list):
+                cast_timeline.extend(
+                    [
+                        (
+                            matter_no,
+                            (now.date() - dt.timedelta(days=6 + idx)),
+                            "Milestone",
+                            "Matter planning checkpoint",
+                            "Initial strategy and scope confirmed.",
+                            True,
+                            lead_user_id,
+                        ),
+                        (
+                            matter_no,
+                            (now.date() + dt.timedelta(days=3 + (idx % 4))),
+                            "Client Update",
+                            "Client checkpoint session",
+                            "Provide progress summary, risk updates, and next actions.",
+                            False,
+                            support_user_id,
+                        ),
+                    ]
+                )
+
+            cast_activity = payload["activity_specs"]
+            if isinstance(cast_activity, list):
+                cast_activity.extend(
+                    [
+                        (
+                            matter_no,
+                            lead_user_id,
+                            "Workspace review completed",
+                            f"Stage set to {blueprint['stage']} and task pack refreshed.",
+                        ),
+                        (
+                            matter_no,
+                            support_user_id,
+                            "Document draft uploaded",
+                            "Initial draft uploaded for quality review.",
+                        ),
+                    ]
+                )
+
+            cast_docs = payload["doc_specs"]
+            if isinstance(cast_docs, list):
+                file_prefix = matter_no.lower().replace("-", "_")
+                cast_docs.extend(
+                    [
+                        {
+                            "matter_no": matter_no,
+                            "original_filename": f"{file_prefix}_strategy_note.txt",
+                            "kind": "txt",
+                            "category": "Advisory",
+                            "version": "v1.0",
+                            "lifecycle_stage": "Draft",
+                            "owner_name": user_name_by_id.get(lead_user_id, "Team Lead"),
+                            "is_privileged": True,
+                            "lines": [
+                                f"{matter_no} strategy note",
+                                f"Client: {blueprint['client_name']}",
+                                "Initial legal posture and next tactical steps.",
+                            ],
+                        },
+                        {
+                            "matter_no": matter_no,
+                            "original_filename": f"{file_prefix}_evidence_pack.pdf",
+                            "kind": "pdf",
+                            "category": "Court Filing",
+                            "version": "v1.1",
+                            "lifecycle_stage": "For Review",
+                            "owner_name": user_name_by_id.get(support_user_id, "Case Support"),
+                            "is_privileged": False,
+                            "lines": [
+                                f"{matter_no} evidence pack",
+                                "Index and chronology prepared for review.",
+                                "Supporting references attached for verification.",
+                            ],
+                        },
+                        {
+                            "matter_no": matter_no,
+                            "original_filename": f"{file_prefix}_client_update.docx",
+                            "kind": "docx",
+                            "category": "General",
+                            "version": "v1.0",
+                            "lifecycle_stage": "Final",
+                            "owner_name": user_name_by_id.get(partner_id, "Supervising Partner"),
+                            "is_privileged": False,
+                            "lines": [
+                                f"{matter_no} client update",
+                                "Status summary and planned execution milestones.",
+                                "Risk controls and budget posture included.",
+                            ],
+                        },
+                    ]
+                )
+
+    return payload
+
+
+def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
     if len(password) < 12:
         raise SystemExit("Password must be at least 12 characters")
+    if scale < 1:
+        raise SystemExit("Scale must be at least 1.")
+    if scale > 8:
+        raise SystemExit("Scale must be 8 or less.")
 
     with app.app_context():
         # Keep local/demo workflows frictionless even before migrations are run.
@@ -436,6 +831,21 @@ def seed_demo_data(app, password: str, reset: bool = False):
         associate_id = users["junior.attorney@dm-inc.co.za"].id
         paralegal_id = users["candidate.attorney@dm-inc.co.za"].id
         staff_id = users["operations@dm-inc.co.za"].id
+        user_name_by_id = {
+            int(user.id): str(user.full_name)
+            for user in users.values()
+            if user.id is not None
+        }
+        expanded_payload = _build_expanded_seed_payload(
+            scale=scale,
+            now=now,
+            partner_id=partner_id,
+            senior_attorney_id=senior_attorney_id,
+            associate_id=associate_id,
+            paralegal_id=paralegal_id,
+            staff_id=staff_id,
+            user_name_by_id=user_name_by_id,
+        )
         director_team_rows = [
             DirectorTeamMember(
                 director_id=partner_id,
@@ -574,6 +984,9 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 now - dt.timedelta(days=12),
             ),
         ]
+        extra_matter_specs = expanded_payload.get("matter_specs", [])
+        if isinstance(extra_matter_specs, list) and extra_matter_specs:
+            matter_specs.extend(extra_matter_specs)
         for (
             matter_no,
             title,
@@ -707,6 +1120,9 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 ],
             },
         }
+        extra_matter_metadata = expanded_payload.get("matter_metadata", {})
+        if isinstance(extra_matter_metadata, dict) and extra_matter_metadata:
+            matter_metadata.update(extra_matter_metadata)
         for matter_no, metadata in matter_metadata.items():
             row = matter_map[matter_no]
             row.court_name = metadata["court_name"]
@@ -739,6 +1155,9 @@ def seed_demo_data(app, password: str, reset: bool = False):
             ("2026-REG-0021", paralegal_id, "Filing Support"),
             ("2026-REG-0021", staff_id, "Client Coordination"),
         ]
+        extra_memberships = expanded_payload.get("memberships", [])
+        if isinstance(extra_memberships, list) and extra_memberships:
+            memberships.extend(extra_memberships)
         for matter_no, user_id, role_in_matter in memberships:
             db.session.add(
                 MatterMember(
@@ -943,6 +1362,9 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 "requires_two_person_review": True,
             },
         ]
+        extra_task_specs = expanded_payload.get("task_specs", [])
+        if isinstance(extra_task_specs, list) and extra_task_specs:
+            task_specs.extend(extra_task_specs)
         task_rows: list[Task] = []
         task_map: dict[tuple[str, str], Task] = {}
         for spec in task_specs:
@@ -978,6 +1400,9 @@ def seed_demo_data(app, password: str, reset: bool = False):
             ("Bongani Ndlovu", "Ntuli Logistics", "bongani.ndlovu@ntulilogistics.co.za", "+27 31 555 0112", "Operations director for contract dispute matter."),
             ("Emma James", "Blue Dune Energy", "emma.james@bluedune.energy", "+27 11 555 0199", "Primary regulatory liaison for licensing matter."),
         ]
+        extra_contacts = expanded_payload.get("contacts", [])
+        if isinstance(extra_contacts, list) and extra_contacts:
+            contacts.extend(extra_contacts)
         for name, organization, email, phone, notes in contacts:
             db.session.add(
                 Contact(
@@ -1018,6 +1443,9 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 "Mediation readiness structure:\n- Align settlement range\n- Define non-negotiables\n- Prepare concession sequencing and approval path",
             ),
         ]
+        extra_kb_specs = expanded_payload.get("kb_specs", [])
+        if isinstance(extra_kb_specs, list) and extra_kb_specs:
+            kb_specs.extend(extra_kb_specs)
         for title, tags, body in kb_specs:
             db.session.add(
                 KnowledgeBase(
@@ -1042,6 +1470,9 @@ def seed_demo_data(app, password: str, reset: bool = False):
             ("2026-REG-0021", now.date() - dt.timedelta(days=9), "Filing", "Supplementary compliance filing submitted", "Additional regulator package lodged with annexures.", False, paralegal_id),
             ("2026-REG-0021", now.date() + dt.timedelta(days=6), "Client Update", "Regulatory status checkpoint", "Client executive update on response timeline and options.", False, staff_id),
         ]
+        extra_timeline_specs = expanded_payload.get("timeline_specs", [])
+        if isinstance(extra_timeline_specs, list) and extra_timeline_specs:
+            timeline_specs.extend(extra_timeline_specs)
         for matter_no, event_date, event_type, title, description, is_milestone, created_by in timeline_specs:
             db.session.add(
                 MatterTimelineEvent(
@@ -1067,6 +1498,9 @@ def seed_demo_data(app, password: str, reset: bool = False):
             ("2026-REG-0021", paralegal_id, "Timeline event added: Supplementary compliance filing submitted", "Filing"),
             ("2026-REG-0021", partner_id, "Risk escalation", "Licensing response delay flagged for leadership."),
         ]
+        extra_activity_specs = expanded_payload.get("activity_specs", [])
+        if isinstance(extra_activity_specs, list) and extra_activity_specs:
+            activity_specs.extend(extra_activity_specs)
         for matter_no, actor_user_id, action, details in activity_specs:
             db.session.add(
                 MatterActivity(
@@ -1174,6 +1608,9 @@ def seed_demo_data(app, password: str, reset: bool = False):
                 ],
             },
         ]
+        extra_doc_specs = expanded_payload.get("doc_specs", [])
+        if isinstance(extra_doc_specs, list) and extra_doc_specs:
+            doc_specs.extend(extra_doc_specs)
         doc_file_rows: list[DocumentFile] = []
         for i, spec in enumerate(doc_specs, start=1):
             original_filename = spec["original_filename"]

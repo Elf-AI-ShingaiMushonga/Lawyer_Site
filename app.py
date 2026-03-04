@@ -69,6 +69,12 @@ def main() -> None:
     seed_cmd = sub.add_parser("seed-demo")
     seed_cmd.add_argument("--password", default="ClientDemo2026!", help="Password applied to all demo users")
     seed_cmd.add_argument("--reset", action="store_true", help="Delete existing data before seeding")
+    seed_cmd.add_argument(
+        "--scale",
+        type=int,
+        default=3,
+        help="Dataset expansion factor (1=baseline, 3=default expansive dataset)",
+    )
 
     worker_cmd = sub.add_parser("worker")
     worker_cmd.add_argument("--max-jobs", type=int, default=50, help="Maximum jobs processed in this run")
@@ -104,7 +110,7 @@ def main() -> None:
         uid = create_user(app, args.email, args.password, args.role, args.name)
         print(f"Created user id={uid}")
     elif args.cmd == "seed-demo":
-        summary = seed_demo_data(app, password=args.password, reset=args.reset)
+        summary = seed_demo_data(app, password=args.password, reset=args.reset, scale=args.scale)
         print("Demo data seeded:")
         primary_keys = [
             "users",

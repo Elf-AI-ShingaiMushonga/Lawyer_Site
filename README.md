@@ -72,7 +72,7 @@ set -a; source .env; set +a
 flask --app app.py db upgrade -d migrations
 
 # resets existing records and writes demo data
-python app.py seed-demo --reset --password "ClientDemo2026!"
+python app.py seed-demo --reset --password "ClientDemo2026!" --scale 3
 ```
 
 Or run the helper script:
@@ -80,6 +80,11 @@ Or run the helper script:
 ```bash
 ./scripts/seed_demo.sh
 ```
+
+Scale notes:
+- `--scale 1`: baseline seed dataset
+- `--scale 3`: default expansive dataset (recommended for client demos)
+- `--scale 4+`: very large demo dataset for stress/demo scenarios
 
 Seeded demo logins:
 - `admin@dm-inc.co.za`
@@ -106,7 +111,7 @@ Common seed error:
 - Fix:
   - `set -a; source .env; set +a`
   - `flask --app app.py db upgrade -d migrations`
-  - re-run `python app.py seed-demo --reset --password "ClientDemo2026!"`
+  - re-run `python app.py seed-demo --reset --password "ClientDemo2026!" --scale 3`
   - if you intentionally use SQLite and want a clean reset: `rm -f intranet.db && flask --app app.py db upgrade -d migrations`
 
 ## GitHub upload checklist
