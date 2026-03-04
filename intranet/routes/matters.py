@@ -7,8 +7,9 @@ import time
 from urllib.parse import urlsplit
 
 import sqlalchemy as sa
-from flask import Response, abort, flash, jsonify, redirect, request, send_from_directory, url_for
+from flask import Response, abort, current_app, flash, jsonify, redirect, request, send_from_directory, url_for
 from flask_login import current_user, login_required
+from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.utils import secure_filename
 
 from ..config import ALLOWED_DOC_EXT, BUDGET_STATUSES, MATTER_STATUSES, RISK_LEVELS, is_valid_email
@@ -343,54 +344,65 @@ def register_matter_routes(app):
     @login_required
     def matter_create():
         enforce_permission("matter", "create")
-        archetype_templates = _archetype_templates()
-        template_by_id = {row.id: row for row in archetype_templates}
-        archetype_ids = [int(row.id) for row in archetype_templates]
-        linked_contract_templates = (
-            ContractTemplate.query.filter(
-                ContractTemplate.archetype_id.in_(archetype_ids),
-                ContractTemplate.is_active.is_(True),
-                ContractTemplate.auto_create_on_matter_open.is_(True),
+        try:
+            archetype_templates = _archetype_templates()
+            template_by_id = {row.id: row for row in archetype_templates}
+            archetype_ids = [int(row.id) for row in archetype_templates]
+            linked_contract_templates = (
+                ContractTemplate.query.filter(
+                    ContractTemplate.archetype_id.in_(archetype_ids),
+                    ContractTemplate.is_active.is_(True),
+                    ContractTemplate.auto_create_on_matter_open.is_(True),
+                )
+                .order_by(ContractTemplate.name.asc())
+                .all()
+                if archetype_ids
+                else []
             )
-            .order_by(ContractTemplate.name.asc())
-            .all()
-            if archetype_ids
-            else []
-        )
-        contract_templates_by_archetype: dict[int, list[ContractTemplate]] = {}
-        for contract_template in linked_contract_templates:
-            if not contract_template.archetype_id:
-                continue
-            key = int(contract_template.archetype_id)
-            contract_templates_by_archetype.setdefault(key, []).append(contract_template)
-        linked_document_templates = (
-            DocumentTemplate.query.filter(
-                DocumentTemplate.archetype_id.in_(archetype_ids),
+            contract_templates_by_archetype: dict[int, list[ContractTemplate]] = {}
+            for contract_template in linked_contract_templates:
+                if not contract_template.archetype_id:
+                    continue
+                key = int(contract_template.archetype_id)
+                contract_templates_by_archetype.setdefault(key, []).append(contract_template)
+            linked_document_templates = (
+                DocumentTemplate.query.filter(
+                    DocumentTemplate.archetype_id.in_(archetype_ids),
+                )
+                .order_by(DocumentTemplate.name.asc())
+                .all()
+                if archetype_ids
+                else []
             )
-            .order_by(DocumentTemplate.name.asc())
-            .all()
-            if archetype_ids
-            else []
-        )
-        document_templates_by_archetype: dict[int, list[DocumentTemplate]] = {}
-        for document_template in linked_document_templates:
-            if not document_template.archetype_id:
-                continue
-            key = int(document_template.archetype_id)
-            document_templates_by_archetype.setdefault(key, []).append(document_template)
-        legal_team_role_values = tuple(sorted(role_query_values_for_legal_team()))
-        assignable_lawyers = (
-            User.query.filter(
-                User.is_active.is_(True),
-                sa.func.lower(User.role).in_(legal_team_role_values),
+            document_templates_by_archetype: dict[int, list[DocumentTemplate]] = {}
+            for document_template in linked_document_templates:
+                if not document_template.archetype_id:
+                    continue
+                key = int(document_template.archetype_id)
+                document_templates_by_archetype.setdefault(key, []).append(document_template)
+            legal_team_role_values = tuple(sorted(role_query_values_for_legal_team()))
+            assignable_lawyers = (
+                User.query.filter(
+                    User.is_active.is_(True),
+                    sa.func.lower(User.role).in_(legal_team_role_values),
+                )
+                .order_by(User.full_name.asc(), User.email.asc())
+                .all()
             )
-            .order_by(User.full_name.asc(), User.email.asc())
-            .all()
-        )
-        if role_is_director(getattr(current_user, "role", None)):
-            scoped_ids = director_team_member_ids(int(current_user.id))
-            assignable_lawyers = [user for user in assignable_lawyers if int(user.id) in scoped_ids]
-        assignable_lawyer_ids = {int(user.id) for user in assignable_lawyers}
+            if role_is_director(getattr(current_user, "role", None)):
+                scoped_ids = director_team_member_ids(int(current_user.id))
+                assignable_lawyers = [user for user in assignable_lawyers if int(user.id) in scoped_ids]
+            assignable_lawyer_ids = {int(user.id) for user in assignable_lawyers}
+        except SQLAlchemyError:
+            current_app.logger.exception("Matter create preload failed.")
+            flash(
+                (
+                    "New Matter is unavailable because the database schema appears out of sync. "
+                    "Run schema sync/migrations on the server, then retry."
+                ),
+                "warning",
+            )
+            return redirect(url_for("dashboard"))
         if request.method == "POST":
             matter_no = normalize_query(request.form.get("matter_no", "")).upper()
             title = normalize_query(request.form.get("title", ""))

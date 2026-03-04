@@ -2,6 +2,7 @@
 {% block content %}
 <style>
   .priority-inbox-shell {
+    --priority-inbox-max-height: 760px;
     position: relative;
     overflow: hidden;
     border-radius: 20px;
@@ -9,7 +10,7 @@
     background:
       radial-gradient(760px 280px at 0% -16%, rgba(225, 6, 0, 0.13), rgba(225, 6, 0, 0)),
       linear-gradient(180deg, rgba(255, 246, 246, 0.97), rgba(255, 255, 255, 0.99));
-    min-height: 620px;
+    min-height: 0;
   }
 
   .priority-inbox-layout {
@@ -17,6 +18,8 @@
     grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
     gap: 14px;
     margin-top: 12px;
+    max-height: calc(var(--priority-inbox-max-height) - 78px);
+    min-height: 0;
   }
 
   .priority-inbox-sidebar {
@@ -28,6 +31,8 @@
     display: grid;
     gap: 12px;
     align-content: start;
+    overflow-y: auto;
+    max-height: 100%;
   }
 
   .priority-sidebar-label {
@@ -110,7 +115,11 @@
   .priority-pane-stack {
     display: grid;
     gap: 12px;
-    min-height: 540px;
+    min-height: 0;
+    max-height: 100%;
+    overflow-y: auto;
+    align-content: start;
+    padding-right: 2px;
   }
 
   .priority-pane {
@@ -118,9 +127,16 @@
     background: rgba(255, 255, 255, 0.95);
     border-radius: 15px;
     box-shadow: 0 8px 20px rgba(107, 35, 35, 0.08);
-    min-height: 530px;
+    min-height: 0;
+    height: 340px;
     display: flex;
     flex-direction: column;
+    flex: 0 0 auto;
+  }
+
+  .priority-inbox-shell[data-priority-filter]:not([data-priority-filter="all"]) .priority-pane {
+    min-height: 420px;
+    height: 100%;
   }
 
   .priority-pane[data-priority-type="client"] {
@@ -256,19 +272,24 @@
 
   @media (max-width: 991.98px) {
     .priority-inbox-shell {
-      min-height: 0;
+      --priority-inbox-max-height: 700px;
     }
 
     .priority-inbox-layout {
       grid-template-columns: 1fr;
+      max-height: none;
     }
 
     .priority-pane {
-      min-height: 420px;
+      height: 320px;
     }
 
     .priority-pane-stack {
-      min-height: 0;
+      max-height: 560px;
+    }
+
+    .priority-inbox-shell[data-priority-filter]:not([data-priority-filter="all"]) .priority-pane {
+      min-height: 360px;
     }
   }
 </style>

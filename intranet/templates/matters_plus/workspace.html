@@ -17,11 +17,16 @@
   }
 
   .workspace-section {
-    height: 100%;
+    height: auto;
+  }
+
+  .workspace-section.card {
+    padding: 0.9rem !important;
   }
 
   .workspace-section-title {
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    line-height: 1.25;
   }
 
   .workspace-actions-grid {
@@ -35,13 +40,32 @@
   }
 
   .workspace-metric-strip {
-    margin-top: 12px;
+    margin-top: 8px;
+    gap: 8px;
   }
 
   .workspace-kpi-label {
     font-size: 11px;
     letter-spacing: 0.03em;
     text-transform: uppercase;
+  }
+
+  .workspace-section .kpi-pill {
+    padding: 8px 10px;
+  }
+
+  .workspace-section .kpi-pill .value {
+    font-size: 18px;
+  }
+
+  .workspace-section .table-tools {
+    margin-bottom: 8px;
+  }
+
+  .workspace-section .table td,
+  .workspace-section .table th {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
   }
 
   @media (max-width: 991.98px) {
@@ -51,7 +75,7 @@
   }
 </style>
 
-<div class="row g-3">
+<div class="row g-3 align-items-start">
   <div class="col-lg-8">
     <div class="card p-3 mb-3 workspace-section">
       <div class="workspace-overview-title">
