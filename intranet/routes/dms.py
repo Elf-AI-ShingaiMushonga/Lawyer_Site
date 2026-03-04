@@ -34,7 +34,7 @@ from ..models import (
 from ..policies import enforce_permission, visible_matter_ids
 from ..policies.residency import enforce_data_residency
 from ..roles import role_is_admin, role_is_director
-from ..services.dms_option_lists import load_dms_option_lists
+from ..services.dms_option_lists import DEFAULT_DMS_OPTION_LISTS, load_dms_option_lists
 from ..services.notification_engine import NotificationEngine
 from ..services.semantic_search import SemanticSearchService
 from ..services.storage_paths import build_matter_storage_name, resolve_upload_path
@@ -195,6 +195,20 @@ def _template_token_requirements(template_body: str | None, builtin_context_keys
     }
 
 
+def _safe_load_dms_option_lists() -> dict[str, list[str]]:
+    try:
+        payload = load_dms_option_lists()
+    except Exception:  # pragma: no cover - defensive fallback for runtime config/schema drift
+        current_app.logger.exception("Failed to load DMS option lists; falling back to defaults.")
+        payload = {}
+    normalized: dict[str, list[str]] = {}
+    for key, defaults in DEFAULT_DMS_OPTION_LISTS.items():
+        values = payload.get(key) if isinstance(payload, dict) else None
+        options = [str(item).strip() for item in (values or []) if str(item).strip()]
+        normalized[key] = options if options else list(defaults)
+    return normalized
+
+
 def register_dms_routes(app):
     @app.get("/dms")
     @login_required
@@ -222,7 +236,7 @@ def register_dms_routes(app):
         m = db.session.get(Matter, matter_id)
         if not m:
             abort(404)
-        dms_option_lists = load_dms_option_lists()
+        dms_option_lists = _safe_load_dms_option_lists()
         document_type_options = list(dms_option_lists.get("document_types") or [])
         confidentiality_options = list(dms_option_lists.get("confidentialities") or [])
         privilege_label_options = list(dms_option_lists.get("privilege_labels") or [])
@@ -618,7 +632,11 @@ def register_dms_routes(app):
                 if score > 0:
                     search_scores[doc.id] = score
 
-        doc_templates = DocumentTemplate.query.order_by(DocumentTemplate.created_at.desc()).limit(300).all()
+        try:
+            doc_templates = DocumentTemplate.query.order_by(DocumentTemplate.created_at.desc()).limit(300).all()
+        except Exception:  # pragma: no cover - defensive fallback for schema drift
+            current_app.logger.exception("Failed to load document templates for matter_dms(matter_id=%s).", matter_id)
+            doc_templates = []
         builtin_context_keys = set(_template_context(m).keys())
         template_requirements_map = {
             str(template.id): _template_token_requirements(template.body, builtin_context_keys)
