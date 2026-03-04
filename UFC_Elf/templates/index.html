@@ -32,10 +32,7 @@
         <p class="subhead">Use Retrain Models before first predictions or after data updates. This can take several minutes and will block predictions while running.</p>
         <div class="ops-status">
           <p>Data rows: <strong>{{ system_status.data_rows }}</strong></p>
-          <p>Data updated (UTC): <strong>{{ system_status.data_updated_utc or "n/a" }}</strong></p>
-          <p>Model store: <strong>{{ system_status.model_store_dir or system_status.cache_dir or "n/a" }}</strong></p>
           <p>Base models ready: <strong>{{ "Yes" if system_status.base_models_ready else "No" }}</strong></p>
-          <p>Base models trained (UTC): <strong>{{ system_status.base_models_trained_at_utc or "n/a" }}</strong></p>
           <p>Loaded base models from disk this boot: <strong>{{ "Yes" if system_status.base_models_loaded_from_cache else "No" }}</strong></p>
         </div>
         <div class="ops-buttons">

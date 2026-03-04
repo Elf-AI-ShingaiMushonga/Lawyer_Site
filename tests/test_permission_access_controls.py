@@ -275,17 +275,46 @@ def test_any_matter_member_can_upload_dms_documents_even_without_dms_grants(app_
     assert doc is not None
 
 
-def test_only_director_or_admin_can_delete_dms_documents(app_ctx):
+def test_upload_dms_document_allows_non_matter_member(app_ctx):
+    app = app_ctx
+    owner = _seed_user("dms-owner-open-upload@example.com", role="senior_attorney")
+    outsider = _seed_user("dms-outsider-open-upload@example.com", role="operations_staff")
+    matter = _seed_matter(owner, "2026-PERM-DMS-OPEN-0001")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=owner.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, outsider.id)
+    response = client.post(
+        f"/matters/{matter.id}/dms",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "upload_document",
+            "title": "Open Upload",
+            "document_type": "General",
+            "confidentiality": "Internal",
+            "file": (io.BytesIO(b"outsider-upload"), "outsider-upload.txt"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 302
+    doc = DocumentRecord.query.filter_by(matter_id=matter.id, title="Open Upload").first()
+    assert doc is not None
+
+
+def test_only_senior_attorney_can_delete_dms_documents(app_ctx):
     app = app_ctx
     director = _seed_user("dms-director@example.com", role="director")
-    lawyer = _seed_user("dms-senior@example.com", role="lawyer")
+    senior = _seed_user("dms-senior@example.com", role="senior_attorney")
     staff = _seed_user("dms-staff-delete@example.com", role="staff")
     admin = _seed_user("dms-admin@example.com", role="finance_cost_admin")
+    junior = _seed_user("dms-junior-delete@example.com", role="junior_attorney")
     matter = _seed_matter(director, "2026-PERM-DMS-0002")
     db.session.add(MatterMember(matter_id=matter.id, user_id=director.id, role_in_matter="Lead"))
-    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Team"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=senior.id, role_in_matter="Team"))
     db.session.add(MatterMember(matter_id=matter.id, user_id=staff.id, role_in_matter="Team"))
     db.session.add(MatterMember(matter_id=matter.id, user_id=admin.id, role_in_matter="Team"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=junior.id, role_in_matter="Team"))
     db.session.commit()
 
     director_client = app.test_client()
@@ -315,13 +344,20 @@ def test_only_director_or_admin_can_delete_dms_documents(app_ctx):
     assert staff_delete.status_code == 403
     assert db.session.get(DocumentRecord, delete_candidate.id) is not None
 
-    lawyer_client = app.test_client()
-    _set_user_session(lawyer_client, lawyer.id)
-    lawyer_delete = lawyer_client.post(
+    director_delete = director_client.post(
         f"/documents/{delete_candidate.id}/delete",
         data={"csrf_token": "test-csrf"},
     )
-    assert lawyer_delete.status_code == 403
+    assert director_delete.status_code == 403
+    assert db.session.get(DocumentRecord, delete_candidate.id) is not None
+
+    junior_client = app.test_client()
+    _set_user_session(junior_client, junior.id)
+    junior_delete = junior_client.post(
+        f"/documents/{delete_candidate.id}/delete",
+        data={"csrf_token": "test-csrf"},
+    )
+    assert junior_delete.status_code == 403
     assert db.session.get(DocumentRecord, delete_candidate.id) is not None
 
     admin_client = app.test_client()
@@ -330,8 +366,24 @@ def test_only_director_or_admin_can_delete_dms_documents(app_ctx):
         f"/documents/{delete_candidate.id}/delete",
         data={"csrf_token": "test-csrf"},
     )
-    assert admin_delete.status_code == 302
+    assert admin_delete.status_code == 403
+    assert db.session.get(DocumentRecord, delete_candidate.id) is not None
+
+    senior_client = app.test_client()
+    _set_user_session(senior_client, senior.id)
+    senior_delete = senior_client.post(
+        f"/documents/{delete_candidate.id}/delete",
+        data={"csrf_token": "test-csrf"},
+    )
+    assert senior_delete.status_code == 302
     assert db.session.get(DocumentRecord, delete_candidate.id) is None
+
+    # Finance/admin is intentionally blocked from delete; only senior attorneys can delete.
+    admin_delete_after = admin_client.post(
+        f"/documents/{delete_candidate.id}/delete",
+        data={"csrf_token": "test-csrf"},
+    )
+    assert admin_delete_after.status_code in {403, 404}
 
 
 def test_partner_role_alias_inherits_lawyer_permissions(app_ctx):

@@ -33,7 +33,7 @@ from ..models import (
 )
 from ..policies import enforce_permission, visible_matter_ids
 from ..policies.residency import enforce_data_residency
-from ..roles import role_is_admin, role_is_director
+from ..roles import canonical_role, role_is_admin
 from ..services.dms_option_lists import DEFAULT_DMS_OPTION_LISTS, load_dms_option_lists
 from ..services.notification_engine import NotificationEngine
 from ..services.semantic_search import SemanticSearchService
@@ -90,7 +90,7 @@ def _safe_remove_file(path: str) -> None:
 
 
 def _can_delete_document(role: str | None) -> bool:
-    return role_is_director(role) or role_is_admin(role)
+    return canonical_role(role) == "senior_attorney"
 
 
 def _match_option(raw: str | None, options: list[str]) -> str:
@@ -231,14 +231,14 @@ def register_dms_routes(app):
     @app.route("/matters/<int:matter_id>/dms", methods=["GET", "POST"])
     @login_required
     def matter_dms(matter_id: int):
-        action = None
-        if request.method == "POST":
-            action = (request.form.get("action") or "upload_document").strip().lower()
-        # Uploading a document is intentionally available to any authenticated user
-        # with matter access, regardless of role-level DMS grants.
-        if request.method != "POST" or action != "upload_document":
+        action = (request.form.get("action") or "upload_document").strip().lower() if request.method == "POST" else ""
+        is_upload_action = request.method == "POST" and action == "upload_document"
+        # Uploading a document is intentionally available to any authenticated user,
+        # regardless of matter access or role-level DMS grants.
+        if not is_upload_action:
             enforce_permission("dms", "read")
-        if not can_access_matter(matter_id):
+        has_matter_access = can_access_matter(matter_id)
+        if not has_matter_access and not is_upload_action:
             abort(403)
         m = db.session.get(Matter, matter_id)
         if not m:
@@ -675,13 +675,15 @@ def register_dms_routes(app):
     @login_required
     def document_versions(document_id: int):
         # Uploading a new version is intentionally available to any authenticated
-        # user with matter access, regardless of role-level DMS grants.
-        if request.method != "POST":
+        # user, regardless of matter access or role-level DMS grants.
+        is_upload_version = request.method == "POST"
+        if not is_upload_version:
             enforce_permission("dms", "read")
         doc = db.session.get(DocumentRecord, document_id)
         if not doc:
             abort(404)
-        if not can_access_matter(doc.matter_id):
+        has_matter_access = can_access_matter(doc.matter_id)
+        if not has_matter_access and not is_upload_version:
             abort(403)
 
         if request.method == "POST":
