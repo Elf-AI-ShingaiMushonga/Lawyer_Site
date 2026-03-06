@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from intranet.cli import recover_user_mfa
+from intranet.cli import recover_all_users_mfa, recover_user_mfa
 from intranet.extensions import db
 from intranet.mfa import hash_backup_code
 from intranet.models import User, UserMFABackupCode
@@ -72,3 +72,26 @@ def test_recover_user_mfa_can_disable_mfa(app):
         assert result["mfa_secret"] is None
         assert result["otpauth_uri"] is None
         assert result["backup_codes"] == []
+
+
+def test_recover_all_users_mfa_rotates_each_user(app):
+    with app.app_context():
+        _seed_user("recover-all-a@example.com", mfa_enabled=False, mfa_secret=None)
+        _seed_user("recover-all-b@example.com", mfa_enabled=True, mfa_secret="JBSWY3DPEHPK3PXP")
+
+        results = recover_all_users_mfa(app, disable=False)
+
+        db.session.expire_all()
+        users = User.query.order_by(User.email.asc()).all()
+        backup_counts = {
+            user.email: UserMFABackupCode.query.filter_by(user_id=user.id, used_at=None).count()
+            for user in users
+        }
+
+        assert len(results) == 2
+        assert all(bool(row.get("mfa_enabled")) for row in results)
+        assert all(row.get("mfa_secret") for row in results)
+        assert all(len(row.get("backup_codes") or []) == 10 for row in results)
+        assert all(user.mfa_enabled is True for user in users)
+        assert all(user.mfa_secret for user in users)
+        assert all(count == 10 for count in backup_counts.values())

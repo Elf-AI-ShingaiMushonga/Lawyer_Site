@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from intranet import create_app
-from intranet.cli import create_user, init_db, recover_user_mfa, run_server, seed_demo_data
+from intranet.cli import create_user, init_db, recover_all_users_mfa, recover_user_mfa, run_server, seed_demo_data
 from intranet.config import env_int
 from intranet.roles import ROLE_LABELS
 from intranet.jobs.scheduler import DEFAULT_PERIODIC_JOBS, schedule_due_jobs
@@ -77,7 +77,9 @@ def main() -> None:
     )
 
     mfa_cmd = sub.add_parser("recover-mfa")
-    mfa_cmd.add_argument("--email", required=True, help="Account email")
+    mfa_target = mfa_cmd.add_mutually_exclusive_group(required=True)
+    mfa_target.add_argument("--email", help="Account email")
+    mfa_target.add_argument("--all", action="store_true", help="Recover MFA for all accounts")
     mfa_cmd.add_argument(
         "--disable",
         action="store_true",
@@ -150,18 +152,37 @@ def main() -> None:
         print("  finance.admin@dm-inc.co.za")
         print(f"  password={summary['password']}")
     elif args.cmd == "recover-mfa":
-        result = recover_user_mfa(app, args.email, disable=args.disable)
-        print(f"MFA recovery complete for user_id={result['user_id']} ({result['email']}).")
-        if args.disable:
-            print("  mfa_enabled=False")
-            print("  Next login will require MFA enrollment for roles that enforce MFA.")
+        if args.all:
+            results = recover_all_users_mfa(app, disable=args.disable)
+            print(f"MFA recovery complete for users={len(results)}.")
+            if not results:
+                print("  No users found.")
+            for result in results:
+                print(f"  user_id={result['user_id']} email={result['email']}")
+                if args.disable:
+                    print("    mfa_enabled=False")
+                else:
+                    print("    mfa_enabled=True")
+                    print(f"    secret={result['mfa_secret']}")
+                    print(f"    otpauth_uri={result['otpauth_uri']}")
+                    backup_codes = result.get("backup_codes") or []
+                    if backup_codes:
+                        print("    backup_codes=" + ", ".join(str(code) for code in backup_codes))
+            if args.disable:
+                print("  Next login will require MFA enrollment for roles that enforce MFA.")
         else:
-            print("  mfa_enabled=True")
-            print(f"  secret={result['mfa_secret']}")
-            print(f"  otpauth_uri={result['otpauth_uri']}")
-            backup_codes = result.get("backup_codes") or []
-            if backup_codes:
-                print("  backup_codes=" + ", ".join(str(code) for code in backup_codes))
+            result = recover_user_mfa(app, args.email, disable=args.disable)
+            print(f"MFA recovery complete for user_id={result['user_id']} ({result['email']}).")
+            if args.disable:
+                print("  mfa_enabled=False")
+                print("  Next login will require MFA enrollment for roles that enforce MFA.")
+            else:
+                print("  mfa_enabled=True")
+                print(f"  secret={result['mfa_secret']}")
+                print(f"  otpauth_uri={result['otpauth_uri']}")
+                backup_codes = result.get("backup_codes") or []
+                if backup_codes:
+                    print("  backup_codes=" + ", ".join(str(code) for code in backup_codes))
     elif args.cmd == "run":
         run_server(app, host=args.host, port=args.port, debug=args.debug)
     elif args.cmd == "worker":
