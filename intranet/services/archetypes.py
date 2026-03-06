@@ -11,7 +11,11 @@ TOKEN_PATTERN = re.compile(r"\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}")
 
 
 def normalize_archetype_field_key(raw: str) -> str:
-    candidate = (raw or "").strip().lower().replace("-", "_").replace(" ", "_")
+    candidate = (raw or "").strip().lower()
+    for prefix in ("contract_field_", "field_"):
+        if candidate.startswith(prefix):
+            candidate = candidate[len(prefix) :]
+    candidate = candidate.replace("-", "_").replace(" ", "_")
     candidate = re.sub(r"[^a-z0-9_]", "_", candidate)
     candidate = re.sub(r"_+", "_", candidate).strip("_")
     if not candidate:
@@ -116,6 +120,22 @@ def validate_required_field_values(field_defs: list[dict[str, str]], values: Map
         if not str(values.get(key) or "").strip():
             missing.append(field.get("label") or key)
     return missing
+
+
+def humanize_required_field_label(raw_label: str) -> str:
+    text = str(raw_label or "").strip()
+    if not text:
+        return ""
+    lowered = text.lower()
+    if lowered.startswith("contract_field_"):
+        text = text[len("contract_field_") :]
+        lowered = text.lower()
+    if lowered.startswith("field_"):
+        text = text[6:]
+        lowered = text.lower()
+    if "_" in text and lowered == text:
+        text = " ".join(part for part in text.split("_") if part).strip().title()
+    return text or str(raw_label or "").strip()
 
 
 def build_document_context(

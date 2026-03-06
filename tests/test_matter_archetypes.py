@@ -267,6 +267,117 @@ def test_matter_creation_allows_custom_no_archetype(app_ctx):
     assert matter.archetype_data_json is None
 
 
+def test_matter_creation_with_selected_archetype_does_not_require_other_archetype_fields(app_ctx):
+    app = app_ctx
+    admin = _seed_admin()
+    regulatory = MatterTemplate(
+        name="Regulatory Remediation",
+        legal_category="Regulatory",
+        default_risk_level="High",
+        required_fields_json=json.dumps(
+            [
+                {"key": "regulator_name", "label": "Regulator Name", "help": ""},
+                {"key": "remediation_plan_due", "label": "Remediation Plan Due", "help": ""},
+            ],
+            ensure_ascii=True,
+        ),
+        boilerplate_template="Regulatory remediation for {{ client_name }}.",
+        created_by=admin.id,
+    )
+    litigation = MatterTemplate(
+        name="Litigation Dispute",
+        legal_category="Litigation",
+        default_risk_level="High",
+        required_fields_json=json.dumps(
+            [
+                {"key": "opposing_party", "label": "Opposing Party", "help": ""},
+                {"key": "claim_amount", "label": "Claim Amount", "help": ""},
+            ],
+            ensure_ascii=True,
+        ),
+        boilerplate_template="Litigation dispute for {{ client_name }}.",
+        created_by=admin.id,
+    )
+    db.session.add_all([regulatory, litigation])
+    db.session.commit()
+
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, admin.id)
+
+    created_response = client.post(
+        "/matters/new",
+        data={
+            "csrf_token": csrf_token,
+            "matter_no": "2026-ARC-REG-0001",
+            "title": "Regulatory Remediation Engagement",
+            "client_name": "Client Reg",
+            "status": "Open",
+            "risk_level": "High",
+            "budget_status": "On Track",
+            "legal_category": "Regulatory",
+            "archetype_id": str(regulatory.id),
+            "field_regulator_name": "FSCA",
+            "field_remediation_plan_due": "2026-03-31",
+        },
+    )
+    assert created_response.status_code == 302
+    matter = Matter.query.filter_by(matter_no="2026-ARC-REG-0001").first()
+    assert matter is not None
+    assert matter.archetype_id == regulatory.id
+    values = json.loads(matter.archetype_data_json or "{}")
+    assert values.get("regulator_name") == "FSCA"
+    assert values.get("remediation_plan_due") == "2026-03-31"
+    assert "opposing_party" not in values
+    assert "claim_amount" not in values
+
+
+def test_matter_creation_normalizes_legacy_prefixed_archetype_field_keys(app_ctx):
+    app = app_ctx
+    admin = _seed_admin()
+    legacy = MatterTemplate(
+        name="Legacy Prefixed Archetype",
+        legal_category="Labour Law",
+        default_risk_level="Medium",
+        required_fields_json=json.dumps(
+            [
+                {"key": "field_opposing_party", "label": "field_opposing_party", "help": ""},
+                {"key": "contract_field_claim_amount", "label": "contract_field_claim_amount", "help": ""},
+            ],
+            ensure_ascii=True,
+        ),
+        boilerplate_template="Party {{ opposing_party }} and amount {{ claim_amount }}.",
+        created_by=admin.id,
+    )
+    db.session.add(legacy)
+    db.session.commit()
+
+    client = app.test_client()
+    csrf_token = _set_internal_session(client, admin.id)
+    created_response = client.post(
+        "/matters/new",
+        data={
+            "csrf_token": csrf_token,
+            "matter_no": "2026-ARC-LEGACY-0001",
+            "title": "Legacy Key Matter",
+            "client_name": "Legacy Client",
+            "status": "Open",
+            "risk_level": "Medium",
+            "budget_status": "On Track",
+            "legal_category": "Labour Law",
+            "archetype_id": str(legacy.id),
+            "field_opposing_party": "Acme Corp",
+            "field_claim_amount": "1250000",
+        },
+    )
+    assert created_response.status_code == 302
+    matter = Matter.query.filter_by(matter_no="2026-ARC-LEGACY-0001").first()
+    assert matter is not None
+    values = json.loads(matter.archetype_data_json or "{}")
+    assert values.get("opposing_party") == "Acme Corp"
+    assert values.get("claim_amount") == "1250000"
+    assert "field_opposing_party" not in values
+    assert "contract_field_claim_amount" not in values
+
 def test_matter_intake_allows_custom_no_archetype(app_ctx):
     app = app_ctx
     admin = _seed_admin()

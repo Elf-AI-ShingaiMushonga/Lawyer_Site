@@ -41,6 +41,7 @@
       --status-chip-min-width: 10ch;
       --risk-chip-min-width: 9ch;
       --category-chip-min-width: 11ch;
+      --nav-live-height: 74px;
       --field-control-height: calc(1.5em + .75rem + 2px);
       --touch-target-min-height: 44px;
       --table-scroll-max-height: min(64vh, 42rem);
@@ -126,30 +127,15 @@
       opacity: 0.98;
     }
 
-    .navbar.has-active-matter .nav-head {
-      overflow: visible;
-      max-height: 420px;
-      opacity: 1;
-      transform: translateY(0);
-      transition: max-height 0.22s ease, opacity 0.2s ease, transform 0.22s ease;
+    .active-matter-rail-wrap {
+      position: sticky;
+      top: calc(var(--nav-live-height) + 8px);
+      z-index: 19;
+      transition: top 0.2s ease;
     }
 
-    .navbar.has-active-matter.is-collapsed {
-      transform: translateY(0);
-      box-shadow: 0 10px 24px rgba(123, 42, 42, 0.1);
-      opacity: 1;
-    }
-
-    .navbar.has-active-matter.is-collapsed .nav-head {
-      overflow: hidden;
-      max-height: 0;
-      opacity: 0;
-      transform: translateY(-10px);
-      pointer-events: none;
-    }
-
-    .navbar.has-active-matter.is-collapsed .context-rail {
-      margin-top: 0;
+    body.nav-collapsed .active-matter-rail-wrap {
+      top: 8px;
     }
 
     .nav-head {
@@ -481,7 +467,7 @@
     }
 
     .context-rail {
-      margin-top: 8px;
+      margin-top: 0;
       padding: 7px 9px;
       border: 1px solid rgba(225, 6, 0, 0.26);
       border-radius: 12px;
@@ -2541,6 +2527,10 @@
         border-radius: 14px;
       }
 
+      body.nav-collapsed .active-matter-rail-wrap {
+        top: 6px;
+      }
+
       .nav-head {
         gap: 6px;
       }
@@ -2893,7 +2883,7 @@
   {% set more_active = endpoint in more_endpoints
     and not (is_lawyer_role and endpoint in billing_endpoints)
     and not ((is_support_role or is_admin_role) and endpoint in crm_endpoints) %}
-  <nav class="navbar px-3 py-2 mb-3{% if current_user.is_authenticated and active_matter %} has-active-matter{% endif %}" data-collapsible-nav>
+  <nav class="navbar px-3 py-2 mb-2" data-collapsible-nav>
     <div class="nav-head" data-collapsible-nav-body>
       <div class="nav-brand">
         <a class="brand" href="{{ url_for('dashboard') }}">
@@ -3046,7 +3036,10 @@
       </div>
     </div>
 
-    {% if current_user.is_authenticated and active_matter %}
+  </nav>
+
+  {% if current_user.is_authenticated and active_matter %}
+    <div class="active-matter-rail-wrap mb-3" data-active-matter-rail>
       <div class="context-rail" role="navigation" aria-label="Active matter shortcuts">
         <div class="context-rail-head">
           <div class="context-rail-title">Active Matter</div>
@@ -3070,8 +3063,8 @@
           <a class="context-rail-chip context-rail-chip-emphasis" href="{{ url_for('matters') }}">Switch Matter</a>
         </div>
       </div>
-    {% endif %}
-  </nav>
+    </div>
+  {% endif %}
 
   {% if current_user.is_authenticated and active_timer_cue %}
     {% set timer_cue_href = url_for('time_timers', matter_id=active_timer_cue.matter_id) if active_timer_cue.matter_id else url_for('time_timers') %}

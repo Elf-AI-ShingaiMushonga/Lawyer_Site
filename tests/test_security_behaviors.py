@@ -28,6 +28,12 @@ def _csrf_token_for_login(client) -> str:
         return sess.get("_csrf_token") or ""
 
 
+def _csrf_token_for_path(client, path: str) -> str:
+    client.get(path)
+    with client.session_transaction() as sess:
+        return sess.get("_csrf_token") or ""
+
+
 def test_visible_matter_ids_excludes_ethical_wall(app_ctx):
     app = app_ctx
     user = User(email="wall@example.com", full_name="Wall User", role="lawyer", password_hash="x")
@@ -200,3 +206,74 @@ def test_portal_login_rate_limit_enforced(monkeypatch, tmp_path):
     assert first.status_code in {302, 401}
     assert second.status_code in {302, 401}
     assert third.status_code == 429
+
+
+def test_login_shows_specific_message_when_mfa_configuration_is_missing(app_ctx):
+    app = app_ctx
+    user = User(
+        email="mfa-missing@example.com",
+        full_name="MFA Missing User",
+        role="director",
+        password_hash="x",
+        is_active=True,
+        mfa_enabled=True,
+        mfa_secret=None,
+    )
+    user.set_password("StrongPassword123!")
+    db.session.add(user)
+    db.session.commit()
+
+    client = app.test_client()
+    token = _csrf_token_for_login(client)
+    response = client.post(
+        "/login",
+        data={
+            "csrf_token": token,
+            "email": user.email,
+            "password": "StrongPassword123!",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert "/login" in (response.headers.get("Location") or "")
+
+    with client.session_transaction() as sess:
+        flashes = sess.get("_flashes") or []
+    messages = [message for _category, message in flashes]
+    assert any("recover-mfa" in message for message in messages)
+    assert AuditLog.query.filter_by(action="login_mfa_misconfigured", entity_type="User", entity_id=user.id).count() == 1
+
+
+def test_portal_login_warns_when_mfa_enabled_but_secret_is_missing(app_ctx):
+    app = app_ctx
+    user = PortalUser(
+        email="portal-mfa-missing@example.com",
+        full_name="Portal MFA Missing",
+        password_hash="x",
+        is_active=True,
+        mfa_enabled=True,
+        mfa_secret=None,
+    )
+    user.set_password("PortalStrongPassword123!")
+    db.session.add(user)
+    db.session.commit()
+
+    client = app.test_client()
+    token = _csrf_token_for_path(client, "/portal/login")
+    response = client.post(
+        "/portal/login",
+        data={
+            "csrf_token": token,
+            "email": user.email,
+            "password": "PortalStrongPassword123!",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert "/portal/login" in (response.headers.get("Location") or "")
+
+    with client.session_transaction() as sess:
+        flashes = sess.get("_flashes") or []
+    messages = [message for _category, message in flashes]
+    assert any("not configured" in message for message in messages)
+    assert AuditLog.query.filter_by(action="portal_login_mfa_misconfigured", entity_id=user.id).count() == 1

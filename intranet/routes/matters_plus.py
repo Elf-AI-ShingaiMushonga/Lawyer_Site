@@ -44,6 +44,7 @@ from ..models import (
 from ..services.archetypes import (
     build_document_context,
     collect_required_field_values,
+    humanize_required_field_label,
     load_required_fields,
     render_template_text,
     validate_required_field_values,
@@ -70,6 +71,19 @@ from ..roles import role_is_admin
 from ..templates import page
 
 CUSTOM_ARCHETYPE_SENTINEL = "custom"
+
+
+def _display_missing_field_labels(labels: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for label in labels:
+        text = humanize_required_field_label(label)
+        if text.lower().startswith("contract_field_"):
+            text = text[len("contract_field_") :]
+        if "_" in text and text.lower() == text:
+            text = " ".join(part for part in text.split("_") if part).strip().title()
+        if text:
+            normalized.append(text)
+    return normalized
 
 
 def register_matters_plus_routes(app):
@@ -128,7 +142,9 @@ def register_matters_plus_routes(app):
             matter_specific_values = collect_required_field_values(request.form, required_field_defs)
             missing_required_fields = validate_required_field_values(required_field_defs, matter_specific_values)
             if missing_required_fields:
-                flash(f"Provide required archetype fields: {', '.join(missing_required_fields[:5])}.", "warning")
+                preview = ", ".join(_display_missing_field_labels(missing_required_fields)[:5])
+                archetype_name = template.name if template is not None else "selected archetype"
+                flash(f"Provide required archetype fields for '{archetype_name}': {preview}.", "warning")
                 return redirect(url_for("matters_intake"))
 
             auto_contract_templates = auto_contract_templates_for_archetype(template.id if template else None)
@@ -147,7 +163,8 @@ def register_matters_plus_routes(app):
                     contract_field_values[normalized_key] = str(value).strip()
             missing_contract_fields = validate_contract_field_values(contract_required_defs, contract_field_values)
             if missing_contract_fields:
-                flash(f"Provide required contract fields: {', '.join(missing_contract_fields[:5])}.", "warning")
+                preview = ", ".join(_display_missing_field_labels(missing_contract_fields)[:5])
+                flash(f"Provide required contract fields: {preview}.", "warning")
                 return redirect(url_for("matters_intake"))
 
             now = dt.datetime.utcnow()

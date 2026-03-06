@@ -142,8 +142,27 @@ def register_auth_routes(app):
                 return redirect(url_for("auth_mfa_setup"))
 
             if user.mfa_enabled:
+                has_totp_secret = bool((user.mfa_secret or "").strip())
+                has_backup_codes = (
+                    db.session.query(UserMFABackupCode.id)
+                    .filter(
+                        UserMFABackupCode.user_id == user.id,
+                        UserMFABackupCode.used_at.is_(None),
+                    )
+                    .first()
+                    is not None
+                )
+                if not has_totp_secret and not has_backup_codes:
+                    audit("login_mfa_misconfigured", "User", user.id)
+                    flash(
+                        "MFA is enabled but not configured for this account. "
+                        "Ask an administrator to run: python app.py recover-mfa --email <your-email>",
+                        "warning",
+                    )
+                    return redirect(url_for("login"))
+
                 verified = False
-                if mfa_code and user.mfa_secret and verify_totp(user.mfa_secret, mfa_code):
+                if mfa_code and has_totp_secret and verify_totp(user.mfa_secret, mfa_code):
                     verified = True
                 elif backup_code:
                     backups = UserMFABackupCode.query.filter_by(user_id=user.id, used_at=None).all()

@@ -174,6 +174,10 @@ def register_portal_routes(app):
                 flash("Invalid portal credentials.", "warning")
                 return redirect(url_for("portal_login"))
             if user.mfa_enabled:
+                if not (user.mfa_secret or "").strip():
+                    audit("portal_login_mfa_misconfigured", "PortalUser", user.id)
+                    flash("Portal MFA is enabled but not configured. Please contact support.", "warning")
+                    return redirect(url_for("portal_login"))
                 if not user.mfa_secret or not verify_totp(user.mfa_secret, mfa_code):
                     flash("Invalid portal MFA code.", "warning")
                     return redirect(url_for("portal_login"))

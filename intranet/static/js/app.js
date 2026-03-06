@@ -702,11 +702,33 @@
         .toLowerCase() || "all";
     };
 
+    const filterButtons = toggles.map((button) => ({
+      button,
+      filter: normalizeFilter(button.getAttribute("data-priority-toggle")),
+    }));
+    const allowedFilters = new Set(filterButtons.map((entry) => entry.filter));
+    const storageKey = `priority-inbox-filter::${root.id || "default"}`;
+    const readStoredFilter = () => {
+      try {
+        const stored = normalizeFilter(window.sessionStorage.getItem(storageKey));
+        return allowedFilters.has(stored) ? stored : "";
+      } catch (_error) {
+        return "";
+      }
+    };
+    const persistFilter = (filter) => {
+      try {
+        window.sessionStorage.setItem(storageKey, filter);
+      } catch (_error) {
+        // Session storage can fail in strict/privacy modes; continue without persistence.
+      }
+    };
+
     const applyFilter = (rawFilter) => {
-      const filter = normalizeFilter(rawFilter);
+      const filterCandidate = normalizeFilter(rawFilter);
+      const filter = allowedFilters.has(filterCandidate) ? filterCandidate : "all";
       root.setAttribute("data-priority-filter", filter);
-      toggles.forEach((button) => {
-        const buttonFilter = normalizeFilter(button.getAttribute("data-priority-toggle"));
+      filterButtons.forEach(({ button, filter: buttonFilter }) => {
         const isActive = buttonFilter === filter;
         button.classList.toggle("is-active", isActive);
         button.setAttribute("aria-pressed", isActive ? "true" : "false");
@@ -717,17 +739,32 @@
         pane.hidden = !shouldShow;
         pane.setAttribute("aria-hidden", shouldShow ? "false" : "true");
       });
+      persistFilter(filter);
     };
 
-    toggles.forEach((button) => {
+    filterButtons.forEach(({ button }, index) => {
       button.addEventListener("click", () => {
         applyFilter(button.getAttribute("data-priority-toggle"));
       });
+      button.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+          return;
+        }
+        event.preventDefault();
+        const delta = event.key === "ArrowRight" ? 1 : -1;
+        const nextIndex = (index + delta + filterButtons.length) % filterButtons.length;
+        const nextButton = filterButtons[nextIndex]?.button;
+        if (!(nextButton instanceof HTMLButtonElement)) {
+          return;
+        }
+        nextButton.focus();
+        applyFilter(nextButton.getAttribute("data-priority-toggle"));
+      });
     });
 
-    const defaultFilter = normalizeFilter(
-      toggles.find((button) => button.classList.contains("is-active"))?.getAttribute("data-priority-toggle")
-    );
+    const defaultFilter =
+      readStoredFilter() ||
+      normalizeFilter(toggles.find((button) => button.classList.contains("is-active"))?.getAttribute("data-priority-toggle"));
     applyFilter(defaultFilter || "all");
   };
 
@@ -2129,6 +2166,16 @@
       }
     };
 
+    let lastActivityTickAt = 0;
+    const markActivityThrottled = () => {
+      const now = Date.now();
+      if (now - lastActivityTickAt < 250) {
+        return;
+      }
+      lastActivityTickAt = now;
+      markActivity();
+    };
+
     const submitPause = (reason) => {
       if (submitted) {
         return;
@@ -2157,9 +2204,10 @@
       });
     }
 
-    ["mousedown", "mousemove", "touchstart", "scroll"].forEach((eventName) => {
-      window.addEventListener(eventName, markActivity, { passive: true });
-    });
+    window.addEventListener("mousedown", markActivity, { passive: true });
+    window.addEventListener("touchstart", markActivity, { passive: true });
+    window.addEventListener("mousemove", markActivityThrottled, { passive: true });
+    window.addEventListener("scroll", markActivityThrottled, { passive: true });
     window.addEventListener("keydown", markActivity);
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
@@ -3177,11 +3225,26 @@
       return;
     }
 
+    let visible = false;
+    let ticking = false;
     const toggle = () => {
-      button.classList.toggle("is-visible", window.scrollY > 460);
+      const shouldShow = window.scrollY > 460;
+      if (shouldShow !== visible) {
+        button.classList.toggle("is-visible", shouldShow);
+        visible = shouldShow;
+      }
+      ticking = false;
     };
 
-    window.addEventListener("scroll", toggle, { passive: true });
+    const onScroll = () => {
+      if (ticking) {
+        return;
+      }
+      ticking = true;
+      window.requestAnimationFrame(toggle);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
     toggle();
 
     button.addEventListener("click", () => {
@@ -3194,6 +3257,8 @@
     if (!(nav instanceof HTMLElement)) {
       return;
     }
+    const body = document.body;
+    const rootStyle = document.documentElement.style;
     const navBody = nav.querySelector("[data-collapsible-nav-body]");
     const collapsibleSection = navBody instanceof HTMLElement ? navBody : nav;
 
@@ -3227,6 +3292,11 @@
       }
     };
 
+    const syncNavLiveHeight = () => {
+      const navHeight = Math.max(1, Math.round(nav.getBoundingClientRect().height || nav.offsetHeight || 0));
+      rootStyle.setProperty("--nav-live-height", `${Math.max(48, navHeight)}px`);
+    };
+
     const collapseStart = () => Math.max(72, expandedHeight + 18);
 
     const hasOpenNavMenu = () => Boolean(nav.querySelector("[data-nav-menu][open]"));
@@ -3240,6 +3310,7 @@
       }
       isCollapsed = nextState;
       nav.classList.toggle("is-collapsed", nextState);
+      body.classList.toggle("nav-collapsed", nextState);
       if (nextState) {
         suppressExpandUntil = nowMs() + expandDebounceMs;
       } else {
@@ -3298,6 +3369,7 @@
       if (window.scrollY <= collapseStart()) {
         setCollapsed(false);
       }
+      syncNavLiveHeight();
       update();
     });
     if (typeof window.ResizeObserver === "function") {
@@ -3305,8 +3377,10 @@
         if (!isCollapsed) {
           measureExpandedHeight();
         }
+        syncNavLiveHeight();
       });
       observer.observe(collapsibleSection);
+      observer.observe(nav);
     }
     window.addEventListener("keydown", (event) => {
       if (event.key === "Tab") {
@@ -3315,6 +3389,8 @@
     });
 
     measureExpandedHeight();
+    syncNavLiveHeight();
+    body.classList.toggle("nav-collapsed", false);
     update();
   };
 
@@ -3629,45 +3705,7 @@
       if (selectedOption instanceof HTMLOptionElement && selectedOption.hidden) {
         archetypeSelect.value = "";
       }
-      if (!String(archetypeSelect.value || "").trim()) {
-        const firstVisibleTemplate = Array.from(archetypeSelect.options).find((option) => {
-          if (!(option instanceof HTMLOptionElement)) {
-            return false;
-          }
-          const value = String(option.value || "").trim();
-          return value && value !== "custom" && !option.hidden;
-        });
-        if (firstVisibleTemplate instanceof HTMLOptionElement) {
-          archetypeSelect.value = firstVisibleTemplate.value;
-        }
-      }
       renderRequiredFields();
-    };
-
-    const ensureInitialArchetypeSelection = () => {
-      if (String(archetypeSelect.value || "").trim()) {
-        return;
-      }
-      const firstTemplate = Array.from(archetypeSelect.options).find((option) => {
-        if (!(option instanceof HTMLOptionElement)) {
-          return false;
-        }
-        const value = String(option.value || "").trim();
-        return value && value !== "custom";
-      });
-      if (!(firstTemplate instanceof HTMLOptionElement)) {
-        return;
-      }
-      archetypeSelect.value = firstTemplate.value;
-      const selected = byId.get(String(firstTemplate.value));
-      if (
-        selected &&
-        typeof selected === "object" &&
-        !String(categoryInput.value || "").trim() &&
-        String(selected.legal_category || "").trim()
-      ) {
-        categoryInput.value = String(selected.legal_category || "").trim();
-      }
     };
 
     categoryInput.addEventListener("change", filterArchetypesByCategory);
@@ -3838,7 +3876,6 @@
       setPickerOpen(false);
     }
 
-    ensureInitialArchetypeSelection();
     filterArchetypesByCategory();
   };
 
