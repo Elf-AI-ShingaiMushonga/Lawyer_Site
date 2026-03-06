@@ -302,6 +302,65 @@ def test_upload_dms_document_allows_non_matter_member(app_ctx):
     assert doc is not None
 
 
+def test_upload_dms_document_non_member_redirects_without_forbidden(app_ctx):
+    app = app_ctx
+    owner = _seed_user("dms-owner-open-upload-redirect@example.com", role="senior_attorney")
+    outsider = _seed_user("dms-outsider-open-upload-redirect@example.com", role="operations_staff")
+    matter = _seed_matter(owner, "2026-PERM-DMS-OPEN-0002")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=owner.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, outsider.id)
+    response = client.post(
+        f"/matters/{matter.id}/dms",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "upload_document",
+            "title": "Open Upload Redirect",
+            "document_type": "General",
+            "confidentiality": "Internal",
+            "file": (io.BytesIO(b"outsider-upload-redirect"), "outsider-upload-redirect.txt"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 302
+    follow = client.get(response.headers.get("Location") or "", follow_redirects=True)
+    assert follow.status_code == 200
+    doc = DocumentRecord.query.filter_by(matter_id=matter.id, title="Open Upload Redirect").first()
+    assert doc is not None
+
+
+def test_upload_dms_document_any_role_member_redirects_without_forbidden(app_ctx):
+    app = app_ctx
+    owner = _seed_user("dms-owner-any-role-redirect@example.com", role="lawyer")
+    analyst = _seed_user("dms-analyst-any-role-redirect@example.com", role="analyst")
+    matter = _seed_matter(owner, "2026-PERM-DMS-ANY-0002")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=owner.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=analyst.id, role_in_matter="Team"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, analyst.id)
+    response = client.post(
+        f"/matters/{matter.id}/dms",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "upload_document",
+            "title": "Any Role Redirect",
+            "document_type": "General",
+            "confidentiality": "Internal",
+            "file": (io.BytesIO(b"any-role-redirect"), "any-role-redirect.txt"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 302
+    follow = client.get(response.headers.get("Location") or "", follow_redirects=True)
+    assert follow.status_code == 200
+    doc = DocumentRecord.query.filter_by(matter_id=matter.id, title="Any Role Redirect").first()
+    assert doc is not None
+
+
 def test_only_senior_attorney_can_delete_dms_documents(app_ctx):
     app = app_ctx
     director = _seed_user("dms-director@example.com", role="director")

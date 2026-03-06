@@ -31,8 +31,8 @@ from ..models import (
     SavedSearch,
     TrustLedgerEntry,
 )
-from ..policies import enforce_permission, visible_matter_ids
-from ..policies.residency import enforce_data_residency
+from ..policies import enforce_permission, has_permission, visible_matter_ids
+from ..policies.residency import enforce_data_residency, residency_allowed
 from ..roles import canonical_role, role_is_admin
 from ..services.dms_option_lists import DEFAULT_DMS_OPTION_LISTS, load_dms_option_lists
 from ..services.notification_engine import NotificationEngine
@@ -240,6 +240,13 @@ def register_dms_routes(app):
         has_matter_access = can_access_matter(matter_id)
         if not has_matter_access and not is_upload_action:
             abort(403)
+        can_view_dms = has_matter_access and has_permission("dms", "read")
+
+        def _post_redirect():
+            if can_view_dms:
+                return redirect(url_for("matter_dms", matter_id=matter_id))
+            return redirect(url_for("dashboard"))
+
         m = db.session.get(Matter, matter_id)
         if not m:
             abort(404)
@@ -259,7 +266,7 @@ def register_dms_routes(app):
                 template = db.session.get(DocumentTemplate, template_id) if template_id else None
                 if template is None:
                     flash("Document template not found.", "warning")
-                    return redirect(url_for("matter_dms", matter_id=matter_id))
+                    return _post_redirect()
 
                 generated_title = (request.form.get("generated_title") or "").strip() or f"{template.name} - {m.matter_no}"
                 context = _template_context(m)
@@ -267,7 +274,7 @@ def register_dms_routes(app):
                 rendered_body, missing_tokens = _render_template_body(template.body, context)
                 if not rendered_body.strip():
                     flash("Generated document body is empty. Add template text or merge fields.", "warning")
-                    return redirect(url_for("matter_dms", matter_id=matter_id))
+                    return _post_redirect()
                 try:
                     generated_document_type = _coerce_option_value(
                         (request.form.get("generated_document_type") or template.template_type),
@@ -295,9 +302,15 @@ def register_dms_routes(app):
                     )
                 except ValueError as exc:
                     flash(str(exc), "warning")
-                    return redirect(url_for("matter_dms", matter_id=matter_id))
+                    return _post_redirect()
 
-                enforce_data_residency("primary_storage")
+                allowed_primary_storage, residency_message = residency_allowed("primary_storage")
+                if not allowed_primary_storage:
+                    flash(
+                        residency_message or "Data residency policy blocked this upload target.",
+                        "warning",
+                    )
+                    return _post_redirect()
                 os.makedirs(app.config["UPLOAD_DIR"], exist_ok=True)
                 base_name = secure_filename(generated_title) or f"generated_{template.id}"
                 safe_name = f"{base_name[:80]}.txt"
@@ -306,13 +319,13 @@ def register_dms_routes(app):
                     stored, path = resolve_upload_path(app.config["UPLOAD_DIR"], stored, create_parent=True)
                 except ValueError:
                     flash("Storage path validation failed for generated document.", "warning")
-                    return redirect(url_for("matter_dms", matter_id=matter_id))
+                    return _post_redirect()
                 try:
                     with open(path, "w", encoding="utf-8") as handle:
                         handle.write(rendered_body)
                 except OSError:
                     flash("Failed to persist generated document.", "warning")
-                    return redirect(url_for("matter_dms", matter_id=matter_id))
+                    return _post_redirect()
 
                 sha = sha256_file(path)
                 try:
@@ -374,7 +387,7 @@ def register_dms_routes(app):
                     db.session.rollback()
                     _safe_remove_file(path)
                     flash("Failed to save generated document. Please retry.", "warning")
-                    return redirect(url_for("matter_dms", matter_id=matter_id))
+                    return _post_redirect()
 
                 audit(
                     "dms_template_generate",
@@ -396,24 +409,30 @@ def register_dms_routes(app):
                     )
                 else:
                     flash("Document generated from template.", "info")
-                return redirect(url_for("matter_dms", matter_id=matter_id))
+                return _post_redirect()
             if action != "upload_document":
                 flash("Unsupported DMS action.", "warning")
-                return redirect(url_for("matter_dms", matter_id=matter_id))
+                return _post_redirect()
 
             title = (request.form.get("title") or "").strip()
             if not title:
                 flash("Document title required.", "warning")
-                return redirect(url_for("matter_dms", matter_id=matter_id))
+                return _post_redirect()
 
             f = request.files.get("file")
             if not f or not f.filename:
                 flash("Document file required.", "warning")
-                return redirect(url_for("matter_dms", matter_id=matter_id))
+                return _post_redirect()
             if not allowed_doc(f.filename):
                 flash("Unsupported file type.", "warning")
-                return redirect(url_for("matter_dms", matter_id=matter_id))
-            enforce_data_residency("primary_storage")
+                return _post_redirect()
+            allowed_primary_storage, residency_message = residency_allowed("primary_storage")
+            if not allowed_primary_storage:
+                flash(
+                    residency_message or "Data residency policy blocked this upload target.",
+                    "warning",
+                )
+                return _post_redirect()
             try:
                 document_type = _coerce_option_value(
                     request.form.get("document_type"),
@@ -441,18 +460,18 @@ def register_dms_routes(app):
                 )
             except ValueError as exc:
                 flash(str(exc), "warning")
-                return redirect(url_for("matter_dms", matter_id=matter_id))
+                return _post_redirect()
 
             safe_name = secure_filename(f.filename)
             if not safe_name:
                 flash("Invalid filename.", "warning")
-                return redirect(url_for("matter_dms", matter_id=matter_id))
+                return _post_redirect()
             stored = build_matter_storage_name("dms", matter_id, safe_name)
             try:
                 stored, path = resolve_upload_path(app.config["UPLOAD_DIR"], stored, create_parent=True)
             except ValueError:
                 flash("Storage path validation failed for upload.", "warning")
-                return redirect(url_for("matter_dms", matter_id=matter_id))
+                return _post_redirect()
             f.save(path)
             sha = sha256_file(path)
             try:
@@ -511,7 +530,7 @@ def register_dms_routes(app):
                 db.session.rollback()
                 _safe_remove_file(path)
                 flash("Document upload failed. Please retry.", "warning")
-                return redirect(url_for("matter_dms", matter_id=matter_id))
+                return _post_redirect()
 
             audit("dms_document_create", "DocumentRecord", container.id, {"matter_id": matter_id})
             try:
@@ -519,7 +538,7 @@ def register_dms_routes(app):
             except Exception:  # pragma: no cover - non-blocking indexing fallback
                 current_app.logger.exception("Failed to queue semantic index for document version_id=%s", version.id)
             flash("Document created in DMS.", "info")
-            return redirect(url_for("matter_dms", matter_id=matter_id))
+            return _post_redirect()
 
         q = (request.args.get("q") or "").strip().lower()
         filter_type = _match_option(request.args.get("document_type"), document_type_options) or (
@@ -685,6 +704,12 @@ def register_dms_routes(app):
         has_matter_access = can_access_matter(doc.matter_id)
         if not has_matter_access and not is_upload_version:
             abort(403)
+        can_view_versions = has_matter_access and has_permission("dms", "read")
+
+        def _post_redirect():
+            if can_view_versions:
+                return redirect(url_for("document_versions", document_id=document_id))
+            return redirect(url_for("dashboard"))
 
         if request.method == "POST":
             lock = (
@@ -694,32 +719,38 @@ def register_dms_routes(app):
             )
             if lock and lock.locked_by != current_user.id:
                 flash("Document is locked by another user.", "warning")
-                return redirect(url_for("document_versions", document_id=document_id))
+                return _post_redirect()
 
             state = (request.form.get("state") or "draft").strip().lower() or "draft"
             if state not in DOCUMENT_STATES:
                 flash("Invalid version state.", "warning")
-                return redirect(url_for("document_versions", document_id=document_id))
+                return _post_redirect()
 
             f = request.files.get("file")
             if not f or not f.filename:
                 flash("Version file required.", "warning")
-                return redirect(url_for("document_versions", document_id=document_id))
+                return _post_redirect()
             if not allowed_doc(f.filename):
                 flash("Unsupported file type.", "warning")
-                return redirect(url_for("document_versions", document_id=document_id))
-            enforce_data_residency("primary_storage")
+                return _post_redirect()
+            allowed_primary_storage, residency_message = residency_allowed("primary_storage")
+            if not allowed_primary_storage:
+                flash(
+                    residency_message or "Data residency policy blocked this upload target.",
+                    "warning",
+                )
+                return _post_redirect()
 
             safe_name = secure_filename(f.filename)
             if not safe_name:
                 flash("Invalid filename.", "warning")
-                return redirect(url_for("document_versions", document_id=document_id))
+                return _post_redirect()
             stored = build_matter_storage_name("dms", doc.matter_id, safe_name)
             try:
                 stored, path = resolve_upload_path(app.config["UPLOAD_DIR"], stored, create_parent=True)
             except ValueError:
                 flash("Storage path validation failed for upload.", "warning")
-                return redirect(url_for("document_versions", document_id=document_id))
+                return _post_redirect()
             f.save(path)
             sha = sha256_file(path)
 
@@ -772,12 +803,12 @@ def register_dms_routes(app):
                 db.session.rollback()
                 _safe_remove_file(path)
                 flash("Another version was uploaded at the same time. Please retry.", "warning")
-                return redirect(url_for("document_versions", document_id=document_id))
+                return _post_redirect()
             except Exception:
                 db.session.rollback()
                 _safe_remove_file(path)
                 flash("Version upload failed. Please retry.", "warning")
-                return redirect(url_for("document_versions", document_id=document_id))
+                return _post_redirect()
             NotificationEngine.enqueue("document_uploaded", current_user.id, f"document_version:{ver.id}")
             try:
                 SemanticSearchService.enqueue_document_version_index(ver.id, requested_by=current_user.id)
@@ -785,7 +816,7 @@ def register_dms_routes(app):
                 current_app.logger.exception("Failed to queue semantic index for document version_id=%s", ver.id)
             audit("dms_version_add", "DocumentVersion", ver.id, {"document_id": doc.id, "version_no": next_no})
             flash("Version uploaded.", "info")
-            return redirect(url_for("document_versions", document_id=document_id))
+            return _post_redirect()
 
         page_number = request.args.get("page", default=1, type=int) or 1
         if page_number < 1:
