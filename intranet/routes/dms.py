@@ -68,7 +68,9 @@ def _extract_ocr_text(path: str, content_type: str | None) -> str:
         extracted = chunk.decode("utf-8", errors="ignore")
         if not extracted.strip():
             extracted = "OCR pending for binary document. Text extraction unavailable in this environment."
-    return (extracted.strip() or "No OCR text extracted.")[:12000]
+    # PostgreSQL text columns reject NUL bytes; sanitize decoded payload before persisting.
+    sanitized = extracted.replace("\x00", "").strip()
+    return (sanitized or "No OCR text extracted.")[:12000]
 
 
 def _safe_query_json(raw: str) -> dict:

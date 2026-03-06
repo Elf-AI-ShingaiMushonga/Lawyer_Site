@@ -6,7 +6,7 @@ import io
 from flask import g
 
 from intranet.extensions import db
-from intranet.models import CRMLead, DocumentRecord, DocumentVersion, Matter, MatterMember, PortalUser, TimeEntry, User
+from intranet.models import CRMLead, DocumentOCRText, DocumentRecord, DocumentVersion, Matter, MatterMember, PortalUser, TimeEntry, User
 
 
 def _set_user_session(client, user_id: int, csrf_token: str = "test-csrf") -> None:
@@ -359,6 +359,37 @@ def test_upload_dms_document_any_role_member_redirects_without_forbidden(app_ctx
     assert follow.status_code == 200
     doc = DocumentRecord.query.filter_by(matter_id=matter.id, title="Any Role Redirect").first()
     assert doc is not None
+
+
+def test_dms_upload_sanitizes_nul_bytes_in_ocr_text(app_ctx):
+    app = app_ctx
+    owner = _seed_user("dms-ocr-owner@example.com", role="senior_attorney")
+    matter = _seed_matter(owner, "2026-PERM-DMS-OCR-0001")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=owner.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, owner.id)
+    response = client.post(
+        f"/matters/{matter.id}/dms",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "upload_document",
+            "title": "NUL OCR Upload",
+            "document_type": "General",
+            "confidentiality": "Internal",
+            "file": (io.BytesIO(b"PK\x03\x04hello\x00world\x00docx"), "nul-ocr.docx"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 302
+    doc = DocumentRecord.query.filter_by(matter_id=matter.id, title="NUL OCR Upload").first()
+    assert doc is not None
+    version = DocumentVersion.query.filter_by(document_id=doc.id, version_no=1).first()
+    assert version is not None
+    ocr = DocumentOCRText.query.filter_by(document_version_id=version.id).first()
+    assert ocr is not None
+    assert "\x00" not in (ocr.extracted_text or "")
 
 
 def test_only_senior_attorney_can_delete_dms_documents(app_ctx):
