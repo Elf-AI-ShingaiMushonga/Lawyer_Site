@@ -384,6 +384,12 @@ def register_dms_routes(app):
                     )
                     db.session.commit()
                 except Exception:
+                    current_app.logger.exception(
+                        "DMS template generation failed (matter_id=%s, user_id=%s, template_id=%s).",
+                        matter_id,
+                        getattr(current_user, "id", None),
+                        template.id if template is not None else None,
+                    )
                     db.session.rollback()
                     _safe_remove_file(path)
                     flash("Failed to save generated document. Please retry.", "warning")
@@ -527,6 +533,12 @@ def register_dms_routes(app):
                 )
                 db.session.commit()
             except Exception:
+                current_app.logger.exception(
+                    "DMS document upload failed (matter_id=%s, user_id=%s, filename=%s).",
+                    matter_id,
+                    getattr(current_user, "id", None),
+                    safe_name,
+                )
                 db.session.rollback()
                 _safe_remove_file(path)
                 flash("Document upload failed. Please retry.", "warning")
@@ -805,6 +817,13 @@ def register_dms_routes(app):
                 flash("Another version was uploaded at the same time. Please retry.", "warning")
                 return _post_redirect()
             except Exception:
+                current_app.logger.exception(
+                    "DMS version upload failed (document_id=%s, matter_id=%s, user_id=%s, filename=%s).",
+                    document_id,
+                    doc.matter_id if doc is not None else None,
+                    getattr(current_user, "id", None),
+                    safe_name,
+                )
                 db.session.rollback()
                 _safe_remove_file(path)
                 flash("Version upload failed. Please retry.", "warning")
