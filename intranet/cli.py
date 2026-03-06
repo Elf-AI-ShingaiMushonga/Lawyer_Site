@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 from .config import VALID_ROLES, is_valid_email
 from .extensions import db
-from .mfa import hash_backup_code
+from .mfa import build_otpauth_uri, generate_backup_codes, generate_totp_secret, hash_backup_code
 from .models import (
     Announcement,
     AnalyticsMetricSnapshot,
@@ -214,6 +214,56 @@ def create_user(app, email: str, password: str, role: str, full_name: str = "(Un
         db.session.add(user)
         db.session.commit()
         return user.id
+
+
+def recover_user_mfa(app, email: str, *, disable: bool = False) -> dict[str, object]:
+    normalized_email = (email or "").strip().lower()
+    if not is_valid_email(normalized_email):
+        raise SystemExit("Invalid email format")
+
+    with app.app_context():
+        user = User.query.filter(sa.func.lower(User.email) == normalized_email).first()
+        if not user:
+            raise SystemExit(f"User not found: {normalized_email}")
+
+        UserMFABackupCode.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+
+        backup_codes: list[str] = []
+        secret: str | None = None
+        otpauth_uri: str | None = None
+        if disable:
+            user.mfa_enabled = False
+            user.mfa_secret = None
+        else:
+            secret = generate_totp_secret()
+            user.mfa_enabled = True
+            user.mfa_secret = secret
+            otpauth_uri = build_otpauth_uri(secret, user.email)
+
+            backup_codes = generate_backup_codes()
+            now = dt.datetime.utcnow()
+            for code in backup_codes:
+                db.session.add(
+                    UserMFABackupCode(
+                        user_id=user.id,
+                        code_hash=hash_backup_code(code),
+                        created_at=now,
+                    )
+                )
+
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user.last_failed_login_at = None
+
+        db.session.commit()
+        return {
+            "user_id": int(user.id),
+            "email": user.email,
+            "mfa_enabled": bool(user.mfa_enabled),
+            "mfa_secret": secret,
+            "otpauth_uri": otpauth_uri,
+            "backup_codes": backup_codes,
+        }
 
 
 def run_server(app, host: str = "127.0.0.1", port: int = 5000, debug: bool = False):
