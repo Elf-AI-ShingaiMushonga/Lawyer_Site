@@ -155,6 +155,7 @@ Common seed error:
 Production boot guards:
 - App startup fails if `DATABASE_URL` is not PostgreSQL.
 - App startup fails if `BACKUP_ENCRYPTION_KEY` is missing in production.
+- App startup fails if `BACKUP_ENCRYPTION_KEY` is present but not valid 32-byte URL-safe base64 (or 64-char hex).
 - App startup fails when `RATE_LIMIT_STORAGE_URI=memory://` and `GUNICORN_WORKERS>1` unless `ALLOW_IN_MEMORY_RATELIMIT=true`.
 
 Optional but recommended:
@@ -263,6 +264,7 @@ UFC production notes:
   - `sudo cp deploy/ubuntu/systemd/law-intranet.service /etc/systemd/system/law-intranet.service`
   - `sudo cp deploy/ubuntu/systemd/law-intranet-worker.service /etc/systemd/system/law-intranet-worker.service`
   - `sudo cp deploy/ubuntu/systemd/law-intranet-scheduler.service /etc/systemd/system/law-intranet-scheduler.service`
+  - Service units enforce `UMask=0077` so uploaded/generated files default to private host permissions.
   - Rewrite service paths for your actual app directory:
     - `sudo sed -i "s#/home/ubuntu/Lawyer_Site#/home/ubuntu/<app-dir>#g" /etc/systemd/system/law-intranet.service`
     - `sudo sed -i "s#/home/ubuntu/Lawyer_Site#/home/ubuntu/<app-dir>#g" /etc/systemd/system/law-intranet-worker.service`

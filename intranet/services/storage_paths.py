@@ -7,6 +7,8 @@ import uuid
 from werkzeug.utils import secure_filename
 
 _KIND_RE = re.compile(r"[^a-z0-9_-]+")
+_PRIVATE_FILE_MODE = 0o600
+_UPLOAD_DIR_MODE = 0o750
 
 
 def normalize_stored_filename(stored_filename: str | None) -> str:
@@ -36,8 +38,21 @@ def resolve_upload_path(
     if abs_path != root and not abs_path.startswith(root + os.sep):
         raise ValueError("Stored filename escapes upload root.")
     if create_parent:
-        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+        os.makedirs(os.path.dirname(abs_path), mode=_UPLOAD_DIR_MODE, exist_ok=True)
     return normalized, abs_path
+
+
+def harden_private_file(path: str | None) -> None:
+    """Best-effort file permission hardening for sensitive uploaded/generated artifacts."""
+    target = str(path or "").strip()
+    if not target:
+        return
+    try:
+        if os.path.isfile(target):
+            os.chmod(target, _PRIVATE_FILE_MODE)
+    except OSError:
+        # Some filesystems/platforms may not support chmod semantics; continue safely.
+        return
 
 
 def build_matter_storage_name(kind: str, matter_id: int, original_filename: str) -> str:

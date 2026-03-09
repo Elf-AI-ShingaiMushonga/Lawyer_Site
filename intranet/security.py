@@ -19,6 +19,7 @@ MFA_ENROLLMENT_ALLOWLIST = {
     "logout",
     "static",
 }
+SECURITY_BYPASS_ENDPOINTS = {"logout", "static", "healthz", "readyz", "ufc_unavailable_healthz"}
 
 
 def register_security_handlers(app):
@@ -29,7 +30,7 @@ def register_security_handlers(app):
     @app.before_request
     def enforce_active_account():
         endpoint = request.endpoint or ""
-        if endpoint in {"logout", "static"}:
+        if endpoint in SECURITY_BYPASS_ENDPOINTS:
             return None
         session_user_id = session.get("_user_id")
         if not session_user_id:
@@ -65,13 +66,15 @@ def register_security_handlers(app):
 
     @app.before_request
     def enforce_mfa_enrollment():
+        endpoint = request.endpoint or ""
+        if endpoint in SECURITY_BYPASS_ENDPOINTS:
+            return None
         if not current_user.is_authenticated:
             return None
         if not role_requires_mfa(getattr(current_user, "role", "")):
             return None
         if bool(getattr(current_user, "mfa_enabled", False)):
             return None
-        endpoint = request.endpoint or ""
         if endpoint in MFA_ENROLLMENT_ALLOWLIST:
             return None
         flash("MFA enrollment is required before accessing other modules.", "warning")
@@ -82,7 +85,7 @@ def register_security_handlers(app):
         if not current_user.is_authenticated:
             return None
         endpoint = request.endpoint or ""
-        if endpoint in {"logout", "static"}:
+        if endpoint in SECURITY_BYPASS_ENDPOINTS:
             return None
 
         ttl = int(app.config.get("SESSION_TTL_MINUTES", 8 * 60))

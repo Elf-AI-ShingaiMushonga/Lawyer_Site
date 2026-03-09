@@ -34,6 +34,7 @@ from ..models import (
 from ..policies import enforce_data_residency
 from ..roles import role_is_admin
 from ..services.notification_engine import NotificationEngine
+from ..services.storage_paths import harden_private_file, resolve_upload_path
 from ..services.workflow_automation import create_portal_upload_review_task
 from ..templates import page
 
@@ -359,8 +360,13 @@ def register_portal_routes(app):
 
             safe = secure_filename(f.filename)
             stored = f"portal_{matter_id}_{uuid.uuid4().hex}_{safe}"
-            path = os.path.join(app.config["UPLOAD_DIR"], stored)
+            try:
+                stored, path = resolve_upload_path(app.config["UPLOAD_DIR"], stored, create_parent=True)
+            except ValueError:
+                flash("Storage path validation failed for upload.", "warning")
+                return redirect(url_for("portal_uploads"))
             f.save(path)
+            harden_private_file(path)
 
             row = PortalUpload(
                 matter_id=matter_id,
@@ -652,7 +658,10 @@ def register_portal_routes(app):
             if not _portal_has_matter_access(portal_user.id, record.matter_id, min_level="shared_docs"):
                 abort(403)
             enforce_data_residency("exports")
-            path = os.path.join(app.config["UPLOAD_DIR"], version.stored_filename)
+            try:
+                stored_filename, path = resolve_upload_path(app.config["UPLOAD_DIR"], version.stored_filename)
+            except ValueError:
+                abort(404)
             if not os.path.isfile(path):
                 abort(404)
             row.used_at = dt.datetime.utcnow()
@@ -666,7 +675,7 @@ def register_portal_routes(app):
             )
             return send_from_directory(
                 app.config["UPLOAD_DIR"],
-                version.stored_filename,
+                stored_filename,
                 as_attachment=True,
                 download_name=version.original_filename,
             )

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import os
 import uuid
 from collections import defaultdict
 
@@ -65,6 +64,7 @@ from ..services.contracts import (
 )
 from ..services.intake_ai import suggest_matter_intake
 from ..services.matter_option_lists import legal_category_options, practice_area_options
+from ..services.storage_paths import harden_private_file, resolve_upload_path
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..services.notification_engine import NotificationEngine
 from ..roles import role_is_admin
@@ -549,9 +549,18 @@ def register_matters_plus_routes(app):
                     return redirect(url_for("matter_notes", matter_id=matter_id))
                 ext = safe_name.rsplit(".", 1)[-1].lower()
                 stored_name = f"matter{matter_id}_note{note.id}_{dt.datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
-                os.makedirs(current_app.config["UPLOAD_DIR"], exist_ok=True)
-                path = os.path.join(current_app.config["UPLOAD_DIR"], stored_name)
+                try:
+                    stored_name, path = resolve_upload_path(
+                        current_app.config["UPLOAD_DIR"],
+                        stored_name,
+                        create_parent=True,
+                    )
+                except ValueError:
+                    flash("Storage path validation failed for voice note.", "warning")
+                    db.session.rollback()
+                    return redirect(url_for("matter_notes", matter_id=matter_id))
                 voice_file.save(path)
+                harden_private_file(path)
                 db.session.add(
                     DocumentFile(
                         matter_id=matter_id,

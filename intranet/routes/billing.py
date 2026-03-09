@@ -4,7 +4,6 @@ import csv
 import datetime as dt
 import io
 import json
-import os
 
 from flask import Response, abort, flash, redirect, request, send_file, url_for
 from flask_login import current_user, login_required
@@ -30,6 +29,7 @@ from ..policies import enforce_data_residency, enforce_permission, visible_matte
 from ..reports.ledes import generate_ledes_1998b
 from ..services.billing_engine import BillingEngine
 from ..services.notification_engine import NotificationEngine
+from ..services.storage_paths import harden_private_file, resolve_upload_path
 from ..services.workflow_automation import (
     reconcile_invoice_payment_status,
     schedule_invoice_collection_followups,
@@ -89,11 +89,10 @@ def _build_invoice_pdf(invoice: Invoice, lines: list[InvoiceLine], *, heading: s
 
 
 def _persist_invoice_pdf(upload_dir: str, filename: str, payload: bytes) -> str:
-    invoice_dir = os.path.join(upload_dir, "invoices")
-    os.makedirs(invoice_dir, exist_ok=True)
-    path = os.path.join(invoice_dir, filename)
+    _stored_name, path = resolve_upload_path(upload_dir, f"invoices/{filename}", create_parent=True)
     with open(path, "wb") as f:
         f.write(payload)
+    harden_private_file(path)
     return path
 
 
@@ -645,12 +644,15 @@ def register_billing_routes(app):
         enforce_data_residency("exports")
 
         data = generate_ledes_1998b(inv)
-        export_dir = os.path.join(app.config["UPLOAD_DIR"], "ledes")
-        os.makedirs(export_dir, exist_ok=True)
         filename = f"invoice_{invoice_id}_ledes_1998b.csv"
-        path = os.path.join(export_dir, filename)
+        _stored_name, path = resolve_upload_path(
+            app.config["UPLOAD_DIR"],
+            f"ledes/{filename}",
+            create_parent=True,
+        )
         with open(path, "w", encoding="utf-8", newline="") as f:
             f.write(data)
+        harden_private_file(path)
 
         export = LEDESExport(invoice_id=inv.id, variant="1998B", file_path=path, created_by=current_user.id)
         db.session.add(export)

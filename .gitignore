@@ -22,6 +22,7 @@ uploads/
 *.db
 *.sqlite
 *.sqlite3
+UFC_Elf/data/job_status/*.json
 
 # macOS / editor
 .DS_Store

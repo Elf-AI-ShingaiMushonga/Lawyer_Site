@@ -68,7 +68,7 @@ from ..services.contracts import (
 from ..services.assist_ai import suggest_matter_client_update, suggest_matter_executive_summary
 from ..services.director_team import director_team_member_ids, user_in_director_scope
 from ..services.matter_option_lists import legal_category_options
-from ..services.storage_paths import build_matter_storage_name, resolve_upload_path
+from ..services.storage_paths import build_matter_storage_name, harden_private_file, resolve_upload_path
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..templates import page
 
@@ -1553,6 +1553,7 @@ def register_matter_routes(app):
                 flash("Storage path validation failed.", "warning")
                 return redirect(url_for("matter_documents", matter_id=matter_id))
             f.save(dest)
+            harden_private_file(dest)
 
             category = normalize_query(request.form.get("category", "General")) or "General"
             doc_version = normalize_query(request.form.get("doc_version", ""))

@@ -37,11 +37,17 @@ from ..roles import canonical_role, role_is_admin
 from ..services.dms_option_lists import DEFAULT_DMS_OPTION_LISTS, load_dms_option_lists
 from ..services.notification_engine import NotificationEngine
 from ..services.semantic_search import SemanticSearchService
-from ..services.storage_paths import build_matter_storage_name, resolve_upload_path
+from ..services.storage_paths import build_matter_storage_name, harden_private_file, resolve_upload_path
 from ..templates import page
 
 DOCUMENT_STATES = {"draft", "reviewed", "final", "filed"}
 TEMPLATE_TOKEN_PATTERN = re.compile(r"\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}")
+_PG_TEXT_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _sanitize_pg_text(value: str | None, *, fallback: str) -> str:
+    cleaned = _PG_TEXT_CONTROL_RE.sub("", value or "").strip()
+    return (cleaned or fallback)[:12000]
 
 
 def _latest_version(document_id: int) -> DocumentVersion | None:
@@ -68,9 +74,8 @@ def _extract_ocr_text(path: str, content_type: str | None) -> str:
         extracted = chunk.decode("utf-8", errors="ignore")
         if not extracted.strip():
             extracted = "OCR pending for binary document. Text extraction unavailable in this environment."
-    # PostgreSQL text columns reject NUL bytes; sanitize decoded payload before persisting.
-    sanitized = extracted.replace("\x00", "").strip()
-    return (sanitized or "No OCR text extracted.")[:12000]
+    # PostgreSQL rejects NUL and other control bytes in text fields.
+    return _sanitize_pg_text(extracted, fallback="No OCR text extracted.")
 
 
 def _safe_query_json(raw: str) -> dict:
@@ -262,6 +267,7 @@ def register_dms_routes(app):
 
         if request.method == "POST":
             action = action or "upload_document"
+            actor_user_id = getattr(current_user, "id", None)
             if action == "generate_from_template":
                 enforce_permission("dms", "write")
                 template_id = request.form.get("template_id", type=int)
@@ -325,6 +331,7 @@ def register_dms_routes(app):
                 try:
                     with open(path, "w", encoding="utf-8") as handle:
                         handle.write(rendered_body)
+                    harden_private_file(path)
                 except OSError:
                     flash("Failed to persist generated document.", "warning")
                     return _post_redirect()
@@ -381,18 +388,18 @@ def register_dms_routes(app):
                     db.session.add(
                         DocumentOCRText(
                             document_version_id=version.id,
-                            extracted_text=(rendered_body.strip() or "No generated text."),
+                            extracted_text=_sanitize_pg_text(rendered_body, fallback="No generated text."),
                         )
                     )
                     db.session.commit()
                 except Exception:
+                    db.session.rollback()
                     current_app.logger.exception(
                         "DMS template generation failed (matter_id=%s, user_id=%s, template_id=%s).",
                         matter_id,
-                        getattr(current_user, "id", None),
+                        actor_user_id,
                         template.id if template is not None else None,
                     )
-                    db.session.rollback()
                     _safe_remove_file(path)
                     flash("Failed to save generated document. Please retry.", "warning")
                     return _post_redirect()
@@ -481,6 +488,7 @@ def register_dms_routes(app):
                 flash("Storage path validation failed for upload.", "warning")
                 return _post_redirect()
             f.save(path)
+            harden_private_file(path)
             sha = sha256_file(path)
             try:
                 container = DocumentRecord(
@@ -535,13 +543,13 @@ def register_dms_routes(app):
                 )
                 db.session.commit()
             except Exception:
+                db.session.rollback()
                 current_app.logger.exception(
                     "DMS document upload failed (matter_id=%s, user_id=%s, filename=%s).",
                     matter_id,
-                    getattr(current_user, "id", None),
+                    actor_user_id,
                     safe_name,
                 )
-                db.session.rollback()
                 _safe_remove_file(path)
                 flash("Document upload failed. Please retry.", "warning")
                 return _post_redirect()
@@ -647,12 +655,18 @@ def register_dms_routes(app):
         search_scores: dict[int, int] = {}
         if q and docs:
             version_ids = [v.id for v in latest_versions.values() if v is not None]
-            ocr_rows = (
-                DocumentOCRText.query.filter(DocumentOCRText.document_version_id.in_(version_ids)).all()
-                if version_ids
-                else []
-            )
-            ocr_by_version = {row.document_version_id: (row.extracted_text or "").lower() for row in ocr_rows}
+            like = f"%{q}%"
+            ocr_match_version_ids: set[int] = set()
+            if version_ids:
+                ocr_match_version_ids = {
+                    int(row[0])
+                    for row in db.session.query(DocumentOCRText.document_version_id)
+                    .filter(
+                        DocumentOCRText.document_version_id.in_(version_ids),
+                        DocumentOCRText.extracted_text.ilike(like),
+                    )
+                    .all()
+                }
             for doc in docs:
                 score = 0
                 if q in (doc.title or "").lower():
@@ -667,7 +681,7 @@ def register_dms_routes(app):
                 if latest is not None:
                     if q in (latest.notes or "").lower():
                         score += 1
-                    if q in ocr_by_version.get(latest.id, ""):
+                    if latest.id in ocr_match_version_ids:
                         score += 1
                 if score > 0:
                     search_scores[doc.id] = score
@@ -726,6 +740,7 @@ def register_dms_routes(app):
             return redirect(url_for("dashboard"))
 
         if request.method == "POST":
+            actor_user_id = getattr(current_user, "id", None)
             lock = (
                 DocumentLock.query.filter_by(document_id=document_id, released_at=None)
                 .order_by(DocumentLock.locked_at.desc())
@@ -766,6 +781,7 @@ def register_dms_routes(app):
                 flash("Storage path validation failed for upload.", "warning")
                 return _post_redirect()
             f.save(path)
+            harden_private_file(path)
             sha = sha256_file(path)
 
             # Serialize version number assignment for this document on databases that support row locks.
@@ -819,14 +835,14 @@ def register_dms_routes(app):
                 flash("Another version was uploaded at the same time. Please retry.", "warning")
                 return _post_redirect()
             except Exception:
+                db.session.rollback()
                 current_app.logger.exception(
                     "DMS version upload failed (document_id=%s, matter_id=%s, user_id=%s, filename=%s).",
                     document_id,
                     doc.matter_id if doc is not None else None,
-                    getattr(current_user, "id", None),
+                    actor_user_id,
                     safe_name,
                 )
-                db.session.rollback()
                 _safe_remove_file(path)
                 flash("Version upload failed. Please retry.", "warning")
                 return _post_redirect()
@@ -873,12 +889,24 @@ def register_dms_routes(app):
             abort(403)
 
         matter_id = int(doc.matter_id)
-        versions = DocumentVersion.query.filter_by(document_id=document_id).all()
-        version_ids = [int(row.id) for row in versions]
-        ocr_rows = DocumentOCRText.query.filter(DocumentOCRText.document_version_id.in_(version_ids)).all() if version_ids else []
-        ocr_ids = [int(row.id) for row in ocr_rows]
-        document_file_ids = sorted({int(row.document_file_id) for row in versions if row.document_file_id})
-        stored_filenames = sorted({str(row.stored_filename) for row in versions if row.stored_filename})
+        version_rows = (
+            db.session.query(DocumentVersion.id, DocumentVersion.document_file_id, DocumentVersion.stored_filename)
+            .filter(DocumentVersion.document_id == document_id)
+            .all()
+        )
+        version_ids = [int(row.id) for row in version_rows]
+        ocr_ids = (
+            [
+                int(row[0])
+                for row in db.session.query(DocumentOCRText.id)
+                .filter(DocumentOCRText.document_version_id.in_(version_ids))
+                .all()
+            ]
+            if version_ids
+            else []
+        )
+        document_file_ids = sorted({int(row.document_file_id) for row in version_rows if row.document_file_id})
+        stored_filenames = sorted({str(row.stored_filename) for row in version_rows if row.stored_filename})
 
         try:
             if version_ids:
@@ -1130,14 +1158,28 @@ def register_dms_routes(app):
                 .order_by(DocumentVersion.id.asc())
                 .all()
             )
+            version_ids = [int(ver.id) for ver in versions]
+            existing_items_by_version_id: dict[int, ProductionItem] = {}
+            if version_ids:
+                existing_items = (
+                    ProductionItem.query.filter(
+                        ProductionItem.production_set_id == production_set_id,
+                        ProductionItem.document_version_id.in_(version_ids),
+                    )
+                    .order_by(ProductionItem.id.asc())
+                    .all()
+                )
+                for existing in existing_items:
+                    existing_items_by_version_id.setdefault(int(existing.document_version_id), existing)
             for idx, ver in enumerate(versions, start=start_no):
                 if idx > end_no:
                     break
                 bates_no = f"{prefix}{idx:06d}"
-                item = ProductionItem.query.filter_by(production_set_id=production_set_id, document_version_id=ver.id).first()
+                item = existing_items_by_version_id.get(int(ver.id))
                 if item is None:
                     item = ProductionItem(production_set_id=production_set_id, document_version_id=ver.id)
                     db.session.add(item)
+                    existing_items_by_version_id[int(ver.id)] = item
                 item.bates_number = bates_no
 
             db.session.commit()
@@ -1186,13 +1228,18 @@ def register_dms_routes(app):
             flash("Saved search created.", "info")
             return redirect(url_for("dms_saved_searches"))
 
-        rows = SavedSearch.query.filter_by(user_id=current_user.id).order_by(SavedSearch.created_at.desc()).limit(200).all()
+        rows_query = SavedSearch.query.filter_by(user_id=current_user.id)
         if not is_admin():
             scope_ids = visible_matter_ids()
-            rows = [r for r in rows if (r.matter_id is None or r.matter_id in scope_ids)]
-            matter_query = Matter.query.filter(Matter.id.in_(scope_ids)) if scope_ids else Matter.query.filter(Matter.id == -1)
+            if scope_ids:
+                rows_query = rows_query.filter(or_(SavedSearch.matter_id.is_(None), SavedSearch.matter_id.in_(scope_ids)))
+                matter_query = Matter.query.filter(Matter.id.in_(scope_ids))
+            else:
+                rows_query = rows_query.filter(SavedSearch.matter_id.is_(None))
+                matter_query = Matter.query.filter(Matter.id == -1)
         else:
             matter_query = Matter.query
+        rows = rows_query.order_by(SavedSearch.created_at.desc()).limit(200).all()
         matters = matter_query.order_by(Matter.opened_at.desc()).limit(300).all()
         queries = {row.id: _safe_query_json(row.query_json).get("q", "") for row in rows}
         return page("DMS Saved Searches", "dms/saved_searches.html", searches=rows, queries=queries, matters=matters)
@@ -1254,6 +1301,7 @@ def register_dms_routes(app):
                     flash("Storage path validation failed for attachment.", "warning")
                     return redirect(url_for("matter_email_capture", matter_id=matter_id))
                 f.save(attachment_path)
+                harden_private_file(attachment_path)
                 attachment_hash = sha256_file(attachment_path)
 
             try:

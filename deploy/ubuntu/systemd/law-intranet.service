@@ -10,6 +10,7 @@ Group=ubuntu
 WorkingDirectory=/home/ubuntu/Lawyer_Site
 EnvironmentFile=/home/ubuntu/Lawyer_Site/.env
 Environment=PYTHONUNBUFFERED=1
+UMask=0077
 ExecStart=/home/ubuntu/Lawyer_Site/venv/bin/gunicorn \
   -c /home/ubuntu/Lawyer_Site/deploy/ubuntu/gunicorn.conf.py \
   app:app

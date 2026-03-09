@@ -20,7 +20,7 @@ from ..models import (
     MatterTemplate,
 )
 from .archetypes import build_document_context, load_required_fields, normalize_archetype_field_key, render_template_text
-from .storage_paths import build_matter_storage_name, resolve_upload_path
+from .storage_paths import build_matter_storage_name, harden_private_file, resolve_upload_path
 
 
 def auto_contract_templates_for_archetype(archetype_id: int | None) -> list[ContractTemplate]:
@@ -123,6 +123,7 @@ def _persist_generated_text_document(
     stored_filename, file_path = resolve_upload_path(upload_dir, storage_name, create_parent=True)
     with open(file_path, "w", encoding="utf-8") as handle:
         handle.write(rendered_body)
+    harden_private_file(file_path)
 
     sha = sha256_file(file_path)
     document = DocumentRecord(

@@ -13,10 +13,11 @@ packages:
 write_files:
   - path: /opt/law-intranet/bootstrap.sh
     owner: root:root
-    permissions: "0755"
+    permissions: "0700"
     content: |
       #!/usr/bin/env bash
       set -euo pipefail
+      umask 077
 
       APP_USER="ubuntu"
       APP_REPO_DIR="Lawyer_Site"

@@ -15,6 +15,7 @@ from ..helpers import allowed_doc, audit, can_access_matter, is_admin, sha256_fi
 from ..models import ExpenseEntry, Matter
 from ..policies import visible_matter_ids
 from ..roles import role_is_lawyer
+from ..services.storage_paths import harden_private_file, resolve_upload_path
 from ..templates import page
 
 
@@ -87,8 +88,13 @@ def register_expenses_routes(app):
                     return redirect(url_for("expenses"))
                 safe = secure_filename(file_obj.filename)
                 stored = f"expense_{matter_id}_{uuid.uuid4().hex}_{safe}"
-                path = os.path.join(app.config["UPLOAD_DIR"], stored)
+                try:
+                    stored, path = resolve_upload_path(app.config["UPLOAD_DIR"], stored, create_parent=True)
+                except ValueError:
+                    flash("Storage path validation failed for receipt upload.", "warning")
+                    return redirect(url_for("expenses"))
                 file_obj.save(path)
+                harden_private_file(path)
                 receipt_filename = stored
                 receipt_sha = sha256_file(path)
                 receipt_ocr = _extract_receipt_text(path)
@@ -187,11 +193,14 @@ def register_expenses_routes(app):
         if not row.receipt_filename:
             abort(404)
 
-        path = os.path.join(app.config["UPLOAD_DIR"], row.receipt_filename)
+        try:
+            stored_filename, path = resolve_upload_path(app.config["UPLOAD_DIR"], row.receipt_filename)
+        except ValueError:
+            abort(404)
         if not os.path.isfile(path):
             abort(404)
         audit("expense_receipt_download", "ExpenseEntry", row.id)
-        return send_from_directory(app.config["UPLOAD_DIR"], row.receipt_filename, as_attachment=True)
+        return send_from_directory(app.config["UPLOAD_DIR"], stored_filename, as_attachment=True)
 
     @app.get("/expenses/<int:expense_id>/receipt/pdf")
     @login_required

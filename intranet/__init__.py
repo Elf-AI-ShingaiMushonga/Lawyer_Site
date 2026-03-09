@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import datetime as dt
 import importlib.util
 import logging
@@ -39,6 +41,8 @@ from .roles import (
 from .schema_sync import sync_schema_compatibility
 from .security import register_security_handlers
 
+HEALTH_ENDPOINTS = {"healthz", "readyz", "ufc_unavailable_healthz"}
+
 
 @login_manager.user_loader
 def load_user(user_id: str):
@@ -56,6 +60,28 @@ def _is_migration_cli_invocation() -> bool:
     return "alembic" in executable
 
 
+def _validate_backup_encryption_key(raw_value: str) -> str:
+    value = str(raw_value or "").strip()
+    if not value:
+        return ""
+    if len(value) == 64:
+        try:
+            bytes.fromhex(value)
+            return value
+        except ValueError:
+            pass
+    padded = value + ("=" * (-len(value) % 4))
+    try:
+        decoded = base64.urlsafe_b64decode(padded.encode("utf-8"))
+    except (ValueError, binascii.Error) as exc:
+        raise RuntimeError(
+            "BACKUP_ENCRYPTION_KEY is invalid. Use 32-byte URL-safe base64 or 64-char hex."
+        ) from exc
+    if len(decoded) != 32:
+        raise RuntimeError("BACKUP_ENCRYPTION_KEY must decode to exactly 32 bytes for AES-256.")
+    return value
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
 
@@ -63,7 +89,7 @@ def create_app() -> Flask:
     is_production = app_env in PRODUCTION_ENV_VALUES
     secret_key = os.environ.get("FLASK_SECRET_KEY")
     database_uri = os.environ.get("DATABASE_URL")
-    backup_encryption_key = (os.environ.get("BACKUP_ENCRYPTION_KEY") or "").strip()
+    backup_encryption_key = _validate_backup_encryption_key(os.environ.get("BACKUP_ENCRYPTION_KEY") or "")
     rate_limit_storage_uri = os.environ.get("RATE_LIMIT_STORAGE_URI", "memory://")
     rate_limit_strategy = os.environ.get("RATE_LIMIT_STRATEGY", "fixed-window")
     auth_login_rate_limit = os.environ.get("AUTH_LOGIN_RATE_LIMIT", "10/minute")
@@ -111,9 +137,14 @@ def create_app() -> Flask:
     if is_production and db_backend != "postgresql":
         raise RuntimeError("PostgreSQL is required in production. Set DATABASE_URL=postgresql+psycopg://...")
 
-    upload_dir = os.environ.get("UPLOAD_DIR", UPLOAD_DIR)
-    os.makedirs(upload_dir, exist_ok=True)
+    upload_dir = str(os.environ.get("UPLOAD_DIR", UPLOAD_DIR) or "").strip() or UPLOAD_DIR
+    if not os.path.isabs(upload_dir):
+        upload_dir = os.path.join(BASE_DIR, upload_dir)
+    upload_dir = os.path.abspath(upload_dir)
+    os.makedirs(upload_dir, mode=0o750, exist_ok=True)
     max_upload_bytes = env_int("MAX_UPLOAD_BYTES", 50 * 1024 * 1024)
+    if max_upload_bytes <= 0:
+        raise RuntimeError("MAX_UPLOAD_BYTES must be a positive integer.")
     session_ttl_minutes = env_int("SESSION_TTL_MINUTES", 8 * 60)
     session_touch_interval_seconds = env_int("SESSION_TOUCH_INTERVAL_SECONDS", 60)
     trust_proxy = env_bool("TRUST_PROXY", False)
@@ -209,11 +240,17 @@ def create_app() -> Flask:
 
     @app.before_request
     def _bind_db_access_context():
+        endpoint = request.endpoint or ""
+        if endpoint in HEALTH_ENDPOINTS:
+            return
         # Bind request-scoped identity context for PostgreSQL RLS policies.
         apply_request_db_context()
 
     @app.before_request
     def _capture_active_matter_context():
+        endpoint = request.endpoint or ""
+        if endpoint in HEALTH_ENDPOINTS:
+            return
         if not current_user.is_authenticated:
             session.pop(ACTIVE_MATTER_SESSION_KEY, None)
             return

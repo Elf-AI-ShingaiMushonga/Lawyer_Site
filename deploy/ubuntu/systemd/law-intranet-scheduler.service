@@ -10,6 +10,7 @@ Group=ubuntu
 WorkingDirectory=/home/ubuntu/Lawyer_Site
 EnvironmentFile=/home/ubuntu/Lawyer_Site/.env
 Environment=PYTHONUNBUFFERED=1
+UMask=0077
 ExecStart=/home/ubuntu/Lawyer_Site/venv/bin/python /home/ubuntu/Lawyer_Site/app.py scheduler --seed-defaults --loop --sleep-seconds 30
 Restart=always
 RestartSec=5
