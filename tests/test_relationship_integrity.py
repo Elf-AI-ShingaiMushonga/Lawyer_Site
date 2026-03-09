@@ -3009,6 +3009,7 @@ def test_mobile_hub_renders_fast_launcher_and_presets(app_ctx):
 
     assert response.status_code == 200
     assert "Fast Matter Launcher" in body
+    assert "Touch-First Capture Desk" in body
     assert f'data-mobile-matter-select="{matter.id}"' in body
     assert "15 min" in body
     assert "Call client" in body
@@ -3047,6 +3048,7 @@ def test_search_results_render_operational_actions(app_ctx):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
+    assert "Search Command Center" in body
     assert "Smart Launch Pack" in body
     assert "Search Brief" in body
     assert "Workspace" in body

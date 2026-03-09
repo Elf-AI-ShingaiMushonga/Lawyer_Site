@@ -97,6 +97,7 @@ def test_dashboard_renders_legal_desk_with_next_best_move(app_ctx):
     assert b"Next Best Move" in response.data
     assert b"Clear overdue tasks" in response.data
     assert b"Personal Daily Briefing" in response.data
+    assert b"Inbox and work queue pressure" in response.data
 
 
 def test_dashboard_uses_configured_priority_inbox_sla_values(app_ctx):
@@ -286,3 +287,4 @@ def test_dashboard_workspace_mode_persists_and_surfaces_command_actions(app_ctx)
     assert "South Africa Desk" in body
     assert "South Africa Practice Hub" in body
     assert "Workspace Quick Actions" in body
+    assert "Workspace mode and launch actions" in body

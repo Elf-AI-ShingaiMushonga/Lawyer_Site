@@ -1,12 +1,34 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
+  .dashboard-briefing-grid {
+    margin-top: 14px;
+  }
+
+  .dashboard-briefing-grid .action-card {
+    min-height: 148px;
+  }
+
+  .dashboard-badge,
+  .workspace-action-badge {
+    align-self: flex-start;
+    border-radius: 999px;
+    border: 1px solid rgba(225, 6, 0, 0.18);
+    background: rgba(255, 244, 244, 0.88);
+    color: #7b4545;
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
   .priority-inbox-shell {
-    --priority-inbox-max-height: 760px;
+    --priority-inbox-max-height: 860px;
     position: relative;
     overflow: hidden;
-    border-radius: 20px;
     border: 1px solid rgba(225, 6, 0, 0.22);
+    border-radius: 20px;
     background:
       radial-gradient(760px 280px at 0% -16%, rgba(225, 6, 0, 0.13), rgba(225, 6, 0, 0)),
       linear-gradient(180deg, rgba(255, 246, 246, 0.97), rgba(255, 255, 255, 0.99));
@@ -355,7 +377,7 @@
 
   .workspace-mode-grid {
     display: grid;
-    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
     gap: 14px;
     margin-top: 14px;
   }
@@ -403,7 +425,7 @@
 
   .workspace-action-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 12px;
   }
 
@@ -415,7 +437,7 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    min-height: 168px;
+    min-height: 160px;
   }
 
   .workspace-action-card.is-strong {
@@ -423,19 +445,6 @@
     background:
       radial-gradient(circle at top right, rgba(225, 6, 0, 0.1), rgba(225, 6, 0, 0)),
       rgba(255, 250, 250, 0.98);
-  }
-
-  .workspace-action-badge {
-    align-self: flex-start;
-    border-radius: 999px;
-    border: 1px solid rgba(225, 6, 0, 0.18);
-    background: rgba(255, 244, 244, 0.88);
-    color: #7b4545;
-    padding: 3px 9px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   .workspace-action-title {
@@ -450,47 +459,66 @@
     line-height: 1.5;
   }
 
-  .briefing-grid {
+  .dashboard-risk-list,
+  .dashboard-task-list {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-    margin-top: 14px;
-  }
-
-  .briefing-card {
-    border: 1px solid rgba(225, 6, 0, 0.16);
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.95);
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
     gap: 10px;
-    min-height: 150px;
   }
 
-  .briefing-card.is-strong {
-    border-color: rgba(225, 6, 0, 0.38);
-    background:
-      radial-gradient(circle at top right, rgba(225, 6, 0, 0.1), rgba(225, 6, 0, 0)),
-      rgba(255, 250, 250, 0.98);
+  .dashboard-risk-item,
+  .dashboard-task-item {
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 14px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.92);
   }
 
-  .briefing-card-title {
-    font-size: 15px;
-    font-weight: 760;
-    color: #4a2828;
+  .dashboard-snapshot-grid {
+    display: grid;
+    gap: 10px;
   }
 
-  .briefing-card-summary {
+  .dashboard-snapshot-item {
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 14px;
+    padding: 11px 12px;
+    background: rgba(255, 255, 255, 0.92);
+    color: inherit;
+    text-decoration: none;
+    display: block;
+  }
+
+  .dashboard-snapshot-item:hover {
+    color: inherit;
+    border-color: rgba(225, 6, 0, 0.4);
+    background: rgba(255, 246, 246, 0.96);
+  }
+
+  .dashboard-snapshot-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #8a6665;
+  }
+
+  .dashboard-snapshot-value {
+    margin-top: 4px;
+    font-size: 22px;
+    line-height: 1;
+    font-weight: 800;
+    color: #402020;
+  }
+
+  .dashboard-snapshot-meta {
+    margin-top: 6px;
     font-size: 12px;
-    color: #725c5c;
-    line-height: 1.5;
+    color: #6d5a5a;
+    line-height: 1.45;
   }
 
   @media (max-width: 991.98px) {
-    .workspace-mode-grid,
-    .workspace-action-grid,
-    .briefing-grid {
+    .workspace-mode-grid {
       grid-template-columns: 1fr;
     }
 
@@ -516,395 +544,432 @@
     }
   }
 </style>
-<div class="row g-3 mb-1">
-  <div class="col-12">
-    <div class="card p-3">
-      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-        <div>
-          <h4 class="mb-0">{{ today_briefing.headline }}</h4>
-          <div class="form-help mt-1">{{ today_briefing.summary }}</div>
+
+{% set portal_count = priority_inbox.portal_response_watchlist|length %}
+{% set followup_count = priority_inbox.crm_followup_watchlist|length %}
+{% set billing_count = priority_inbox.unbilled_time_watchlist|length %}
+
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Personal Daily Briefing</div>
+        <h1 class="page-hero-title">{{ today_briefing.headline }}</h1>
+        <div class="page-hero-summary">{{ today_briefing.summary }}</div>
+        <div class="page-hero-meta">
+          <span class="tag-chip">{{ priority_inbox.total_actions }} inbox action(s)</span>
+          <span class="tag-chip">{{ stats.assigned_open_tasks }} open task(s)</span>
+          <span class="tag-chip">{{ stats.due_this_week }} due this week</span>
+          {% if today_briefing.focus_matter %}<span class="tag-chip">Focus {{ today_briefing.focus_matter.matter_no }}</span>{% endif %}
         </div>
+      </div>
+      <div class="page-hero-actions">
         {% if today_briefing.focus_matter %}
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=today_briefing.focus_matter.id) }}">
-            Focus {{ today_briefing.focus_matter.matter_no }}
-          </a>
+          <a class="btn btn-sm btn-light" href="{{ url_for('matter_workspace', matter_id=today_briefing.focus_matter.id) }}">Focus {{ today_briefing.focus_matter.matter_no }}</a>
+        {% endif %}
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_create') }}">Open New Matter</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('search') }}">Global Search</a>
+        {% if is_director_role %}
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('director_personnel') }}">Manage Team</a>
         {% endif %}
       </div>
-      <div class="briefing-grid">
-        {% for card in today_briefing.cards %}
-          <article class="briefing-card {{ 'is-strong' if card.emphasis == 'strong' else '' }}">
-            {% if card.badge %}<span class="workspace-action-badge">{{ card.badge }}</span>{% endif %}
-            <div class="briefing-card-title">{{ card.title }}</div>
-            <div class="briefing-card-summary">{{ card.summary }}</div>
-            <div class="mt-auto">
-              <a class="btn btn-sm btn-light" href="{{ card.href }}">Open</a>
+    </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Accessible Matters</div>
+        <div class="page-stat-value">{{ stats.matter_count }}</div>
+        <div class="page-stat-meta">Files visible in your current scope.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">My Open Tasks</div>
+        <div class="page-stat-value">{{ stats.assigned_open_tasks }}</div>
+        <div class="page-stat-meta">Active work assigned to you.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Overdue Tasks</div>
+        <div class="page-stat-value">{{ stats.overdue_tasks }}</div>
+        <div class="page-stat-meta">Tasks already past due.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Due This Week</div>
+        <div class="page-stat-value">{{ stats.due_this_week }}</div>
+        <div class="page-stat-meta">Upcoming work across your scope.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Urgent Unassigned</div>
+        <div class="page-stat-value">{{ stats.urgent_unassigned }}</div>
+        <div class="page-stat-meta">Items needing ownership decisions.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Priority Inbox</div>
+        <div class="page-stat-value">{{ priority_inbox.total_actions }}</div>
+        <div class="page-stat-meta">Client, intake, and billing pressure.</div>
+      </div>
+    </div>
+    <div class="action-grid dashboard-briefing-grid">
+      {% for card in today_briefing.cards %}
+        <a class="action-card {{ 'is-primary' if card.emphasis == 'strong' else '' }}" href="{{ card.href }}">
+          {% if card.badge %}<span class="dashboard-badge">{{ card.badge }}</span>{% endif %}
+          <span class="action-card-kicker">Briefing Action</span>
+          <span class="action-card-title">{{ card.title }}</span>
+          <span class="action-card-summary">{{ card.summary }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card priority-inbox-shell" id="dashboard-priority-inbox" data-priority-inbox>
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Priority Inbox</div>
+            <h2 class="panel-title">Inbox and work queue pressure</h2>
+            <div class="panel-summary">Focus by issue type and clear high-impact actions before they turn into client delay, intake loss, or billing leakage.</div>
+          </div>
+          <span class="badge status-badge status-critical">{{ priority_inbox.total_actions }}</span>
+        </div>
+        <div class="priority-inbox-layout">
+          <aside class="priority-inbox-sidebar">
+            <div>
+              <div class="priority-sidebar-label">Inbox Folders</div>
+              <div class="priority-sidebar-total">{{ priority_inbox.total_actions }} actionable items</div>
             </div>
-          </article>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-
-  <div class="col-12">
-    <div class="card p-3">
-      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-        <div>
-          <h3 class="mb-1">Operations Snapshot</h3>
-          <div class="page-intro">A live view of matters, tasks, and firm activity.</div>
-        </div>
-        <div class="d-flex gap-2">
-          <a class="btn btn-sm btn-light" href="{{ url_for('matter_create') }}">Open New Matter</a>
-          {% if is_director_role %}
-            <a class="btn btn-sm btn-outline-light" href="{{ url_for('director_personnel') }}">Manage Team</a>
-          {% endif %}
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('search') }}">Global Search</a>
-        </div>
-      </div>
-      <div class="metric-grid mt-3">
-        <a class="metric-card metric-card-link" href="{{ url_for('matters') }}">
-          <div class="metric-label">Accessible Matters</div>
-          <div class="metric-value">{{ stats.matter_count }}</div>
-          <div class="metric-link-hint">Open Matter Directory</div>
-        </a>
-        <a class="metric-card metric-card-link" href="#dashboard-my-tasks">
-          <div class="metric-label">My Open Tasks</div>
-          <div class="metric-value">{{ stats.assigned_open_tasks }}</div>
-          <div class="metric-link-hint">Jump to My Tasks</div>
-        </a>
-        <a class="metric-card metric-card-link" href="{{ url_for('calendar_my', filter='overdue') }}">
-          <div class="metric-label">Overdue Tasks</div>
-          <div class="metric-value">{{ stats.overdue_tasks }}</div>
-          <div class="metric-link-hint">Open Overdue Calendar View</div>
-        </a>
-        <a class="metric-card metric-card-link" href="{{ url_for('calendar_my', filter='next7') }}">
-          <div class="metric-label">Due This Week</div>
-          <div class="metric-value">{{ stats.due_this_week }}</div>
-          <div class="metric-link-hint">Open Next 7 Days Calendar</div>
-        </a>
-        <a class="metric-card metric-card-link" href="{{ url_for('admin_automation') if is_admin_role else url_for('matters') }}">
-          <div class="metric-label">Urgent Unassigned</div>
-          <div class="metric-value">{{ stats.urgent_unassigned }}</div>
-          <div class="metric-link-hint">{{ "Open Automation Studio" if is_admin_role else "Open Matter Directory" }}</div>
-        </a>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-3 mb-1">
-  <div class="col-12">
-    <div class="card p-3">
-      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-        <div>
-          <h4 class="mb-0">Workspace Command Center</h4>
-          <div class="form-help mt-1">{{ workspace_mode_meta.summary }}</div>
-        </div>
-        <div class="d-flex gap-2 flex-wrap align-items-center">
-          <span class="badge status-badge status-open">{{ workspace_mode_meta.label }}</span>
-          {% if workspace_focus_matter %}
-            <span class="badge badge-soft status-badge">{{ workspace_focus_matter.matter_no }}</span>
-          {% endif %}
-        </div>
-      </div>
-      <div class="workspace-mode-grid">
-        <form method="post" action="{{ url_for('dashboard_workspace_mode') }}" class="workspace-mode-stack">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          {% for option in workspace_mode_choices %}
-            <button
-              class="workspace-mode-button {{ 'is-active' if option.key == workspace_mode else '' }}"
-              type="submit"
-              name="mode"
-              value="{{ option.key }}"
-            >
-              <div class="workspace-mode-label">{{ option.label }}</div>
-              <div class="workspace-mode-summary">{{ option.summary }}</div>
-            </button>
-          {% endfor %}
-        </form>
-        <div class="workspace-action-grid">
-          {% for action in workspace_quick_actions %}
-            <article class="workspace-action-card {{ 'is-strong' if action.emphasis == 'strong' else '' }}">
-              {% if action.badge %}<span class="workspace-action-badge">{{ action.badge }}</span>{% endif %}
-              <div class="workspace-action-title">{{ action.title }}</div>
-              <div class="workspace-action-summary">{{ action.summary }}</div>
-              <div class="mt-auto">
-                <a class="btn btn-sm btn-light" href="{{ action.href }}">Launch</a>
-              </div>
-            </article>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-12">
-    <div class="card p-3">
-      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-        <div>
-          <h4 class="mb-0">Legal Desk</h4>
-          <div class="form-help mt-1">The matters most likely to need legal attention next, with the next best move pre-selected.</div>
-        </div>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Open Matter Directory</a>
-      </div>
-      {% if legal_desk %}
-        <div class="legal-desk-grid mt-3">
-          {% for card in legal_desk %}
-            {% set top_action = card.top_action %}
-            <article class="legal-desk-card tone-{{ card.health_tone }}">
-              <div class="legal-desk-header">
+            <div class="priority-folder-list" role="group" aria-label="Priority issue filter">
+              <button class="priority-folder-btn is-active" type="button" data-priority-toggle="all" aria-pressed="true">
+                <span>All Priority</span>
+                <span class="priority-folder-count">{{ priority_inbox.total_actions }}</span>
+              </button>
+              <button class="priority-folder-btn" type="button" data-priority-toggle="client" aria-pressed="false">
+                <span>Client Response</span>
+                <span class="priority-folder-count">{{ portal_count }}</span>
+              </button>
+              <button class="priority-folder-btn" type="button" data-priority-toggle="followup" aria-pressed="false">
+                <span>Intake Follow-ups</span>
+                <span class="priority-folder-count">{{ followup_count }}</span>
+              </button>
+              <button class="priority-folder-btn" type="button" data-priority-toggle="billing" aria-pressed="false">
+                <span>Billing Leakage</span>
+                <span class="priority-folder-count">{{ billing_count }}</span>
+              </button>
+            </div>
+            <div class="priority-sla-list">
+              <div class="priority-sla-item">Client response SLA: {{ priority_inbox.portal_response_sla_hours }}h</div>
+              <div class="priority-sla-item">Follow-up horizon: {{ priority_inbox.followup_horizon_hours }}h</div>
+              <div class="priority-sla-item">Billing capture SLA: {{ priority_inbox.billing_capture_sla_hours }}h</div>
+              <div class="priority-sla-item">Unbilled hours: {{ priority_inbox.unbilled_total_hours }}</div>
+            </div>
+          </aside>
+          <div class="priority-pane-stack">
+            <section class="priority-pane" data-priority-pane="client" data-priority-type="client">
+              <div class="priority-pane-header">
                 <div>
-                  <a class="fw-semibold text-decoration-none" href="{{ url_for('matter_detail', matter_id=card.matter.id) }}">{{ card.matter.matter_no }} - {{ card.matter.title }}</a>
-                  <div class="muted small mt-1">{{ card.matter.client_name }}</div>
+                  <div class="priority-pane-title">Client Response</div>
+                  <div class="priority-pane-subtitle">Threads waiting beyond the response SLA.</div>
                 </div>
-                <span class="risk-chip risk-{{ (card.matter.risk_level or 'medium')|lower }}">{{ card.matter.risk_level or "Medium" }}</span>
+                <span class="badge status-badge status-critical">{{ portal_count }}</span>
               </div>
-              <div class="legal-desk-status">{{ card.status_line }}</div>
-              {% if top_action %}
-                <div class="legal-desk-action">
-                  <div class="legal-desk-action-label">Next Best Move</div>
-                  <div class="legal-desk-action-title">{{ top_action.title }}</div>
-                  <div class="legal-desk-action-summary">{{ top_action.summary }}</div>
-                  <div class="table-actions mt-2">
-                    <a class="btn btn-sm btn-light" href="{{ top_action.href }}">{{ top_action.button_label }}</a>
-                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=card.matter.id) }}">Workspace</a>
-                  </div>
-                </div>
-              {% endif %}
-              <div class="legal-desk-chip-row">
-                <span class="legal-desk-chip">{{ card.open_task_count }} open task(s)</span>
-                <span class="legal-desk-chip">{{ card.document_count }} document(s)</span>
-                {% if card.next_event_summary %}
-                  <span class="legal-desk-chip">{{ card.next_event_summary }}</span>
-                {% elif card.stale_days %}
-                  <span class="legal-desk-chip">{{ card.stale_days }} day(s) since last matter update</span>
-                {% endif %}
-              </div>
-            </article>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="muted mt-2">No matters are currently competing for your attention.</div>
-      {% endif %}
-    </div>
-  </div>
-</div>
-
-<div class="row g-3">
-  <div class="col-lg-7">
-    <div class="card p-3 mb-3">
-      <div class="d-flex justify-content-between align-items-center">
-        <h4 class="mb-0">At-Risk Matters</h4>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Open directory</a>
-      </div>
-      <div class="mt-2 entry-scroll">
-        {% if at_risk_matters %}
-          {% for item in at_risk_matters %}
-            <div class="activity-item">
-              <div class="d-flex justify-content-between">
-                <a class="fw-semibold text-decoration-none" href="{{ url_for('matter_detail', matter_id=item.matter.id) }}">{{ item.matter.matter_no }} - {{ item.matter.title }}</a>
-                <span class="risk-chip risk-{{ item.matter.risk_level|lower }}">{{ item.matter.risk_level }}</span>
-              </div>
-              <div class="muted small">{{ item.risk_driver }}{% if item.overdue_tasks %} • {{ item.overdue_tasks }} overdue{% endif %}</div>
-            </div>
-          {% endfor %}
-        {% else %}
-          <div class="muted">No at-risk matters currently detected.</div>
-        {% endif %}
-      </div>
-    </div>
-
-    {% set portal_count = priority_inbox.portal_response_watchlist|length %}
-    {% set followup_count = priority_inbox.crm_followup_watchlist|length %}
-    {% set billing_count = priority_inbox.unbilled_time_watchlist|length %}
-    <div class="card p-3 mb-3 priority-inbox-shell" id="dashboard-priority-inbox" data-priority-inbox>
-      <div class="d-flex justify-content-between align-items-center gap-3">
-        <div>
-          <h4 class="mb-0">Priority Inbox</h4>
-          <div class="form-help mt-1">Focus by issue type and clear high-impact actions first.</div>
-        </div>
-        <span class="badge status-badge status-critical">{{ priority_inbox.total_actions }}</span>
-      </div>
-      <div class="priority-inbox-layout">
-        <aside class="priority-inbox-sidebar">
-          <div>
-            <div class="priority-sidebar-label">Inbox Folders</div>
-            <div class="priority-sidebar-total">{{ priority_inbox.total_actions }} actionable items</div>
-          </div>
-          <div class="priority-folder-list" role="group" aria-label="Priority issue filter">
-            <button class="priority-folder-btn is-active" type="button" data-priority-toggle="all" aria-pressed="true">
-              <span>All Priority</span>
-              <span class="priority-folder-count">{{ priority_inbox.total_actions }}</span>
-            </button>
-            <button class="priority-folder-btn" type="button" data-priority-toggle="client" aria-pressed="false">
-              <span>Client Response</span>
-              <span class="priority-folder-count">{{ portal_count }}</span>
-            </button>
-            <button class="priority-folder-btn" type="button" data-priority-toggle="followup" aria-pressed="false">
-              <span>Intake Follow-ups</span>
-              <span class="priority-folder-count">{{ followup_count }}</span>
-            </button>
-            <button class="priority-folder-btn" type="button" data-priority-toggle="billing" aria-pressed="false">
-              <span>Billing Leakage</span>
-              <span class="priority-folder-count">{{ billing_count }}</span>
-            </button>
-          </div>
-          <div class="priority-sla-list">
-            <div class="priority-sla-item">Client response SLA: {{ priority_inbox.portal_response_sla_hours }}h</div>
-            <div class="priority-sla-item">Follow-up horizon: {{ priority_inbox.followup_horizon_hours }}h</div>
-            <div class="priority-sla-item">Billing capture SLA: {{ priority_inbox.billing_capture_sla_hours }}h</div>
-            <div class="priority-sla-item">Unbilled hours: {{ priority_inbox.unbilled_total_hours }}</div>
-          </div>
-        </aside>
-        <div class="priority-pane-stack">
-          <section class="priority-pane" data-priority-pane="client" data-priority-type="client">
-            <div class="priority-pane-header">
-              <div>
-                <div class="priority-pane-title">Client Response</div>
-                <div class="priority-pane-subtitle">Threads waiting beyond the response SLA.</div>
-              </div>
-              <span class="badge status-badge status-critical">{{ portal_count }}</span>
-            </div>
-            <div class="priority-pane-body">
-              {% if priority_inbox.portal_response_watchlist %}
-                {% for row in priority_inbox.portal_response_watchlist %}
-                  <article class="priority-message">
-                    <div class="priority-message-main">
-                      <div class="priority-message-top">
-                        <span class="priority-message-dot dot-client" aria-hidden="true"></span>
-                        <a class="priority-message-subject" href="{{ url_for('portal_messages', matter_id=row.matter_id, thread_id=row.thread_id) }}#portal-message-body">#{{ row.thread_id }} • {{ row.subject }}</a>
+              <div class="priority-pane-body">
+                {% if priority_inbox.portal_response_watchlist %}
+                  {% for row in priority_inbox.portal_response_watchlist %}
+                    <article class="priority-message">
+                      <div class="priority-message-main">
+                        <div class="priority-message-top">
+                          <span class="priority-message-dot dot-client" aria-hidden="true"></span>
+                          <a class="priority-message-subject" href="{{ url_for('portal_messages', matter_id=row.matter_id, thread_id=row.thread_id) }}#portal-message-body">#{{ row.thread_id }} • {{ row.subject }}</a>
+                        </div>
+                        <div class="priority-message-meta">{{ row.matter_no }} - {{ row.matter_title }}</div>
+                        <div class="priority-message-snippet">Awaiting client response beyond configured SLA.</div>
                       </div>
-                      <div class="priority-message-meta">{{ row.matter_no }} - {{ row.matter_title }}</div>
-                      <div class="priority-message-snippet">Awaiting client response beyond configured SLA.</div>
-                    </div>
-                    <div class="priority-message-side">
-                      <span class="badge status-badge status-critical">{{ row.wait_hours }}h</span>
-                    </div>
-                  </article>
-                {% endfor %}
-              {% else %}
-                <div class="priority-empty">No delayed client replies.</div>
-              {% endif %}
-            </div>
-          </section>
-
-          <section class="priority-pane" data-priority-pane="followup" data-priority-type="followup">
-            <div class="priority-pane-header">
-              <div>
-                <div class="priority-pane-title">Intake Follow-ups</div>
-                <div class="priority-pane-subtitle">Leads requiring outreach before conversion stalls.</div>
-              </div>
-              <span class="badge status-badge status-on-hold">{{ followup_count }}</span>
-            </div>
-            <div class="priority-pane-body">
-              {% if priority_inbox.crm_followup_watchlist %}
-                {% for row in priority_inbox.crm_followup_watchlist %}
-                  <article class="priority-message">
-                    <div class="priority-message-main">
-                      <div class="priority-message-top">
-                        <span class="priority-message-dot dot-followup" aria-hidden="true"></span>
-                        <a class="priority-message-subject" href="{{ url_for('crm_lead_detail', lead_id=row.lead_id) }}#lead-follow-up-panel">{{ row.lead_name }}</a>
+                      <div class="priority-message-side">
+                        <span class="badge status-badge status-critical">{{ row.wait_hours }}h</span>
                       </div>
-                      <div class="priority-message-meta">{{ row.lead_stage }} • {{ row.due_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
-                      <div class="priority-message-snippet">
-                        {% if row.is_overdue %}This follow-up is overdue and should be actioned immediately.{% else %}Due soon based on the follow-up horizon.{% endif %}
-                      </div>
-                      <div class="table-actions priority-message-actions">
-                        <form method="post" action="{{ url_for('crm_followup_status', followup_id=row.followup_id) }}">
-                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                          <input type="hidden" name="status" value="done">
-                          <input type="hidden" name="next" value="{{ request.path }}#dashboard-priority-inbox">
-                          <button class="btn btn-sm btn-outline-light" type="submit">Mark Done</button>
-                        </form>
-                        <a class="btn btn-sm btn-outline-light" href="{{ url_for('crm_lead_detail', lead_id=row.lead_id) }}#lead-follow-up-panel">Open Lead</a>
-                      </div>
-                    </div>
-                    <div class="priority-message-side">
-                      <span class="badge status-badge {{ 'status-critical' if row.is_overdue else 'status-on-hold' }}">{{ "Overdue" if row.is_overdue else "Due" }}</span>
-                    </div>
-                  </article>
-                {% endfor %}
-              {% else %}
-                <div class="priority-empty">No follow-ups due in the next day.</div>
-              {% endif %}
-            </div>
-          </section>
-
-          <section class="priority-pane" data-priority-pane="billing" data-priority-type="billing">
-            <div class="priority-pane-header">
-              <div>
-                <div class="priority-pane-title">Billing Leakage</div>
-                <div class="priority-pane-subtitle">Approved time that still needs invoice capture.</div>
-              </div>
-              <span class="badge status-badge status-on-hold">{{ billing_count }}</span>
-            </div>
-            <div class="priority-pane-body">
-              {% if priority_inbox.unbilled_time_watchlist %}
-                {% for row in priority_inbox.unbilled_time_watchlist %}
-                  <article class="priority-message">
-                    <div class="priority-message-main">
-                      <div class="priority-message-top">
-                        <span class="priority-message-dot dot-billing" aria-hidden="true"></span>
-                        <a class="priority-message-subject" href="{{ url_for('time_entries', matter_id=row.matter_id) }}">Entry #{{ row.time_entry_id }}</a>
-                      </div>
-                      <div class="priority-message-meta">{{ row.matter_no }} - {{ row.matter_title }}</div>
-                      <div class="priority-message-snippet">{{ row.timekeeper_name }} • captured {{ row.captured_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
-                      <div class="table-actions priority-message-actions">
-                        <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_invoices', matter_id=row.matter_id) }}">Invoice Matter</a>
-                        <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=row.matter_id) }}">Open Time</a>
-                      </div>
-                    </div>
-                    <div class="priority-message-side">
-                      <span class="badge status-badge status-on-hold">{{ row.hours }}h</span>
-                    </div>
-                  </article>
-                {% endfor %}
-              {% else %}
-                <div class="priority-empty">No aged approved time waiting for invoice capture.</div>
-              {% endif %}
-            </div>
-          </section>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <div class="col-lg-5">
-    <div class="card p-3 mb-3" id="dashboard-my-tasks">
-      <div class="d-flex justify-content-between align-items-center">
-        <h4 class="mb-0">My Tasks</h4>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Open Matters</a>
-      </div>
-      <div class="mt-2 entry-scroll">
-        {% if my_tasks %}
-          {% for t in my_tasks %}
-            {% set task_matter = task_matter_map.get(t.matter_id) if task_matter_map else None %}
-            <div class="border-top pt-2 mt-2">
-              <div class="d-flex justify-content-between">
-                <div class="fw-semibold">{{ t.title }}</div>
-                <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
-              </div>
-              <div class="muted small">
-                {% if task_matter %}
-                  <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=task_matter.id) }}">{{ task_matter.matter_no }} - {{ task_matter.title }}</a>
+                    </article>
+                  {% endfor %}
                 {% else %}
-                  Matter #{{ t.matter_id }}
+                  <div class="priority-empty">No delayed client replies.</div>
                 {% endif %}
-                {% if t.due_date %} - due {{ t.due_date }}{% endif %}
-                {% if t.priority %} - priority {{ t.priority }}{% endif %}
               </div>
-              <div class="table-actions mt-2">
-                <a class="btn btn-sm btn-outline-light matter-quick-action" href="{{ url_for('time_entries', matter_id=t.matter_id, task_id=t.id) }}">Log Time</a>
-                <a class="btn btn-sm btn-outline-light matter-quick-action" href="{{ url_for('matter_tasks', matter_id=t.matter_id) }}#task-{{ t.id }}">Open Task</a>
+            </section>
+
+            <section class="priority-pane" data-priority-pane="followup" data-priority-type="followup">
+              <div class="priority-pane-header">
+                <div>
+                  <div class="priority-pane-title">Intake Follow-ups</div>
+                  <div class="priority-pane-subtitle">Leads requiring outreach before conversion stalls.</div>
+                </div>
+                <span class="badge status-badge status-on-hold">{{ followup_count }}</span>
               </div>
-            </div>
-          {% endfor %}
+              <div class="priority-pane-body">
+                {% if priority_inbox.crm_followup_watchlist %}
+                  {% for row in priority_inbox.crm_followup_watchlist %}
+                    <article class="priority-message">
+                      <div class="priority-message-main">
+                        <div class="priority-message-top">
+                          <span class="priority-message-dot dot-followup" aria-hidden="true"></span>
+                          <a class="priority-message-subject" href="{{ url_for('crm_lead_detail', lead_id=row.lead_id) }}#lead-follow-up-panel">{{ row.lead_name }}</a>
+                        </div>
+                        <div class="priority-message-meta">{{ row.lead_stage }} • {{ row.due_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
+                        <div class="priority-message-snippet">
+                          {% if row.is_overdue %}This follow-up is overdue and should be actioned immediately.{% else %}Due soon based on the follow-up horizon.{% endif %}
+                        </div>
+                        <div class="table-actions priority-message-actions">
+                          <form method="post" action="{{ url_for('crm_followup_status', followup_id=row.followup_id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="status" value="done">
+                            <input type="hidden" name="next" value="{{ request.path }}#dashboard-priority-inbox">
+                            <button class="btn btn-sm btn-outline-light" type="submit">Mark Done</button>
+                          </form>
+                          <a class="btn btn-sm btn-outline-light" href="{{ url_for('crm_lead_detail', lead_id=row.lead_id) }}#lead-follow-up-panel">Open Lead</a>
+                        </div>
+                      </div>
+                      <div class="priority-message-side">
+                        <span class="badge status-badge {{ 'status-critical' if row.is_overdue else 'status-on-hold' }}">{{ "Overdue" if row.is_overdue else "Due" }}</span>
+                      </div>
+                    </article>
+                  {% endfor %}
+                {% else %}
+                  <div class="priority-empty">No follow-ups due in the next day.</div>
+                {% endif %}
+              </div>
+            </section>
+
+            <section class="priority-pane" data-priority-pane="billing" data-priority-type="billing">
+              <div class="priority-pane-header">
+                <div>
+                  <div class="priority-pane-title">Billing Leakage</div>
+                  <div class="priority-pane-subtitle">Approved time that still needs invoice capture.</div>
+                </div>
+                <span class="badge status-badge status-on-hold">{{ billing_count }}</span>
+              </div>
+              <div class="priority-pane-body">
+                {% if priority_inbox.unbilled_time_watchlist %}
+                  {% for row in priority_inbox.unbilled_time_watchlist %}
+                    <article class="priority-message">
+                      <div class="priority-message-main">
+                        <div class="priority-message-top">
+                          <span class="priority-message-dot dot-billing" aria-hidden="true"></span>
+                          <a class="priority-message-subject" href="{{ url_for('time_entries', matter_id=row.matter_id) }}">Entry #{{ row.time_entry_id }}</a>
+                        </div>
+                        <div class="priority-message-meta">{{ row.matter_no }} - {{ row.matter_title }}</div>
+                        <div class="priority-message-snippet">{{ row.timekeeper_name }} • captured {{ row.captured_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
+                        <div class="table-actions priority-message-actions">
+                          <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_invoices', matter_id=row.matter_id) }}">Invoice Matter</a>
+                          <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=row.matter_id) }}">Open Time</a>
+                        </div>
+                      </div>
+                      <div class="priority-message-side">
+                        <span class="badge status-badge status-on-hold">{{ row.hours }}h</span>
+                      </div>
+                    </article>
+                  {% endfor %}
+                {% else %}
+                  <div class="priority-empty">No aged approved time waiting for invoice capture.</div>
+                {% endif %}
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Legal Desk</div>
+            <h2 class="panel-title">Next-best-move matter queue</h2>
+            <div class="panel-summary">The matters most likely to need legal attention next, with the next best move already framed.</div>
+          </div>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Open Matter Directory</a>
+        </div>
+        {% if legal_desk %}
+          <div class="legal-desk-grid">
+            {% for card in legal_desk %}
+              {% set top_action = card.top_action %}
+              <article class="legal-desk-card tone-{{ card.health_tone }}">
+                <div class="legal-desk-header">
+                  <div>
+                    <a class="fw-semibold text-decoration-none" href="{{ url_for('matter_detail', matter_id=card.matter.id) }}">{{ card.matter.matter_no }} - {{ card.matter.title }}</a>
+                    <div class="muted small mt-1">{{ card.matter.client_name }}</div>
+                  </div>
+                  <span class="risk-chip risk-{{ (card.matter.risk_level or 'medium')|lower }}">{{ card.matter.risk_level or "Medium" }}</span>
+                </div>
+                <div class="legal-desk-status">{{ card.status_line }}</div>
+                {% if top_action %}
+                  <div class="legal-desk-action">
+                    <div class="legal-desk-action-label">Next Best Move</div>
+                    <div class="legal-desk-action-title">{{ top_action.title }}</div>
+                    <div class="legal-desk-action-summary">{{ top_action.summary }}</div>
+                    <div class="table-actions mt-2">
+                      <a class="btn btn-sm btn-light" href="{{ top_action.href }}">{{ top_action.button_label }}</a>
+                      <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=card.matter.id) }}">Workspace</a>
+                    </div>
+                  </div>
+                {% endif %}
+                <div class="legal-desk-chip-row">
+                  <span class="legal-desk-chip">{{ card.open_task_count }} open task(s)</span>
+                  <span class="legal-desk-chip">{{ card.document_count }} document(s)</span>
+                  {% if card.next_event_summary %}
+                    <span class="legal-desk-chip">{{ card.next_event_summary }}</span>
+                  {% elif card.stale_days %}
+                    <span class="legal-desk-chip">{{ card.stale_days }} day(s) since last matter update</span>
+                  {% endif %}
+                </div>
+              </article>
+            {% endfor %}
+          </div>
         {% else %}
-          <div class="muted">No tasks assigned.</div>
+          <div class="empty-state">No matters are currently competing for your attention.</div>
         {% endif %}
-      </div>
+      </section>
+
+      <section class="panel-card" id="dashboard-my-tasks">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">My Tasks</div>
+            <h2 class="panel-title">Assigned work queue</h2>
+            <div class="panel-summary">Your open tasks, with direct links into the matter or time capture workflow.</div>
+          </div>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Open Matters</a>
+        </div>
+        {% if my_tasks %}
+          <div class="dashboard-task-list">
+            {% for t in my_tasks %}
+              {% set task_matter = task_matter_map.get(t.matter_id) if task_matter_map else None %}
+              <article class="dashboard-task-item">
+                <div class="d-flex justify-content-between gap-2">
+                  <div class="fw-semibold">{{ t.title }}</div>
+                  <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
+                </div>
+                <div class="muted small mt-1">
+                  {% if task_matter %}
+                    <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=task_matter.id) }}">{{ task_matter.matter_no }} - {{ task_matter.title }}</a>
+                  {% else %}
+                    Matter #{{ t.matter_id }}
+                  {% endif %}
+                  {% if t.due_date %} • due {{ t.due_date }}{% endif %}
+                  {% if t.priority %} • priority {{ t.priority }}{% endif %}
+                </div>
+                <div class="table-actions mt-2">
+                  <a class="btn btn-sm btn-outline-light matter-quick-action" href="{{ url_for('time_entries', matter_id=t.matter_id, task_id=t.id) }}">Log Time</a>
+                  <a class="btn btn-sm btn-outline-light matter-quick-action" href="{{ url_for('matter_tasks', matter_id=t.matter_id) }}#task-{{ t.id }}">Open Task</a>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">No tasks assigned.</div>
+        {% endif %}
+      </section>
     </div>
 
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card is-accent">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Workspace Command Center</div>
+              <h2 class="panel-title">Workspace mode and launch actions</h2>
+              <div class="panel-summary">{{ workspace_mode_meta.summary }}</div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+              <span class="badge status-badge status-open">{{ workspace_mode_meta.label }}</span>
+              {% if workspace_focus_matter %}
+                <span class="badge badge-soft status-badge">{{ workspace_focus_matter.matter_no }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="workspace-mode-grid">
+            <form method="post" action="{{ url_for('dashboard_workspace_mode') }}" class="workspace-mode-stack">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              {% for option in workspace_mode_choices %}
+                <button
+                  class="workspace-mode-button {{ 'is-active' if option.key == workspace_mode else '' }}"
+                  type="submit"
+                  name="mode"
+                  value="{{ option.key }}"
+                >
+                  <div class="workspace-mode-label">{{ option.label }}</div>
+                  <div class="workspace-mode-summary">{{ option.summary }}</div>
+                </button>
+              {% endfor %}
+            </form>
+            <div>
+              <div class="panel-kicker mb-2">Workspace Quick Actions</div>
+              <div class="workspace-action-grid">
+                {% for action in workspace_quick_actions %}
+                  <article class="workspace-action-card {{ 'is-strong' if action.emphasis == 'strong' else '' }}">
+                    {% if action.badge %}<span class="workspace-action-badge">{{ action.badge }}</span>{% endif %}
+                    <div class="workspace-action-title">{{ action.title }}</div>
+                    <div class="workspace-action-summary">{{ action.summary }}</div>
+                    <div class="mt-auto">
+                      <a class="btn btn-sm btn-light" href="{{ action.href }}">Launch</a>
+                    </div>
+                  </article>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Operations Snapshot</div>
+              <h2 class="panel-title">Shortcut view of firm load</h2>
+              <div class="panel-summary">A condensed view of the most important counters, each linked to the place you resolve them.</div>
+            </div>
+          </div>
+          <div class="dashboard-snapshot-grid">
+            <a class="dashboard-snapshot-item" href="{{ url_for('matters') }}">
+              <div class="dashboard-snapshot-label">Accessible Matters</div>
+              <div class="dashboard-snapshot-value">{{ stats.matter_count }}</div>
+              <div class="dashboard-snapshot-meta">Open the matter directory.</div>
+            </a>
+            <a class="dashboard-snapshot-item" href="{{ url_for('calendar_my', filter='overdue') }}">
+              <div class="dashboard-snapshot-label">Overdue Tasks</div>
+              <div class="dashboard-snapshot-value">{{ stats.overdue_tasks }}</div>
+              <div class="dashboard-snapshot-meta">Jump into the overdue calendar view.</div>
+            </a>
+            <a class="dashboard-snapshot-item" href="{{ url_for('calendar_my', filter='next7') }}">
+              <div class="dashboard-snapshot-label">Due This Week</div>
+              <div class="dashboard-snapshot-value">{{ stats.due_this_week }}</div>
+              <div class="dashboard-snapshot-meta">Open the next 7 days calendar.</div>
+            </a>
+            <a class="dashboard-snapshot-item" href="{{ url_for('admin_automation') if is_admin_role else url_for('matters') }}">
+              <div class="dashboard-snapshot-label">Urgent Unassigned</div>
+              <div class="dashboard-snapshot-value">{{ stats.urgent_unassigned }}</div>
+              <div class="dashboard-snapshot-meta">{{ 'Open Automation Studio' if is_admin_role else 'Open matter directory' }}.</div>
+            </a>
+          </div>
+        </section>
+
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">At-Risk Matters</div>
+              <h2 class="panel-title">Files trending the wrong way</h2>
+              <div class="panel-summary">These matters are ordered by urgency and risk so they are easy to triage quickly.</div>
+            </div>
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Open directory</a>
+          </div>
+          {% if at_risk_matters %}
+            <div class="dashboard-risk-list">
+              {% for item in at_risk_matters %}
+                <article class="dashboard-risk-item">
+                  <div class="d-flex justify-content-between gap-2">
+                    <a class="fw-semibold text-decoration-none" href="{{ url_for('matter_detail', matter_id=item.matter.id) }}">{{ item.matter.matter_no }} - {{ item.matter.title }}</a>
+                    <span class="risk-chip risk-{{ item.matter.risk_level|lower }}">{{ item.matter.risk_level }}</span>
+                  </div>
+                  <div class="muted small mt-1">{{ item.risk_driver }}{% if item.overdue_tasks %} • {{ item.overdue_tasks }} overdue{% endif %}</div>
+                </article>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="empty-state">No at-risk matters currently detected.</div>
+          {% endif %}
+        </section>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

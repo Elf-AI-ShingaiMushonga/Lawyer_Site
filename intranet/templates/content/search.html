@@ -11,9 +11,8 @@
 
   .search-launch-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 10px;
-    margin-top: 12px;
   }
 
   .search-launch-action {
@@ -45,6 +44,44 @@
     line-height: 1.45;
   }
 
+  .search-category-panel .list-stack {
+    max-height: 420px;
+  }
+
+  .search-result-panel {
+    display: grid;
+    gap: 12px;
+  }
+
+  .search-empty-shell {
+    min-height: 280px;
+    display: grid;
+    place-items: center;
+  }
+
+  .search-query-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 999px;
+    padding: 5px 10px;
+    background: rgba(255, 248, 248, 0.88);
+    font-size: 12px;
+    color: #7a5959;
+  }
+
+  .search-side-note {
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 14px;
+    padding: 11px 12px;
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .search-side-note + .search-side-note {
+    margin-top: 8px;
+  }
+
   .workspace-action-badge {
     align-self: flex-start;
     border-radius: 999px;
@@ -57,268 +94,355 @@
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
-
-  @media (max-width: 991.98px) {
-    .search-launch-grid {
-      grid-template-columns: 1fr;
-    }
-  }
 </style>
-<div class="card p-3">
-  <div class="toolbar-row">
-    <div>
-      <h3 class="section-title">Global Search</h3>
-      <div class="page-intro mt-1">Query matters, tasks, documents, knowledge, and contacts in one view.</div>
-    </div>
-  </div>
-  <form class="row g-2 mt-3" method="get">
-    <div class="col-md-10">
-      <input class="form-control" name="q" placeholder="Search across matters, tasks, documents, knowledge..." value="{{ q }}">
-    </div>
-    <div class="col-md-2 d-grid">
-      <button class="btn btn-light">Search</button>
-    </div>
-  </form>
-  <div class="form-help">Tip: use at least 2 characters for broad cross-module search.</div>
 
-  {% if q and query_too_short %}
-    <div class="alert alert-warning mt-3">
-      Search term too short. Enter at least 2 characters to run a platform-wide query.
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Global Search</div>
+        <h1 class="page-hero-title">Search Command Center</h1>
+        <div class="page-hero-summary">Query matters, tasks, documents, knowledge, and contacts in one operational view.</div>
+        <div class="page-hero-meta">
+          {% if q %}<span class="search-query-label">Query {{ q }}</span>{% endif %}
+          {% if launch_pack %}<span class="tag-chip">Smart Launch Pack ready</span>{% endif %}
+          {% if query_too_short %}<span class="tag-chip">Needs at least 2 characters</span>{% endif %}
+        </div>
+      </div>
+      <div class="page-hero-actions">
+        {% if q %}
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('search') }}">Clear Search</a>
+        {% endif %}
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Matter Directory</a>
+        <button class="btn btn-sm btn-outline-light" type="button" data-command-open>Open Command Palette</button>
+      </div>
     </div>
-  {% elif q %}
-    {% if launch_pack %}
-      <div class="card p-3 mt-3 search-launch-pack">
-        <div class="toolbar-row">
-          <div>
-            <h4 class="mb-0">Smart Launch Pack</h4>
-            <div class="form-help mt-1">{{ launch_pack.subheadline }}</div>
-          </div>
-          <span class="badge status-badge status-open">{{ launch_pack.headline }}</span>
+    {% if q and not query_too_short %}
+      <div class="page-stat-grid">
+        <div class="page-stat-card">
+          <div class="page-stat-label">Matters</div>
+          <div class="page-stat-value">{{ matters|length }}</div>
+          <div class="page-stat-meta">Operational matter matches.</div>
         </div>
-        <div class="muted small mt-2">{{ launch_pack.status_line }}</div>
-        <div class="search-launch-grid">
-          {% for action in launch_pack.quick_actions %}
-            <article class="search-launch-action {{ 'is-strong' if action.emphasis == 'strong' else '' }}">
-              {% if action.badge %}<span class="workspace-action-badge">{{ action.badge }}</span>{% endif %}
-              <div class="search-launch-title">{{ action.title }}</div>
-              <div class="search-launch-summary">{{ action.summary }}</div>
-              <div class="mt-auto">
-                <a class="btn btn-sm btn-light" href="{{ action.href }}">Launch</a>
-              </div>
-            </article>
-          {% endfor %}
+        <div class="page-stat-card">
+          <div class="page-stat-label">Tasks</div>
+          <div class="page-stat-value">{{ tasks|length }}</div>
+          <div class="page-stat-meta">Task-level hits you can act on immediately.</div>
         </div>
-        <div class="mt-3">
-          <label class="form-label" for="search-launch-brief">Search Brief</label>
-          <textarea class="form-control" id="search-launch-brief" rows="7" readonly>{{ launch_pack.brief_text }}</textarea>
-          <div class="d-flex gap-2 align-items-center mt-2">
-            <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="search-launch-brief" data-copy-success-text="Copied">Copy Brief</button>
-            <span class="form-help" data-copy-feedback-for="search-launch-brief"></span>
-          </div>
+        <div class="page-stat-card">
+          <div class="page-stat-label">Documents</div>
+          <div class="page-stat-value">{{ docs|length }}</div>
+          <div class="page-stat-meta">Repository and file matches.</div>
+        </div>
+        <div class="page-stat-card">
+          <div class="page-stat-label">Knowledge</div>
+          <div class="page-stat-value">{{ articles|length }}</div>
+          <div class="page-stat-meta">Knowledge base matches.</div>
+        </div>
+        <div class="page-stat-card">
+          <div class="page-stat-label">Contacts</div>
+          <div class="page-stat-value">{{ contacts|length }}</div>
+          <div class="page-stat-meta">People and relationship hits.</div>
+        </div>
+        <div class="page-stat-card">
+          <div class="page-stat-label">Semantic</div>
+          <div class="page-stat-value">{{ semantic_hits|length }}</div>
+          <div class="page-stat-meta">Similarity-based matches.</div>
         </div>
       </div>
     {% endif %}
+  </section>
 
-    <div class="kpi-strip mt-3">
-      <div class="kpi-pill">
-        <div class="label">Matters</div>
-        <div class="value">{{ matters|length }}</div>
-      </div>
-      <div class="kpi-pill">
-        <div class="label">Tasks</div>
-        <div class="value">{{ tasks|length }}</div>
-      </div>
-      <div class="kpi-pill">
-        <div class="label">Documents</div>
-        <div class="value">{{ docs|length }}</div>
-      </div>
-      <div class="kpi-pill">
-        <div class="label">Knowledge</div>
-        <div class="value">{{ articles|length }}</div>
-      </div>
-      <div class="kpi-pill">
-        <div class="label">Contacts</div>
-        <div class="value">{{ contacts|length }}</div>
-      </div>
-      <div class="kpi-pill">
-        <div class="label">Semantic</div>
-        <div class="value">{{ semantic_hits|length }}</div>
-      </div>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      {% if q and query_too_short %}
+        <section class="panel-card search-empty-shell is-accent">
+          <div class="empty-state">
+            Search term too short. Enter at least 2 characters to run a platform-wide query.
+          </div>
+        </section>
+      {% elif q %}
+        <div class="panel-stack search-result-panel">
+          <section class="panel-card search-category-panel is-accent">
+            <div class="panel-header">
+              <div class="panel-header-main">
+                <div class="panel-kicker">Matters</div>
+                <h2 class="panel-title">Operational matter matches</h2>
+                <div class="panel-summary">Open the matter, jump into the workspace, or go straight to DMS.</div>
+              </div>
+              <span class="result-count">{{ matters|length }}</span>
+            </div>
+            {% if matters %}
+              <div class="list-stack">
+                {% for m in matters %}
+                  <div class="list-item">
+                    <a class="list-title" href="{{ url_for('matter_detail', matter_id=m.id) }}">{{ m.matter_no }} - {{ m.title }}</a>
+                    <div class="list-meta mt-1">
+                      <span>{{ m.client_name }}</span>
+                      <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
+                      <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }}</span>
+                    </div>
+                    {% if m.last_update_note %}<div class="muted small mt-1">{{ m.last_update_note }}</div>{% endif %}
+                    <div class="table-actions mt-2">
+                      <a class="btn btn-sm btn-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
+                      <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
+                      <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=m.id) }}">DMS</a>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="empty-state">No matching matters.</div>
+            {% endif %}
+          </section>
+
+          <section class="panel-card search-category-panel">
+            <div class="panel-header">
+              <div class="panel-header-main">
+                <div class="panel-kicker">Tasks</div>
+                <h2 class="panel-title">Actionable task hits</h2>
+                <div class="panel-summary">Open the task, log time against it, or start a timer from the result itself.</div>
+              </div>
+              <span class="result-count">{{ tasks|length }}</span>
+            </div>
+            {% if tasks %}
+              <div class="list-stack">
+                {% for t in tasks %}
+                  <div class="list-item">
+                    <div class="list-title">{{ t.title }}</div>
+                    {% set task_matter = matter_by_id.get(t.matter_id) if matter_by_id else None %}
+                    <div class="list-meta mt-1">
+                      {% if task_matter %}
+                        <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=task_matter.id) }}">{{ task_matter.matter_no }} - {{ task_matter.title }}</a>
+                      {% else %}
+                        <span>Matter #{{ t.matter_id }}</span>
+                      {% endif %}
+                      <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
+                    </div>
+                    <div class="table-actions mt-2">
+                      {% if task_matter %}
+                        <a class="btn btn-sm btn-light" href="{{ url_for('matter_tasks', matter_id=task_matter.id) }}#task-{{ t.id }}">Open Task</a>
+                        <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=task_matter.id, task_id=t.id) }}">Log Time</a>
+                        <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_timers', matter_id=task_matter.id, task_id=t.id, label=t.title) }}">Start Timer</a>
+                      {% endif %}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="empty-state">No matching tasks.</div>
+            {% endif %}
+          </section>
+
+          <section class="panel-card search-category-panel">
+            <div class="panel-header">
+              <div class="panel-header-main">
+                <div class="panel-kicker">Documents</div>
+                <h2 class="panel-title">File and repository matches</h2>
+                <div class="panel-summary">Download directly or jump back to the matter and DMS context around the document.</div>
+              </div>
+              <span class="result-count">{{ docs|length }}</span>
+            </div>
+            {% if docs %}
+              <div class="list-stack">
+                {% for d in docs %}
+                  <div class="list-item">
+                    <div class="list-title">{{ d.original_filename }}</div>
+                    {% set doc_matter = matter_by_id.get(d.matter_id) if matter_by_id else None %}
+                    <div class="list-meta mt-1">
+                      {% if doc_matter %}
+                        <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=doc_matter.id) }}">{{ doc_matter.matter_no }} - {{ doc_matter.title }}</a>
+                      {% else %}
+                        <span>Matter #{{ d.matter_id }}</span>
+                      {% endif %}
+                      <span>sha256 {{ d.sha256[:12] }}...</span>
+                      <span>{{ d.category or "General" }}</span>
+                      <span>{{ d.lifecycle_stage }}</span>
+                      {% if d.is_privileged %}<span class="tag-chip">Privileged</span>{% endif %}
+                    </div>
+                    <div class="table-actions mt-2">
+                      <a class="btn btn-sm btn-light" href="{{ url_for('doc_download', doc_id=d.id) }}">Download</a>
+                      {% if doc_matter %}
+                        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=doc_matter.id) }}">Matter</a>
+                        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=doc_matter.id) }}">DMS</a>
+                      {% endif %}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="empty-state">No matching documents.</div>
+            {% endif %}
+          </section>
+
+          <section class="panel-card search-category-panel">
+            <div class="panel-header">
+              <div class="panel-header-main">
+                <div class="panel-kicker">Knowledge</div>
+                <h2 class="panel-title">Reference material</h2>
+                <div class="panel-summary">Knowledge base items that match the query and may answer the question or support the work.</div>
+              </div>
+              <span class="result-count">{{ articles|length }}</span>
+            </div>
+            {% if articles %}
+              <div class="list-stack">
+                {% for a in articles %}
+                  <div class="list-item">
+                    <a class="list-title" href="{{ url_for('kb_view', kb_id=a.id) }}">{{ a.title }}</a>
+                    <div class="list-meta mt-1">
+                      <span>{{ a.tags or "No tags" }}</span>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="empty-state">No matching knowledge articles.</div>
+            {% endif %}
+          </section>
+
+          <section class="panel-card search-category-panel">
+            <div class="panel-header">
+              <div class="panel-header-main">
+                <div class="panel-kicker">Contacts</div>
+                <h2 class="panel-title">People and relationship matches</h2>
+                <div class="panel-summary">Client, contact, and organization results connected to the query.</div>
+              </div>
+              <span class="result-count">{{ contacts|length }}</span>
+            </div>
+            {% if contacts %}
+              <div class="list-stack">
+                {% for c in contacts %}
+                  <div class="list-item">
+                    <div class="list-title">{{ c.name }}</div>
+                    <div class="list-meta mt-1">
+                      <span>{{ c.organization or "No organization" }}</span>
+                      {% if c.email %}<span>{{ c.email }}</span>{% endif %}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="empty-state">No matching contacts.</div>
+            {% endif %}
+          </section>
+
+          <section class="panel-card search-category-panel">
+            <div class="panel-header">
+              <div class="panel-header-main">
+                <div class="panel-kicker">Semantic Results</div>
+                <h2 class="panel-title">Similarity-based matches</h2>
+                <div class="panel-summary">Results surfaced by semantic relevance when exact text may not be enough.</div>
+              </div>
+              <span class="result-count">{{ semantic_hits|length }}</span>
+            </div>
+            {% if semantic_hits %}
+              <div class="list-stack">
+                {% for hit in semantic_hits %}
+                  <div class="list-item">
+                    {% if hit.url %}
+                      <a class="list-title" href="{{ hit.url }}">{{ hit.title }}</a>
+                    {% else %}
+                      <div class="list-title">{{ hit.title }}</div>
+                    {% endif %}
+                    <div class="list-meta mt-1">
+                      <span>Score {{ '%.2f'|format(hit.score) }}</span>
+                      {% if hit.matter_id %}<span>Matter #{{ hit.matter_id }}</span>{% endif %}
+                    </div>
+                    {% if hit.excerpt %}<div class="muted small mt-1">{{ hit.excerpt }}</div>{% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="empty-state">No semantic matches.</div>
+            {% endif %}
+          </section>
+        </div>
+      {% else %}
+        <section class="panel-card search-empty-shell is-accent">
+          <div class="empty-state">Enter a search term to explore records across the platform.</div>
+        </section>
+      {% endif %}
     </div>
 
-    <div class="result-grid mt-3">
-      <div class="result-panel">
-        <div class="result-head">
-          <h5>Matters</h5>
-          <span class="result-count">{{ matters|length }}</span>
-        </div>
-        {% if matters %}
-          <div class="list-stack">
-            {% for m in matters %}
-              <div class="list-item">
-                <a class="list-title" href="{{ url_for('matter_detail', matter_id=m.id) }}">{{ m.matter_no }} - {{ m.title }}</a>
-                <div class="list-meta mt-1">
-                  <span>{{ m.client_name }}</span>
-                  <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
-                  <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }}</span>
-                </div>
-                {% if m.last_update_note %}<div class="muted small mt-1">{{ m.last_update_note }}</div>{% endif %}
-                <div class="table-actions mt-2">
-                  <a class="btn btn-sm btn-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
-                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
-                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=m.id) }}">DMS</a>
-                </div>
-              </div>
-            {% endfor %}
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card is-accent">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Search Console</div>
+              <h2 class="panel-title">Run a platform-wide query</h2>
+              <div class="panel-summary">Start here, then move directly from results into matter work, time capture, or document retrieval.</div>
+            </div>
           </div>
-        {% else %}
-          <div class="empty-state">No matching matters.</div>
-        {% endif %}
-      </div>
+          <form class="field-grid" method="get">
+            <div>
+              <label class="form-label" for="global-search-query">Search</label>
+              <input class="form-control" id="global-search-query" name="q" placeholder="Search across matters, tasks, documents, knowledge..." value="{{ q }}">
+            </div>
+            <div class="d-grid">
+              <button class="btn btn-light">Search</button>
+            </div>
+          </form>
+          <div class="form-help mt-2">Tip: use at least 2 characters for broad cross-module search.</div>
+        </section>
 
-      <div class="result-panel">
-        <div class="result-head">
-          <h5>Tasks</h5>
-          <span class="result-count">{{ tasks|length }}</span>
-        </div>
-        {% if tasks %}
-          <div class="list-stack">
-            {% for t in tasks %}
-              <div class="list-item">
-                <div class="list-title">{{ t.title }}</div>
-                {% set task_matter = matter_by_id.get(t.matter_id) if matter_by_id else None %}
-                <div class="list-meta mt-1">
-                  {% if task_matter %}
-                    <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=task_matter.id) }}">{{ task_matter.matter_no }} - {{ task_matter.title }}</a>
-                  {% else %}
-                    <span>Matter #{{ t.matter_id }}</span>
-                  {% endif %}
-                  <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
-                </div>
-                <div class="table-actions mt-2">
-                  {% if task_matter %}
-                    <a class="btn btn-sm btn-light" href="{{ url_for('matter_tasks', matter_id=task_matter.id) }}#task-{{ t.id }}">Open Task</a>
-                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=task_matter.id, task_id=t.id) }}">Log Time</a>
-                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_timers', matter_id=task_matter.id, task_id=t.id, label=t.title) }}">Start Timer</a>
-                  {% endif %}
-                </div>
+        {% if launch_pack %}
+          <section class="panel-card search-launch-pack">
+            <div class="panel-header">
+              <div class="panel-header-main">
+                <div class="panel-kicker">Smart Launch Pack</div>
+                <h2 class="panel-title">Fastest path into the likely matter</h2>
+                <div class="panel-summary">{{ launch_pack.subheadline }}</div>
               </div>
-            {% endfor %}
-          </div>
-        {% else %}
-          <div class="empty-state">No matching tasks.</div>
+              <span class="badge status-badge status-open">{{ launch_pack.headline }}</span>
+            </div>
+            <div class="muted small">{{ launch_pack.status_line }}</div>
+            <div class="search-launch-grid mt-2">
+              {% for action in launch_pack.quick_actions %}
+                <article class="search-launch-action {{ 'is-strong' if action.emphasis == 'strong' else '' }}">
+                  {% if action.badge %}<span class="workspace-action-badge">{{ action.badge }}</span>{% endif %}
+                  <div class="search-launch-title">{{ action.title }}</div>
+                  <div class="search-launch-summary">{{ action.summary }}</div>
+                  <div class="mt-auto">
+                    <a class="btn btn-sm btn-light" href="{{ action.href }}">Launch</a>
+                  </div>
+                </article>
+              {% endfor %}
+            </div>
+            <div class="mt-3">
+              <label class="form-label" for="search-launch-brief">Search Brief</label>
+              <textarea class="form-control" id="search-launch-brief" rows="7" readonly>{{ launch_pack.brief_text }}</textarea>
+              <div class="d-flex gap-2 align-items-center mt-2">
+                <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="search-launch-brief" data-copy-success-text="Copied">Copy Brief</button>
+                <span class="form-help" data-copy-feedback-for="search-launch-brief"></span>
+              </div>
+            </div>
+          </section>
         {% endif %}
-      </div>
 
-      <div class="result-panel">
-        <div class="result-head">
-          <h5>Documents</h5>
-          <span class="result-count">{{ docs|length }}</span>
-        </div>
-        {% if docs %}
-          <div class="list-stack">
-            {% for d in docs %}
-              <div class="list-item">
-                <div class="list-title">{{ d.original_filename }}</div>
-                {% set doc_matter = matter_by_id.get(d.matter_id) if matter_by_id else None %}
-                <div class="list-meta mt-1">
-                  {% if doc_matter %}
-                    <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=doc_matter.id) }}">{{ doc_matter.matter_no }} - {{ doc_matter.title }}</a>
-                  {% else %}
-                    <span>Matter #{{ d.matter_id }}</span>
-                  {% endif %}
-                  <span>sha256 {{ d.sha256[:12] }}...</span>
-                  <span>{{ d.category or "General" }}</span>
-                  <span>{{ d.lifecycle_stage }}</span>
-                  {% if d.is_privileged %}<span class="tag-chip">Privileged</span>{% endif %}
-                </div>
-                <div class="table-actions mt-2">
-                  <a class="btn btn-sm btn-light" href="{{ url_for('doc_download', doc_id=d.id) }}">Download</a>
-                  {% if doc_matter %}
-                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=doc_matter.id) }}">Matter</a>
-                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=doc_matter.id) }}">DMS</a>
-                  {% endif %}
-                </div>
-              </div>
-            {% endfor %}
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Search Guidance</div>
+              <h2 class="panel-title">How to use this view</h2>
+              <div class="panel-summary">Operational results are prioritized above reference material so lawyers can move from query to action quickly.</div>
+            </div>
           </div>
-        {% else %}
-          <div class="empty-state">No matching documents.</div>
-        {% endif %}
-      </div>
-
-      <div class="result-panel">
-        <div class="result-head">
-          <h5>Knowledge</h5>
-          <span class="result-count">{{ articles|length }}</span>
-        </div>
-        {% if articles %}
-          <div class="list-stack">
-            {% for a in articles %}
-              <div class="list-item">
-                <a class="list-title" href="{{ url_for('kb_view', kb_id=a.id) }}">{{ a.title }}</a>
-                <div class="list-meta mt-1">
-                  <span>{{ a.tags or "No tags" }}</span>
-                </div>
-              </div>
-            {% endfor %}
+          <div class="search-side-note">
+            <div class="glance-eyebrow">Operational first</div>
+            <div class="glance-meta">Matters, tasks, and documents are the fastest path to doing work, so they are surfaced first.</div>
           </div>
-        {% else %}
-          <div class="empty-state">No matching knowledge articles.</div>
-        {% endif %}
-      </div>
-
-      <div class="result-panel">
-        <div class="result-head">
-          <h5>Contacts</h5>
-          <span class="result-count">{{ contacts|length }}</span>
-        </div>
-        {% if contacts %}
-          <div class="list-stack">
-            {% for c in contacts %}
-              <div class="list-item">
-                <div class="list-title">{{ c.name }}</div>
-                <div class="list-meta mt-1">
-                  <span>{{ c.organization or "No organization" }}</span>
-                  {% if c.email %}<span>{{ c.email }}</span>{% endif %}
-                </div>
-              </div>
-            {% endfor %}
+          <div class="search-side-note">
+            <div class="glance-eyebrow">Use launch packs</div>
+            <div class="glance-meta">When search strongly implies a matter, the Smart Launch Pack gives the fastest route into the right workflow.</div>
           </div>
-        {% else %}
-          <div class="empty-state">No matching contacts.</div>
-        {% endif %}
-      </div>
-
-      <div class="result-panel">
-        <div class="result-head">
-          <h5>Semantic Results</h5>
-          <span class="result-count">{{ semantic_hits|length }}</span>
-        </div>
-        {% if semantic_hits %}
-          <div class="list-stack">
-            {% for hit in semantic_hits %}
-              <div class="list-item">
-                {% if hit.url %}
-                  <a class="list-title" href="{{ hit.url }}">{{ hit.title }}</a>
-                {% else %}
-                  <div class="list-title">{{ hit.title }}</div>
-                {% endif %}
-                <div class="list-meta mt-1">
-                  <span>Score {{ '%.2f'|format(hit.score) }}</span>
-                  {% if hit.matter_id %}<span>Matter #{{ hit.matter_id }}</span>{% endif %}
-                </div>
-                {% if hit.excerpt %}<div class="muted small mt-1">{{ hit.excerpt }}</div>{% endif %}
-              </div>
-            {% endfor %}
+          <div class="search-side-note">
+            <div class="glance-eyebrow">Broaden or narrow</div>
+            <div class="glance-meta">Short queries produce too much noise; longer queries make document and semantic hits more useful.</div>
           </div>
-        {% else %}
-          <div class="empty-state">No semantic matches.</div>
-        {% endif %}
+        </section>
       </div>
     </div>
-  {% else %}
-    <div class="empty-state mt-3">Enter a search term to explore records across the platform.</div>
-  {% endif %}
+  </div>
 </div>
 {% endblock %}

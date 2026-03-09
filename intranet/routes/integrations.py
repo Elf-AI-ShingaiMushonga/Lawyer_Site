@@ -1123,6 +1123,7 @@ def register_integration_routes(app):
             "Mobile Hub",
             "integrations/mobile_hub.html",
             matters=matters,
+            matter_by_id=matter_by_id,
             matter_shortcuts=matter_shortcuts,
             selected_matter_id=selected_matter_id,
             users=users,

@@ -1,19 +1,28 @@
 {% extends "base.html" %}
 {% block content %}
+{% set selected_matter = matter_by_id.get(selected_matter_id) if matter_by_id and selected_matter_id else None %}
 <style>
   .mobile-matter-shortcuts {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
     gap: 10px;
   }
 
   .mobile-matter-card {
     border: 1px solid rgba(225, 6, 0, 0.16);
-    border-radius: 14px;
+    border-radius: 16px;
     padding: 12px;
     background:
       radial-gradient(circle at top right, rgba(225, 6, 0, 0.08), rgba(225, 6, 0, 0)),
       linear-gradient(180deg, rgba(255, 250, 250, 0.98), rgba(255, 255, 255, 0.98));
+  }
+
+  .mobile-capture-form {
+    display: grid;
+    gap: 12px;
+  }
+
+  .mobile-capture-form .form-section {
+    margin: 0;
   }
 
   .mobile-preset-row {
@@ -24,215 +33,356 @@
 
   .mobile-preset-row .btn {
     flex: 0 0 auto;
+    min-height: 40px;
+  }
+
+  .mobile-activity-table .table-responsive {
+    max-height: 320px;
+  }
+
+  .mobile-touch-note {
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 14px;
+    padding: 11px 12px;
+    background: rgba(255, 248, 248, 0.92);
+  }
+
+  .mobile-touch-note + .mobile-touch-note {
+    margin-top: 8px;
   }
 </style>
-<div class="card p-3 mb-3">
-  <div class="toolbar-row">
-    <div>
-      <h3 class="mb-1">Mobile & Tablet Hub</h3>
-      <p class="page-intro mb-0">Capture fees and assign tasks quickly with touch-friendly controls optimized for mobile access.</p>
-    </div>
-    <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries') }}">Full Timekeeping</a>
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Matter Directory</a>
-    </div>
-  </div>
-</div>
 
-<div class="card p-3 mb-3">
-  <div class="toolbar-row">
-    <div>
-      <h4 class="mb-0">Fast Matter Launcher</h4>
-      <div class="form-help mt-1">Tap a matter once to prefill both quick-capture forms, or jump straight into the right workspace.</div>
-    </div>
-  </div>
-  <div class="mobile-matter-shortcuts mt-3">
-    {% for matter in matter_shortcuts %}
-      <article class="mobile-matter-card">
-        <div class="fw-semibold">{{ matter.matter_no }} - {{ matter.title }}</div>
-        <div class="muted small mt-1">{{ matter.client_name }}</div>
-        <div class="list-meta mt-2">
-          <span class="badge status-badge status-{{ (matter.status or 'open')|lower|replace(' ', '-') }}">{{ matter.status or "Open" }}</span>
-          <span class="risk-chip risk-{{ (matter.risk_level or 'medium')|lower }}">{{ matter.risk_level or "Medium" }}</span>
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Mobile & Tablet Hub</div>
+        <h1 class="page-hero-title">Touch-First Capture Desk</h1>
+        <div class="page-hero-summary">Capture fees and assign tasks quickly with controls designed for mobile access and short bursts of work.</div>
+        <div class="page-hero-meta">
+          {% if selected_matter %}
+            <span class="tag-chip">Selected {{ selected_matter.matter_no }}</span>
+            <span class="tag-chip">{{ selected_matter.client_name }}</span>
+          {% endif %}
+          <span class="tag-chip">{{ matter_shortcuts|length }} fast-launch matter(s)</span>
+          <span class="tag-chip">{{ my_recent_entries|length }} recent fee entries</span>
         </div>
-        <div class="table-actions mt-3">
-          <button class="btn btn-sm btn-light" type="button" data-mobile-matter-select="{{ matter.id }}">Use in Forms</button>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('mobile_hub', matter_id=matter.id) }}">Prefill</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=matter.id) }}">Workspace</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=matter.id) }}">DMS</a>
-        </div>
-      </article>
-    {% endfor %}
-  </div>
-</div>
-
-<div class="row g-3">
-  <div class="col-lg-6">
-    <div class="card p-3">
-      <h4 class="mb-2">Quick Fee Capture</h4>
-      <form method="post" class="row g-2">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="action" value="capture_fee">
-        <div class="col-12">
-          <label class="form-label" for="mobile-fee-matter">Matter</label>
-          <select class="form-select" id="mobile-fee-matter" name="matter_id" required>
-            <option value="">Choose matter</option>
-            {% for matter in matters %}
-              <option value="{{ matter.id }}" {% if selected_matter_id == matter.id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-sm-6">
-          <label class="form-label" for="mobile-fee-start">Start</label>
-          <input class="form-control" id="mobile-fee-start" name="start_at" type="datetime-local" value="{{ now_iso }}" required>
-        </div>
-        <div class="col-sm-6">
-          <label class="form-label" for="mobile-fee-end">End</label>
-          <input class="form-control" id="mobile-fee-end" name="end_at" type="datetime-local">
-          <div class="form-help">If provided, this takes precedence over duration.</div>
-        </div>
-        <div class="col-sm-6">
-          <label class="form-label" for="mobile-fee-duration">Duration Minutes (optional)</label>
-          <input class="form-control" id="mobile-fee-duration" name="duration_minutes" type="number" min="1" placeholder="e.g. 45">
-          <div class="form-help">Used only when End is empty.</div>
-          <div class="mobile-preset-row mt-2">
-            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="15">15 min</button>
-            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="30">30 min</button>
-            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="45">45 min</button>
-            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="60">1 hr</button>
-            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="90">90 min</button>
-          </div>
-        </div>
-        <div class="col-sm-6 d-flex align-items-end">
-          <div class="form-check mb-2">
-            <input class="form-check-input" id="mobile-fee-billable" type="checkbox" name="is_billable" value="1" checked>
-            <label class="form-check-label" for="mobile-fee-billable">Billable</label>
-          </div>
-        </div>
-        <div class="col-sm-6">
-          <label class="form-label" for="mobile-fee-task-code">Task Code</label>
-          <input class="form-control" id="mobile-fee-task-code" name="task_code" placeholder="L100">
-        </div>
-        <div class="col-sm-6">
-          <label class="form-label" for="mobile-fee-activity-code">Activity Code</label>
-          <input class="form-control" id="mobile-fee-activity-code" name="activity_code" placeholder="A101">
-        </div>
-        <div class="col-12">
-          <label class="form-label" for="mobile-fee-narrative">Narrative</label>
-          <textarea class="form-control" id="mobile-fee-narrative" name="narrative" rows="3" placeholder="Short narrative for billing"></textarea>
-        </div>
-        <div class="col-12 d-grid">
-          <button class="btn btn-light" type="submit" data-submitting-text="Capturing...">Capture Fee Entry</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <div class="col-lg-6">
-    <div class="card p-3">
-      <h4 class="mb-2">Quick Task Assignment</h4>
-      <form method="post" class="row g-2">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="action" value="assign_task">
-        <div class="col-12">
-          <label class="form-label" for="mobile-task-matter">Matter</label>
-          <select class="form-select" id="mobile-task-matter" name="matter_id" required>
-            <option value="">Choose matter</option>
-            {% for matter in matters %}
-              <option value="{{ matter.id }}" {% if selected_matter_id == matter.id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-12">
-          <label class="form-label" for="mobile-task-title">Task Title</label>
-          <input class="form-control" id="mobile-task-title" name="title" placeholder="Task title" required>
-          <div class="mobile-preset-row mt-2">
-            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-task-title="Call client">Call client</button>
-            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-task-title="Review latest draft">Review latest draft</button>
-            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-task-title="Prepare filing bundle">Prepare filing bundle</button>
-            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-task-title="Send status update">Send status update</button>
-          </div>
-        </div>
-        <div class="col-sm-6">
-          <label class="form-label" for="mobile-task-due">Due Date</label>
-          <input class="form-control" id="mobile-task-due" name="due_date" type="date">
-        </div>
-        <div class="col-sm-6">
-          <label class="form-label" for="mobile-task-priority">Priority</label>
-          <select class="form-select" id="mobile-task-priority" name="priority">
-            <option>Low</option>
-            <option selected>Medium</option>
-            <option>High</option>
-            <option>Critical</option>
-          </select>
-        </div>
-        <div class="col-12">
-          <label class="form-label" for="mobile-task-assignees">Assign To</label>
-          <div class="form-help mb-1">Tap one or more people.</div>
-          <div class="assignee-checklist" id="mobile-task-assignees" role="group" aria-label="Task assignees">
-            {% for user in users %}
-              <label class="assignee-checklist-item">
-                <input class="form-check-input" type="checkbox" name="assignee_user_ids" value="{{ user.id }}">
-                <span class="assignee-checklist-main">{{ user.full_name }}</span>
-                <span class="assignee-checklist-sub">{{ user.email }}</span>
-              </label>
-            {% endfor %}
-          </div>
-        </div>
-        <div class="col-12">
-          <label class="form-label" for="mobile-task-description">Description</label>
-          <textarea class="form-control" id="mobile-task-description" name="description" rows="3" placeholder="Optional context"></textarea>
-        </div>
-        <div class="col-12 d-grid">
-          <button class="btn btn-light" type="submit" data-submitting-text="Assigning...">Assign Task</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<div class="row g-3 mt-1">
-  <div class="col-lg-6">
-    <div class="card p-3">
-      <h4 class="mb-2">Recent Fee Entries</h4>
-      <div class="table-responsive">
-        <table class="table">
-          <thead><tr><th>Matter</th><th>Start</th><th>Rounded</th><th>Status</th></tr></thead>
-          <tbody>
-            {% for entry in my_recent_entries %}
-              <tr>
-                <td>#{{ entry.matter_id }}</td>
-                <td>{{ entry.start_at }}</td>
-                <td>{{ entry.rounded_hours }}</td>
-                <td><span class="badge badge-soft status-badge">{{ entry.status }}</span></td>
-              </tr>
-            {% else %}
-              <tr><td colspan="4" class="muted">No recent fee entries.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      </div>
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries') }}">Full Timekeeping</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Matter Directory</a>
+        {% if selected_matter %}
+          <a class="btn btn-sm btn-light" href="{{ url_for('matter_workspace', matter_id=selected_matter.id) }}">Open {{ selected_matter.matter_no }}</a>
+        {% endif %}
       </div>
     </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card p-3">
-      <h4 class="mb-2">My Recently Assigned Tasks</h4>
-      <div class="table-responsive">
-        <table class="table">
-          <thead><tr><th>Task</th><th>Matter</th><th>Due</th><th>Status</th></tr></thead>
-          <tbody>
-            {% for task in my_recent_tasks %}
-              <tr>
-                <td>{{ task.title }}</td>
-                <td>#{{ task.matter_id }}</td>
-                <td>{{ task.due_date or "-" }}</td>
-                <td><span class="badge badge-soft status-badge">{{ task.status }}</span></td>
-              </tr>
-            {% else %}
-              <tr><td colspan="4" class="muted">No recent assigned tasks.</td></tr>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Fast Launch Matters</div>
+        <div class="page-stat-value">{{ matter_shortcuts|length }}</div>
+        <div class="page-stat-meta">Pinned and recently used matters for one-tap launch.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Available Matters</div>
+        <div class="page-stat-value">{{ matters|length }}</div>
+        <div class="page-stat-meta">Matters you can capture against from this device.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Recent Fee Entries</div>
+        <div class="page-stat-value">{{ my_recent_entries|length }}</div>
+        <div class="page-stat-meta">Latest mobile-visible entries for quick reassurance.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Recent Tasks</div>
+        <div class="page-stat-value">{{ my_recent_tasks|length }}</div>
+        <div class="page-stat-meta">Recently assigned work you may need to action on the move.</div>
+      </div>
+    </div>
+    <div class="action-grid">
+      <a class="action-card is-primary" href="#quick-fee-capture">
+        <span class="action-card-kicker">Fees</span>
+        <span class="action-card-title">Quick Fee Capture</span>
+        <span class="action-card-summary">Capture a billable entry in a few taps with matter prefills and duration presets.</span>
+      </a>
+      <a class="action-card" href="#quick-task-assignment">
+        <span class="action-card-kicker">Tasks</span>
+        <span class="action-card-title">Quick Task Assignment</span>
+        <span class="action-card-summary">Delegate work from your phone without opening the full matter screen.</span>
+      </a>
+      <a class="action-card" href="#fast-matter-launcher">
+        <span class="action-card-kicker">Launch</span>
+        <span class="action-card-title">Fast Matter Launcher</span>
+        <span class="action-card-summary">Set both quick-capture forms to the right matter with one tap.</span>
+      </a>
+      {% if selected_matter %}
+        <a class="action-card" href="{{ url_for('matter_dms', matter_id=selected_matter.id) }}">
+          <span class="action-card-kicker">Documents</span>
+          <span class="action-card-title">Open Selected Matter DMS</span>
+          <span class="action-card-summary">Jump from mobile capture into the document hub for the active matter.</span>
+        </a>
+      {% endif %}
+    </div>
+  </section>
+
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section id="quick-fee-capture" class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Quick Fee Capture</div>
+            <h2 class="panel-title">Capture work before it leaks</h2>
+            <div class="panel-summary">Built for short sessions on a phone or tablet: pick the matter, tap a duration, and save the fee note while the work is still fresh.</div>
+          </div>
+        </div>
+        <form method="post" class="mobile-capture-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="capture_fee">
+          <div class="form-section">
+            <div class="field-grid columns-2">
+              <div>
+                <label class="form-label" for="mobile-fee-matter">Matter</label>
+                <select class="form-select" id="mobile-fee-matter" name="matter_id" required>
+                  <option value="">Choose matter</option>
+                  {% for matter in matters %}
+                    <option value="{{ matter.id }}" {% if selected_matter_id == matter.id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="d-flex align-items-end">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" id="mobile-fee-billable" type="checkbox" name="is_billable" value="1" checked>
+                  <label class="form-check-label" for="mobile-fee-billable">Billable</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="form-section">
+            <div class="field-grid columns-2">
+              <div>
+                <label class="form-label" for="mobile-fee-start">Start</label>
+                <input class="form-control" id="mobile-fee-start" name="start_at" type="datetime-local" value="{{ now_iso }}" required>
+              </div>
+              <div>
+                <label class="form-label" for="mobile-fee-end">End</label>
+                <input class="form-control" id="mobile-fee-end" name="end_at" type="datetime-local">
+                <div class="form-help">If provided, this takes precedence over duration.</div>
+              </div>
+            </div>
+            <div class="mt-3">
+              <label class="form-label" for="mobile-fee-duration">Duration Minutes (optional)</label>
+              <input class="form-control" id="mobile-fee-duration" name="duration_minutes" type="number" min="1" placeholder="e.g. 45">
+              <div class="form-help">Used only when End is empty.</div>
+              <div class="mobile-preset-row mt-2">
+                <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="15">15 min</button>
+                <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="30">30 min</button>
+                <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="45">45 min</button>
+                <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="60">1 hr</button>
+                <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="90">90 min</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-section">
+            <div class="field-grid columns-2">
+              <div>
+                <label class="form-label" for="mobile-fee-task-code">Task Code</label>
+                <input class="form-control" id="mobile-fee-task-code" name="task_code" placeholder="L100">
+              </div>
+              <div>
+                <label class="form-label" for="mobile-fee-activity-code">Activity Code</label>
+                <input class="form-control" id="mobile-fee-activity-code" name="activity_code" placeholder="A101">
+              </div>
+            </div>
+            <div class="mt-3">
+              <label class="form-label" for="mobile-fee-narrative">Narrative</label>
+              <textarea class="form-control" id="mobile-fee-narrative" name="narrative" rows="3" placeholder="Short narrative for billing"></textarea>
+            </div>
+          </div>
+          <div class="d-grid">
+            <button class="btn btn-light" type="submit" data-submitting-text="Capturing...">Capture Fee Entry</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="quick-task-assignment" class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Quick Task Assignment</div>
+            <h2 class="panel-title">Delegate work in one pass</h2>
+            <div class="panel-summary">Set the matter, use a title preset if it helps, assign the right people, and send the task out without opening the full matter workflow.</div>
+          </div>
+        </div>
+        <form method="post" class="mobile-capture-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="assign_task">
+          <div class="form-section">
+            <div class="field-grid columns-2">
+              <div>
+                <label class="form-label" for="mobile-task-matter">Matter</label>
+                <select class="form-select" id="mobile-task-matter" name="matter_id" required>
+                  <option value="">Choose matter</option>
+                  {% for matter in matters %}
+                    <option value="{{ matter.id }}" {% if selected_matter_id == matter.id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="mobile-task-priority">Priority</label>
+                <select class="form-select" id="mobile-task-priority" name="priority">
+                  <option>Low</option>
+                  <option selected>Medium</option>
+                  <option>High</option>
+                  <option>Critical</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="form-section">
+            <div>
+              <label class="form-label" for="mobile-task-title">Task Title</label>
+              <input class="form-control" id="mobile-task-title" name="title" placeholder="Task title" required>
+              <div class="mobile-preset-row mt-2">
+                <button class="btn btn-sm btn-outline-light" type="button" data-mobile-task-title="Call client">Call client</button>
+                <button class="btn btn-sm btn-outline-light" type="button" data-mobile-task-title="Review latest draft">Review latest draft</button>
+                <button class="btn btn-sm btn-outline-light" type="button" data-mobile-task-title="Prepare filing bundle">Prepare filing bundle</button>
+                <button class="btn btn-sm btn-outline-light" type="button" data-mobile-task-title="Send status update">Send status update</button>
+              </div>
+            </div>
+            <div class="mt-3">
+              <label class="form-label" for="mobile-task-due">Due Date</label>
+              <input class="form-control" id="mobile-task-due" name="due_date" type="date">
+            </div>
+          </div>
+          <div class="form-section">
+            <label class="form-label" for="mobile-task-assignees">Assign To</label>
+            <div class="form-help mb-1">Tap one or more people.</div>
+            <div class="assignee-checklist" id="mobile-task-assignees" role="group" aria-label="Task assignees">
+              {% for user in users %}
+                <label class="assignee-checklist-item">
+                  <input class="form-check-input" type="checkbox" name="assignee_user_ids" value="{{ user.id }}">
+                  <span class="assignee-checklist-main">{{ user.full_name }}</span>
+                  <span class="assignee-checklist-sub">{{ user.email }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="form-section">
+            <label class="form-label" for="mobile-task-description">Description</label>
+            <textarea class="form-control" id="mobile-task-description" name="description" rows="3" placeholder="Optional context"></textarea>
+          </div>
+          <div class="d-grid">
+            <button class="btn btn-light" type="submit" data-submitting-text="Assigning...">Assign Task</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section id="fast-matter-launcher" class="panel-card is-accent">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Fast Matter Launcher</div>
+              <h2 class="panel-title">Set both forms with one tap</h2>
+              <div class="panel-summary">Tap a matter once to prefill both quick-capture forms, or jump straight into the right workspace.</div>
+            </div>
+          </div>
+          <div class="mobile-matter-shortcuts">
+            {% for matter in matter_shortcuts %}
+              <article class="mobile-matter-card">
+                <div class="fw-semibold">{{ matter.matter_no }} - {{ matter.title }}</div>
+                <div class="muted small mt-1">{{ matter.client_name }}</div>
+                <div class="list-meta mt-2">
+                  <span class="badge status-badge status-{{ (matter.status or 'open')|lower|replace(' ', '-') }}">{{ matter.status or "Open" }}</span>
+                  <span class="risk-chip risk-{{ (matter.risk_level or 'medium')|lower }}">{{ matter.risk_level or "Medium" }}</span>
+                </div>
+                <div class="table-actions mt-3">
+                  <button class="btn btn-sm btn-light" type="button" data-mobile-matter-select="{{ matter.id }}">Use in Forms</button>
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('mobile_hub', matter_id=matter.id) }}">Prefill</a>
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=matter.id) }}">Workspace</a>
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=matter.id) }}">DMS</a>
+                </div>
+              </article>
             {% endfor %}
-          </tbody>
-        </table>
+          </div>
+        </section>
+
+        <section class="panel-card mobile-activity-table">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Recent Fee Entries</div>
+              <h2 class="panel-title">What you just captured</h2>
+              <div class="panel-summary">Sanity check recent entries without leaving the mobile surface.</div>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead><tr><th>Matter</th><th>Start</th><th>Rounded</th><th>Status</th></tr></thead>
+              <tbody>
+                {% for entry in my_recent_entries %}
+                  {% set matter = matter_by_id.get(entry.matter_id) if matter_by_id else None %}
+                  <tr>
+                    <td>{% if matter %}{{ matter.matter_no }}{% else %}#{{ entry.matter_id }}{% endif %}</td>
+                    <td>{{ entry.start_at }}</td>
+                    <td>{{ entry.rounded_hours }}</td>
+                    <td><span class="badge badge-soft status-badge">{{ entry.status }}</span></td>
+                  </tr>
+                {% else %}
+                  <tr><td colspan="4" class="muted">No recent fee entries.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel-card mobile-activity-table">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">My Recently Assigned Tasks</div>
+              <h2 class="panel-title">Work that just landed</h2>
+              <div class="panel-summary">The most recent tasks assigned to you, visible on the same mobile surface.</div>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead><tr><th>Task</th><th>Matter</th><th>Due</th><th>Status</th></tr></thead>
+              <tbody>
+                {% for task in my_recent_tasks %}
+                  {% set matter = matter_by_id.get(task.matter_id) if matter_by_id else None %}
+                  <tr>
+                    <td>{{ task.title }}</td>
+                    <td>{% if matter %}{{ matter.matter_no }}{% else %}#{{ task.matter_id }}{% endif %}</td>
+                    <td>{{ task.due_date or "-" }}</td>
+                    <td><span class="badge badge-soft status-badge">{{ task.status }}</span></td>
+                  </tr>
+                {% else %}
+                  <tr><td colspan="4" class="muted">No recent assigned tasks.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Mobile Capture Flow</div>
+              <h2 class="panel-title">How to use this screen well</h2>
+              <div class="panel-summary">The point of this surface is speed with enough structure to avoid cleanup later.</div>
+            </div>
+          </div>
+          <div class="mobile-touch-note">
+            <div class="glance-eyebrow">1. Pick the matter once</div>
+            <div class="glance-meta">Use the fast launcher so both forms inherit the correct matter immediately.</div>
+          </div>
+          <div class="mobile-touch-note">
+            <div class="glance-eyebrow">2. Prefer duration presets</div>
+            <div class="glance-meta">On mobile, quick duration buttons are faster and less error-prone than typing exact end times.</div>
+          </div>
+          <div class="mobile-touch-note">
+            <div class="glance-eyebrow">3. Capture before context fades</div>
+            <div class="glance-meta">This screen is optimized for immediate capture, not deep editing. Use the full desktop screens only when needed.</div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
