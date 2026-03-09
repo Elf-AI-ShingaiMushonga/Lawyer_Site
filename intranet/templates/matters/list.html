@@ -1,112 +1,281 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3">
-  <div class="toolbar-row">
-    <div>
-      <h3 class="section-title">Matter Directory</h3>
-      <div class="page-intro mt-1">Track each client engagement from intake to closure.</div>
-    </div>
-    <div class="d-flex gap-2">
-      <a class="btn btn-light" href="{{ url_for('matter_create') }}">Create Matter</a>
-      <a class="btn btn-outline-light" href="{{ url_for('matters_intake') }}">Intake Wizard</a>
-    </div>
-  </div>
+<style>
+  .matter-directory-filter-panel,
+  .matter-directory-results-panel {
+    display: grid;
+    gap: 16px;
+  }
 
+  .matter-directory-filter-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.92fr) auto auto;
+    gap: 12px;
+    align-items: end;
+  }
 
-  <form class="mt-3" method="get">
-    <label class="form-label" for="matter-search">Find Matter</label>
-    <div class="row g-2 align-items-center">
-      <div class="col-md-6 col-lg-5">
-        <input class="form-control" id="matter-search" name="q" placeholder="Search matter number, title, or client..." value="{{ q }}">
+  .matter-directory-chip-groups {
+    display: grid;
+    gap: 12px;
+  }
+
+  .matter-directory-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .matter-directory-results-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .matter-directory-list {
+    display: grid;
+    gap: 14px;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .matter-directory-item {
+    border-radius: 16px;
+    padding: 16px 18px;
+    background:
+      radial-gradient(circle at top right, rgba(225, 6, 0, 0.06), rgba(225, 6, 0, 0)),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 250, 250, 0.94));
+  }
+
+  .matter-directory-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .matter-directory-title-block {
+    display: grid;
+    gap: 8px;
+    min-width: min(100%, 42rem);
+  }
+
+  .matter-directory-title-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .matter-directory-summary {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #6c5a5a;
+  }
+
+  .matter-directory-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .matter-directory-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .matter-directory-actions .matter-quick-action-form {
+    display: inline-flex;
+  }
+
+  .matter-directory-actions .matter-quick-action,
+  .matter-directory-actions .matter-status-filter-badge {
+    min-width: 98px;
+    justify-content: center;
+  }
+
+  @media (max-width: 991.98px) {
+    .matter-directory-filter-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .matter-directory-results-meta {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+
+  @media (max-width: 767.98px) {
+    .matter-directory-item {
+      padding: 15px 16px;
+    }
+
+    .matter-directory-title-line {
+      align-items: flex-start;
+    }
+
+    .matter-directory-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .matter-directory-actions .matter-quick-action-form,
+    .matter-directory-actions .matter-quick-action,
+    .matter-directory-actions .matter-status-filter-badge {
+      flex: 1 1 100%;
+    }
+  }
+</style>
+
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Matter Management</div>
+        <h1 class="page-hero-title">Matter Directory</h1>
+        <div class="page-hero-summary">Track each client engagement from intake to closure.</div>
+        <div class="page-hero-meta">
+          <span class="tag-chip">{{ pagination.total }} total matter(s)</span>
+          <span class="tag-chip">{{ ms|length }} visible on this page</span>
+          {% if q %}<span class="tag-chip">Filtered for "{{ q }}"</span>{% endif %}
+        </div>
       </div>
-      <div class="col-md-6 col-lg-4">
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-light" href="{{ url_for('matter_create') }}">Create Matter</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters_intake') }}">Intake Wizard</a>
+      </div>
+    </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Total Matters</div>
+        <div class="page-stat-value">{{ pagination.total }}</div>
+        <div class="page-stat-meta">All matters in the current scope.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Open</div>
+        <div class="page-stat-value">{{ status_counts.get("Open", 0) }}</div>
+        <div class="page-stat-meta">Live matters currently being worked.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">On Hold</div>
+        <div class="page-stat-value">{{ status_counts.get("On Hold", 0) }}</div>
+        <div class="page-stat-meta">Matters paused pending input or instruction.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Closed</div>
+        <div class="page-stat-value">{{ status_counts.get("Closed", 0) }}</div>
+        <div class="page-stat-meta">Completed matters in the directory.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Visible Results</div>
+        <div class="page-stat-value">{{ ms|length }}</div>
+        <div class="page-stat-meta">Rows currently surfaced on this page.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel-card is-accent matter-directory-filter-panel">
+    <div class="panel-header">
+      <div class="panel-header-main">
+        <div class="panel-kicker">Directory Filters</div>
+        <h2 class="panel-title">Find the right matter fast</h2>
+        <div class="panel-summary">Search by matter number, title, or client, then use quick filters to tighten the list without losing context.</div>
+      </div>
+    </div>
+
+    <form method="get" class="matter-directory-filter-grid">
+      <div>
+        <label class="form-label" for="matter-search">Find Matter</label>
+        <input class="form-control" id="matter-search" name="q" placeholder="Search matter number, title, or client..." value="{{ q }}">
+        <div class="form-help">Use partial client names, matter numbers, or keywords.</div>
+      </div>
+      <div>
+        <label class="form-label" for="matter-sort">Sort</label>
         <select class="form-select" id="matter-sort" name="sort" aria-label="Sort matter directory">
           {% for value, label in sort_options %}
-            <option value="{{ value }}" {% if sort == value %}selected{% endif %}>Sort: {{ label }}</option>
+            <option value="{{ value }}" {% if sort == value %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
-      <div class="col-sm-6 col-lg-auto d-grid">
+      <div class="d-grid">
         <button class="btn btn-outline-light" type="submit">Apply</button>
       </div>
-      <div class="col-sm-6 col-lg-auto d-grid">
+      <div class="d-grid">
         <a class="btn btn-outline-light" href="{{ url_for('matters') }}">Clear</a>
       </div>
-    </div>
-    <div class="form-help">Use partial client names, matter numbers, or keywords, then choose the sort order.</div>
-  </form>
+    </form>
 
-  <div class="kpi-strip mt-3">
-    <div class="kpi-pill">
-      <div class="label">Total matters</div>
-      <div class="value">{{ pagination.total }}</div>
+    <div class="matter-directory-chip-groups">
+      <div class="matter-directory-chip-row">
+        <span class="small muted">Status:</span>
+        <button class="nav-pill is-active" type="button" data-matter-filter="status:all" aria-pressed="true">All</button>
+        <button class="nav-pill" type="button" data-matter-filter="status:open" aria-pressed="false">Open</button>
+        <button class="nav-pill" type="button" data-matter-filter="status:on-hold" aria-pressed="false">On Hold</button>
+        <button class="nav-pill" type="button" data-matter-filter="status:closed" aria-pressed="false">Closed</button>
+      </div>
+      <div class="matter-directory-chip-row">
+        <span class="small muted">Risk:</span>
+        <button class="nav-pill is-active" type="button" data-matter-filter="risk:all" aria-pressed="true">All</button>
+        <button class="nav-pill" type="button" data-matter-filter="risk:low" aria-pressed="false">Low</button>
+        <button class="nav-pill" type="button" data-matter-filter="risk:medium" aria-pressed="false">Medium</button>
+        <button class="nav-pill" type="button" data-matter-filter="risk:high" aria-pressed="false">High</button>
+        <button class="nav-pill" type="button" data-matter-filter="risk:critical" aria-pressed="false">Critical</button>
+      </div>
+      <div class="matter-directory-results-meta">
+        <div class="small muted">
+          Showing {{ ms|length }} of {{ pagination.total }} matters on page {{ pagination.page }} of {{ pagination.pages or 1 }}.
+        </div>
+        <div class="small muted" id="matter-filter-summary">Loading filters...</div>
+      </div>
     </div>
-    <div class="kpi-pill">
-      <div class="label">Open</div>
-      <div class="value">{{ status_counts.get("Open", 0) }}</div>
-    </div>
-    <div class="kpi-pill">
-      <div class="label">On hold</div>
-      <div class="value">{{ status_counts.get("On Hold", 0) }}</div>
-    </div>
-    <div class="kpi-pill">
-      <div class="label">Closed</div>
-      <div class="value">{{ status_counts.get("Closed", 0) }}</div>
-    </div>
-  </div>
+  </section>
 
-  <div class="form-section mt-3">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-      <div class="small fw-semibold text-uppercase muted">Quick Filters</div>
-      <div class="small muted" id="matter-filter-summary">Loading filters...</div>
+  <section class="panel-card matter-directory-results-panel">
+    <div class="panel-header">
+      <div class="panel-header-main">
+        <div class="panel-kicker">Active List</div>
+        <h2 class="panel-title">Browse matters in operating context</h2>
+        <div class="panel-summary">Each row exposes status, risk, and direct launch actions so you can triage and move immediately.</div>
+      </div>
     </div>
-    <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
-      <span class="small muted">Status:</span>
-      <button class="nav-pill is-active" type="button" data-matter-filter="status:all" aria-pressed="true">All</button>
-      <button class="nav-pill" type="button" data-matter-filter="status:open" aria-pressed="false">Open</button>
-      <button class="nav-pill" type="button" data-matter-filter="status:on-hold" aria-pressed="false">On Hold</button>
-      <button class="nav-pill" type="button" data-matter-filter="status:closed" aria-pressed="false">Closed</button>
-    </div>
-    <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
-      <span class="small muted">Risk:</span>
-      <button class="nav-pill is-active" type="button" data-matter-filter="risk:all" aria-pressed="true">All</button>
-      <button class="nav-pill" type="button" data-matter-filter="risk:low" aria-pressed="false">Low</button>
-      <button class="nav-pill" type="button" data-matter-filter="risk:medium" aria-pressed="false">Medium</button>
-      <button class="nav-pill" type="button" data-matter-filter="risk:high" aria-pressed="false">High</button>
-      <button class="nav-pill" type="button" data-matter-filter="risk:critical" aria-pressed="false">Critical</button>
-    </div>
-  </div>
 
-  <div class="mt-3">
-    {% if q %}
-      <div class="mb-2 muted small">Showing filtered results for "{{ q }}".</div>
-    {% endif %}
-    <div class="mb-2 muted small">
-      Showing {{ ms|length }} of {{ pagination.total }} matters on page {{ pagination.page }} of {{ pagination.pages or 1 }}.
-    </div>
     {% if ms %}
-      <div class="list-stack" id="matter-list">
+      <div class="matter-directory-list" id="matter-list">
         {% for m in ms %}
           {% set is_pinned = m.id in pinned_matter_ids %}
-          <div
-            class="list-item is-clickable"
+          <article
+            class="matter-directory-item list-item is-clickable"
             data-matter-item
             data-matter-link="{{ url_for('matter_detail', matter_id=m.id) }}"
             data-status="{{ m.status|lower|replace(' ', '-') }}"
             data-risk="{{ m.risk_level|lower }}"
           >
-            <div class="list-row">
-              <div>
-                <a class="list-title" href="{{ url_for('matter_detail', matter_id=m.id) }}">{{ m.matter_no }} - {{ m.title }}</a>
-                <div class="list-meta mt-1">
-                  <span>{{ m.client_name }}</span>
-                  <span>Opened {{ m.opened_at.strftime("%Y-%m-%d") }}</span>
-                  {% if is_pinned %}<span class="tag-chip">Pinned</span>{% endif %}
+            <div class="matter-directory-head">
+              <div class="matter-directory-title-block">
+                <div class="matter-directory-title-line">
+                  <a class="list-title" href="{{ url_for('matter_detail', matter_id=m.id) }}">{{ m.matter_no }} - {{ m.title }}</a>
+                  <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
                   <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }}</span>
+                  {% if is_pinned %}<span class="tag-chip">Pinned</span>{% endif %}
+                </div>
+                <div class="matter-directory-summary">
+                  {{ m.client_name }}
+                  {% if m.stage %} • Stage {{ m.stage }}{% endif %}
+                  • Opened {{ m.opened_at.strftime("%Y-%m-%d") }}
+                </div>
+                <div class="matter-directory-meta list-meta">
                   {% if m.budget_status %}<span class="badge status-badge status-{{ m.budget_status|lower|replace(' ', '-') }}">{{ m.budget_status }}</span>{% endif %}
+                  <span class="tag-chip">Matter {{ m.id }}</span>
                 </div>
               </div>
-              <div class="list-actions">
+              <div class="matter-directory-actions list-actions">
                 <button
                   class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }} matter-status-filter-badge"
                   type="button"
@@ -121,19 +290,20 @@
                   <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
                   <button class="btn btn-sm btn-outline-light matter-quick-action" type="submit">{{ "Unpin" if is_pinned else "Pin" }}</button>
                 </form>
+                <a class="btn btn-sm btn-outline-light matter-quick-action" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
                 <a class="btn btn-sm btn-outline-light matter-quick-action" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Tasks</a>
                 <a class="btn btn-sm btn-outline-light matter-quick-action" href="{{ url_for('time_entries', matter_id=m.id) }}">Log Time</a>
               </div>
             </div>
-          </div>
+          </article>
         {% endfor %}
       </div>
-      <div class="empty-state mt-3" id="matter-filter-empty" hidden>No matters match the selected quick filters.</div>
+      <div class="empty-state" id="matter-filter-empty" hidden>No matters match the selected quick filters.</div>
 
       {% if pagination.pages > 1 %}
         {% set start_page = pagination.page - 2 if pagination.page - 2 > 1 else 1 %}
         {% set end_page = pagination.page + 2 if pagination.page + 2 < pagination.pages else pagination.pages %}
-        <nav class="mt-3" aria-label="Matter directory pages">
+        <nav aria-label="Matter directory pages">
           <ul class="pagination pagination-sm mb-0 flex-wrap">
             <li class="page-item {{ 'disabled' if not pagination.has_prev }}">
               {% if pagination.has_prev %}
@@ -180,6 +350,6 @@
     {% else %}
       <div class="empty-state">No matters found. Create one to start tracking client work.</div>
     {% endif %}
-  </div>
+  </section>
 </div>
 {% endblock %}

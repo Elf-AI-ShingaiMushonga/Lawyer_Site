@@ -5,16 +5,19 @@
 <style>
   .analytics-watchlist {
     display: grid;
-    gap: 10px;
+    gap: 12px;
   }
 
   .analytics-watch-item,
   .analytics-spotlight-card,
   .analytics-data-row {
     border: 1px solid rgba(225, 6, 0, 0.16);
-    border-radius: 14px;
-    padding: 12px 13px;
-    background: rgba(255, 255, 255, 0.9);
+    border-radius: 16px;
+    padding: 14px 15px;
+    background:
+      radial-gradient(circle at top right, rgba(225, 6, 0, 0.06), rgba(225, 6, 0, 0)),
+      rgba(255, 255, 255, 0.94);
+    box-shadow: 0 10px 22px rgba(104, 38, 38, 0.07);
   }
 
   .analytics-watch-head,
@@ -28,8 +31,31 @@
 
   .analytics-spotlight-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+  }
+
+  .analytics-spotlight-card {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+    min-height: 172px;
+  }
+
+  .analytics-spotlight-card .glance-title {
+    font-size: clamp(1.15rem, 1.8vw, 1.55rem);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+  }
+
+  .analytics-watch-item {
+    display: grid;
+    gap: 10px;
+  }
+
+  .analytics-data-row {
+    padding: 11px 12px;
+    background: rgba(255, 251, 251, 0.96);
   }
 
   .analytics-mini-stat,
@@ -45,9 +71,26 @@
     gap: 10px;
   }
 
+  .analytics-action-list {
+    gap: 12px;
+  }
+
+  .analytics-action-list .glance-item {
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 14px;
+    padding: 14px 15px;
+    background: rgba(255, 252, 252, 0.94);
+  }
+
   .analytics-table td,
   .analytics-table th {
     vertical-align: top;
+  }
+
+  @media (max-width: 991.98px) {
+    .analytics-spotlight-card {
+      min-height: 0;
+    }
   }
 </style>
 <section class="page-hero">

@@ -892,6 +892,52 @@
     applyFilter(defaultFilter || "all");
   };
 
+  const initDashboardCardLinks = () => {
+    const cards = Array.from(document.querySelectorAll("[data-card-href]")).filter(
+      (item) => item instanceof HTMLElement
+    );
+    if (cards.length === 0) {
+      return;
+    }
+
+    const isInteractiveTarget = (target) => {
+      return (
+        target instanceof Element &&
+        target.closest("a, button, input, select, textarea, label, summary, details")
+      );
+    };
+
+    const navigateFromCard = (event, card) => {
+      if (isInteractiveTarget(event.target)) {
+        return;
+      }
+      const href = card.dataset.cardHref || "";
+      if (!href) {
+        return;
+      }
+      window.location.href = href;
+    };
+
+    cards.forEach((card) => {
+      if (!card.hasAttribute("tabindex")) {
+        card.tabIndex = 0;
+      }
+      if (!card.hasAttribute("role")) {
+        card.setAttribute("role", "link");
+      }
+      card.addEventListener("click", (event) => {
+        navigateFromCard(event, card);
+      });
+      card.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") {
+          return;
+        }
+        event.preventDefault();
+        navigateFromCard(event, card);
+      });
+    });
+  };
+
   const initMatterDetailJumpbar = () => {
     const bar = document.querySelector("[data-matter-detail-jumpbar]");
     if (!(bar instanceof HTMLElement)) {
@@ -4734,6 +4780,7 @@
     initNavMenus();
     initMatterQuickFilters();
     initPriorityInbox();
+    initDashboardCardLinks();
     initMatterDetailJumpbar();
     initTimePrompts();
     initArchetypeAIDraftGenerator();

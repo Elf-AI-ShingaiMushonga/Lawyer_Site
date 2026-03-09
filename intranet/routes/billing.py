@@ -1181,8 +1181,18 @@ def register_billing_routes(app):
         scope_ids = None if is_admin() else visible_matter_ids()
         matter_filter = request.args.get("matter_id", type=int)
         invoice_filter = request.args.get("invoice_id", type=int)
+        allowed_txn_type_filters = {"all", "bill_line", "adjustment", "payment"}
+        allowed_status_filters = {"all", "pending", "settled", "failed"}
         txn_type_filter = (request.args.get("txn_type") or "all").strip().lower() or "all"
         status_filter = (request.args.get("status") or "all").strip().lower() or "all"
+        if txn_type_filter not in allowed_txn_type_filters:
+            txn_type_filter = "all"
+        if status_filter not in allowed_status_filters:
+            status_filter = "all"
+        if status_filter in {"pending", "settled", "failed"} and txn_type_filter == "all":
+            txn_type_filter = "payment"
+        if status_filter in {"pending", "settled", "failed"} and txn_type_filter in {"bill_line", "adjustment"}:
+            status_filter = "all"
         page_number = request.args.get("page", default=1, type=int) or 1
         if page_number < 1:
             page_number = 1

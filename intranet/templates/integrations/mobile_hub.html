@@ -57,6 +57,81 @@
   .mobile-touch-note + .mobile-touch-note {
     margin-top: 8px;
   }
+
+  @media (max-width: 991.98px) {
+    .mobile-matter-shortcuts {
+      gap: 14px;
+    }
+
+    .mobile-matter-card {
+      padding: 14px;
+    }
+
+    .mobile-capture-form {
+      gap: 14px;
+    }
+
+    .mobile-capture-form .form-section {
+      padding: 13px 14px;
+    }
+
+    .mobile-preset-row {
+      gap: 10px;
+    }
+
+    .mobile-preset-row .btn {
+      min-height: 44px;
+    }
+
+    .mobile-activity-table .table-responsive {
+      max-height: none;
+    }
+
+    .mobile-touch-note {
+      padding: 13px 14px;
+    }
+
+    .mobile-touch-note + .mobile-touch-note {
+      margin-top: 10px;
+    }
+  }
+
+  @media (max-width: 576px) {
+    .mobile-preset-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .mobile-preset-row .btn {
+      width: 100%;
+    }
+
+    .mobile-matter-card .table-actions {
+      gap: 8px;
+    }
+
+    .mobile-matter-card .table-actions .btn {
+      flex: 1 1 100%;
+    }
+  }
+
+  @media (max-width: 767.98px) {
+    .mobile-matter-shortcuts {
+      gap: 16px;
+    }
+
+    .mobile-matter-card {
+      padding: 15px 16px;
+    }
+
+    .mobile-capture-form {
+      gap: 14px;
+    }
+
+    .mobile-capture-form .field-grid {
+      gap: 14px;
+    }
+  }
 </style>
 
 <div class="page-shell">

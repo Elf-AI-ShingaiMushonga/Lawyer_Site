@@ -5,6 +5,14 @@
 {% set payment_status_counts = payment_status_counts or {} %}
 {% set selected_txn_type = selected_txn_type or 'all' %}
 {% set selected_status = selected_status or 'all' %}
+{% set summary = summary or {
+  'transaction_count': 0,
+  'billed_total': 0,
+  'adjustment_total': 0,
+  'settled_collected_total': 0,
+  'pending_collected_total': 0,
+  'net_outstanding_position': 0
+} %}
 <div class="card p-3 mb-3">
   <div class="toolbar-row">
     <div>

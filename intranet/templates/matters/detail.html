@@ -178,6 +178,67 @@
       position: static;
       top: auto;
     }
+
+    .matter-command-grid {
+      margin-top: 16px;
+    }
+
+    .matter-command-grid .action-card {
+      min-height: 150px;
+    }
+
+    .matter-summary-form,
+    .matter-ai-panel,
+    .matter-archetype-panel,
+    .matter-timeline-panel,
+    .matter-magic-list,
+    .matter-pulse-grid {
+      gap: 14px;
+    }
+
+    .matter-note-band {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .matter-magic-item,
+    .matter-activity-item,
+    .matter-side-item {
+      padding: 13px 14px;
+    }
+
+    .matter-side-item + .matter-side-item,
+    .matter-activity-item + .matter-activity-item {
+      margin-top: 10px;
+    }
+
+    .matter-side-section .entry-scroll,
+    .matter-side-section .timeline-list {
+      max-height: none;
+    }
+  }
+
+  @media (max-width: 767.98px) {
+    .matter-detail-jumpbar {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 12px;
+    }
+
+    .matter-detail-jumpbar .nav-pill {
+      width: 100%;
+      min-width: 0;
+      justify-content: center;
+    }
+
+    .matter-command-grid .action-card {
+      min-height: 0;
+    }
+
+    .matter-compact-meta {
+      align-items: flex-start;
+    }
   }
 </style>
 

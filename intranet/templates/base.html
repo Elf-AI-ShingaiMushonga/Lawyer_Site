@@ -2101,8 +2101,8 @@
     .page-stat-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-      gap: 10px;
-      margin-top: 16px;
+      gap: 12px;
+      margin-top: 18px;
     }
 
     .page-stat-card {
@@ -2111,6 +2111,7 @@
       padding: 11px 12px;
       background: rgba(255, 255, 255, 0.8);
       backdrop-filter: blur(6px);
+      min-width: 0;
     }
 
     .page-stat-label {
@@ -2129,6 +2130,8 @@
       color: #402020;
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum" 1;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .page-stat-meta {
@@ -2141,7 +2144,7 @@
     .action-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
-      gap: 10px;
+      gap: 12px;
     }
 
     .action-card {
@@ -2155,6 +2158,7 @@
       color: inherit;
       text-decoration: none;
       transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease, background .16s ease;
+      min-width: 0;
     }
 
     .action-card:hover {
@@ -2202,7 +2206,7 @@
     .workbench-grid {
       display: grid;
       grid-template-columns: minmax(0, 1.65fr) minmax(280px, 0.95fr);
-      gap: 16px;
+      gap: 20px;
       align-items: start;
     }
 
@@ -2210,20 +2214,20 @@
     .workbench-rail,
     .panel-stack {
       display: grid;
-      gap: 16px;
+      gap: 20px;
     }
 
     .sticky-stack {
       position: sticky;
       top: 92px;
       display: grid;
-      gap: 16px;
+      gap: 20px;
     }
 
     .panel-card {
       border: 1px solid rgba(225, 6, 0, 0.18);
       border-radius: 18px;
-      padding: 16px;
+      padding: 18px;
       background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 250, 250, 0.95));
       box-shadow: 0 10px 22px rgba(102, 39, 39, 0.07);
@@ -2240,14 +2244,14 @@
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 12px;
+      gap: 14px;
       flex-wrap: wrap;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
 
     .panel-header-main {
       display: grid;
-      gap: 4px;
+      gap: 6px;
       min-width: min(100%, 32rem);
     }
 
@@ -2274,7 +2278,7 @@
 
     .panel-body {
       display: grid;
-      gap: 12px;
+      gap: 14px;
     }
 
     .section-note {
@@ -2289,13 +2293,13 @@
 
     .glance-list {
       display: grid;
-      gap: 9px;
+      gap: 11px;
     }
 
     .glance-item {
       border: 1px solid rgba(225, 6, 0, 0.16);
       border-radius: 14px;
-      padding: 11px 12px;
+      padding: 12px 14px;
       background: rgba(255, 255, 255, 0.88);
     }
 
@@ -2339,12 +2343,55 @@
     }
 
     @media (max-width: 991.98px) {
+      .page-shell {
+        gap: 18px;
+      }
+
       .page-hero {
-        padding: 16px;
+        padding: 20px 18px;
+      }
+
+      .page-hero-top {
+        gap: 18px;
+      }
+
+      .page-hero-meta {
+        gap: 10px;
       }
 
       .page-hero-actions {
         justify-content: flex-start;
+        gap: 10px;
+      }
+
+      .page-stat-grid {
+        gap: 14px;
+      }
+
+      .page-stat-card {
+        padding: 13px 14px;
+      }
+
+      .action-grid {
+        gap: 14px;
+      }
+
+      .action-card {
+        padding: 14px 15px;
+        gap: 8px;
+      }
+
+      .panel-card {
+        padding: 20px 18px;
+      }
+
+      .panel-header {
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+
+      .panel-body {
+        gap: 16px;
       }
 
       .workbench-grid,
@@ -2356,6 +2403,12 @@
 
       .sticky-stack {
         position: static;
+      }
+
+      .workbench-main,
+      .workbench-rail,
+      .sticky-stack {
+        gap: 18px;
       }
     }
 
@@ -2765,6 +2818,70 @@
     }
 
     @media (max-width: 768px) {
+      .page-shell {
+        gap: 16px;
+      }
+
+      .page-hero-top {
+        gap: 14px;
+      }
+
+      .page-hero-meta {
+        gap: 8px;
+        align-items: flex-start;
+      }
+
+      .page-hero-meta .status-badge,
+      .page-hero-meta .risk-chip,
+      .page-hero-meta .tag-chip {
+        min-width: 0;
+        max-width: 100%;
+        justify-content: flex-start;
+        white-space: normal;
+        text-align: left;
+        line-height: 1.2;
+        font-size: 10px;
+        padding: 4px 8px;
+      }
+
+      .page-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .page-stat-card {
+        padding: 14px 13px;
+      }
+
+      .page-stat-label {
+        font-size: 10px;
+        letter-spacing: 0.06em;
+      }
+
+      .page-stat-value {
+        font-size: clamp(17px, 6vw, 22px);
+        line-height: 1.15;
+      }
+
+      .page-stat-meta {
+        font-size: 11px;
+      }
+
+      .action-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .page-hero-actions {
+        width: 100%;
+      }
+
+      .page-hero-actions .btn,
+      .page-hero-actions .nav-pill {
+        flex: 1 1 100%;
+        justify-content: center;
+      }
+
       .calendar-month-grid {
         min-width: 700px;
         grid-template-columns: repeat(7, minmax(96px, 1fr));
@@ -2800,21 +2917,21 @@
         display: block;
         border: 1px solid rgba(225, 6, 0, 0.2);
         border-radius: 11px;
-        padding: 8px 10px;
+        padding: 10px 12px;
         background: #fffdfd;
       }
 
       table.table-mobile-cards tbody tr[data-table-row] + tr[data-table-row] {
-        margin-top: 8px;
+        margin-top: 10px;
       }
 
       table.table-mobile-cards tbody td {
         display: grid;
         grid-template-columns: minmax(92px, 42%) 1fr;
-        gap: 7px 10px;
+        gap: 8px 12px;
         align-items: start;
         border: 0;
-        padding: 6px 0;
+        padding: 7px 0;
         text-align: left !important;
       }
 
@@ -2856,8 +2973,8 @@
       }
 
       .shell {
-        margin: 16px auto;
-        padding: 0 10px 78px;
+        margin: 12px auto;
+        padding: 0 12px 84px;
       }
 
       :root {
@@ -2953,11 +3070,11 @@
       }
 
       .main-content {
-        gap: 10px;
+        gap: 14px;
       }
 
       .context-path {
-        padding: 9px;
+        padding: 11px;
       }
 
       .card {
@@ -2965,12 +3082,25 @@
         box-shadow: 0 6px 16px rgba(123, 42, 42, 0.08);
       }
 
+      .page-hero {
+        padding: 18px 16px;
+      }
+
+      .page-stat-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .panel-card {
+        padding: 18px 16px;
+      }
+
       .section-title {
         font-size: 24px;
       }
 
       .page-intro {
-        font-size: 13px;
+        font-size: 14px;
       }
 
       .form-label {
@@ -2992,15 +3122,16 @@
       }
 
       form.row {
-        row-gap: 10px;
+        row-gap: 12px;
       }
 
       .form-section {
-        padding: 10px;
+        padding: 12px;
       }
 
       .toolbar-row {
         align-items: stretch;
+        gap: 12px;
       }
 
       .toolbar-row .btn {
@@ -3042,11 +3173,12 @@
       }
 
       .table-responsive {
-        border-radius: 10px;
+        border-radius: 12px;
       }
 
       .table-tools {
         align-items: stretch;
+        gap: 12px;
       }
 
       .table-tools .form-control {
@@ -3069,8 +3201,8 @@
 
       .table td,
       .table th {
-        padding-top: 0.6rem;
-        padding-bottom: 0.6rem;
+        padding-top: 0.72rem;
+        padding-bottom: 0.72rem;
       }
 
       .metric-value {
@@ -3082,7 +3214,7 @@
       }
 
       .footer-note {
-        margin-top: 16px;
+        margin-top: 18px;
       }
 
       .mobile-dock {

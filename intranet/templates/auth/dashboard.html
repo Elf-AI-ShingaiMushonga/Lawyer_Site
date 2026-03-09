@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
+  .workbench-grid {
+    grid-template-columns: minmax(0, 1.34fr) minmax(340px, 1fr);
+    gap: 18px;
+  }
+
   .dashboard-briefing-grid {
     margin-top: 14px;
   }
@@ -24,7 +29,7 @@
   }
 
   .priority-inbox-shell {
-    --priority-inbox-max-height: 860px;
+    --priority-inbox-max-height: 760px;
     position: relative;
     overflow: hidden;
     border: 1px solid rgba(225, 6, 0, 0.22);
@@ -37,8 +42,8 @@
 
   .priority-inbox-layout {
     display: grid;
-    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
-    gap: 14px;
+    grid-template-columns: minmax(232px, 252px) minmax(0, 1fr);
+    gap: 16px;
     margin-top: 12px;
     max-height: calc(var(--priority-inbox-max-height) - 78px);
     min-height: 0;
@@ -136,7 +141,8 @@
 
   .priority-pane-stack {
     display: grid;
-    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
     min-height: 0;
     max-height: 100%;
     overflow-y: auto;
@@ -150,15 +156,20 @@
     border-radius: 15px;
     box-shadow: 0 8px 20px rgba(107, 35, 35, 0.08);
     min-height: 0;
-    height: 340px;
+    height: 278px;
     display: flex;
     flex-direction: column;
     flex: 0 0 auto;
   }
 
+  .priority-pane:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
   .priority-inbox-shell[data-priority-filter]:not([data-priority-filter="all"]) .priority-pane {
-    min-height: 420px;
-    height: 100%;
+    min-height: 0;
+    height: auto;
+    grid-column: 1 / -1;
   }
 
   .priority-pane[data-priority-type="client"] {
@@ -199,7 +210,7 @@
   .priority-pane-body {
     flex: 1;
     overflow: auto;
-    padding: 2px 10px 10px;
+    padding: 4px 12px 12px;
     background: linear-gradient(180deg, rgba(255, 254, 254, 0.9), rgba(255, 249, 249, 0.62));
   }
 
@@ -287,21 +298,26 @@
   }
 
   .priority-empty {
-    padding: 14px 6px;
-    color: var(--muted);
+    margin: 8px 0 2px;
+    padding: 16px 14px;
+    color: #806868;
     font-size: 13px;
+    line-height: 1.5;
+    border: 1px dashed rgba(225, 6, 0, 0.24);
+    border-radius: 14px;
+    background: rgba(255, 249, 249, 0.94);
   }
 
   .legal-desk-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 12px;
+    gap: 14px;
   }
 
   .legal-desk-card {
     border: 1px solid rgba(225, 6, 0, 0.14);
     border-radius: 16px;
-    padding: 14px;
+    padding: 16px;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 249, 249, 0.94)),
       radial-gradient(circle at top right, rgba(225, 6, 0, 0.08), rgba(225, 6, 0, 0));
@@ -377,14 +393,15 @@
 
   .workspace-mode-grid {
     display: grid;
-    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-    gap: 14px;
-    margin-top: 14px;
+    grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+    gap: 18px;
+    margin-top: 18px;
+    align-items: start;
   }
 
   .workspace-mode-stack {
     display: grid;
-    gap: 10px;
+    gap: 12px;
     align-content: start;
   }
 
@@ -393,7 +410,7 @@
     border: 1px solid rgba(225, 6, 0, 0.18);
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.92);
-    padding: 12px 13px;
+    padding: 14px 15px;
     text-align: left;
     color: inherit;
     transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
@@ -426,18 +443,40 @@
   .workspace-action-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 14px;
+  }
+
+  .workspace-quick-actions-block {
+    display: grid;
+    gap: 10px;
   }
 
   .workspace-action-card {
     border: 1px solid rgba(225, 6, 0, 0.18);
     border-radius: 16px;
     background: rgba(255, 255, 255, 0.95);
-    padding: 14px;
+    padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    min-height: 160px;
+    gap: 12px;
+    min-height: 148px;
+    color: inherit;
+    text-decoration: none;
+    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  }
+
+  .workspace-action-card:hover {
+    color: inherit;
+    border-color: rgba(225, 6, 0, 0.42);
+    background: rgba(255, 246, 246, 0.98);
+    box-shadow: 0 12px 24px rgba(113, 37, 37, 0.14);
+    transform: translateY(-1px);
+  }
+
+  .workspace-action-card:focus-visible {
+    outline: 0;
+    border-color: rgba(225, 6, 0, 0.76);
+    box-shadow: 0 0 0 3px rgba(225, 6, 0, 0.18);
   }
 
   .workspace-action-card.is-strong {
@@ -459,29 +498,69 @@
     line-height: 1.5;
   }
 
+  .workspace-action-launch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    border-radius: 10px;
+    border: 1px solid rgba(225, 6, 0, 0.22);
+    background: rgba(255, 255, 255, 0.9);
+    color: #4f2a2a;
+    font-size: 12px;
+    font-weight: 720;
+    letter-spacing: 0.01em;
+    padding: 6px 11px;
+  }
+
   .dashboard-risk-list,
   .dashboard-task-list {
     display: grid;
-    gap: 10px;
+    gap: 12px;
   }
 
   .dashboard-risk-item,
   .dashboard-task-item {
     border: 1px solid rgba(225, 6, 0, 0.14);
     border-radius: 14px;
-    padding: 12px;
+    padding: 14px;
     background: rgba(255, 255, 255, 0.92);
+  }
+
+  .dashboard-link-card {
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  }
+
+  .dashboard-link-card:hover {
+    border-color: rgba(225, 6, 0, 0.42);
+    background: rgba(255, 246, 246, 0.97);
+    box-shadow: 0 12px 22px rgba(113, 37, 37, 0.12);
+    transform: translateY(-1px);
+  }
+
+  .dashboard-link-card:focus-visible {
+    outline: 0;
+    border-color: rgba(225, 6, 0, 0.78);
+    box-shadow: 0 0 0 3px rgba(225, 6, 0, 0.18);
+  }
+
+  .dashboard-risk-chip-compact {
+    min-width: 0;
+    padding: 3px 8px;
+    font-size: 10px;
+    letter-spacing: 0.04em;
   }
 
   .dashboard-snapshot-grid {
     display: grid;
-    gap: 10px;
+    gap: 12px;
   }
 
   .dashboard-snapshot-item {
     border: 1px solid rgba(225, 6, 0, 0.14);
     border-radius: 14px;
-    padding: 11px 12px;
+    padding: 13px 14px;
     background: rgba(255, 255, 255, 0.92);
     color: inherit;
     text-decoration: none;
@@ -518,8 +597,31 @@
   }
 
   @media (max-width: 991.98px) {
+    .dashboard-briefing-grid {
+      margin-top: 18px;
+    }
+
+    .dashboard-briefing-grid .action-card {
+      min-height: 162px;
+    }
+
     .workspace-mode-grid {
       grid-template-columns: 1fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .workspace-mode-stack {
+      gap: 14px;
+    }
+
+    .workspace-action-grid {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .workspace-action-card {
+      min-height: 182px;
     }
 
     .priority-inbox-shell {
@@ -529,18 +631,107 @@
     .priority-inbox-layout {
       grid-template-columns: 1fr;
       max-height: none;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .priority-inbox-sidebar {
+      gap: 14px;
+      padding: 14px;
+    }
+
+    .priority-sla-list {
+      padding: 10px;
+      gap: 8px;
     }
 
     .priority-pane {
-      height: 320px;
+      height: auto;
+      min-height: 340px;
     }
 
     .priority-pane-stack {
-      max-height: 560px;
+      grid-template-columns: 1fr;
+      max-height: none;
+      gap: 14px;
+    }
+
+    .priority-pane-header {
+      padding: 14px 14px 12px;
+      gap: 12px;
+    }
+
+    .priority-pane-body {
+      padding: 6px 12px 12px;
+    }
+
+    .priority-message {
+      padding: 12px 6px;
+    }
+
+    .priority-message .table-actions {
+      margin-top: 10px;
+    }
+
+    .dashboard-risk-list,
+    .dashboard-task-list,
+    .dashboard-snapshot-grid {
+      gap: 14px;
+    }
+
+    .dashboard-risk-item,
+    .dashboard-task-item {
+      padding: 15px 16px;
+    }
+
+    .dashboard-snapshot-item {
+      padding: 14px 15px;
     }
 
     .priority-inbox-shell[data-priority-filter]:not([data-priority-filter="all"]) .priority-pane {
-      min-height: 360px;
+      min-height: 380px;
+    }
+  }
+
+  @media (max-width: 767.98px) {
+    .dashboard-briefing-grid .action-card,
+    .workspace-action-card {
+      min-height: 0;
+    }
+
+    .priority-pane,
+    .priority-inbox-shell[data-priority-filter]:not([data-priority-filter="all"]) .priority-pane {
+      min-height: 0;
+    }
+
+    .priority-pane-body {
+      overflow: visible;
+    }
+
+    .priority-message {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .priority-message-top {
+      align-items: flex-start;
+    }
+
+    .priority-message-subject {
+      white-space: normal;
+    }
+
+    .priority-message-side {
+      text-align: left;
+    }
+
+    .priority-message .table-actions {
+      margin-top: 8px;
+    }
+
+    .priority-folder-btn {
+      padding: 10px 12px;
     }
   }
 </style>
@@ -814,7 +1005,12 @@
           <div class="legal-desk-grid">
             {% for card in legal_desk %}
               {% set top_action = card.top_action %}
-              <article class="legal-desk-card tone-{{ card.health_tone }}">
+              <article
+                class="legal-desk-card tone-{{ card.health_tone }} dashboard-link-card"
+                data-card-href="{{ url_for('matter_detail', matter_id=card.matter.id) }}"
+                tabindex="0"
+                role="link"
+              >
                 <div class="legal-desk-header">
                   <div>
                     <a class="fw-semibold text-decoration-none" href="{{ url_for('matter_detail', matter_id=card.matter.id) }}">{{ card.matter.matter_no }} - {{ card.matter.title }}</a>
@@ -864,7 +1060,12 @@
           <div class="dashboard-task-list">
             {% for t in my_tasks %}
               {% set task_matter = task_matter_map.get(t.matter_id) if task_matter_map else None %}
-              <article class="dashboard-task-item">
+              <article
+                class="dashboard-task-item dashboard-link-card"
+                data-card-href="{{ url_for('matter_tasks', matter_id=t.matter_id) }}#task-{{ t.id }}"
+                tabindex="0"
+                role="link"
+              >
                 <div class="d-flex justify-content-between gap-2">
                   <div class="fw-semibold">{{ t.title }}</div>
                   <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
@@ -922,18 +1123,16 @@
                 </button>
               {% endfor %}
             </form>
-            <div>
+            <div class="workspace-quick-actions-block">
               <div class="panel-kicker mb-2">Workspace Quick Actions</div>
               <div class="workspace-action-grid">
                 {% for action in workspace_quick_actions %}
-                  <article class="workspace-action-card {{ 'is-strong' if action.emphasis == 'strong' else '' }}">
+                  <a class="workspace-action-card {{ 'is-strong' if action.emphasis == 'strong' else '' }}" href="{{ action.href }}">
                     {% if action.badge %}<span class="workspace-action-badge">{{ action.badge }}</span>{% endif %}
                     <div class="workspace-action-title">{{ action.title }}</div>
                     <div class="workspace-action-summary">{{ action.summary }}</div>
-                    <div class="mt-auto">
-                      <a class="btn btn-sm btn-light" href="{{ action.href }}">Launch</a>
-                    </div>
-                  </article>
+                    <span class="workspace-action-launch mt-auto">Launch</span>
+                  </a>
                 {% endfor %}
               </div>
             </div>
@@ -984,10 +1183,15 @@
           {% if at_risk_matters %}
             <div class="dashboard-risk-list">
               {% for item in at_risk_matters %}
-                <article class="dashboard-risk-item">
+                <article
+                  class="dashboard-risk-item dashboard-link-card"
+                  data-card-href="{{ url_for('matter_detail', matter_id=item.matter.id) }}"
+                  tabindex="0"
+                  role="link"
+                >
                   <div class="d-flex justify-content-between gap-2">
                     <a class="fw-semibold text-decoration-none" href="{{ url_for('matter_detail', matter_id=item.matter.id) }}">{{ item.matter.matter_no }} - {{ item.matter.title }}</a>
-                    <span class="risk-chip risk-{{ item.matter.risk_level|lower }}">{{ item.matter.risk_level }}</span>
+                    <span class="risk-chip dashboard-risk-chip-compact risk-{{ item.matter.risk_level|lower }}">{{ item.matter.risk_level }}</span>
                   </div>
                   <div class="muted small mt-1">{{ item.risk_driver }}{% if item.overdue_tasks %} • {{ item.overdue_tasks }} overdue{% endif %}</div>
                 </article>

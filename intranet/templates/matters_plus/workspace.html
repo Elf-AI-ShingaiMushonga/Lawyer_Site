@@ -82,7 +82,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    min-height: 142px;
+    min-height: 124px;
   }
 
   .war-room-action.is-strong {
@@ -90,6 +90,10 @@
     background:
       radial-gradient(circle at top right, rgba(225, 6, 0, 0.08), rgba(225, 6, 0, 0)),
       rgba(255, 250, 250, 0.98);
+  }
+
+  .war-room-grid > .empty-state {
+    grid-column: 1 / -1;
   }
 
   .war-room-action-title {
@@ -118,7 +122,14 @@
   }
 
   .workspace-action-grid .action-card {
-    min-height: 118px;
+    min-height: 108px;
+  }
+
+  .workspace-history-empty {
+    display: grid;
+    gap: 10px;
+    text-align: left;
+    align-items: start;
   }
 
   .workspace-section .table td,
@@ -141,6 +152,39 @@
   @media (max-width: 991.98px) {
     .war-room-grid {
       grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .workspace-action-grid .action-card {
+      min-height: 120px;
+    }
+
+    .workspace-magic-list {
+      gap: 12px;
+    }
+
+    .workspace-magic-item {
+      padding: 12px 13px;
+    }
+
+    .war-room-action {
+      min-height: 140px;
+      padding: 13px;
+      gap: 8px;
+    }
+
+    .workspace-section .table td,
+    .workspace-section .table th {
+      padding-top: 0.65rem;
+      padding-bottom: 0.65rem;
+    }
+
+    .workspace-checklist-item {
+      padding: 12px 13px;
+    }
+
+    .workspace-checklist-item + .workspace-checklist-item {
+      margin-top: 10px;
     }
   }
 </style>
@@ -240,36 +284,43 @@
             <div class="panel-summary">Track stage changes and the reasons behind them so handovers and reviews stay grounded.</div>
           </div>
         </div>
-        <div class="section-note">Use this as the operating history for the file. It should answer what changed, when it changed, and why the team moved the matter forward.</div>
-        <div class="table-tools" data-table-tools data-table-target="matter-stage-history-table">
-          <input class="form-control" type="search" data-table-search placeholder="Filter by stage or reason...">
-          <div class="table-count" data-table-count aria-live="polite"></div>
-        </div>
-        <div class="table-responsive">
-          <table class="table" id="matter-stage-history-table">
-            <thead>
-              <tr>
-                <th data-sort-index="0" data-sort-type="date">When</th>
-                <th data-sort-index="1">From</th>
-                <th data-sort-index="2">To</th>
-                <th data-sort-index="3">Reason</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in stage_history %}
-                <tr data-table-row data-search="{{ row.changed_at }} {{ row.from_stage or '' }} {{ row.to_stage }} {{ row.reason or '' }}">
-                  <td>{{ row.changed_at }}</td>
-                  <td>{{ row.from_stage or '-' }}</td>
-                  <td>{{ row.to_stage }}</td>
-                  <td>{{ row.reason or '-' }}</td>
+        {% if stage_history %}
+          <div class="section-note">Use this as the operating history for the file. It should answer what changed, when it changed, and why the team moved the matter forward.</div>
+          <div class="table-tools" data-table-tools data-table-target="matter-stage-history-table">
+            <input class="form-control" type="search" data-table-search placeholder="Filter by stage or reason...">
+            <div class="table-count" data-table-count aria-live="polite"></div>
+          </div>
+          <div class="table-responsive">
+            <table class="table" id="matter-stage-history-table">
+              <thead>
+                <tr>
+                  <th data-sort-index="0" data-sort-type="date">When</th>
+                  <th data-sort-index="1">From</th>
+                  <th data-sort-index="2">To</th>
+                  <th data-sort-index="3">Reason</th>
                 </tr>
-              {% endfor %}
-              <tr data-table-empty-row class="table-empty-row" {% if stage_history|length > 0 %}hidden{% endif %}>
-                <td colspan="4" class="muted">No stage history yet.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {% for row in stage_history %}
+                  <tr data-table-row data-search="{{ row.changed_at }} {{ row.from_stage or '' }} {{ row.to_stage }} {{ row.reason or '' }}">
+                    <td>{{ row.changed_at }}</td>
+                    <td>{{ row.from_stage or '-' }}</td>
+                    <td>{{ row.to_stage }}</td>
+                    <td>{{ row.reason or '-' }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="empty-state workspace-history-empty">
+            <div class="fw-semibold">No stage transitions recorded yet.</div>
+            <div class="muted">Capture the first stage update from the transition panel to turn this workspace into a reliable handover and review history.</div>
+            <div class="table-actions">
+              <a class="btn btn-sm btn-light" href="#workspace-stage">Record First Stage Change</a>
+            </div>
+          </div>
+        {% endif %}
       </section>
     </div>
 
@@ -295,6 +346,8 @@
                   <a class="btn btn-sm btn-light" href="{{ action.href }}">Launch</a>
                 </div>
               </article>
+            {% else %}
+              <div class="empty-state">Launch actions will appear here as soon as the matter has enough context to suggest them.</div>
             {% endfor %}
           </div>
           <div class="panel-body mt-2">
@@ -329,6 +382,8 @@
                   <a class="btn btn-sm btn-light" href="{{ action.href }}">{{ action.button_label }}</a>
                 </div>
               </article>
+            {% else %}
+              <div class="empty-state">No next-best moves are available yet. Update the matter summary, stage, or checklist and the guidance will become more specific.</div>
             {% endfor %}
           </div>
         </section>
