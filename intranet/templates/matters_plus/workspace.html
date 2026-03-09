@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-{% set checklist = checklist or [] %}
-{% set matter_magic = matter_magic or {} %}
+{% set checklist = checklist|default([], true) %}
+{% set matter_magic = matter_magic|default({}, true) %}
 {% set matter_magic_actions = matter_magic.get('actions', []) %}
 {% set matter_magic_headline = matter_magic.get('headline') or "No matter guidance is available yet." %}
 {% set matter_magic_status_line = matter_magic.get('status_line') or "Work directly from the matter workspace." %}
 {% set matter_magic_health_tone = matter_magic.get('health_tone') or "neutral" %}
-{% set matter_launch_pack = matter_launch_pack or {} %}
+{% set matter_launch_pack = matter_launch_pack|default({}, true) %}
 {% set matter_launch_actions = matter_launch_pack.get('quick_actions', []) %}
 {% set matter_launch_subheadline = matter_launch_pack.get('subheadline') or "Launch common matter actions from one place." %}
 {% set matter_launch_status_line = matter_launch_pack.get('status_line') or "Use the workspace to move quickly between execution tasks." %}
