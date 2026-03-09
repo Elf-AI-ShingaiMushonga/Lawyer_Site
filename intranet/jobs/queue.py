@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import json
 
 from sqlalchemy import or_, select
@@ -27,7 +28,7 @@ def enqueue_job(job_type: str, payload: dict, *, run_after: dt.datetime | None =
 def lease_job(worker_id: str, lease_seconds: int = 60):
     from ..models import JobQueue
 
-    now = dt.datetime.utcnow()
+    now = utc_now()
     stmt = (
         select(JobQueue)
         .where(
@@ -62,7 +63,7 @@ def complete_job(job_id: int, message: str = "ok") -> None:
     if job is None:
         return
     job.status = "succeeded"
-    job.finished_at = dt.datetime.utcnow()
+    job.finished_at = utc_now()
     job.last_error = None
     db.session.add(JobHistory(job_id=job.id, status="succeeded", message=message))
     db.session.commit()
@@ -80,6 +81,6 @@ def fail_job(job_id: int, error: str) -> None:
     else:
         job.status = "failed"
         job.lease_until = None
-    job.finished_at = dt.datetime.utcnow()
+    job.finished_at = utc_now()
     db.session.add(JobHistory(job_id=job.id, status=job.status, message=job.last_error))
     db.session.commit()

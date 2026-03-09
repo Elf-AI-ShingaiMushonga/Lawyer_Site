@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import json
 
 from ..config import VALID_ROLES
@@ -19,7 +20,7 @@ def _handle_send_notification(payload: dict) -> str:
 
     # Internal-only delivery model: mark as delivered without external provider.
     notification.status = "delivered"
-    notification.delivered_at = dt.datetime.utcnow()
+    notification.delivered_at = utc_now()
     db.session.commit()
     return "notification delivered"
 
@@ -27,7 +28,7 @@ def _handle_send_notification(payload: dict) -> str:
 def _handle_deadline_sweep(payload: dict) -> str:
     from ..models import Deadline
 
-    now = dt.datetime.utcnow().date()
+    now = utc_now().date()
     critical = (
         Deadline.query.filter(
             Deadline.is_critical.is_(True),
@@ -48,7 +49,7 @@ def _handle_deadline_escalation_scan(payload: dict) -> str:
     from ..models import Deadline, Notification
     from ..services.notification_engine import NotificationEngine
 
-    today = dt.datetime.utcnow().date()
+    today = utc_now().date()
     rows = (
         Deadline.query.filter(
             Deadline.is_critical.is_(True),
@@ -78,7 +79,7 @@ def _handle_deadline_digest(payload: dict) -> str:
     from ..models import Deadline, MatterMember, Notification
     from ..services.notification_engine import NotificationEngine
 
-    today = dt.datetime.utcnow().date()
+    today = utc_now().date()
     week_end = today + dt.timedelta(days=7)
     members = db.session.query(MatterMember.user_id).distinct().all()
 
@@ -140,7 +141,7 @@ def _handle_priority_inbox_digest(payload: dict) -> str:
     if not bool(config.get("digest_enabled")):
         return "priority inbox digest disabled"
 
-    now_utc = dt.datetime.utcnow()
+    now_utc = utc_now()
     eligible_roles = {str(role).strip().lower() for role in VALID_ROLES if str(role).strip()}
     raw_roles = payload.get("roles")
     selected_roles = sorted(eligible_roles)
@@ -224,7 +225,7 @@ def _handle_priority_inbox_digest(payload: dict) -> str:
 def _handle_retention_archive_sweep(payload: dict) -> str:
     from ..models import LegalHold, Matter, RetentionPolicy
 
-    now = dt.datetime.utcnow()
+    now = utc_now()
     batch_size = max(1, int(payload.get("batch_size") or 200))
 
     # Seed archival due dates for closed matters that have no schedule yet.
@@ -468,7 +469,7 @@ def _handle_suspicious_activity_scan(payload: dict) -> str:
         )
         return True
 
-    now = dt.datetime.utcnow()
+    now = utc_now()
     created = 0
 
     # Repeated denied matter access attempts by a single actor.

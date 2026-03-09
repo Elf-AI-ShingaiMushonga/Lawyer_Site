@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 
 from intranet.extensions import db
 from intranet.jobs.worker import _handle_burnout_heuristics, _handle_workload_forecast
@@ -117,8 +118,8 @@ def test_conflict_engine_semantic_scan_links_ocr_entities(seed_user_matter):
         client_name="Acme Logistics Group",
         status="Open",
         created_by=user.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add(prior_matter)
     db.session.flush()
@@ -211,8 +212,8 @@ def test_analytics_engine_honors_matter_scope(seed_user_matter):
         client_name="Other Client",
         status="Open",
         created_by=user.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add(other_matter)
     db.session.flush()
@@ -221,8 +222,8 @@ def test_analytics_engine_honors_matter_scope(seed_user_matter):
         TimeEntry(
             user_id=user.id,
             matter_id=matter.id,
-            start_at=dt.datetime.utcnow() - dt.timedelta(hours=2),
-            end_at=dt.datetime.utcnow() - dt.timedelta(hours=1),
+            start_at=utc_now() - dt.timedelta(hours=2),
+            end_at=utc_now() - dt.timedelta(hours=1),
             hours=2.0,
             rounded_hours=2.0,
             narrative="Scoped work",
@@ -233,8 +234,8 @@ def test_analytics_engine_honors_matter_scope(seed_user_matter):
         TimeEntry(
             user_id=user.id,
             matter_id=other_matter.id,
-            start_at=dt.datetime.utcnow() - dt.timedelta(hours=3),
-            end_at=dt.datetime.utcnow() - dt.timedelta(hours=2),
+            start_at=utc_now() - dt.timedelta(hours=3),
+            end_at=utc_now() - dt.timedelta(hours=2),
             hours=3.0,
             rounded_hours=3.0,
             narrative="Other work",

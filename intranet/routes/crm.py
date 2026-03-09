@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import json
 from collections import defaultdict
 from urllib.parse import urlsplit
@@ -150,7 +151,7 @@ def register_crm_routes(app):
                     return redirect(url_for("crm_lead_detail", lead_id=lead_id))
                 lead.stage = stage
                 lead.notes = (request.form.get("notes") or "").strip() or lead.notes
-                lead.updated_at = dt.datetime.utcnow()
+                lead.updated_at = utc_now()
                 db.session.commit()
                 audit("crm_lead_update", "CRMLead", lead.id, {"stage": stage})
                 flash("Lead updated.", "info")
@@ -270,7 +271,7 @@ def register_crm_routes(app):
                         flash("Invalid quote validity date.", "warning")
                         return redirect(url_for("crm_lead_detail", lead_id=lead_id))
 
-                now_utc = dt.datetime.utcnow()
+                now_utc = utc_now()
                 row = LeadQuote(
                     lead_id=lead.id,
                     title=title,
@@ -455,7 +456,7 @@ def register_crm_routes(app):
 
         followup.status = next_status
         followup.due_at = due_at
-        lead.updated_at = dt.datetime.utcnow()
+        lead.updated_at = utc_now()
         db.session.commit()
         audit(
             "crm_followup_status_update",
@@ -484,7 +485,7 @@ def register_crm_routes(app):
             return redirect(url_for("crm_lead_detail", lead_id=lead.id))
 
         note = (request.form.get("status_note") or "").strip() or None
-        now_utc = dt.datetime.utcnow()
+        now_utc = utc_now()
         previous = (row.status or "draft").strip().lower()
         row.status = next_status
         row.updated_at = now_utc
@@ -613,7 +614,7 @@ def register_crm_routes(app):
 
         row.status = "signed"
         row.signed_by = signer_name
-        row.signed_at = dt.datetime.utcnow()
+        row.signed_at = utc_now()
         row.signed_ip = request.remote_addr
         onboarding_task_ids = create_engagement_signed_tasks(
             row.id,

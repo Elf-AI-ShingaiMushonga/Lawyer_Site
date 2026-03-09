@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 import io
 
 from flask import g
@@ -34,7 +35,7 @@ def _seed_user() -> User:
 
 
 def _seed_matter(owner_user_id: int) -> Matter:
-    now = dt.datetime.utcnow()
+    now = utc_now()
     matter = Matter(
         matter_no="2026-AI-ASSIST-0001",
         title="AI Assist Matter",
@@ -124,7 +125,7 @@ def test_time_ai_narrative_endpoint_returns_payload(app_ctx):
     client = app.test_client()
     csrf_token = _set_internal_session(client, user.id)
 
-    start_at = (dt.datetime.utcnow() - dt.timedelta(hours=1, minutes=15)).replace(second=0, microsecond=0)
+    start_at = (utc_now() - dt.timedelta(hours=1, minutes=15)).replace(second=0, microsecond=0)
     end_at = start_at + dt.timedelta(minutes=45)
     response = client.post(
         "/time/ai/narrative",

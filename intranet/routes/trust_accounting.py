@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import datetime as dt
+from ..timeutils import utc_now
 import io
 import json
 from typing import Any
@@ -457,7 +458,7 @@ def register_trust_accounting_routes(app):
             return redirect(url_for("trust_ledger"))
 
         row.approved_by = actor_user_id or current_user.id
-        row.approved_at = dt.datetime.utcnow()
+        row.approved_at = utc_now()
         note = (request.form.get("note") or "").strip() or None
 
         if decision == "reject":
@@ -498,7 +499,7 @@ def register_trust_accounting_routes(app):
                 _create_threshold_alerts(ledger)
             db.session.commit()
             row.status = "executed"
-            row.executed_at = dt.datetime.utcnow()
+            row.executed_at = utc_now()
             row.executed_entry_id = result.entry_id
             row.notes = note
             db.session.commit()
@@ -515,7 +516,7 @@ def register_trust_accounting_routes(app):
                 flash(message, "warning")
                 return redirect(url_for("trust_ledger"))
             row.status = "executed"
-            row.executed_at = dt.datetime.utcnow()
+            row.executed_at = utc_now()
             row.executed_entry_id = source_entry_id
             row.notes = note
             db.session.commit()
@@ -1028,7 +1029,7 @@ def register_trust_accounting_routes(app):
                 ],
                 csv_rows,
             )
-        return Response(json.dumps({"generated_at": dt.datetime.utcnow().isoformat(), "rows": rows}, indent=2), mimetype="application/json")
+        return Response(json.dumps({"generated_at": utc_now().isoformat(), "rows": rows}, indent=2), mimetype="application/json")
 
     @app.get("/trust/reports/monthly")
     @login_required

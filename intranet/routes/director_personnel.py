@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 
 from flask import abort, flash, redirect, request, url_for
 from flask_login import current_user, login_required
@@ -37,7 +38,7 @@ def _build_personnel_rows(team_members: list[User]) -> tuple[list[dict], dict]:
 
     today = dt.date.today()
     week_end = today + dt.timedelta(days=7)
-    now_utc = dt.datetime.utcnow()
+    now_utc = utc_now()
     window_7d = now_utc - dt.timedelta(days=7)
     window_30d = now_utc - dt.timedelta(days=30)
     monthly_target_hours = 160.0

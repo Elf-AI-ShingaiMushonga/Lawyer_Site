@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 
 from flask import g
 
@@ -40,8 +41,8 @@ def _seed_matter(owner: User, matter_no: str) -> Matter:
         client_name="Director Scope Client",
         status="Open",
         created_by=owner.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
         legal_category="General",
     )
     db.session.add(row)

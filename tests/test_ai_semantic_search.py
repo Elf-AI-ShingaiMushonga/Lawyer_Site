@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 
 from intranet.extensions import db
 from intranet.jobs.worker import _handle_semantic_index_document_version
@@ -38,8 +39,8 @@ def _seed_matter(owner: User, matter_no: str, title: str) -> Matter:
         client_name="Semantic Client",
         status="Open",
         created_by=owner.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add(matter)
     db.session.flush()

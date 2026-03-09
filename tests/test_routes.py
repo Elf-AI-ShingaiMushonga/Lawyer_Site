@@ -142,6 +142,7 @@ REQUIRED_ROUTES = {
     "/ops/backup/run",
     "/ops/restore/verify",
     "/ops/dr/targets",
+    "/integrations/south-africa",
     "/integrations/office365",
     "/integrations/office365/outlook.ics",
     "/integrations/office365/excel/time-entries.csv",

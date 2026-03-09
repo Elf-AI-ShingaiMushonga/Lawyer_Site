@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import secrets
 
 from sqlalchemy import select
@@ -82,7 +83,7 @@ class TrustEngine:
             created_by=int(request["created_by"]),
             reversal_of_entry_id=reversal_of_entry_id,
             immutable_ref=request.get("immutable_ref")
-            or f"TL-{trust_account_id}-{dt.datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}",
+            or f"TL-{trust_account_id}-{utc_now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}",
         )
         db.session.add(entry)
 

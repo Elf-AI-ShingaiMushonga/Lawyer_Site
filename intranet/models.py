@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from .timeutils import utc_now
 
 from flask_login import UserMixin
 from sqlalchemy import event
@@ -16,7 +17,7 @@ from .extensions import db
 
 class AuditLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    at = db.Column(db.DateTime, nullable=False, default=utc_now)
     actor_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     action = db.Column(db.String(120), nullable=False)
     entity_type = db.Column(db.String(40), nullable=True)
@@ -33,7 +34,7 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(40), nullable=False, default="junior_attorney")
     password_hash = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     last_login_at = db.Column(db.DateTime, nullable=True)
 
     # Security hardening
@@ -59,7 +60,7 @@ class DirectorTeamMember(db.Model):
     director_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     member_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     assigned_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.UniqueConstraint("director_id", "member_user_id", name="uq_director_team_member"),
         db.UniqueConstraint("member_user_id", name="uq_director_team_member_user"),
@@ -71,7 +72,7 @@ class Announcement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(180), nullable=False)
     body = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
 
 
@@ -87,9 +88,9 @@ class Matter(db.Model):
     budget_status = db.Column(db.String(60), nullable=False, default="On Track")
     outcome_summary = db.Column(db.Text, nullable=True)
     last_update_note = db.Column(db.Text, nullable=True)
-    opened_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    opened_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     closed_at = db.Column(db.DateTime, nullable=True)
-    last_updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    last_updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     legal_category = db.Column(db.String(120), nullable=True, index=True)
     archetype_id = db.Column(db.Integer, db.ForeignKey("matter_template.id"), nullable=True, index=True)
@@ -125,7 +126,7 @@ class MatterPin(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.UniqueConstraint("user_id", "matter_id", name="uq_matter_pin_user_matter"),
         db.Index("ix_matter_pin_user_created", "user_id", "created_at"),
@@ -136,8 +137,8 @@ class MatterRecentView(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
-    first_viewed_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
-    last_viewed_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    first_viewed_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    last_viewed_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     view_count = db.Column(db.Integer, nullable=False, default=1)
     __table_args__ = (
         db.UniqueConstraint("user_id", "matter_id", name="uq_matter_recent_user_matter"),
@@ -154,7 +155,7 @@ class Task(db.Model):
     due_date = db.Column(db.Date, nullable=True)
     assigned_to = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
     # Workflow expansion
     priority = db.Column(db.String(20), nullable=False, default="Medium")
@@ -176,7 +177,7 @@ class TaskAssignee(db.Model):
     task_id = db.Column(db.Integer, db.ForeignKey("task.id"), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     assigned_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-    assigned_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    assigned_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.UniqueConstraint("task_id", "user_id", name="uq_task_assignee_task_user"),
         db.Index("ix_task_assignee_user_task", "user_id", "task_id"),
@@ -192,7 +193,7 @@ class MatterTimelineEvent(db.Model):
     description = db.Column(db.Text, nullable=True)
     is_milestone = db.Column(db.Boolean, nullable=False, default=False)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class MatterActivity(db.Model):
@@ -201,7 +202,7 @@ class MatterActivity(db.Model):
     actor_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     action = db.Column(db.String(120), nullable=False)
     details = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class DocumentFile(db.Model):
@@ -217,7 +218,7 @@ class DocumentFile(db.Model):
     owner_name = db.Column(db.String(255), nullable=True)
     is_privileged = db.Column(db.Boolean, nullable=False, default=False)
     uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    uploaded_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class Contact(db.Model):
@@ -227,7 +228,7 @@ class Contact(db.Model):
     email = db.Column(db.String(255), nullable=True)
     phone = db.Column(db.String(80), nullable=True)
     notes = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
 
 
@@ -237,8 +238,8 @@ class KnowledgeBase(db.Model):
     tags = db.Column(db.String(255), nullable=True)
     body = db.Column(db.Text, nullable=False)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class GovernanceIncident(db.Model):
@@ -250,7 +251,7 @@ class GovernanceIncident(db.Model):
     summary = db.Column(db.Text, nullable=False)
     impact = db.Column(db.Text, nullable=True)
     resolution = db.Column(db.Text, nullable=True)
-    opened_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    opened_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     closed_at = db.Column(db.DateTime, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
@@ -267,8 +268,8 @@ class UserSession(db.Model):
     session_token_hash = db.Column(db.String(128), nullable=False, unique=True)
     ip = db.Column(db.String(64), nullable=True)
     user_agent = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
-    last_seen_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    last_seen_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     expires_at = db.Column(db.DateTime, nullable=False)
     revoked_at = db.Column(db.DateTime, nullable=True)
 
@@ -278,7 +279,7 @@ class TrustedDevice(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     device_name = db.Column(db.String(255), nullable=False)
     fingerprint_hash = db.Column(db.String(128), nullable=False, unique=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     last_seen_at = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
@@ -287,7 +288,7 @@ class UserMFABackupCode(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     code_hash = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     used_at = db.Column(db.DateTime, nullable=True)
 
 
@@ -298,7 +299,7 @@ class SSOApplication(db.Model):
     client_secret_hash = db.Column(db.String(255), nullable=False)
     redirect_uri = db.Column(db.String(500), nullable=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class SSOAuthorizationCode(db.Model):
@@ -307,7 +308,7 @@ class SSOAuthorizationCode(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     code_hash = db.Column(db.String(128), nullable=False, unique=True)
     scope = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     expires_at = db.Column(db.DateTime, nullable=False)
     consumed_at = db.Column(db.DateTime, nullable=True)
 
@@ -319,7 +320,7 @@ class SSOToken(db.Model):
     access_token_hash = db.Column(db.String(128), nullable=False, unique=True)
     refresh_token_hash = db.Column(db.String(128), nullable=True)
     scope = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     expires_at = db.Column(db.DateTime, nullable=False)
     revoked_at = db.Column(db.DateTime, nullable=True)
 
@@ -335,7 +336,7 @@ class PermissionGrant(db.Model):
     resource = db.Column(db.String(80), nullable=False, index=True)
     action = db.Column(db.String(40), nullable=False, index=True)
     is_allowed = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class EthicalWall(db.Model):
@@ -344,7 +345,7 @@ class EthicalWall(db.Model):
     description = db.Column(db.Text, nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class EthicalWallRule(db.Model):
@@ -353,7 +354,7 @@ class EthicalWallRule(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     is_deny = db.Column(db.Boolean, nullable=False, default=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.UniqueConstraint("wall_id", "user_id", name="uq_ethical_wall_user_rule"),
         db.Index("ix_ethical_wall_rule_user_state", "user_id", "is_active", "is_deny", "wall_id"),
@@ -364,7 +365,7 @@ class EthicalWallMatter(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     wall_id = db.Column(db.Integer, db.ForeignKey("ethical_wall.id"), nullable=False, index=True)
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.UniqueConstraint("wall_id", "matter_id", name="uq_ethical_wall_matter"),
         db.Index("ix_ethical_wall_matter_matter_wall", "matter_id", "wall_id"),
@@ -377,7 +378,7 @@ class LegalHold(db.Model):
     reason = db.Column(db.Text, nullable=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     released_at = db.Column(db.DateTime, nullable=True)
 
 
@@ -389,7 +390,7 @@ class RetentionPolicy(db.Model):
     retain_days = db.Column(db.Integer, nullable=False)
     archive_after_days = db.Column(db.Integer, nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class DataResidencyPolicy(db.Model):
@@ -398,7 +399,7 @@ class DataResidencyPolicy(db.Model):
     data_class = db.Column(db.String(80), nullable=False)
     region_code = db.Column(db.String(40), nullable=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class SuspiciousActivityAlert(db.Model):
@@ -407,7 +408,7 @@ class SuspiciousActivityAlert(db.Model):
     severity = db.Column(db.String(40), nullable=False, default="medium")
     status = db.Column(db.String(40), nullable=False, default="open")
     details_json = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     resolved_at = db.Column(db.DateTime, nullable=True)
     resolved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
 
@@ -419,7 +420,7 @@ class Notification(db.Model):
     subject_ref = db.Column(db.String(255), nullable=False)
     channel = db.Column(db.String(40), nullable=False, default="in_app")
     status = db.Column(db.String(40), nullable=False, default="queued")
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     delivered_at = db.Column(db.DateTime, nullable=True)
 
 
@@ -432,7 +433,7 @@ class FirmSetting(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     setting_key = db.Column(db.String(120), nullable=False, unique=True)
     setting_value_json = db.Column(db.Text, nullable=False, default="{}")
-    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
 
 
@@ -441,14 +442,14 @@ class Office(db.Model):
     name = db.Column(db.String(120), nullable=False, unique=True)
     jurisdiction = db.Column(db.String(80), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class PracticeArea(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False, unique=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class TimekeeperRole(db.Model):
@@ -468,7 +469,7 @@ class MatterTemplate(db.Model):
     required_fields_json = db.Column(db.Text, nullable=True)
     boilerplate_template = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class ContractTemplate(db.Model):
@@ -483,7 +484,7 @@ class ContractTemplate(db.Model):
     auto_create_on_matter_open = db.Column(db.Boolean, nullable=False, default=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.Index("ix_contract_template_archetype_active", "archetype_id", "is_active"),
     )
@@ -497,7 +498,7 @@ class TaskTemplate(db.Model):
     sla_hours = db.Column(db.Integer, nullable=True)
     recurrence_rule = db.Column(db.String(120), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class TaskTemplateItem(db.Model):
@@ -516,7 +517,7 @@ class DocumentTemplate(db.Model):
     body = db.Column(db.Text, nullable=False)
     requires_signature = db.Column(db.Boolean, nullable=False, default=False)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 # ---------------------------------------------------------------------------
@@ -531,7 +532,7 @@ class Entity(db.Model):
     email = db.Column(db.String(255), nullable=True)
     phone = db.Column(db.String(80), nullable=True)
     metadata_json = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class EntityRelationship(db.Model):
@@ -539,7 +540,7 @@ class EntityRelationship(db.Model):
     src_entity_id = db.Column(db.Integer, db.ForeignKey("entity.id"), nullable=False, index=True)
     dst_entity_id = db.Column(db.Integer, db.ForeignKey("entity.id"), nullable=False, index=True)
     relationship_type = db.Column(db.String(80), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class MatterParty(db.Model):
@@ -548,7 +549,7 @@ class MatterParty(db.Model):
     entity_id = db.Column(db.Integer, db.ForeignKey("entity.id"), nullable=False, index=True)
     party_role = db.Column(db.String(80), nullable=False)
     is_primary = db.Column(db.Boolean, nullable=False, default=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class MatterNote(db.Model):
@@ -558,8 +559,8 @@ class MatterNote(db.Model):
     tags = db.Column(db.String(255), nullable=True)
     privilege_label = db.Column(db.String(80), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class MatterNoteACL(db.Model):
@@ -578,7 +579,7 @@ class MatterStageHistory(db.Model):
     to_stage = db.Column(db.String(80), nullable=False)
     reason = db.Column(db.Text, nullable=True)
     changed_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    changed_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    changed_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class MatterClosingChecklistItem(db.Model):
@@ -615,7 +616,7 @@ class DeadlineRule(db.Model):
     business_day_adjust = db.Column(db.Boolean, nullable=False, default=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class Deadline(db.Model):
@@ -634,7 +635,7 @@ class Deadline(db.Model):
     overridden_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     overridden_at = db.Column(db.DateTime, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 # ---------------------------------------------------------------------------
@@ -646,7 +647,7 @@ class TaskDependency(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     task_id = db.Column(db.Integer, db.ForeignKey("task.id"), nullable=False, index=True)
     depends_on_task_id = db.Column(db.Integer, db.ForeignKey("task.id"), nullable=False, index=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (db.UniqueConstraint("task_id", "depends_on_task_id", name="uq_task_dependency"),)
 
 
@@ -665,7 +666,7 @@ class TaskApproval(db.Model):
     approver_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     state = db.Column(db.String(20), nullable=False, default="pending")
     notes = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     decided_at = db.Column(db.DateTime, nullable=True)
 
 
@@ -684,7 +685,7 @@ class DocumentRecord(db.Model):
     retention_category = db.Column(db.String(80), nullable=True)
     legal_hold = db.Column(db.Boolean, nullable=False, default=False)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.Index(
             "ix_document_record_matter_type_conf_created",
@@ -711,7 +712,7 @@ class DocumentVersion(db.Model):
     filed_reference = db.Column(db.String(120), nullable=True)
     is_immutable = db.Column(db.Boolean, nullable=False, default=False)
     uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    uploaded_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (db.UniqueConstraint("document_id", "version_no", name="uq_document_version_no"),)
 
 
@@ -720,7 +721,7 @@ class DocumentLock(db.Model):
     document_id = db.Column(db.Integer, db.ForeignKey("document_record.id"), nullable=False, index=True)
     locked_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     lock_reason = db.Column(db.String(255), nullable=True)
-    locked_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    locked_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     expires_at = db.Column(db.DateTime, nullable=True)
     released_at = db.Column(db.DateTime, nullable=True)
 
@@ -729,7 +730,7 @@ class DocumentOCRText(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     document_version_id = db.Column(db.Integer, db.ForeignKey("document_version.id"), nullable=False, index=True)
     extracted_text = db.Column(db.Text, nullable=False)
-    extracted_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    extracted_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 @event.listens_for(DocumentOCRText, "before_insert")
@@ -746,7 +747,7 @@ class SavedSearch(db.Model):
     name = db.Column(db.String(120), nullable=False)
     query_json = db.Column(db.Text, nullable=False)
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class ProductionSet(db.Model):
@@ -759,7 +760,7 @@ class ProductionSet(db.Model):
     bates_start = db.Column(db.Integer, nullable=True)
     bates_end = db.Column(db.Integer, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class ProductionItem(db.Model):
@@ -775,7 +776,7 @@ class BatesRange(db.Model):
     prefix = db.Column(db.String(20), nullable=False)
     start_no = db.Column(db.Integer, nullable=False)
     end_no = db.Column(db.Integer, nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class EmailCapture(db.Model):
@@ -789,7 +790,7 @@ class EmailCapture(db.Model):
     stored_filename = db.Column(db.String(255), nullable=True)
     attachment_hash = db.Column(db.String(64), nullable=True)
     captured_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    captured_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    captured_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 # ---------------------------------------------------------------------------
@@ -818,8 +819,8 @@ class TimeTimer(db.Model):
     paused_at = db.Column(db.DateTime, nullable=True)
     elapsed_seconds = db.Column(db.Integer, nullable=False, default=0)
     status = db.Column(db.String(20), nullable=False, default="paused")
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class TimeEntry(db.Model):
@@ -839,8 +840,8 @@ class TimeEntry(db.Model):
     approved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
     locked_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.Index("ix_time_entry_user_start_at", "user_id", "start_at"),
         db.Index("ix_time_entry_matter_start_at", "matter_id", "start_at"),
@@ -854,7 +855,7 @@ class TimeValidationEvent(db.Model):
     time_entry_id = db.Column(db.Integer, db.ForeignKey("time_entry.id"), nullable=False, index=True)
     event_type = db.Column(db.String(80), nullable=False)
     message = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 # ---------------------------------------------------------------------------
@@ -908,7 +909,7 @@ class Invoice(db.Model):
     approved_at = db.Column(db.DateTime, nullable=True)
     pdf_path = db.Column(db.String(255), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (db.Index("ix_invoice_matter_created_at", "matter_id", "created_at"),)
 
 
@@ -933,7 +934,7 @@ class InvoiceAdjustment(db.Model):
     reason = db.Column(db.Text, nullable=False)
     amount = db.Column(db.Float, nullable=False)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class LEDESExport(db.Model):
@@ -942,7 +943,7 @@ class LEDESExport(db.Model):
     variant = db.Column(db.String(40), nullable=False, default="1998B")
     file_path = db.Column(db.String(255), nullable=False)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class ARSnapshot(db.Model):
@@ -952,7 +953,7 @@ class ARSnapshot(db.Model):
     outstanding_amount = db.Column(db.Float, nullable=False, default=0.0)
     aging_bucket = db.Column(db.String(40), nullable=False)
     collection_notes = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class PaymentAllocation(db.Model):
@@ -966,7 +967,7 @@ class PaymentAllocation(db.Model):
     settled_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     external_txn_id = db.Column(db.String(120), nullable=True)
     processor_note = db.Column(db.Text, nullable=True)
-    allocated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    allocated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     __table_args__ = (
         db.Index("ix_payment_allocation_invoice_allocated", "invoice_id", "allocated_at"),
@@ -996,7 +997,7 @@ class ExpenseEntry(db.Model):
     receipt_sha256 = db.Column(db.String(64), nullable=True)
     receipt_ocr_text = db.Column(db.Text, nullable=True)
     invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id"), nullable=True, index=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 # ---------------------------------------------------------------------------
@@ -1012,7 +1013,7 @@ class TrustAccount(db.Model):
     jurisdiction = db.Column(db.String(80), nullable=True)
     currency = db.Column(db.String(8), nullable=False, default="ZAR")
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class TrustClientLedger(db.Model):
@@ -1021,7 +1022,7 @@ class TrustClientLedger(db.Model):
     client_name = db.Column(db.String(255), nullable=False)
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True, index=True)
     current_balance = db.Column(db.Float, nullable=False, default=0.0)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (db.CheckConstraint("current_balance >= 0", name="ck_trust_client_balance_nonnegative"),)
 
 
@@ -1037,7 +1038,7 @@ class TrustLedgerEntry(db.Model):
     reversal_of_entry_id = db.Column(db.Integer, db.ForeignKey("trust_ledger_entry.id"), nullable=True)
     immutable_ref = db.Column(db.String(120), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.CheckConstraint("amount > 0", name="ck_trust_ledger_amount_positive"),
         db.CheckConstraint(
@@ -1061,7 +1062,7 @@ class TrustReconciliationRun(db.Model):
     status = db.Column(db.String(40), nullable=False, default="draft")
     exception_notes = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class TrustThresholdAlert(db.Model):
@@ -1070,7 +1071,7 @@ class TrustThresholdAlert(db.Model):
     threshold_amount = db.Column(db.Float, nullable=False)
     current_balance = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(40), nullable=False, default="open")
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     resolved_at = db.Column(db.DateTime, nullable=True)
     resolved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
 
@@ -1082,7 +1083,7 @@ class TrustApprovalRequest(db.Model):
     status = db.Column(db.String(40), nullable=False, default="pending")
     requested_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     approved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-    requested_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    requested_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     approved_at = db.Column(db.DateTime, nullable=True)
     executed_at = db.Column(db.DateTime, nullable=True)
     executed_entry_id = db.Column(db.Integer, db.ForeignKey("trust_ledger_entry.id"), nullable=True)
@@ -1101,7 +1102,7 @@ class TrustBankStatementImport(db.Model):
     currency = db.Column(db.String(8), nullable=False, default="ZAR")
     row_count = db.Column(db.Integer, nullable=False, default=0)
     imported_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    imported_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    imported_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     notes = db.Column(db.Text, nullable=True)
 
 
@@ -1133,7 +1134,7 @@ class Section86Investment(db.Model):
     source = db.Column(db.String(40), nullable=False, default="manual")
     notes = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     closed_on = db.Column(db.Date, nullable=True)
 
 
@@ -1146,7 +1147,7 @@ class Section86Accrual(db.Model):
     net_interest_amount = db.Column(db.Float, nullable=False)
     posted_entry_id = db.Column(db.Integer, db.ForeignKey("trust_ledger_entry.id"), nullable=True, index=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (db.UniqueConstraint("investment_id", "accrual_date", name="uq_section86_accrual_day"),)
 
 
@@ -1166,8 +1167,8 @@ class CRMLead(db.Model):
     notes = db.Column(db.Text, nullable=True)
     assigned_to = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class CRMFollowUp(db.Model):
@@ -1177,7 +1178,7 @@ class CRMFollowUp(db.Model):
     note = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(40), nullable=False, default="open")
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class LeadQuote(db.Model):
@@ -1200,8 +1201,8 @@ class LeadQuote(db.Model):
     decided_at = db.Column(db.DateTime, nullable=True)
     decided_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.Index("ix_lead_quote_lead_created", "lead_id", "created_at"),
         db.Index("ix_lead_quote_status_valid", "status", "valid_until"),
@@ -1214,7 +1215,7 @@ class IntakeForm(db.Model):
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True, index=True)
     data_json = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class ConflictCheck(db.Model):
@@ -1225,7 +1226,7 @@ class ConflictCheck(db.Model):
     override_required = db.Column(db.Boolean, nullable=False, default=False)
     overridden_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     override_reason = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class ConflictSemanticHit(db.Model):
@@ -1242,7 +1243,7 @@ class ConflictSemanticHit(db.Model):
     vector_score = db.Column(db.Float, nullable=False, default=0.0)
     excerpt = db.Column(db.Text, nullable=True)
     semantic_rank = db.Column(db.Integer, nullable=False, default=1)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.Index("ix_conflict_semantic_hit_conflict_rank", "conflict_check_id", "semantic_rank"),
         db.Index("ix_conflict_semantic_hit_similarity", "similarity_score", "created_at"),
@@ -1259,7 +1260,7 @@ class EngagementLetter(db.Model):
     signed_at = db.Column(db.DateTime, nullable=True)
     signed_ip = db.Column(db.String(64), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 # ---------------------------------------------------------------------------
@@ -1275,7 +1276,7 @@ class PortalUser(db.Model):
     mfa_enabled = db.Column(db.Boolean, nullable=False, default=False)
     mfa_secret = db.Column(db.String(64), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     last_login_at = db.Column(db.DateTime, nullable=True)
 
     def set_password(self, pw: str) -> None:
@@ -1291,7 +1292,7 @@ class PortalMatterAccess(db.Model):
     matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
     visibility_level = db.Column(db.String(40), nullable=False, default="summary_only")
     granted_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    granted_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    granted_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     revoked_at = db.Column(db.DateTime, nullable=True)
     __table_args__ = (
         db.UniqueConstraint("portal_user_id", "matter_id", name="uq_portal_user_matter_access"),
@@ -1305,7 +1306,7 @@ class PortalMessageThread(db.Model):
     subject = db.Column(db.String(255), nullable=False)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_by_portal_user_id = db.Column(db.Integer, db.ForeignKey("portal_user.id"), nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class PortalMessage(db.Model):
@@ -1314,7 +1315,7 @@ class PortalMessage(db.Model):
     body = db.Column(db.Text, nullable=False)
     from_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     from_portal_user_id = db.Column(db.Integer, db.ForeignKey("portal_user.id"), nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class PortalUpload(db.Model):
@@ -1324,14 +1325,14 @@ class PortalUpload(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     stored_filename = db.Column(db.String(255), nullable=False)
     sha256 = db.Column(db.String(64), nullable=False)
-    uploaded_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class PortalInvoiceView(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     portal_user_id = db.Column(db.Integer, db.ForeignKey("portal_user.id"), nullable=False, index=True)
     invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id"), nullable=False, index=True)
-    last_viewed_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    last_viewed_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.UniqueConstraint("portal_user_id", "invoice_id", name="uq_portal_invoice_view_user_invoice"),
         db.Index("ix_portal_invoice_view_user_viewed", "portal_user_id", "last_viewed_at"),
@@ -1346,7 +1347,7 @@ class PortalPaymentReceipt(db.Model):
     currency = db.Column(db.String(8), nullable=False, default="ZAR")
     status = db.Column(db.String(40), nullable=False, default="recorded")
     reference = db.Column(db.String(120), nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class PortalLinkToken(db.Model):
@@ -1356,7 +1357,7 @@ class PortalLinkToken(db.Model):
     document_version_id = db.Column(db.Integer, db.ForeignKey("document_version.id"), nullable=True, index=True)
     token_hash = db.Column(db.String(128), nullable=False, unique=True)
     expires_at = db.Column(db.DateTime, nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     used_at = db.Column(db.DateTime, nullable=True)
 
 
@@ -1373,7 +1374,7 @@ class AnalyticsMetricSnapshot(db.Model):
     scope_id = db.Column(db.Integer, nullable=True)
     value_num = db.Column(db.Float, nullable=True)
     value_text = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.Index("ix_analytics_metric_snapshot_scope_key", "as_of_date", "scope_type", "scope_id", "metric_key"),
     )
@@ -1386,7 +1387,7 @@ class WorkloadForecast(db.Model):
     predicted_hours = db.Column(db.Float, nullable=False)
     confidence = db.Column(db.Float, nullable=True)
     features_json = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class BurnoutSignal(db.Model):
@@ -1396,7 +1397,7 @@ class BurnoutSignal(db.Model):
     score = db.Column(db.Float, nullable=False)
     reason = db.Column(db.String(255), nullable=True)
     status = db.Column(db.String(40), nullable=False, default="open")
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 # ---------------------------------------------------------------------------
@@ -1416,7 +1417,7 @@ class AIOperationLog(db.Model):
     redaction_applied = db.Column(db.Boolean, nullable=False, default=False)
     metadata_json = db.Column(db.Text, nullable=True)
     error_message = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now, index=True)
 
 
 class SemanticIndexEntry(db.Model):
@@ -1433,8 +1434,8 @@ class SemanticIndexEntry(db.Model):
     embedding_dim = db.Column(db.Integer, nullable=False, default=0)
     provider = db.Column(db.String(40), nullable=True)
     redaction_meta_json = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     __table_args__ = (
         db.UniqueConstraint("source_type", "source_id", "chunk_index", name="uq_semantic_index_source_chunk"),
         db.Index("ix_semantic_index_matter_source", "matter_id", "source_type", "source_id"),
@@ -1458,7 +1459,7 @@ class JobQueue(db.Model):
     max_attempts = db.Column(db.Integer, nullable=False, default=5)
     last_error = db.Column(db.Text, nullable=True)
     run_after = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     started_at = db.Column(db.DateTime, nullable=True)
     finished_at = db.Column(db.DateTime, nullable=True)
     __table_args__ = (
@@ -1471,7 +1472,7 @@ class JobHistory(db.Model):
     job_id = db.Column(db.Integer, db.ForeignKey("job_queue.id"), nullable=False, index=True)
     status = db.Column(db.String(20), nullable=False)
     message = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
 class ScheduledJob(db.Model):
@@ -1479,7 +1480,7 @@ class ScheduledJob(db.Model):
     job_type = db.Column(db.String(80), nullable=False, index=True)
     default_payload = db.Column(db.JSON, nullable=True)
     interval_minutes = db.Column(db.Integer, nullable=False, default=60)
-    next_run_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    next_run_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     last_run_at = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     __table_args__ = (db.Index("ix_scheduled_job_active_next_run", "is_active", "next_run_at"),)
@@ -1487,7 +1488,7 @@ class ScheduledJob(db.Model):
 
 class BackupRun(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    started_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    started_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     finished_at = db.Column(db.DateTime, nullable=True)
     status = db.Column(db.String(40), nullable=False, default="running")
     location = db.Column(db.String(255), nullable=True)
@@ -1498,7 +1499,7 @@ class BackupRun(db.Model):
 class RestoreVerification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     backup_run_id = db.Column(db.Integer, db.ForeignKey("backup_run.id"), nullable=True)
-    verified_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    verified_at = db.Column(db.DateTime, nullable=False, default=utc_now)
     status = db.Column(db.String(40), nullable=False, default="passed")
     notes = db.Column(db.Text, nullable=True)
     verified_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
@@ -1511,4 +1512,4 @@ class DRTarget(db.Model):
     rto_minutes_target = db.Column(db.Integer, nullable=False)
     last_actual_rpo_minutes = db.Column(db.Integer, nullable=True)
     last_actual_rto_minutes = db.Column(db.Integer, nullable=True)
-    updated_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)

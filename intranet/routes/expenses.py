@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import io
 import os
 import uuid
@@ -176,7 +177,7 @@ def register_expenses_routes(app):
 
         row.status = "approved"
         row.approved_by = current_user.id
-        row.approved_at = dt.datetime.utcnow()
+        row.approved_at = utc_now()
         db.session.commit()
         audit("expense_approve", "ExpenseEntry", row.id)
         flash("Expense approved.", "info")

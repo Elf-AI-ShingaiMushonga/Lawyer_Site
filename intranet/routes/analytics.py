@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 
 from flask import abort
 from flask_login import current_user, login_required
@@ -97,7 +98,7 @@ def register_analytics_routes(app):
             )
             hours_query = db.session.query(TimeEntry.user_id, func.coalesce(func.sum(TimeEntry.rounded_hours), 0.0)).filter(
                 TimeEntry.user_id.in_(user_ids),
-                TimeEntry.start_at >= dt.datetime.utcnow() - dt.timedelta(days=7),
+                TimeEntry.start_at >= utc_now() - dt.timedelta(days=7),
             )
             if scope_ids is not None:
                 if scope_ids:

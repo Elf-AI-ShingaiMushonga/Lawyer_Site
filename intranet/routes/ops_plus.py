@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 import datetime as dt
+from ..timeutils import utc_now
 import hashlib
 import json
 import os
@@ -367,13 +368,13 @@ def register_ops_plus_routes(app):
         _ops_admin_required()
         enforce_data_residency("backups")
 
-        run = BackupRun(started_at=dt.datetime.utcnow(), status="running", triggered_by=current_user.id)
+        run = BackupRun(started_at=utc_now(), status="running", triggered_by=current_user.id)
         db.session.add(run)
         db.session.flush()
 
         backup_dir = os.path.join(app.config["UPLOAD_DIR"], "backups")
         os.makedirs(backup_dir, exist_ok=True)
-        ts = dt.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        ts = utc_now().strftime("%Y%m%d%H%M%S")
         db_dump_path = os.path.join(backup_dir, f"backup_run_{run.id}_{ts}.dbdump")
         uploads_archive_path = os.path.join(backup_dir, f"backup_run_{run.id}_{ts}_uploads.tar.gz")
         manifest_path = os.path.join(backup_dir, f"backup_run_{run.id}_{ts}.json")
@@ -397,7 +398,7 @@ def register_ops_plus_routes(app):
 
             payload = {
                 "backup_run_id": run.id,
-                "timestamp": dt.datetime.utcnow().isoformat(),
+                "timestamp": utc_now().isoformat(),
                 "db_engine": db_info.get("engine"),
                 "db_source": db_info.get("source"),
                 "db_dump_path": db_dump_path,
@@ -423,7 +424,7 @@ def register_ops_plus_routes(app):
             _cleanup_backup_artifacts(backup_dir, run.id, ts)
             flash(f"Backup failed: {exc}", "warning")
 
-        run.finished_at = dt.datetime.utcnow()
+        run.finished_at = utc_now()
         db.session.commit()
         audit("backup_run", "BackupRun", run.id, {"status": run.status, "location": run.location})
         return redirect(url_for("ops_backup_status"))
@@ -448,7 +449,7 @@ def register_ops_plus_routes(app):
                 status=computed_status,
                 notes=merged_notes or None,
                 verified_by=current_user.id,
-                verified_at=dt.datetime.utcnow(),
+                verified_at=utc_now(),
             )
             db.session.add(row)
             db.session.commit()
@@ -484,7 +485,7 @@ def register_ops_plus_routes(app):
                 db.session.add(row)
             row.last_actual_rpo_minutes = request.form.get("last_actual_rpo_minutes", type=int)
             row.last_actual_rto_minutes = request.form.get("last_actual_rto_minutes", type=int)
-            row.updated_at = dt.datetime.utcnow()
+            row.updated_at = utc_now()
             db.session.commit()
             audit("dr_target_upsert", "DRTarget", row.id)
             flash("DR target saved.", "info")

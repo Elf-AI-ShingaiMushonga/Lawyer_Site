@@ -68,6 +68,54 @@
     padding-bottom: 0.55rem;
   }
 
+  .workspace-magic-card {
+    border: 1px solid rgba(225, 6, 0, 0.18);
+    border-radius: 16px;
+    background:
+      linear-gradient(180deg, rgba(255, 251, 251, 0.98), rgba(255, 255, 255, 0.97)),
+      radial-gradient(circle at top right, rgba(225, 6, 0, 0.08), rgba(225, 6, 0, 0));
+  }
+
+  .workspace-magic-card.tone-critical {
+    border-color: rgba(180, 31, 31, 0.34);
+  }
+
+  .workspace-magic-card.tone-watch {
+    border-color: rgba(201, 117, 23, 0.3);
+  }
+
+  .workspace-magic-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .workspace-magic-item {
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 12px;
+    padding: 10px 11px;
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .workspace-magic-item.urgency-critical {
+    border-left: 4px solid #bc2820;
+  }
+
+  .workspace-magic-item.urgency-high {
+    border-left: 4px solid #cf711f;
+  }
+
+  .workspace-magic-item.urgency-medium {
+    border-left: 4px solid #936431;
+  }
+
+  .workspace-magic-status {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #705b5b;
+    line-height: 1.45;
+  }
+
   @media (max-width: 991.98px) {
     .workspace-actions-grid {
       grid-template-columns: 1fr;
@@ -158,6 +206,31 @@
   </div>
 
   <div class="col-lg-4">
+    <div class="card p-3 mb-3 workspace-section workspace-magic-card tone-{{ matter_magic.health_tone }}">
+      <div class="toolbar-row">
+        <div>
+          <h4 class="mb-0 workspace-section-title">Next Best Moves</h4>
+          <div class="muted small mt-1">{{ matter_magic.headline }}</div>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
+      </div>
+      <div class="workspace-magic-status">{{ matter_magic.status_line }}</div>
+      <div class="workspace-magic-list">
+        {% for action in matter_magic.actions[:3] %}
+          <article class="workspace-magic-item urgency-{{ action.urgency }}">
+            <div class="d-flex justify-content-between gap-2 align-items-start">
+              <div class="fw-semibold">{{ action.title }}</div>
+              {% if action.badge %}<span class="badge badge-soft">{{ action.badge }}</span>{% endif %}
+            </div>
+            <div class="muted small mt-1">{{ action.summary }}</div>
+            <div class="table-actions mt-2">
+              <a class="btn btn-sm btn-light" href="{{ action.href }}">{{ action.button_label }}</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </div>
+
     <div class="card p-3 mb-3 workspace-section">
       <h4 class="mb-2 workspace-section-title">Workspace Actions</h4>
       <div class="workspace-actions-grid">

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 import io
 
 from intranet.extensions import db
@@ -57,8 +58,8 @@ def _seed_matter(owner: User, matter_no: str) -> Matter:
         client_name="Automation Client",
         status="Open",
         created_by=owner.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add(row)
     db.session.flush()
@@ -76,7 +77,7 @@ def test_timer_pause_auto_creates_time_entry_and_draft_billing_item(app_ctx):
         matter_id=matter.id,
         task_id=None,
         label="Timer capture test",
-        started_at=dt.datetime.utcnow() - dt.timedelta(minutes=30),
+        started_at=utc_now() - dt.timedelta(minutes=30),
         elapsed_seconds=0,
         status="running",
     )
@@ -253,7 +254,7 @@ def test_settled_payment_auto_reconciles_invoice_status(app_ctx):
         total=100.0,
         created_by=lawyer.id,
         approved_by=lawyer.id,
-        approved_at=dt.datetime.utcnow(),
+        approved_at=utc_now(),
     )
     db.session.add(invoice)
     db.session.commit()

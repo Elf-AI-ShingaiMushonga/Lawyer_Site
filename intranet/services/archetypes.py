@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import json
 import re
 from collections.abc import Mapping
@@ -144,7 +145,7 @@ def build_document_context(
     archetype: MatterTemplate | None = None,
     required_values: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
-    now = dt.datetime.utcnow()
+    now = utc_now()
     context = {
         "matter_id": str(matter.id),
         "matter_no": matter.matter_no or "",

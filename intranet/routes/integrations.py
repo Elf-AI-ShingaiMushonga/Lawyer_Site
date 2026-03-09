@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import datetime as dt
+from ..timeutils import utc_now
 import io
 import json
 import zipfile
@@ -27,6 +28,11 @@ from ..models import (
     User,
 )
 from ..policies import visible_matter_ids
+from ..services.sa_practice import (
+    DEFAULT_SA_PRACTICE_AREAS,
+    south_africa_matter_reference,
+    south_africa_portal_recommendations,
+)
 from ..templates import page
 
 
@@ -73,7 +79,7 @@ def _get_json_setting(setting_key: str, default: dict) -> tuple[FirmSetting | No
 
 def _save_json_setting(setting_key: str, payload: dict) -> None:
     row = FirmSetting.query.filter_by(setting_key=setting_key).first()
-    now = dt.datetime.utcnow()
+    now = utc_now()
     if row is None:
         row = FirmSetting(
             setting_key=setting_key,
@@ -248,7 +254,7 @@ def register_integration_routes(app):
             .order_by(Deadline.due_at.asc(), Deadline.id.asc())
             .all()
         )
-        now_stamp = dt.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        now_stamp = utc_now().strftime("%Y%m%dT%H%M%SZ")
         lines = [
             "BEGIN:VCALENDAR",
             "VERSION:2.0",
@@ -453,6 +459,150 @@ def register_integration_routes(app):
             return redirect(url_for("integrations_office365"))
         return integrations_office365_word_matter_summary(matter_id)
 
+    @app.get("/integrations/south-africa")
+    @login_required
+    def integrations_south_africa():
+        scoped_ids = visible_matter_ids() if not is_admin() else [row.id for row in Matter.query.with_entities(Matter.id).all()]
+        matter_scope = scoped_ids or [-1]
+        matters = (
+            Matter.query.filter(Matter.id.in_(matter_scope))
+            .order_by(Matter.last_updated_at.desc(), Matter.id.desc())
+            .limit(250)
+            .all()
+        )
+
+        selected_matter = None
+        selected_matter_id = request.args.get("matter_id", type=int)
+        if selected_matter_id:
+            selected_matter = next((row for row in matters if row.id == selected_matter_id), None)
+            if selected_matter is None:
+                selected_matter = db.session.get(Matter, selected_matter_id)
+            if selected_matter is not None and not can_access_matter(selected_matter.id):
+                abort(403)
+        elif matters:
+            selected_matter = matters[0]
+
+        upcoming_deadlines: list[Deadline] = []
+        open_tasks: list[Task] = []
+        team_names: list[str] = []
+        matter_reference = ""
+        internal_actions: list[dict[str, str]] = []
+        if selected_matter is not None:
+            today = dt.date.today()
+            upcoming_deadlines = (
+                Deadline.query.filter(
+                    Deadline.matter_id == selected_matter.id,
+                    Deadline.due_at >= today,
+                    Deadline.due_at <= today + dt.timedelta(days=30),
+                )
+                .order_by(Deadline.due_at.asc(), Deadline.id.asc())
+                .limit(8)
+                .all()
+            )
+            open_tasks = (
+                Task.query.filter(
+                    Task.matter_id == selected_matter.id,
+                    Task.status != "Done",
+                )
+                .order_by(Task.due_date.is_(None), Task.due_date.asc(), Task.id.asc())
+                .limit(8)
+                .all()
+            )
+            team_names = [
+                str(full_name)
+                for (full_name,) in (
+                    db.session.query(User.full_name)
+                    .join(MatterMember, MatterMember.user_id == User.id)
+                    .filter(MatterMember.matter_id == selected_matter.id)
+                    .order_by(User.full_name.asc())
+                    .all()
+                )
+                if isinstance(full_name, str) and str(full_name).strip()
+            ]
+            matter_reference = south_africa_matter_reference(
+                selected_matter,
+                team_names=team_names,
+                deadline_count=len(upcoming_deadlines),
+                open_task_count=len(open_tasks),
+            )
+            internal_actions = [
+                {
+                    "title": "Matter Workspace",
+                    "href": url_for("matter_workspace", matter_id=selected_matter.id),
+                    "summary": "Stages, parties, notes, and the current matter posture.",
+                },
+                {
+                    "title": "Calendar and Docket",
+                    "href": url_for("calendar_matter", matter_id=selected_matter.id),
+                    "summary": "Upcoming court dates, filing cutoffs, and milestone controls.",
+                },
+                {
+                    "title": "DMS Workspace",
+                    "href": url_for("matter_dms", matter_id=selected_matter.id),
+                    "summary": "Bundle versions, pleadings, productions, and evidence files.",
+                },
+                {
+                    "title": "Time Capture",
+                    "href": url_for("time_entries", matter_id=selected_matter.id),
+                    "summary": "Capture billable work against the selected matter immediately.",
+                },
+                {
+                    "title": "Billing Statement",
+                    "href": url_for("billing_account_statement", matter_id=selected_matter.id),
+                    "summary": "Review current financial position before external follow-up.",
+                },
+                {
+                    "title": "Word Matter Summary",
+                    "href": url_for("integrations_office365_word_matter_summary", matter_id=selected_matter.id),
+                    "summary": "Export a concise Word brief for counsel, client, or filing support.",
+                },
+            ]
+
+        conveyancing_count = Matter.query.filter(
+            Matter.id.in_(matter_scope),
+            or_(
+                Matter.practice_area.ilike("%convey%"),
+                Matter.case_type.ilike("%transfer%"),
+                Matter.case_type.ilike("%property%"),
+            ),
+        ).count()
+        labour_count = Matter.query.filter(
+            Matter.id.in_(matter_scope),
+            or_(
+                Matter.practice_area.ilike("%labour%"),
+                Matter.case_type.ilike("%ccma%"),
+                Matter.court_name.ilike("%ccma%"),
+            ),
+        ).count()
+        estates_count = Matter.query.filter(
+            Matter.id.in_(matter_scope),
+            or_(
+                Matter.practice_area.ilike("%estate%"),
+                Matter.practice_area.ilike("%trust%"),
+                Matter.case_type.ilike("%deceased%"),
+                Matter.court_name.ilike("%master%"),
+            ),
+        ).count()
+        portal_cards = south_africa_portal_recommendations(selected_matter)
+
+        return page(
+            "South Africa Operations Hub",
+            "integrations/south_africa.html",
+            matters=matters,
+            selected_matter=selected_matter,
+            upcoming_deadlines=upcoming_deadlines,
+            open_tasks=open_tasks,
+            team_names=team_names,
+            matter_reference=matter_reference,
+            internal_actions=internal_actions,
+            portal_cards=portal_cards,
+            practice_defaults=DEFAULT_SA_PRACTICE_AREAS,
+            scoped_matter_count=len(scoped_ids),
+            conveyancing_count=conveyancing_count,
+            labour_count=labour_count,
+            estates_count=estates_count,
+        )
+
     @app.route("/integrations/third-party", methods=["GET", "POST"])
     @login_required
     def integrations_third_party():
@@ -571,8 +721,8 @@ def register_integration_routes(app):
                             client_name=client_name,
                             status=(row.get("status") or "Open").strip() or "Open",
                             created_by=current_user.id,
-                            opened_at=dt.datetime.utcnow(),
-                            last_updated_at=dt.datetime.utcnow(),
+                            opened_at=utc_now(),
+                            last_updated_at=utc_now(),
                         )
                         db.session.add(matter)
                         db.session.flush()
@@ -588,7 +738,7 @@ def register_integration_routes(app):
                         matter.title = title
                         matter.client_name = client_name
                         matter.status = (row.get("status") or matter.status).strip() or matter.status
-                        matter.last_updated_at = dt.datetime.utcnow()
+                        matter.last_updated_at = utc_now()
                         updated += 1
 
                     matter.practice_area = (row.get("practice_area") or matter.practice_area or "Conveyancing").strip()
@@ -939,5 +1089,5 @@ def register_integration_routes(app):
             users=users,
             my_recent_entries=my_recent_entries,
             my_recent_tasks=my_recent_tasks,
-            now_iso=dt.datetime.utcnow().replace(second=0, microsecond=0).isoformat(timespec="minutes"),
+            now_iso=utc_now().replace(second=0, microsecond=0).isoformat(timespec="minutes"),
         )

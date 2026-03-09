@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 
 import pytest
 
@@ -51,8 +52,8 @@ def seed_user_matter(app_ctx):
         client_name="Test Client",
         status="Open",
         created_by=user.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add(matter)
     db.session.flush()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 
 from flask import abort, flash, redirect, request, url_for
 from flask_login import current_user, login_required
@@ -190,7 +191,7 @@ def register_workflow_routes(app):
             approver_user_id=current_user.id,
             state=state,
             notes=notes or None,
-            decided_at=dt.datetime.utcnow() if state in {"approved", "rejected"} else None,
+            decided_at=utc_now() if state in {"approved", "rejected"} else None,
         )
         db.session.add(approval)
         message = "Task approval updated."
@@ -210,12 +211,12 @@ def register_workflow_routes(app):
             else:
                 t.approval_state = "approved"
                 t.approved_by = current_user.id
-                t.approved_at = dt.datetime.utcnow()
+                t.approved_at = utc_now()
         else:
             t.approval_state = state
             if state == "approved":
                 t.approved_by = current_user.id
-                t.approved_at = dt.datetime.utcnow()
+                t.approved_at = utc_now()
             elif state in {"pending", "rejected"}:
                 t.approved_by = None
                 t.approved_at = None

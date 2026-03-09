@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 import io
 import json
 
@@ -53,8 +54,8 @@ def _seed_matter(owner: User, matter_no: str = "2026-PRI-0001") -> Matter:
         client_name="Priority Client",
         status="Open",
         created_by=owner.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add(row)
     db.session.flush()
@@ -181,7 +182,7 @@ def test_priority_inbox_digest_queues_and_dedupes(app_ctx):
     db.session.add(
         CRMFollowUp(
             lead_id=lead.id,
-            due_at=dt.datetime.utcnow() + dt.timedelta(hours=2),
+            due_at=utc_now() + dt.timedelta(hours=2),
             note="Call prospect for missing docs",
             status="open",
             created_by=admin.id,
@@ -210,7 +211,7 @@ def test_priority_inbox_digest_queues_and_dedupes(app_ctx):
             thread_id=thread.id,
             body="Please revert today.",
             from_portal_user_id=portal_user.id,
-            created_at=dt.datetime.utcnow() - dt.timedelta(hours=8),
+            created_at=utc_now() - dt.timedelta(hours=8),
         )
     )
 
@@ -218,8 +219,8 @@ def test_priority_inbox_digest_queues_and_dedupes(app_ctx):
         TimeEntry(
             user_id=admin.id,
             matter_id=matter.id,
-            start_at=dt.datetime.utcnow() - dt.timedelta(hours=53),
-            end_at=dt.datetime.utcnow() - dt.timedelta(hours=52),
+            start_at=utc_now() - dt.timedelta(hours=53),
+            end_at=utc_now() - dt.timedelta(hours=52),
             hours=1.0,
             rounded_hours=1.0,
             narrative="Aged approved work",

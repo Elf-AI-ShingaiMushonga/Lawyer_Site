@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import json
 import time
 
@@ -32,6 +33,12 @@ from ..services.archetypes import load_required_fields, parse_required_fields_de
 from ..services.archetype_ai import suggest_matter_archetype
 from ..services.dms_option_lists import load_dms_option_lists, save_dms_option_lists
 from ..services.matter_option_lists import legal_category_options, practice_area_options
+from ..services.sa_practice import (
+    DEFAULT_SA_PRACTICE_AREAS,
+    SOUTH_AFRICA_PLAYBOOKS,
+    seed_south_africa_playbooks,
+    seed_south_africa_practice_areas,
+)
 from ..services.template_ai import suggest_contract_template, suggest_document_template
 from ..services.priority_inbox import (
     load_priority_inbox_config,
@@ -64,7 +71,7 @@ def _required_fields_to_text(raw_json: str | None) -> str:
 
 
 def _sync_priority_digest_schedule(config: dict) -> None:
-    now = dt.datetime.utcnow()
+    now = utc_now()
     interval = int(config.get("digest_interval_minutes") or 60)
     enabled = bool(config.get("digest_enabled"))
     row = ScheduledJob.query.filter_by(job_type="priority_inbox_digest").first()
@@ -216,6 +223,14 @@ def register_admin_settings_routes(app):
     def admin_settings_practice_areas():
         _admin_required()
         if request.method == "POST":
+            action = (request.form.get("action") or "create").strip().lower()
+            if action == "seed_south_africa":
+                created = seed_south_africa_practice_areas(db.session)
+                db.session.commit()
+                audit("practice_area_seed_south_africa", "PracticeArea", None, {"created": created})
+                flash(f"South Africa defaults applied. Added {created} practice area(s).", "info")
+                return redirect(url_for("admin_settings_practice_areas"))
+
             name = (request.form.get("name") or "").strip()
             if not name:
                 flash("Practice area required.", "warning")
@@ -228,7 +243,12 @@ def register_admin_settings_routes(app):
             return redirect(url_for("admin_settings_practice_areas"))
 
         rows = PracticeArea.query.order_by(PracticeArea.name.asc()).all()
-        return page("Practice Areas", "admin_settings/practice_areas.html", areas=rows)
+        return page(
+            "Practice Areas",
+            "admin_settings/practice_areas.html",
+            areas=rows,
+            south_africa_defaults=DEFAULT_SA_PRACTICE_AREAS,
+        )
 
     @app.route("/admin/settings/rates", methods=["GET", "POST"])
     @login_required
@@ -284,6 +304,20 @@ def register_admin_settings_routes(app):
             action = (request.form.get("action") or "save").strip().lower()
             template_id = request.form.get("template_id", type=int)
             row = db.session.get(MatterTemplate, template_id) if template_id else None
+
+            if action == "seed_south_africa":
+                counts = seed_south_africa_playbooks(db.session, created_by=current_user.id)
+                db.session.commit()
+                audit("matter_template_seed_south_africa", "MatterTemplate", None, counts)
+                flash(
+                    "South Africa playbooks added. "
+                    f"Archetypes: {counts['matter_archetypes']}, "
+                    f"documents: {counts['document_templates']}, "
+                    f"contracts: {counts['contract_templates']}, "
+                    f"task templates: {counts['task_templates']}.",
+                    "info",
+                )
+                return redirect(url_for("admin_templates_matters"))
 
             if action == "delete":
                 if row is None:
@@ -427,6 +461,7 @@ def register_admin_settings_routes(app):
             form_data=form_data,
             template_usage_map=template_usage_map,
             template_document_map=template_document_map,
+            south_africa_playbooks=[pack["archetype"] for pack in SOUTH_AFRICA_PLAYBOOKS],
         )
 
     @app.post("/admin/templates/matters/ai/suggest")
@@ -850,7 +885,7 @@ def register_admin_settings_routes(app):
                     return redirect(url_for("admin_rules_legal_holds"))
                 note = (request.form.get("release_note") or "").strip()
                 row.is_active = False
-                row.released_at = dt.datetime.utcnow()
+                row.released_at = utc_now()
                 if note:
                     row.reason = f"{row.reason}\n\nRelease note: {note}"
                 matter = db.session.get(Matter, row.matter_id)
@@ -865,7 +900,7 @@ def register_admin_settings_routes(app):
                         .first()
                     )
                     archive_days = int(policy.archive_after_days or 30) if policy else 30
-                    reference = matter.closed_at or dt.datetime.utcnow()
+                    reference = matter.closed_at or utc_now()
                     matter.archival_status = "archive_pending"
                     matter.archival_due_at = reference + dt.timedelta(days=max(1, archive_days))
                 db.session.commit()

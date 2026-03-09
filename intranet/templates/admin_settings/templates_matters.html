@@ -1,6 +1,30 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">South Africa Playbooks</h3>
+      <div class="form-help">Seed ready-to-use archetypes, contracts, documents, and task checklists for high-frequency South African legal workflows.</div>
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="seed_south_africa">
+      <button class="btn btn-outline-light" type="submit">Seed South Africa Playbooks</button>
+    </form>
+  </div>
+  <div class="row g-2 mt-2">
+    {% for playbook in south_africa_playbooks %}
+      <div class="col-md-6 col-xl-3">
+        <div class="card p-3 h-100">
+          <div class="fw-semibold">{{ playbook.name }}</div>
+          <div class="form-help mt-1">{{ playbook.practice_area }} · {{ playbook.default_stage }}</div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
   <h3 class="mb-1">{{ "Edit Matter Archetype" if edit_template_id else "Matter Archetype Builder" }}</h3>
   <div
     class="form-section mt-3"

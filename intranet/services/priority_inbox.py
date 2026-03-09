@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import json
 
 from sqlalchemy import and_, func, or_
@@ -99,7 +100,7 @@ def load_priority_inbox_config() -> dict:
 
 def save_priority_inbox_config(raw: dict, *, updated_by: int | None) -> dict:
     payload = normalize_priority_inbox_config(raw)
-    now = dt.datetime.utcnow()
+    now = utc_now()
     row = FirmSetting.query.filter_by(setting_key=PRIORITY_INBOX_CONFIG_KEY).first()
     if row is None:
         row = FirmSetting(
@@ -142,7 +143,7 @@ def build_priority_inbox(
     limit: int = 12,
     config: dict | None = None,
 ) -> dict:
-    now_utc = now_utc or dt.datetime.utcnow()
+    now_utc = now_utc or utc_now()
     cfg = normalize_priority_inbox_config(config or load_priority_inbox_config())
     matter_scope = _matter_scope_for_user(user, scoped_matter_ids=scoped_matter_ids)
     is_admin_user = role_is_admin(getattr(user, "role", None))

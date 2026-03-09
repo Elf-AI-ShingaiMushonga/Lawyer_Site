@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 
 from flask import abort, flash, redirect, request, url_for
 from flask_login import current_user, login_required
@@ -74,7 +75,7 @@ def register_trust_routes(app):
             "trust/security.html",
             security_controls=security_controls,
             hardening_backlog=hardening_backlog,
-            now_utc=dt.datetime.utcnow(),
+            now_utc=utc_now(),
         )
 
     @app.route("/trust/incidents", methods=["GET", "POST"])
@@ -130,7 +131,7 @@ def register_trust_routes(app):
 
                 incident.status = "Closed"
                 incident.resolution = resolution
-                incident.closed_at = dt.datetime.utcnow()
+                incident.closed_at = utc_now()
                 incident.updated_by = current_user.id
                 db.session.commit()
                 audit("incident_close", "GovernanceIncident", incident.id)

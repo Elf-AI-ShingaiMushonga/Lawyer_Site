@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 
 from flask import current_app, flash, redirect, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
@@ -33,6 +34,7 @@ from ..models import (
     UserMFABackupCode,
 )
 from ..policies import visible_matter_ids
+from ..services.matter_magic import build_dashboard_focus_board
 from ..roles import role_requires_mfa
 from ..services.priority_inbox import build_priority_inbox
 from ..templates import page
@@ -79,7 +81,7 @@ def register_auth_routes(app):
 
             user = User(email=email, full_name=full_name, role="finance_cost_admin", password_hash="x")
             user.set_password(password)
-            user.last_login_at = dt.datetime.utcnow()
+            user.last_login_at = utc_now()
             db.session.add(user)
             try:
                 db.session.commit()
@@ -113,7 +115,7 @@ def register_auth_routes(app):
                 flash("Invalid credentials.", "warning")
                 return redirect(url_for("login"))
             user = User.query.filter_by(email=email).first()
-            now = dt.datetime.utcnow()
+            now = utc_now()
             if user and user.locked_until and user.locked_until > now:
                 flash("Account temporarily locked due to failed sign-in attempts.", "warning")
                 return redirect(url_for("login"))
@@ -131,7 +133,7 @@ def register_auth_routes(app):
             if role_requires_mfa(user.role) and not user.mfa_enabled:
                 login_user(user)
                 session.permanent = True
-                user.last_login_at = dt.datetime.utcnow()
+                user.last_login_at = utc_now()
                 user.failed_login_attempts = 0
                 user.locked_until = None
                 db.session.commit()
@@ -178,10 +180,10 @@ def register_auth_routes(app):
             login_user(user)
             session.permanent = True
             if user.mfa_enabled:
-                session["mfa_verified_at"] = dt.datetime.utcnow().isoformat()
+                session["mfa_verified_at"] = utc_now().isoformat()
             else:
                 session.pop("mfa_verified_at", None)
-            user.last_login_at = dt.datetime.utcnow()
+            user.last_login_at = utc_now()
             user.failed_login_attempts = 0
             user.locked_until = None
             db.session.commit()
@@ -360,6 +362,12 @@ def register_auth_routes(app):
         at_risk_matters = [payload for _, payload in at_risk_candidates[:8]]
 
         priority_inbox = build_priority_inbox(current_user, scoped_matter_ids=scoped_ids)
+        focus_candidates: list[Matter] = []
+        focus_candidates.extend(pinned_matters)
+        focus_candidates.extend(item["matter"] for item in recent_views)
+        focus_candidates.extend(item["matter"] for item in at_risk_matters)
+        focus_candidates.extend(recent_matters)
+        legal_desk = build_dashboard_focus_board(focus_candidates, today=today, limit=6)
 
         stats = {
             "matter_count": matter_scope.count(),
@@ -397,4 +405,5 @@ def register_auth_routes(app):
             pinned_matters=pinned_matters,
             recent_views=recent_views,
             priority_inbox=priority_inbox,
+            legal_desk=legal_desk,
         )

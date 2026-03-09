@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import hashlib
 import secrets
 from urllib.parse import urlencode
@@ -71,7 +72,7 @@ def register_auth_plus_routes(app):
             backup_rows = UserMFABackupCode.query.filter_by(user_id=current_user.id, used_at=None).all()
             for row in backup_rows:
                 if check_backup_code(row.code_hash, backup_code):
-                    row.used_at = dt.datetime.utcnow()
+                    row.used_at = utc_now()
                     verified = True
                     break
 
@@ -79,7 +80,7 @@ def register_auth_plus_routes(app):
             flash("MFA verification failed.", "warning")
             return redirect(url_for("auth_mfa_setup"))
 
-        session["mfa_verified_at"] = dt.datetime.utcnow().isoformat()
+        session["mfa_verified_at"] = utc_now().isoformat()
         register_user_session(current_user.id)
         db.session.commit()
         audit("mfa_verified", "User", current_user.id)
@@ -165,7 +166,7 @@ def register_auth_plus_routes(app):
             user_id=current_user.id,
             code_hash=code_hash,
             scope=scope,
-            expires_at=dt.datetime.utcnow() + dt.timedelta(minutes=5),
+            expires_at=utc_now() + dt.timedelta(minutes=5),
         )
         db.session.add(auth_code)
         db.session.commit()
@@ -195,7 +196,7 @@ def register_auth_plus_routes(app):
             .order_by(SSOAuthorizationCode.id.desc())
             .first()
         )
-        if not auth_code or auth_code.consumed_at is not None or auth_code.expires_at < dt.datetime.utcnow():
+        if not auth_code or auth_code.consumed_at is not None or auth_code.expires_at < utc_now():
             return jsonify({"error": "invalid_grant"}), 400
 
         access_raw = secrets.token_urlsafe(32)
@@ -206,9 +207,9 @@ def register_auth_plus_routes(app):
             access_token_hash=_hash_token(access_raw),
             refresh_token_hash=_hash_token(refresh_raw),
             scope=auth_code.scope,
-            expires_at=dt.datetime.utcnow() + dt.timedelta(hours=1),
+            expires_at=utc_now() + dt.timedelta(hours=1),
         )
-        auth_code.consumed_at = dt.datetime.utcnow()
+        auth_code.consumed_at = utc_now()
         db.session.add(token)
         db.session.commit()
 
@@ -233,7 +234,7 @@ def register_auth_plus_routes(app):
             return jsonify({"error": "invalid_token"}), 401
 
         token = SSOToken.query.filter_by(access_token_hash=_hash_token(token_raw)).first()
-        if not token or token.revoked_at is not None or token.expires_at < dt.datetime.utcnow():
+        if not token or token.revoked_at is not None or token.expires_at < utc_now():
             return jsonify({"error": "invalid_token"}), 401
 
         user = db.session.get(User, token.user_id)

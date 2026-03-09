@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 
 from flask_login import login_user, logout_user
 
@@ -47,8 +48,8 @@ def test_visible_matter_ids_excludes_ethical_wall(app_ctx):
         client_name="Denied Client",
         status="Open",
         created_by=user.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     allowed_matter = Matter(
         matter_no="2026-WALL-0002",
@@ -56,8 +57,8 @@ def test_visible_matter_ids_excludes_ethical_wall(app_ctx):
         client_name="Allowed Client",
         status="Open",
         created_by=user.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add_all([denied_matter, allowed_matter])
     db.session.flush()
@@ -106,7 +107,7 @@ def test_mfa_required_role_redirects_to_setup(app_ctx):
 
 def test_suspicious_scan_creates_alert_for_repeated_denied_access(seed_user_matter):
     user = seed_user_matter["user"]
-    now = dt.datetime.utcnow()
+    now = utc_now()
     for _ in range(6):
         db.session.add(
             AuditLog(
@@ -139,8 +140,8 @@ def test_can_access_matter_fails_closed_when_policy_evaluator_errors(app_ctx, mo
         client_name="Security Client",
         status="Open",
         created_by=user.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add(matter)
     db.session.flush()

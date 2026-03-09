@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import datetime as dt
+from intranet.timeutils import utc_now
 import hashlib
 import io
 import json
@@ -18,6 +19,7 @@ from intranet.models import (
     CRMLead,
     ConflictCheck,
     ConflictSemanticHit,
+    ContractTemplate,
     DataResidencyPolicy,
     Deadline,
     DocumentFile,
@@ -57,11 +59,13 @@ from intranet.models import (
     PortalMessage,
     PortalMessageThread,
     PortalUser,
+    PracticeArea,
     RateCard,
     Section86Accrual,
     Section86Investment,
     Task,
     TaskAssignee,
+    TaskTemplate,
     TimeEntry,
     TimeRoundingPolicy,
     TrustAccount,
@@ -75,6 +79,7 @@ from intranet.models import (
     User,
 )
 from intranet.services.billing_engine import BillingEngine
+from intranet.services.sa_practice import DEFAULT_SA_PRACTICE_AREAS
 from intranet.services.trust_engine import TrustEngine
 
 
@@ -119,8 +124,8 @@ def _seed_matter(owner: User, matter_no: str, title: str, client: str) -> Matter
         client_name=client,
         status="Open",
         created_by=owner.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add(matter)
     db.session.flush()
@@ -1317,7 +1322,7 @@ def test_per_transaction_billing_and_billing_audit_log_exports(app_ctx):
         method="EFT",
         reference="TXN-REF-001",
         status="settled",
-        settled_at=dt.datetime.utcnow(),
+        settled_at=utc_now(),
         settled_by=lawyer.id,
         created_by=lawyer.id,
     )
@@ -1384,7 +1389,7 @@ def test_per_transaction_billing_filters_and_pending_queue(app_ctx):
                 method="EFT",
                 reference="PAY-SETTLED-001",
                 status="settled",
-                settled_at=dt.datetime.utcnow(),
+                settled_at=utc_now(),
                 settled_by=lawyer.id,
                 created_by=lawyer.id,
             ),
@@ -1450,7 +1455,7 @@ def test_billing_audit_log_scopes_records_to_visible_matters(app_ctx):
     db.session.add_all([visible_invoice, hidden_invoice])
     db.session.flush()
 
-    now = dt.datetime.utcnow()
+    now = utc_now()
     db.session.add_all(
         [
             AuditLog(
@@ -1634,7 +1639,7 @@ def test_dms_saved_search_scope_filter_applies_before_limit(app_ctx):
     db.session.add(MatterMember(matter_id=visible_matter.id, user_id=user.id, role_in_matter="Lead"))
     db.session.flush()
 
-    base_time = dt.datetime.utcnow() - dt.timedelta(minutes=20)
+    base_time = utc_now() - dt.timedelta(minutes=20)
     db.session.add(
         SavedSearch(
             user_id=user.id,
@@ -1911,6 +1916,26 @@ def test_matter_dms_template_variable_requirements_payload(app_ctx):
     assert "Template variable requirements" in body
     assert '"built_in_tokens":["client_name","matter_no"]' in compact_body
     assert '"custom_tokens":["counterparty_name","hearing_date"]' in compact_body
+
+
+def test_matter_dms_renders_quick_starts_and_matter_brief(app_ctx):
+    app = app_ctx
+    user = _seed_user("dms-quick-starts@example.com")
+    matter = _seed_matter(user, "2026-DMS-QS-0001", "Litigation Matter", "Quick Start Client")
+    matter.practice_area = "Commercial Litigation"
+    matter.legal_category = "Commercial Litigation"
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/matters/{matter.id}/dms")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "DMS Quick Starts" in body
+    assert "Client Advice" in body
+    assert "Matter Brief" in body
 
 
 def test_matter_create_auto_generates_linked_archetype_document_templates(app_ctx):
@@ -2404,7 +2429,7 @@ def test_portal_link_expiry_returns_gone(app_ctx):
             matter_id=matter.id,
             document_version_id=None,
             token_hash=hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
-            expires_at=dt.datetime.utcnow() - dt.timedelta(minutes=1),
+            expires_at=utc_now() - dt.timedelta(minutes=1),
         )
     )
     db.session.commit()
@@ -2417,7 +2442,7 @@ def test_portal_link_expiry_returns_gone(app_ctx):
 def test_revoked_user_session_forces_relogin(app_ctx):
     app = app_ctx
     user = _seed_user("revoked-session@example.com")
-    now = dt.datetime.utcnow()
+    now = utc_now()
     token_raw = "revoked-session-token"
     token_hash = hashlib.sha256(token_raw.encode("utf-8")).hexdigest()
 
@@ -2450,7 +2475,7 @@ def test_revoked_user_session_forces_relogin(app_ctx):
 def test_expired_user_session_forces_relogin(app_ctx):
     app = app_ctx
     user = _seed_user("expired-session@example.com")
-    now = dt.datetime.utcnow()
+    now = utc_now()
     token_raw = "expired-session-token"
     token_hash = hashlib.sha256(token_raw.encode("utf-8")).hexdigest()
 
@@ -2674,7 +2699,7 @@ def test_matter_close_with_active_legal_hold_blocks_archival(app_ctx):
 
 def test_retention_archive_sweep_blocks_held_matters_and_archives_clear_matters(seed_user_matter):
     user = seed_user_matter["user"]
-    now = dt.datetime.utcnow()
+    now = utc_now()
 
     clear_matter = Matter(
         matter_no="2026-RET-0001",
@@ -2720,7 +2745,7 @@ def test_retention_archive_sweep_blocks_held_matters_and_archives_clear_matters(
 def test_admin_legal_hold_create_release_updates_closed_matter_archival(app_ctx):
     app = app_ctx
     admin = _seed_user("legal-hold-admin@example.com", role="admin", mfa_enabled=True)
-    now = dt.datetime.utcnow()
+    now = utc_now()
     matter = Matter(
         matter_no="2026-LH-ADMIN-0001",
         title="Admin Hold Matter",
@@ -2795,8 +2820,8 @@ def test_sqlite_legal_hold_guard_blocks_matter_delete(seed_user_matter):
         client_name="Delete Guard Client",
         status="Open",
         created_by=user.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add(matter)
     db.session.flush()
@@ -2863,6 +2888,55 @@ def test_office365_admin_settings_persist(app_ctx):
     assert payload.get("enabled") is True
     assert payload.get("tenant_id") == "tenant-123"
     assert payload.get("client_id") == "client-456"
+
+
+def test_south_africa_ops_hub_prioritizes_relevant_portals(app_ctx):
+    app = app_ctx
+    user = _seed_user("sa-hub@example.com")
+    matter = _seed_matter(user, "2026-SA-HUB-0001", "Transfer of Unit 18", "Property Client")
+    matter.practice_area = "Conveyancing"
+    matter.case_type = "Property Transfer"
+    matter.jurisdiction = "ZA-GP"
+    matter.stage = "Lodgement"
+    matter.court_name = "Johannesburg Deeds Registry"
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.add(
+        Deadline(
+            matter_id=matter.id,
+            title="Transfer duty submission",
+            due_at=dt.date.today() + dt.timedelta(days=5),
+            status="open",
+            is_critical=True,
+            created_by=user.id,
+        )
+    )
+    db.session.add(
+        Task(
+            matter_id=matter.id,
+            title="Verify FICA pack",
+            status="Todo",
+            due_date=dt.date.today() + dt.timedelta(days=2),
+            assigned_to=user.id,
+            created_by=user.id,
+            priority="High",
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/integrations/south-africa?matter_id={matter.id}")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "South Africa Operations Hub" in body
+    assert "Matter No: 2026-SA-HUB-0001" in body
+    assert "CIPC eServices" in body
+    assert "SARS eFiling" in body
+    assert "Financial Intelligence Centre" in body
+    assert "Matter Workspace" in body
+    assert "Transfer duty submission" in body
+    assert "Verify FICA pack" in body
 
 
 def test_mobile_hub_captures_fee_and_assigns_task(app_ctx):
@@ -2975,3 +3049,53 @@ def test_third_party_conveyancing_import_creates_matter(app_ctx):
     assert matter is not None
     assert matter.practice_area == "Conveyancing"
     assert matter.case_type == "Property Transfer"
+
+
+def test_admin_can_seed_south_africa_practice_area_defaults(app_ctx):
+    app = app_ctx
+    admin = _seed_user("practice-area-admin@example.com", role="admin", mfa_enabled=True)
+    client = app.test_client()
+    _set_user_session(client, admin.id)
+
+    response = client.post(
+        "/admin/settings/practice-areas",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "seed_south_africa",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    names = {row.name for row in PracticeArea.query.order_by(PracticeArea.name.asc()).all()}
+    assert set(DEFAULT_SA_PRACTICE_AREAS).issubset(names)
+
+
+def test_admin_can_seed_south_africa_playbooks(app_ctx):
+    app = app_ctx
+    admin = _seed_user("playbook-admin@example.com", role="admin", mfa_enabled=True)
+    client = app.test_client()
+    _set_user_session(client, admin.id)
+
+    response = client.post(
+        "/admin/templates/matters",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "seed_south_africa",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    template_names = {row.name for row in MatterTemplate.query.order_by(MatterTemplate.name.asc()).all()}
+    document_names = {row.name for row in DocumentTemplate.query.order_by(DocumentTemplate.name.asc()).all()}
+    contract_names = {row.name for row in ContractTemplate.query.order_by(ContractTemplate.name.asc()).all()}
+    task_template_names = {row.name for row in TaskTemplate.query.order_by(TaskTemplate.name.asc()).all()}
+
+    assert "SA Conveyancing - Property Transfer" in template_names
+    assert "SA Deceased Estate Administration" in template_names
+    assert "SA CCMA Unfair Dismissal" in template_names
+    assert "SA High Court Civil Litigation" in template_names
+    assert "SA Conveyancing Opening Pack" in document_names
+    assert "SA Litigation Engagement Letter" in contract_names
+    assert "SA High Court Litigation Checklist" in task_template_names

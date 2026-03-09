@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import json
 import os
 import time
@@ -67,6 +68,7 @@ from ..services.contracts import (
 )
 from ..services.assist_ai import suggest_matter_client_update, suggest_matter_executive_summary
 from ..services.director_team import director_team_member_ids, user_in_director_scope
+from ..services.matter_magic import attach_matter_magic_links, build_matter_magic_snapshot
 from ..services.matter_option_lists import legal_category_options
 from ..services.storage_paths import build_matter_storage_name, harden_private_file, resolve_upload_path
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
@@ -103,7 +105,7 @@ def _safe_next_path(next_path: str | None, fallback: str) -> str:
 
 
 def _record_recent_matter_view(user_id: int, matter_id: int) -> None:
-    now = dt.datetime.utcnow()
+    now = utc_now()
     row = MatterRecentView.query.filter_by(user_id=user_id, matter_id=matter_id).first()
     if row is None:
         db.session.add(
@@ -505,7 +507,7 @@ def register_matter_routes(app):
                 flash(f"Provide required contract fields: {preview}.", "warning")
                 return redirect(url_for("matter_create"))
 
-            now = dt.datetime.utcnow()
+            now = utc_now()
 
             m = Matter(
                 matter_no=matter_no,
@@ -748,7 +750,7 @@ def register_matter_routes(app):
                 m.status = previous_status
                 m.last_update_note = last_update_note or None
                 m.outcome_summary = outcome_summary or None
-                m.last_updated_at = dt.datetime.utcnow()
+                m.last_updated_at = utc_now()
                 db.session.commit()
                 flash("Summary saved, but matter was not closed: " + "; ".join(close_blockers) + ".", "warning")
                 flash("Use Workspace close-out once archetype requirements are complete.", "info")
@@ -760,7 +762,7 @@ def register_matter_routes(app):
         m.status = status
         m.last_update_note = last_update_note or None
         m.outcome_summary = outcome_summary or None
-        m.last_updated_at = dt.datetime.utcnow()
+        m.last_updated_at = utc_now()
         auto_pause_summary = {"paused": 0, "captured_entries": 0}
         open_task_count_on_close = 0
         if previous_status != "Closed" and status == "Closed":
@@ -998,7 +1000,7 @@ def register_matter_routes(app):
             is_milestone=is_milestone,
             created_by=current_user.id,
         )
-        m.last_updated_at = dt.datetime.utcnow()
+        m.last_updated_at = utc_now()
         db.session.add(event)
         db.session.commit()
 
@@ -1065,7 +1067,7 @@ def register_matter_routes(app):
 
         field_values = collect_required_field_values(request.form, field_defs)
         m.archetype_data_json = json.dumps(field_values, ensure_ascii=True) if field_values else None
-        m.last_updated_at = dt.datetime.utcnow()
+        m.last_updated_at = utc_now()
         db.session.commit()
 
         missing_labels = validate_required_field_values(field_defs, field_values)
@@ -1125,6 +1127,18 @@ def register_matter_routes(app):
         archetype_values = parse_matter_archetype_values(m.archetype_data_json)
         archetype_document, archetype_missing_tokens = _generate_archetype_document(m, archetype)
         archetype_compliance = build_archetype_compliance_snapshot(m, archetype)
+        notes_count = MatterNote.query.filter_by(matter_id=matter_id).count()
+        matter_magic = build_matter_magic_snapshot(
+            m,
+            today=today,
+            tasks=tasks,
+            docs=docs,
+            timeline=timeline,
+            team_size=len(members),
+            notes_count=notes_count,
+            archetype_compliance=archetype_compliance,
+        )
+        matter_magic["actions"] = attach_matter_magic_links(matter_magic["actions"], m.id)
 
         return page(
             f"Matter {m.matter_no}",
@@ -1149,6 +1163,7 @@ def register_matter_routes(app):
             archetype_document=archetype_document,
             archetype_missing_tokens=archetype_missing_tokens,
             archetype_compliance=archetype_compliance,
+            matter_magic=matter_magic,
         )
 
     @app.post("/matters/<int:matter_id>/pin")
@@ -1504,7 +1519,7 @@ def register_matter_routes(app):
             "on",
         }
         if status == "Done" and previous_status != "Done" and suggest_time_on_done:
-            end_at = dt.datetime.utcnow().replace(second=0, microsecond=0)
+            end_at = utc_now().replace(second=0, microsecond=0)
             start_at = end_at - dt.timedelta(minutes=30)
             flash("Task marked done. Confirm the suggested time entry.", "info")
             return redirect(

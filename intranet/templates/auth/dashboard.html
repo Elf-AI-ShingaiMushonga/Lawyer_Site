@@ -270,6 +270,89 @@
     font-size: 13px;
   }
 
+  .legal-desk-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+  }
+
+  .legal-desk-card {
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 16px;
+    padding: 14px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 249, 249, 0.94)),
+      radial-gradient(circle at top right, rgba(225, 6, 0, 0.08), rgba(225, 6, 0, 0));
+    box-shadow: 0 8px 18px rgba(103, 42, 42, 0.07);
+  }
+
+  .legal-desk-card.tone-critical {
+    border-color: rgba(180, 31, 31, 0.36);
+  }
+
+  .legal-desk-card.tone-watch {
+    border-color: rgba(202, 117, 20, 0.34);
+  }
+
+  .legal-desk-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .legal-desk-status {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #7b6262;
+    line-height: 1.4;
+  }
+
+  .legal-desk-action {
+    margin-top: 10px;
+    padding: 10px 11px;
+    border-radius: 12px;
+    background: rgba(225, 6, 0, 0.06);
+    border: 1px solid rgba(225, 6, 0, 0.13);
+  }
+
+  .legal-desk-action-label {
+    font-size: 11px;
+    font-weight: 760;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #835655;
+  }
+
+  .legal-desk-action-title {
+    margin-top: 4px;
+    font-weight: 760;
+    color: #4f2929;
+  }
+
+  .legal-desk-action-summary {
+    margin-top: 3px;
+    font-size: 12px;
+    color: #6e5656;
+    line-height: 1.4;
+  }
+
+  .legal-desk-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .legal-desk-chip {
+    border-radius: 999px;
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    background: rgba(255, 247, 247, 0.92);
+    padding: 4px 9px;
+    font-size: 11px;
+    color: #704646;
+  }
+
   @media (max-width: 991.98px) {
     .priority-inbox-shell {
       --priority-inbox-max-height: 700px;
@@ -336,6 +419,59 @@
           <div class="metric-link-hint">{{ "Open Automation Studio" if is_admin_role else "Open Matter Directory" }}</div>
         </a>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-1">
+  <div class="col-12">
+    <div class="card p-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+          <h4 class="mb-0">Legal Desk</h4>
+          <div class="form-help mt-1">The matters most likely to need legal attention next, with the next best move pre-selected.</div>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Open Matter Directory</a>
+      </div>
+      {% if legal_desk %}
+        <div class="legal-desk-grid mt-3">
+          {% for card in legal_desk %}
+            {% set top_action = card.top_action %}
+            <article class="legal-desk-card tone-{{ card.health_tone }}">
+              <div class="legal-desk-header">
+                <div>
+                  <a class="fw-semibold text-decoration-none" href="{{ url_for('matter_detail', matter_id=card.matter.id) }}">{{ card.matter.matter_no }} - {{ card.matter.title }}</a>
+                  <div class="muted small mt-1">{{ card.matter.client_name }}</div>
+                </div>
+                <span class="risk-chip risk-{{ (card.matter.risk_level or 'medium')|lower }}">{{ card.matter.risk_level or "Medium" }}</span>
+              </div>
+              <div class="legal-desk-status">{{ card.status_line }}</div>
+              {% if top_action %}
+                <div class="legal-desk-action">
+                  <div class="legal-desk-action-label">Next Best Move</div>
+                  <div class="legal-desk-action-title">{{ top_action.title }}</div>
+                  <div class="legal-desk-action-summary">{{ top_action.summary }}</div>
+                  <div class="table-actions mt-2">
+                    <a class="btn btn-sm btn-light" href="{{ top_action.href }}">{{ top_action.button_label }}</a>
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=card.matter.id) }}">Workspace</a>
+                  </div>
+                </div>
+              {% endif %}
+              <div class="legal-desk-chip-row">
+                <span class="legal-desk-chip">{{ card.open_task_count }} open task(s)</span>
+                <span class="legal-desk-chip">{{ card.document_count }} document(s)</span>
+                {% if card.next_event_summary %}
+                  <span class="legal-desk-chip">{{ card.next_event_summary }}</span>
+                {% elif card.stale_days %}
+                  <span class="legal-desk-chip">{{ card.stale_days }} day(s) since last matter update</span>
+                {% endif %}
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="muted mt-2">No matters are currently competing for your attention.</div>
+      {% endif %}
     </div>
   </div>
 </div>

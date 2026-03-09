@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 
 import sqlalchemy as sa
 from flask import jsonify
@@ -13,7 +14,7 @@ def register_ops_routes(app):
     def _probe_payload() -> tuple[dict, int]:
         try:
             db.session.execute(text("SELECT 1"))
-            return {"status": "ok", "db": "ok", "utc": dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"}, 200
+            return {"status": "ok", "db": "ok", "utc": utc_now().replace(microsecond=0).isoformat() + "Z"}, 200
         except Exception:
             db.session.rollback()
             return {"status": "error", "db": "unreachable"}, 503
@@ -47,7 +48,7 @@ def register_ops_routes(app):
                         "db": "ok",
                         "reason": "missing_tables",
                         "missing_tables": missing_tables,
-                        "utc": dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+                        "utc": utc_now().replace(microsecond=0).isoformat() + "Z",
                     },
                     503,
                 )
@@ -59,7 +60,7 @@ def register_ops_routes(app):
                     "status": "error",
                     "db": "ok",
                     "reason": "readiness_check_failed",
-                    "utc": dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+                    "utc": utc_now().replace(microsecond=0).isoformat() + "Z",
                 },
                 503,
             )

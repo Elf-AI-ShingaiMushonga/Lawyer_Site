@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 
 from ..db_context import set_db_access_context
 from ..extensions import db
@@ -26,7 +27,7 @@ def schedule_due_jobs(now: dt.datetime | None = None) -> int:
     set_db_access_context(user_id=None, role="system", is_admin=False, service_account=True)
 
     if now is None:
-        now = dt.datetime.utcnow()
+        now = utc_now()
 
     jobs = ScheduledJob.query.filter(
         ScheduledJob.is_active.is_(True),

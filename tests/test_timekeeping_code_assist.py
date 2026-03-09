@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 import html
 import json
 import re
@@ -37,8 +38,8 @@ def _seed_matter(owner: User, matter_no: str, title: str) -> Matter:
         client_name="Code Assist Client",
         status="Open",
         created_by=owner.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add(matter)
     db.session.flush()

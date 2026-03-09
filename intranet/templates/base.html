@@ -2822,7 +2822,7 @@
   {% set billing_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "billing_tax_invoice_pdf", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses"] %}
   {% set crm_endpoints = ["crm_leads", "crm_lead_detail"] %}
   {% set knowledge_endpoints = ["contacts", "kb", "kb_view", "search"] %}
-  {% set integration_endpoints = ["integrations_office365", "integrations_office365_outlook_feed", "integrations_office365_excel_time_entries", "integrations_office365_excel_invoices", "integrations_office365_word_matter_summary", "integrations_office365_word_matter_summary_query", "integrations_third_party", "integrations_export_cost_recovery", "integrations_export_conveyancing", "integrations_import_cost_recovery", "integrations_import_conveyancing", "mobile_hub"] %}
+  {% set integration_endpoints = ["integrations_south_africa", "integrations_office365", "integrations_office365_outlook_feed", "integrations_office365_excel_time_entries", "integrations_office365_excel_invoices", "integrations_office365_word_matter_summary", "integrations_office365_word_matter_summary_query", "integrations_third_party", "integrations_export_cost_recovery", "integrations_export_conveyancing", "integrations_import_cost_recovery", "integrations_import_conveyancing", "mobile_hub"] %}
   {% set analytics_endpoints = ["analytics_utilization", "analytics_realization", "analytics_ehr", "analytics_workload", "analytics_profitability", "analytics_forecast", "analytics_burnout"] %}
   {% set personnel_endpoints = ["director_personnel"] %}
   {% set ops_endpoints = ["ops_backup_status", "ops_restore_verify", "ops_dr_targets"] %}
@@ -2874,8 +2874,8 @@
     {% set section_href = url_for('portal_login') %}
   {% elif endpoint in integration_endpoints %}
     {% set section_label = "Integrations and Mobile" %}
-    {% set section_meta = "Office365, third-party sync, and mobile capture flows" %}
-    {% set section_href = url_for('integrations_office365') %}
+    {% set section_meta = "South Africa operations, Office365, third-party sync, and mobile capture flows" %}
+    {% set section_href = url_for('integrations_south_africa') %}
   {% elif endpoint in analytics_endpoints %}
     {% set section_label = "Analytics and Forecasting" %}
     {% set section_meta = "Utilization, realization, profitability, and burnout signals" %}
@@ -2975,7 +2975,7 @@
                   {% if is_director_role %}
                     <a class="nav-menu-item {{ 'is-active' if endpoint in personnel_endpoints else '' }}" href="{{ url_for('director_personnel') }}">Personnel</a>
                   {% endif %}
-                  <a class="nav-menu-item {{ 'is-active' if endpoint in integration_endpoints else '' }}" href="{{ url_for('integrations_office365') }}">Integrations</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in integration_endpoints else '' }}" href="{{ url_for('integrations_south_africa') }}">Integrations</a>
                   <a class="nav-menu-item {{ 'is-active' if endpoint == 'mobile_hub' else '' }}" href="{{ url_for('mobile_hub') }}">Mobile Hub</a>
                   <a class="nav-menu-item {{ 'is-active' if endpoint in trust_endpoints else '' }}" href="{{ url_for('trust_policy') }}">Trust & Security</a>
                   {% if is_admin_role %}
@@ -3260,6 +3260,13 @@
             <span>
               <span class="command-item-title">Client Portal</span>
               <span class="command-item-meta">Client-facing matter access and exchange</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          <a class="command-item" href="{{ url_for('integrations_south_africa') }}" data-command-item data-keywords="south africa legal practice court online caselines lpc fica cipc sars ccma master integrations">
+            <span>
+              <span class="command-item-title">South Africa Practice Hub</span>
+              <span class="command-item-meta">Official practitioner portals and matter launch shortcuts</span>
             </span>
             <span class="code-like">Go</span>
           </a>

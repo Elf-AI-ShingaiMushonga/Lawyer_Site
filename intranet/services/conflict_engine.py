@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import hashlib
 import json
 import math
@@ -342,7 +343,7 @@ class ConflictEngine:
                     vector_score=float(item.get("vector_score") or 0.0),
                     excerpt=(str(item.get("excerpt") or "")[:2000] or None),
                     semantic_rank=int(item.get("semantic_rank") or 1),
-                    created_at=dt.datetime.utcnow(),
+                    created_at=utc_now(),
                 )
             )
 
@@ -359,7 +360,7 @@ class ConflictEngine:
         result["semantic_hits"] = semantic_hits
         result["semantic_hit_count"] = len(semantic_hits)
         result["semantic_status"] = semantic_status
-        result["generated_at"] = dt.datetime.utcnow().isoformat()
+        result["generated_at"] = utc_now().isoformat()
         return result
 
     @staticmethod
@@ -389,7 +390,7 @@ class ConflictEngine:
                         "semantic_hits": [],
                         "semantic_hit_count": 0,
                         "semantic_status": "queued",
-                        "queued_at": dt.datetime.utcnow().isoformat(),
+                        "queued_at": utc_now().isoformat(),
                     },
                     sort_keys=True,
                 ),
@@ -402,7 +403,7 @@ class ConflictEngine:
             prior_payload.setdefault("matches", [])
             prior_payload.setdefault("semantic_hits", [])
             prior_payload["semantic_status"] = "queued"
-            prior_payload["queued_at"] = dt.datetime.utcnow().isoformat()
+            prior_payload["queued_at"] = utc_now().isoformat()
             prior_payload["requested_by"] = int(requested_by or 0)
             check.result_json = json.dumps(prior_payload, sort_keys=True)
             if check.status not in {"clear", "potential_conflict", "overridden"}:

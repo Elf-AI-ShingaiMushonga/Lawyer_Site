@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 
 from intranet.cli import recover_all_users_mfa, recover_user_mfa
 from intranet.extensions import db
@@ -17,8 +18,8 @@ def _seed_user(email: str, *, mfa_enabled: bool, mfa_secret: str | None) -> User
         mfa_enabled=mfa_enabled,
         mfa_secret=mfa_secret,
         failed_login_attempts=4,
-        locked_until=dt.datetime.utcnow() + dt.timedelta(minutes=5),
-        last_failed_login_at=dt.datetime.utcnow(),
+        locked_until=utc_now() + dt.timedelta(minutes=5),
+        last_failed_login_at=utc_now(),
     )
     user.set_password("StrongPassword123!")
     db.session.add(user)

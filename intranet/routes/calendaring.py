@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import calendar as pycalendar
 import datetime as dt
+from ..timeutils import utc_now
 from urllib.parse import urlparse
 
 from flask import abort, flash, redirect, request, url_for
@@ -460,7 +461,7 @@ def register_calendar_routes(app):
         row.due_at = new_due
         row.override_reason = reason
         row.overridden_by = current_user.id
-        row.overridden_at = dt.datetime.utcnow()
+        row.overridden_at = utc_now()
         db.session.commit()
         audit("deadline_override", "Deadline", row.id, {"reason": reason, "new_due": new_due.isoformat()})
         flash("Deadline override saved.", "info")
@@ -476,7 +477,7 @@ def register_calendar_routes(app):
             abort(403)
 
         row.acknowledged_by = current_user.id
-        row.acknowledged_at = dt.datetime.utcnow()
+        row.acknowledged_at = utc_now()
         row.status = "acknowledged"
         db.session.commit()
         audit("deadline_ack", "Deadline", row.id)

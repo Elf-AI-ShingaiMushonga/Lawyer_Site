@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import hashlib
 import json
 import os
@@ -25,16 +26,21 @@ from ..models import (
     DocumentVersion,
     EmailCapture,
     Matter,
+    MatterMember,
+    MatterNote,
+    MatterTimelineEvent,
     PortalLinkToken,
     ProductionItem,
     ProductionSet,
     SavedSearch,
+    Task,
     TrustLedgerEntry,
 )
 from ..policies import enforce_permission, has_permission, visible_matter_ids
 from ..policies.residency import enforce_data_residency, residency_allowed
 from ..roles import canonical_role, role_is_admin
 from ..services.dms_option_lists import DEFAULT_DMS_OPTION_LISTS, load_dms_option_lists
+from ..services.matter_magic import attach_matter_magic_links, build_dms_quick_starts, build_matter_magic_snapshot
 from ..services.notification_engine import NotificationEngine
 from ..services.semantic_search import SemanticSearchService
 from ..services.storage_paths import build_matter_storage_name, harden_private_file, resolve_upload_path
@@ -148,7 +154,7 @@ def _parse_generation_fields(raw: str | None) -> dict[str, str]:
 
 
 def _template_context(matter: Matter) -> dict[str, str]:
-    now = dt.datetime.utcnow()
+    now = utc_now()
     return {
         "matter_id": str(matter.id),
         "matter_no": matter.matter_no or "",
@@ -696,6 +702,46 @@ def register_dms_routes(app):
             str(template.id): _template_token_requirements(template.body, builtin_context_keys)
             for template in doc_templates
         }
+        recent_doc_records = (
+            DocumentRecord.query.filter(DocumentRecord.matter_id == matter_id)
+            .order_by(DocumentRecord.created_at.desc(), DocumentRecord.id.desc())
+            .limit(12)
+            .all()
+        )
+        open_tasks = (
+            Task.query.filter(Task.matter_id == matter_id, Task.status != "Done")
+            .order_by(Task.due_date.asc(), Task.id.asc())
+            .limit(40)
+            .all()
+        )
+        upcoming_timeline = (
+            MatterTimelineEvent.query.filter(
+                MatterTimelineEvent.matter_id == matter_id,
+                MatterTimelineEvent.event_date >= dt.date.today(),
+            )
+            .order_by(MatterTimelineEvent.event_date.asc(), MatterTimelineEvent.id.asc())
+            .limit(12)
+            .all()
+        )
+        matter_magic_docs = docs if (q or filter_type or filter_confidentiality) else recent_doc_records
+        matter_magic = build_matter_magic_snapshot(
+            m,
+            today=dt.date.today(),
+            tasks=open_tasks,
+            docs=matter_magic_docs,
+            timeline=upcoming_timeline,
+            team_size=MatterMember.query.filter_by(matter_id=matter_id).count(),
+            notes_count=MatterNote.query.filter_by(matter_id=matter_id).count(),
+        )
+        matter_magic["actions"] = attach_matter_magic_links(matter_magic["actions"], m.id)
+        dms_quick_starts = build_dms_quick_starts(
+            m,
+            document_type_options,
+            confidentiality_options,
+            privilege_label_options,
+            retention_category_options,
+            today=dt.date.today(),
+        )
         audit("dms_repository_access", "Matter", matter_id)
         return page(
             "Matter DMS",
@@ -716,6 +762,8 @@ def register_dms_routes(app):
             default_document_type=default_document_type,
             default_confidentiality=default_confidentiality,
             template_requirements_map=template_requirements_map,
+            matter_magic=matter_magic,
+            dms_quick_starts=dms_quick_starts,
         )
 
     @app.route("/documents/<int:document_id>/versions", methods=["GET", "POST"])
@@ -979,7 +1027,7 @@ def register_dms_routes(app):
                     document_id=document_id,
                     locked_by=current_user.id,
                     lock_reason=(request.form.get("reason") or "").strip() or None,
-                    expires_at=dt.datetime.utcnow() + dt.timedelta(hours=8),
+                    expires_at=utc_now() + dt.timedelta(hours=8),
                 )
             )
             db.session.commit()
@@ -999,7 +1047,7 @@ def register_dms_routes(app):
 
         active = DocumentLock.query.filter_by(document_id=document_id, released_at=None).first()
         if active and (active.locked_by == current_user.id or role_is_admin(getattr(current_user, "role", None))):
-            active.released_at = dt.datetime.utcnow()
+            active.released_at = utc_now()
             db.session.commit()
             audit("dms_unlock", "DocumentRecord", document_id)
             flash("Document unlocked.", "info")

@@ -32,6 +32,74 @@
     margin-top: 8px;
     margin-bottom: 8px;
   }
+
+  .matter-magic-card {
+    border: 1px solid rgba(225, 6, 0, 0.18);
+    border-radius: 16px;
+    background:
+      radial-gradient(circle at top right, rgba(225, 6, 0, 0.1), rgba(225, 6, 0, 0)),
+      linear-gradient(180deg, rgba(255, 250, 250, 0.98), rgba(255, 255, 255, 0.98));
+  }
+
+  .matter-magic-card.tone-critical {
+    border-color: rgba(180, 31, 31, 0.34);
+  }
+
+  .matter-magic-card.tone-watch {
+    border-color: rgba(203, 114, 26, 0.3);
+  }
+
+  .matter-magic-status {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #715a5a;
+    line-height: 1.45;
+  }
+
+  .matter-magic-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .matter-magic-item {
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 12px;
+    padding: 11px 12px;
+    background: rgba(255, 255, 255, 0.9);
+  }
+
+  .matter-magic-item.urgency-critical {
+    border-left: 4px solid #bc2820;
+  }
+
+  .matter-magic-item.urgency-high {
+    border-left: 4px solid #d36d1f;
+  }
+
+  .matter-magic-item.urgency-medium {
+    border-left: 4px solid #8b5f34;
+  }
+
+  .matter-magic-item.urgency-low {
+    border-left: 4px solid #6b6661;
+  }
+
+  .matter-magic-item-title {
+    font-weight: 760;
+    color: #4f2a2a;
+  }
+
+  .matter-magic-item-summary {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6d5757;
+    line-height: 1.45;
+  }
+
+  .matter-magic-brief {
+    margin-top: 12px;
+  }
 </style>
 <div class="row g-3">
   <div class="col-lg-8">
@@ -81,6 +149,7 @@
         <a class="nav-pill is-active" href="#matter-summary-section">Summary</a>
         <a class="nav-pill" href="#matter-ai-section">AI Assistant</a>
         <a class="nav-pill" href="#matter-archetype-section">Archetype</a>
+        <a class="nav-pill" href="#matter-magic-section">Matter Magic</a>
         <a class="nav-pill" href="#matter-timeline-section">Timeline</a>
         <a class="nav-pill" href="#matter-activity-section">Activity</a>
         <a class="nav-pill" href="#matter-tasks-section">Tasks</a>
@@ -383,6 +452,40 @@
   </div>
 
   <div class="col-lg-4">
+    <div class="card p-3 matter-detail-anchor matter-magic-card tone-{{ matter_magic.health_tone }}" id="matter-magic-section">
+      <div class="toolbar-row">
+        <div>
+          <h4 class="mb-0">Matter Magic</h4>
+          <div class="muted small mt-1">{{ matter_magic.headline }}</div>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
+      </div>
+      <div class="matter-magic-status">{{ matter_magic.status_line }}</div>
+      <div class="matter-magic-list">
+        {% for action in matter_magic.actions %}
+          <article class="matter-magic-item urgency-{{ action.urgency }}">
+            <div class="d-flex justify-content-between gap-2 align-items-start">
+              <div class="matter-magic-item-title">{{ action.title }}</div>
+              {% if action.badge %}<span class="badge badge-soft">{{ action.badge }}</span>{% endif %}
+            </div>
+            <div class="matter-magic-item-summary">{{ action.summary }}</div>
+            <div class="table-actions mt-2">
+              <a class="btn btn-sm btn-light" href="{{ action.href }}">{{ action.button_label }}</a>
+              <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+      <div class="matter-magic-brief">
+        <label class="form-label" for="matter-magic-brief-text">Quick Brief</label>
+        <textarea class="form-control" id="matter-magic-brief-text" rows="9" readonly>{{ matter_magic.brief_text }}</textarea>
+        <div class="d-flex gap-2 align-items-center mt-2">
+          <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="matter-magic-brief-text" data-copy-success-text="Copied">Copy Brief</button>
+          <span class="form-help" data-copy-feedback-for="matter-magic-brief-text"></span>
+        </div>
+      </div>
+    </div>
+
     <div class="card p-3 matter-detail-anchor" id="matter-activity-section">
       <h4 class="mb-1">Matter Activity Feed</h4>
       <div class="muted small">Human-readable actions for quick stakeholder updates.</div>

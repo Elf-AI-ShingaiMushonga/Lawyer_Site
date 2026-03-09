@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 import io
 import json
 import os
@@ -145,7 +146,7 @@ def test_smoke_core_matter_time_billing_flow(app_ctx):
     task = Task.query.filter_by(matter_id=matter.id).order_by(Task.id.desc()).first()
     assert task is not None
 
-    start_at = (dt.datetime.utcnow() - dt.timedelta(hours=2)).replace(second=0, microsecond=0)
+    start_at = (utc_now() - dt.timedelta(hours=2)).replace(second=0, microsecond=0)
     end_at = start_at + dt.timedelta(hours=1, minutes=15)
     response = client.post(
         "/time/entries",
@@ -337,8 +338,8 @@ def test_smoke_trust_crm_portal_flow(app_ctx):
     )
     assert response.status_code == 302
 
-    period_start = (dt.datetime.utcnow() - dt.timedelta(days=1)).replace(microsecond=0, second=0)
-    period_end = dt.datetime.utcnow().replace(microsecond=0, second=0)
+    period_start = (utc_now() - dt.timedelta(days=1)).replace(microsecond=0, second=0)
+    period_end = utc_now().replace(microsecond=0, second=0)
     response = client.post(
         "/trust/reconciliations",
         data={
@@ -386,7 +387,7 @@ def test_smoke_trust_crm_portal_flow(app_ctx):
         data={
             "csrf_token": csrf_token,
             "action": "follow_up",
-            "due_at": (dt.datetime.utcnow() + dt.timedelta(days=1)).replace(second=0, microsecond=0).isoformat(timespec="minutes"),
+            "due_at": (utc_now() + dt.timedelta(days=1)).replace(second=0, microsecond=0).isoformat(timespec="minutes"),
             "note": "Send onboarding checklist.",
         },
     )

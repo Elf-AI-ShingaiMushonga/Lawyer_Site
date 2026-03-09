@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import hashlib
 import json
 from typing import Any
@@ -138,7 +139,7 @@ class SemanticSearchService:
 
         chunks = _split_chunks(text)
         vectors, provider_meta = embed_texts(chunks, operation_type="semantic_index_document")
-        now = dt.datetime.utcnow()
+        now = utc_now()
         for idx, chunk in enumerate(chunks):
             vector = vectors[idx] if idx < len(vectors) else []
             content_sha256 = hashlib.sha256(chunk.encode("utf-8")).hexdigest()

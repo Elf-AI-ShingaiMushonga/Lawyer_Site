@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import json
 
 from sqlalchemy import func
@@ -116,7 +117,7 @@ def load_dms_option_lists() -> dict[str, list[str]]:
 
 def save_dms_option_lists(raw: dict, *, updated_by: int | None) -> dict[str, list[str]]:
     payload = normalize_dms_option_lists(raw)
-    now = dt.datetime.utcnow()
+    now = utc_now()
     row = FirmSetting.query.filter_by(setting_key=DMS_OPTION_LISTS_SETTING_KEY).first()
     if row is None:
         row = FirmSetting(

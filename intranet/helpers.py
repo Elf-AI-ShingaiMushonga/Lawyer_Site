@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from .timeutils import utc_now
 import hashlib
 import json
 import re
@@ -187,7 +188,7 @@ def register_user_session(user_id: int, ttl_minutes: int = 8 * 60, *, rotate_tok
         if rotate_token or not session.get("_session_token"):
             session["_session_token"] = secrets.token_urlsafe(24)
         token_hash = _token_hash(_session_token())
-        now = dt.datetime.utcnow()
+        now = utc_now()
         row = UserSession.query.filter_by(session_token_hash=token_hash).first()
         if row is None:
             row = UserSession(
@@ -222,7 +223,7 @@ def touch_user_session() -> None:
         row = UserSession.query.filter_by(session_token_hash=token_hash, user_id=current_user.id).first()
         if row is None:
             return
-        row.last_seen_at = dt.datetime.utcnow()
+        row.last_seen_at = utc_now()
         db.session.commit()
     except Exception:
         db.session.rollback()
@@ -248,7 +249,7 @@ def _validate_user_session(
     if not current_user.is_authenticated:
         return True, None
 
-    now = dt.datetime.utcnow()
+    now = utc_now()
     token = session.get("_session_token")
     if not token:
         sid = register_user_session(current_user.id, ttl_minutes=ttl_minutes, rotate_token=False)
@@ -289,7 +290,7 @@ def revoke_user_session(session_id: int) -> bool:
     row = UserSession.query.filter_by(id=session_id, user_id=current_user.id).first()
     if row is None:
         return False
-    row.revoked_at = dt.datetime.utcnow()
+    row.revoked_at = utc_now()
     db.session.commit()
     return True
 
@@ -303,7 +304,7 @@ def revoke_current_session() -> bool:
     row = UserSession.query.filter_by(session_token_hash=_token_hash(token), user_id=current_user.id).first()
     if row is None:
         return False
-    row.revoked_at = dt.datetime.utcnow()
+    row.revoked_at = utc_now()
     db.session.commit()
     return True
 
@@ -318,7 +319,7 @@ def register_trusted_device(user_id: int) -> int | None:
     fingerprint_raw = f"{user_agent}|{remote_ip}"
     fingerprint_hash = hashlib.sha256(fingerprint_raw.encode("utf-8")).hexdigest()
     device_name = user_agent[:200] or f"IP {remote_ip or 'unknown'}"
-    now = dt.datetime.utcnow()
+    now = utc_now()
 
     try:
         row = TrustedDevice.query.filter_by(user_id=user_id, fingerprint_hash=fingerprint_hash).first()

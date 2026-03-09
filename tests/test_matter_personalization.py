@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import datetime as dt
+
 from intranet.extensions import db
-from intranet.models import MatterPin, MatterRecentView
+from intranet.models import MatterPin, MatterRecentView, Task
 
 
 def _set_user_session(client, user_id: int, csrf_token: str = "test-csrf") -> None:
@@ -95,3 +97,56 @@ def test_dashboard_hides_pinned_and_recent_sections(seed_user_matter, app):
     body = response.get_data(as_text=True)
     assert "Pinned Matters" not in body
     assert "Recently Viewed Matters" not in body
+
+
+def test_matter_detail_renders_matter_magic_brief(seed_user_matter, app):
+    user = seed_user_matter["user"]
+    matter = seed_user_matter["matter"]
+    _enable_mfa(user)
+    db.session.add(
+        Task(
+            matter_id=matter.id,
+            title="Overdue filing",
+            status="Todo",
+            due_date=dt.date.today() - dt.timedelta(days=1),
+            created_by=user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+
+    response = client.get(f"/matters/{matter.id}")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Matter Magic" in body
+    assert "Quick Brief" in body
+    assert "Clear overdue tasks" in body
+
+
+def test_workspace_renders_next_best_moves(seed_user_matter, app):
+    user = seed_user_matter["user"]
+    matter = seed_user_matter["matter"]
+    _enable_mfa(user)
+    db.session.add(
+        Task(
+            matter_id=matter.id,
+            title="Draft update",
+            status="Todo",
+            due_date=dt.date.today(),
+            created_by=user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+
+    response = client.get(f"/matters/{matter.id}/workspace")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Next Best Moves" in body
+    assert "Prepare due work" in body

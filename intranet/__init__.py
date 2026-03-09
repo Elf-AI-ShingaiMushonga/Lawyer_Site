@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 import datetime as dt
+from .timeutils import utc_now
 import importlib.util
 import logging
 import os
@@ -348,7 +349,7 @@ def create_app() -> Flask:
             if running_timer is not None:
                 seed_elapsed_seconds = max(0, int(running_timer.elapsed_seconds or 0))
                 started_at = running_timer.started_at
-                now_utc = dt.datetime.utcnow()
+                now_utc = utc_now()
                 total_elapsed_seconds = seed_elapsed_seconds
                 started_at_iso = ""
                 if started_at:

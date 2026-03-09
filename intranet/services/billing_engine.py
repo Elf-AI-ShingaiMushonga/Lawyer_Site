@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 
 from sqlalchemy import and_, or_
 
@@ -83,7 +84,7 @@ class BillingEngine:
             db.session.add(line)
             subtotal += amount
             row.status = "billed"
-            row.locked_at = dt.datetime.utcnow()
+            row.locked_at = utc_now()
 
         for exp in expense_rows:
             line = InvoiceLine(

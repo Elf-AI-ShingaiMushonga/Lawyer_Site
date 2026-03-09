@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 from typing import Any
 
 from flask import abort, current_app, flash, jsonify, redirect, request, url_for
@@ -36,7 +37,7 @@ def _single_timer_cap_seconds() -> int:
 def _elapsed_seconds_for_timer(timer: TimeTimer, *, as_of: dt.datetime | None = None) -> int:
     total = max(0, int(timer.elapsed_seconds or 0))
     if timer.status == "running" and timer.started_at:
-        now = as_of or dt.datetime.utcnow()
+        now = as_of or utc_now()
         total += max(0, int((now - timer.started_at).total_seconds()))
     return total
 
@@ -51,7 +52,7 @@ def _pause_timer(
         capped = True
     timer.elapsed_seconds = max(0, int(total))
     timer.status = "paused"
-    timer.paused_at = as_of or dt.datetime.utcnow()
+    timer.paused_at = as_of or utc_now()
     return timer.elapsed_seconds, capped
 
 
@@ -587,7 +588,7 @@ def register_timekeeping_routes(app):
             "objective": matter.objective or "",
         }
 
-        started = dt.datetime.utcnow()
+        started = utc_now()
         suggestion = suggest_time_entry_narrative(
             matter_context=matter_context,
             duration_hours=duration_hours,
@@ -595,7 +596,7 @@ def register_timekeeping_routes(app):
             activity_code=activity_code,
             current_narrative=current_narrative,
         )
-        elapsed_ms = int((dt.datetime.utcnow() - started).total_seconds() * 1000)
+        elapsed_ms = int((utc_now() - started).total_seconds() * 1000)
         audit(
             "time_narrative_ai_suggest",
             "Matter",
@@ -685,7 +686,7 @@ def register_timekeeping_routes(app):
         needs_review = 0
         skipped_reasons: list[str] = []
         last_matter_id: int | None = None
-        now = dt.datetime.utcnow()
+        now = utc_now()
 
         for index, item in enumerate(parsed_entries, start=1):
             row = item if isinstance(item, dict) else {}
@@ -924,7 +925,7 @@ def register_timekeeping_routes(app):
             matter_id=matter_id,
             task_id=request.form.get("task_id", type=int),
             label=(request.form.get("label") or "").strip() or None,
-            started_at=dt.datetime.utcnow(),
+            started_at=utc_now(),
             status="running",
         )
         db.session.add(timer)
@@ -975,7 +976,7 @@ def register_timekeeping_routes(app):
                 )
         else:
             timer.status = "paused"
-            timer.paused_at = dt.datetime.utcnow()
+            timer.paused_at = utc_now()
         db.session.commit()
         audit(
             "timer_pause",
@@ -1037,7 +1038,7 @@ def register_timekeeping_routes(app):
             matter_id=matter_id,
             task_id=request.form.get("task_id", type=int),
             label=(request.form.get("label") or "").strip() or None,
-            started_at=dt.datetime.utcnow(),
+            started_at=utc_now(),
             status="running",
         )
         db.session.add(timer)
@@ -1247,7 +1248,7 @@ def register_timekeeping_routes(app):
         prefill_narrative = (request.args.get("narrative") or "").strip()
         prefill_is_billable = _as_bool(request.args.get("is_billable"), default=True)
 
-        default_end_dt = dt.datetime.utcnow().replace(second=0, microsecond=0)
+        default_end_dt = utc_now().replace(second=0, microsecond=0)
         default_start_dt = default_end_dt - dt.timedelta(minutes=30)
         prefill_start_at_dt, start_error = _parse_iso_datetime(request.args.get("start_at"))
         prefill_end_at_dt, end_error = _parse_iso_datetime(request.args.get("end_at"))
@@ -1297,7 +1298,7 @@ def register_timekeeping_routes(app):
             entry.status = state
             if state == "approved":
                 entry.approved_by = current_user.id
-                entry.approved_at = dt.datetime.utcnow()
+                entry.approved_at = utc_now()
                 queued_invoice_id = ensure_draft_billing_item_for_time_entry(
                     entry.id,
                     actor_user_id=current_user.id,
@@ -1335,7 +1336,7 @@ def register_timekeeping_routes(app):
             flash("Only approved entries can be locked.", "warning")
             return redirect(url_for("time_review"))
 
-        entry.locked_at = dt.datetime.utcnow()
+        entry.locked_at = utc_now()
         db.session.commit()
         set_active_matter_context(entry.matter_id)
         audit("time_entry_lock", "TimeEntry", entry.id)

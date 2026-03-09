@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import json
 import uuid
 from collections import defaultdict
@@ -35,6 +36,7 @@ from ..models import (
     MatterNoteACL,
     MatterParty,
     MatterStageHistory,
+    MatterTimelineEvent,
     MatterTemplate,
     Task,
     TaskAssignee,
@@ -63,6 +65,7 @@ from ..services.contracts import (
     validate_contract_field_values,
 )
 from ..services.intake_ai import suggest_matter_intake
+from ..services.matter_magic import attach_matter_magic_links, build_matter_magic_snapshot
 from ..services.matter_option_lists import legal_category_options, practice_area_options
 from ..services.storage_paths import harden_private_file, resolve_upload_path
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
@@ -167,7 +170,7 @@ def register_matters_plus_routes(app):
                 flash(f"Provide required contract fields: {preview}.", "warning")
                 return redirect(url_for("matters_intake"))
 
-            now = dt.datetime.utcnow()
+            now = utc_now()
             stage_value = (request.form.get("stage") or (template.default_stage if template else None) or "Intake").strip() or "Intake"
             practice_area_value = (
                 request.form.get("practice_area")
@@ -416,6 +419,39 @@ def register_matters_plus_routes(app):
         checklist = MatterClosingChecklistItem.query.filter_by(matter_id=matter_id).order_by(MatterClosingChecklistItem.id.asc()).all()
         archetype = db.session.get(MatterTemplate, m.archetype_id) if m.archetype_id else None
         archetype_compliance = build_archetype_compliance_snapshot(m, archetype)
+        open_tasks = (
+            Task.query.filter(Task.matter_id == matter_id, Task.status != "Done")
+            .order_by(Task.due_date.asc(), Task.id.asc())
+            .limit(40)
+            .all()
+        )
+        recent_docs = (
+            DocumentFile.query.filter_by(matter_id=matter_id)
+            .order_by(DocumentFile.uploaded_at.desc(), DocumentFile.id.desc())
+            .limit(12)
+            .all()
+        )
+        upcoming_timeline = (
+            MatterTimelineEvent.query.filter(
+                MatterTimelineEvent.matter_id == matter_id,
+                MatterTimelineEvent.event_date >= dt.date.today(),
+            )
+            .order_by(MatterTimelineEvent.event_date.asc(), MatterTimelineEvent.id.asc())
+            .limit(12)
+            .all()
+        )
+        matter_magic = build_matter_magic_snapshot(
+            m,
+            today=dt.date.today(),
+            tasks=open_tasks,
+            docs=recent_docs,
+            timeline=upcoming_timeline,
+            team_size=MatterMember.query.filter_by(matter_id=matter_id).count(),
+            notes_count=stats["notes"],
+            checklist_remaining=sum(1 for item in checklist if not item.is_done),
+            archetype_compliance=archetype_compliance,
+        )
+        matter_magic["actions"] = attach_matter_magic_links(matter_magic["actions"], m.id)
 
         return page(
             f"Matter Workspace {m.matter_no}",
@@ -426,6 +462,7 @@ def register_matters_plus_routes(app):
             checklist=checklist,
             archetype=archetype,
             archetype_compliance=archetype_compliance,
+            matter_magic=matter_magic,
         )
 
     @app.post("/matters/<int:matter_id>/archetype/sync-checklist")
@@ -548,7 +585,7 @@ def register_matters_plus_routes(app):
                     db.session.rollback()
                     return redirect(url_for("matter_notes", matter_id=matter_id))
                 ext = safe_name.rsplit(".", 1)[-1].lower()
-                stored_name = f"matter{matter_id}_note{note.id}_{dt.datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
+                stored_name = f"matter{matter_id}_note{note.id}_{utc_now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
                 try:
                     stored_name, path = resolve_upload_path(
                         current_app.config["UPLOAD_DIR"],
@@ -660,7 +697,7 @@ def register_matters_plus_routes(app):
 
         prev = m.stage
         m.stage = next_stage
-        m.last_updated_at = dt.datetime.utcnow()
+        m.last_updated_at = utc_now()
         db.session.add(
             MatterStageHistory(
                 matter_id=m.id,
@@ -697,7 +734,7 @@ def register_matters_plus_routes(app):
             item = db.session.get(MatterClosingChecklistItem, item_id)
             if item and item.matter_id == m.id:
                 item.is_done = True
-                item.done_at = dt.datetime.utcnow()
+                item.done_at = utc_now()
                 item.done_by = current_user.id
 
         incomplete = MatterClosingChecklistItem.query.filter_by(matter_id=m.id, is_done=False).count()
@@ -715,7 +752,7 @@ def register_matters_plus_routes(app):
             return redirect(url_for("matter_workspace", matter_id=m.id))
 
         m.status = "Closed"
-        m.closed_at = dt.datetime.utcnow()
+        m.closed_at = utc_now()
         auto_pause_summary = auto_pause_running_timers_for_matter(
             m.id,
             actor_user_id=current_user.id,
@@ -783,7 +820,7 @@ def register_matters_plus_routes(app):
             return redirect(url_for("matter_workspace", matter_id=m.id))
 
         m.archival_status = "archive_pending"
-        m.archival_due_at = dt.datetime.utcnow() + dt.timedelta(days=30)
+        m.archival_due_at = utc_now() + dt.timedelta(days=30)
         try:
             db.session.commit()
         except SQLAlchemyError:

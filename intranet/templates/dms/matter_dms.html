@@ -69,6 +69,61 @@
     margin: 0;
   }
 
+  .dms-magic-card {
+    border: 1px solid rgba(225, 6, 0, 0.18);
+    border-radius: 16px;
+    background:
+      radial-gradient(circle at top right, rgba(225, 6, 0, 0.08), rgba(225, 6, 0, 0)),
+      linear-gradient(180deg, rgba(255, 251, 251, 0.98), rgba(255, 255, 255, 0.98));
+  }
+
+  .dms-magic-card.tone-critical {
+    border-color: rgba(180, 31, 31, 0.34);
+  }
+
+  .dms-magic-card.tone-watch {
+    border-color: rgba(201, 117, 23, 0.32);
+  }
+
+  .dms-magic-status {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #715858;
+    line-height: 1.45;
+  }
+
+  .dms-quick-start-grid {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .dms-quick-start {
+    text-align: left;
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.92);
+    padding: 11px 12px;
+    color: inherit;
+  }
+
+  .dms-quick-start:hover {
+    border-color: rgba(225, 6, 0, 0.36);
+    background: rgba(255, 246, 246, 0.98);
+  }
+
+  .dms-quick-start-label {
+    font-weight: 760;
+    color: #4d2929;
+  }
+
+  .dms-quick-start-summary {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6f5959;
+    line-height: 1.45;
+  }
+
   @media (min-width: 768px) {
     .dms-generate-meta-label {
       min-height: 2.4rem;
@@ -85,6 +140,45 @@
 </style>
 <div class="row g-3 align-items-start">
   <div class="col-12 col-xxl-4">
+    <div class="card p-3 dms-magic-card tone-{{ matter_magic.health_tone }}">
+      <div class="toolbar-row">
+        <div>
+          <h3 class="mb-0">DMS Quick Starts</h3>
+          <div class="page-intro mt-1">{{ m.matter_no }} - {{ m.title }}</div>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
+      </div>
+      <div class="dms-magic-status">{{ matter_magic.status_line }}</div>
+      <div class="dms-quick-start-grid">
+        {% for preset in dms_quick_starts %}
+          <button
+            class="dms-quick-start"
+            type="button"
+            data-dms-quick-start
+            data-title="{{ preset.title }}"
+            data-document-type="{{ preset.document_type }}"
+            data-confidentiality="{{ preset.confidentiality }}"
+            data-privilege-label="{{ preset.privilege_label }}"
+            data-retention-category="{{ preset.retention_category }}"
+          >
+            <div class="d-flex justify-content-between gap-2 align-items-start">
+              <div class="dms-quick-start-label">{{ preset.label }}</div>
+              {% if preset.document_type %}<span class="badge badge-soft">{{ preset.document_type }}</span>{% endif %}
+            </div>
+            <div class="dms-quick-start-summary">{{ preset.summary }}</div>
+          </button>
+        {% endfor %}
+      </div>
+      <div class="mt-3">
+        <label class="form-label" for="dms-matter-brief">Matter Brief</label>
+        <textarea class="form-control" id="dms-matter-brief" rows="8" readonly>{{ matter_magic.brief_text }}</textarea>
+        <div class="d-flex gap-2 align-items-center mt-2">
+          <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="dms-matter-brief" data-copy-success-text="Copied">Copy Brief</button>
+          <span class="form-help" data-copy-feedback-for="dms-matter-brief"></span>
+        </div>
+      </div>
+    </div>
+
     <div class="card p-3">
       <div class="toolbar-row">
         <div>
@@ -365,4 +459,26 @@
     </div>
   </div>
 </div>
+<script>
+  (() => {
+    const buttons = document.querySelectorAll('[data-dms-quick-start]');
+    if (!buttons.length) return;
+    const titleInput = document.getElementById('dms-title');
+    const typeSelect = document.getElementById('dms-type');
+    const confidentialitySelect = document.getElementById('dms-confidentiality');
+    const privilegeSelect = document.getElementById('dms-privilege');
+    const retentionSelect = document.getElementById('dms-retention');
+    const fileInput = document.getElementById('dms-file');
+    for (const button of buttons) {
+      button.addEventListener('click', () => {
+        if (titleInput) titleInput.value = button.dataset.title || '';
+        if (typeSelect && button.dataset.documentType) typeSelect.value = button.dataset.documentType;
+        if (confidentialitySelect && button.dataset.confidentiality) confidentialitySelect.value = button.dataset.confidentiality;
+        if (privilegeSelect) privilegeSelect.value = button.dataset.privilegeLabel || '';
+        if (retentionSelect) retentionSelect.value = button.dataset.retentionCategory || '';
+        if (fileInput) fileInput.focus();
+      });
+    }
+  })();
+</script>
 {% endblock %}

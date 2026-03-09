@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 
 from intranet.extensions import db
 from intranet.models import Matter, MatterMember, TimeTimer, User
@@ -28,8 +29,8 @@ def _seed_matter(owner: User, matter_no: str) -> Matter:
         client_name="Timer Safety Client",
         status="Open",
         created_by=owner.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add(matter)
     db.session.flush()
@@ -47,7 +48,7 @@ def test_timer_is_auto_paused_when_single_run_cap_hit(app_ctx):
         matter_id=matter.id,
         status="running",
         elapsed_seconds=120,
-        started_at=dt.datetime.utcnow() - dt.timedelta(minutes=8),
+        started_at=utc_now() - dt.timedelta(minutes=8),
     )
     db.session.add(timer)
     db.session.commit()
@@ -72,7 +73,7 @@ def test_timer_start_caps_existing_running_timer_before_switching_focus(app_ctx)
         matter_id=matter.id,
         status="running",
         elapsed_seconds=60,
-        started_at=dt.datetime.utcnow() - dt.timedelta(minutes=9),
+        started_at=utc_now() - dt.timedelta(minutes=9),
         label="Old timer",
     )
     db.session.add(existing)
@@ -113,7 +114,7 @@ def test_idle_pause_reason_shows_inactivity_message(app_ctx):
         user_id=user.id,
         matter_id=matter.id,
         status="running",
-        started_at=dt.datetime.utcnow() - dt.timedelta(minutes=2),
+        started_at=utc_now() - dt.timedelta(minutes=2),
         elapsed_seconds=0,
     )
     db.session.add(timer)
@@ -150,7 +151,7 @@ def test_timers_page_renders_idle_presence_guard_attributes(app_ctx):
         user_id=user.id,
         matter_id=matter.id,
         status="running",
-        started_at=dt.datetime.utcnow() - dt.timedelta(minutes=1),
+        started_at=utc_now() - dt.timedelta(minutes=1),
         elapsed_seconds=0,
     )
     db.session.add(timer)
@@ -177,7 +178,7 @@ def test_global_live_billing_cue_renders_when_timer_running(app_ctx):
         status="running",
         label="Drafting heads of argument",
         elapsed_seconds=75,
-        started_at=dt.datetime.utcnow() - dt.timedelta(minutes=2),
+        started_at=utc_now() - dt.timedelta(minutes=2),
     )
     db.session.add(timer)
     db.session.commit()
@@ -203,7 +204,7 @@ def test_global_live_billing_cue_hidden_without_running_timer(app_ctx):
         status="paused",
         label="Paused timer",
         elapsed_seconds=180,
-        started_at=dt.datetime.utcnow() - dt.timedelta(minutes=5),
+        started_at=utc_now() - dt.timedelta(minutes=5),
     )
     db.session.add(timer)
     db.session.commit()

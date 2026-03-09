@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 
 from sqlalchemy import func, or_
 
@@ -112,7 +113,7 @@ def ensure_draft_billing_item_for_time_entry(
             return existing_invoice.id
         return existing_invoice.id if existing_invoice else None
 
-    entry_day = (entry.start_at or dt.datetime.utcnow()).date()
+    entry_day = (entry.start_at or utc_now()).date()
     draft_invoice = (
         Invoice.query.filter(
             Invoice.matter_id == entry.matter_id,
@@ -179,7 +180,7 @@ def capture_timer_to_draft_time_entry(
     if elapsed_seconds <= 0:
         return None, None
 
-    end_at = timer.paused_at or dt.datetime.utcnow()
+    end_at = timer.paused_at or utc_now()
     start_at = end_at - dt.timedelta(seconds=elapsed_seconds)
     if timer.started_at and timer.started_at < end_at:
         start_at = min(start_at, timer.started_at)
@@ -461,7 +462,7 @@ def auto_pause_running_timers_for_matter(
 ) -> dict[str, int]:
     from ..models import TimeTimer
 
-    now = dt.datetime.utcnow()
+    now = utc_now()
     timers = (
         TimeTimer.query.filter_by(matter_id=matter_id, status="running")
         .order_by(TimeTimer.started_at.asc())

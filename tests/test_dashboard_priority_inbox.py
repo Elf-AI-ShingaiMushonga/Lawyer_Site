@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 import json
 import time
 
@@ -61,6 +62,42 @@ def test_dashboard_renders_priority_inbox(app_ctx):
     assert b"Client Response" in response.data
 
 
+def test_dashboard_renders_legal_desk_with_next_best_move(app_ctx):
+    user, password, secret = _seed_admin_with_mfa(email="legal-desk-admin@example.com")
+    matter = Matter(
+        matter_no="2026-DESK-0001",
+        title="Urgent Motion",
+        client_name="Desk Client",
+        status="Open",
+        risk_level="High",
+        created_by=user.id,
+        opened_at=utc_now(),
+        last_updated_at=utc_now() - dt.timedelta(days=10),
+    )
+    db.session.add(matter)
+    db.session.flush()
+    db.session.add(
+        Task(
+            matter_id=matter.id,
+            title="Prepare motion draft",
+            status="Todo",
+            due_date=dt.date.today() - dt.timedelta(days=1),
+            created_by=user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, user.email, password, secret)
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert b"Legal Desk" in response.data
+    assert b"Next Best Move" in response.data
+    assert b"Clear overdue tasks" in response.data
+
+
 def test_dashboard_uses_configured_priority_inbox_sla_values(app_ctx):
     user, password, secret = _seed_admin_with_mfa(email="priority-config-admin@example.com")
     db.session.add(
@@ -102,7 +139,7 @@ def test_crm_followup_status_route_updates_status_and_blocks_external_next(app_c
     db.session.flush()
     followup = CRMFollowUp(
         lead_id=lead.id,
-        due_at=dt.datetime.utcnow() + dt.timedelta(hours=2),
+        due_at=utc_now() + dt.timedelta(hours=2),
         note="Call prospect to confirm documents.",
         status="open",
         created_by=user.id,
@@ -130,7 +167,7 @@ def test_crm_followup_status_route_updates_status_and_blocks_external_next(app_c
 
 def test_dashboard_at_risk_defaults_to_criticality_sorting(app_ctx):
     user, password, secret = _seed_admin_with_mfa(email="risk-order-admin@example.com")
-    now = dt.datetime.utcnow()
+    now = utc_now()
     high = Matter(
         matter_no="2026-AR-HIGH",
         title="High Matter",
@@ -169,7 +206,7 @@ def test_dashboard_at_risk_defaults_to_criticality_sorting(app_ctx):
 
 def test_dashboard_my_tasks_hides_done_tasks(app_ctx):
     user, password, secret = _seed_admin_with_mfa(email="task-visibility-admin@example.com")
-    now = dt.datetime.utcnow()
+    now = utc_now()
     matter = Matter(
         matter_no="2026-MY-TASKS-001",
         title="My Task Visibility Matter",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import hashlib
 import os
 import secrets
@@ -184,7 +185,7 @@ def register_portal_routes(app):
                     return redirect(url_for("portal_login"))
             session[PORTAL_SESSION_KEY] = user.id
             session.pop(PORTAL_ACTIVE_MATTER_SESSION_KEY, None)
-            user.last_login_at = dt.datetime.utcnow()
+            user.last_login_at = utc_now()
             db.session.commit()
             audit("portal_login", "PortalUser", user.id)
             return redirect(url_for("portal_matters"))
@@ -447,7 +448,7 @@ def register_portal_routes(app):
 
         invoice_ids = [inv.id for inv in invoices]
         if invoice_ids:
-            now = dt.datetime.utcnow()
+            now = utc_now()
             existing_rows = (
                 PortalInvoiceView.query.filter(
                     PortalInvoiceView.portal_user_id == portal_user.id,
@@ -576,7 +577,7 @@ def register_portal_routes(app):
                 matter_id=matter_id,
                 document_version_id=document_version_id,
                 token_hash=_hash_token(token_raw),
-                expires_at=dt.datetime.utcnow() + dt.timedelta(minutes=expires_minutes),
+                expires_at=utc_now() + dt.timedelta(minutes=expires_minutes),
             )
             db.session.add(token)
             db.session.commit()
@@ -633,7 +634,7 @@ def register_portal_routes(app):
         row = PortalLinkToken.query.filter_by(token_hash=token_hash).first()
         if row is None:
             abort(404)
-        if row.expires_at < dt.datetime.utcnow():
+        if row.expires_at < utc_now():
             abort(410)
         if row.used_at is not None:
             audit("portal_link_reuse_blocked", "PortalLinkToken", row.id)
@@ -664,7 +665,7 @@ def register_portal_routes(app):
                 abort(404)
             if not os.path.isfile(path):
                 abort(404)
-            row.used_at = dt.datetime.utcnow()
+            row.used_at = utc_now()
             db.session.commit()
             _portal_set_active_matter(portal_user.id, record.matter_id, min_level="shared_docs")
             audit(
@@ -684,7 +685,7 @@ def register_portal_routes(app):
             abort(404)
         if not _portal_has_matter_access(portal_user.id, row.matter_id, min_level="summary_only"):
             abort(403)
-        row.used_at = dt.datetime.utcnow()
+        row.used_at = utc_now()
         db.session.commit()
         _portal_set_active_matter(portal_user.id, row.matter_id, min_level="summary_only")
         audit("portal_link_matter_access", "Matter", row.matter_id, {"portal_user_id": portal_user.id})
@@ -753,7 +754,7 @@ def register_portal_routes(app):
                 access_id = request.form.get("access_id", type=int)
                 access = db.session.get(PortalMatterAccess, access_id) if access_id else None
                 if access:
-                    access.revoked_at = dt.datetime.utcnow()
+                    access.revoked_at = utc_now()
                     db.session.commit()
                     audit("portal_access_revoke", "PortalMatterAccess", access.id)
                     flash("Portal access revoked.", "info")

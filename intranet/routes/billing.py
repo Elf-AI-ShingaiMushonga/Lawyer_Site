@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import datetime as dt
+from ..timeutils import utc_now
 import io
 import json
 
@@ -437,7 +438,7 @@ def register_billing_routes(app):
 
         inv.status = "approved"
         inv.approved_by = current_user.id
-        inv.approved_at = dt.datetime.utcnow()
+        inv.approved_at = utc_now()
         followup_task_ids = schedule_invoice_collection_followups(
             inv.id,
             actor_user_id=current_user.id,
@@ -482,7 +483,7 @@ def register_billing_routes(app):
             return redirect(url_for("billing_invoice_detail", invoice_id=invoice_id))
 
         settled_at = _parse_optional_datetime(request.form.get("settled_at"))
-        allocated_at = settled_at or dt.datetime.utcnow()
+        allocated_at = settled_at or utc_now()
         if status == "settled" and settled_at is None:
             settled_at = allocated_at
 
@@ -556,7 +557,7 @@ def register_billing_routes(app):
             flash("Cannot settle payment because it exceeds outstanding balance.", "warning")
             return redirect(url_for("billing_invoice_detail", invoice_id=inv.id))
 
-        settled_at = _parse_optional_datetime(request.form.get("settled_at")) or dt.datetime.utcnow()
+        settled_at = _parse_optional_datetime(request.form.get("settled_at")) or utc_now()
         payment.status = "settled"
         payment.settled_at = settled_at
         payment.settled_by = current_user.id

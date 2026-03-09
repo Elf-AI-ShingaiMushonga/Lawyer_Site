@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from intranet.timeutils import utc_now
 import io
 
 from flask import g
@@ -54,8 +55,8 @@ def _seed_matter(owner: User, matter_no: str) -> Matter:
         client_name="Permission Client",
         status="Open",
         created_by=owner.id,
-        opened_at=dt.datetime.utcnow(),
-        last_updated_at=dt.datetime.utcnow(),
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
     )
     db.session.add(row)
     db.session.flush()
@@ -99,8 +100,8 @@ def test_staff_cannot_review_or_lock_time_entries(app_ctx):
     entry = TimeEntry(
         user_id=lawyer.id,
         matter_id=matter.id,
-        start_at=dt.datetime.utcnow() - dt.timedelta(hours=2),
-        end_at=dt.datetime.utcnow() - dt.timedelta(hours=1),
+        start_at=utc_now() - dt.timedelta(hours=2),
+        end_at=utc_now() - dt.timedelta(hours=1),
         hours=1.0,
         rounded_hours=1.0,
         narrative="Permission test entry",

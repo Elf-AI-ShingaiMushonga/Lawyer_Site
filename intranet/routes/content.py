@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from ..timeutils import utc_now
 import json
 
 from flask import abort, current_app, flash, jsonify, redirect, request, url_for
@@ -98,7 +99,7 @@ def register_content_routes(app):
             a.title = title
             a.tags = tags or None
             a.body = body_text
-            a.updated_at = dt.datetime.utcnow()
+            a.updated_at = utc_now()
             db.session.commit()
             audit("kb_update", "KnowledgeBase", a.id)
             flash("Updated.", "info")

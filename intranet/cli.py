@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from .timeutils import utc_now
 import hashlib
 import io
 import json
@@ -232,7 +233,7 @@ def _recover_mfa_for_user_row(user: User, *, disable: bool = False) -> dict[str,
         otpauth_uri = build_otpauth_uri(secret, user.email)
 
         backup_codes = generate_backup_codes()
-        now = dt.datetime.utcnow()
+        now = utc_now()
         for code in backup_codes:
             db.session.add(
                 UserMFABackupCode(
@@ -811,7 +812,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
         elif User.query.first():
             raise SystemExit("Database already has users. Re-run with --reset to replace data.")
 
-        now = dt.datetime.utcnow()
+        now = utc_now()
 
         users = {}
         user_specs = [

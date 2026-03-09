@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">South Africa Operations Hub</h3>
+      <p class="page-intro mb-0">Keep daily legal work close to the matter record while surfacing the official South African systems practitioners rely on.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('integrations_office365') }}">Office365</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('integrations_third_party') }}">Third-Party</a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for('mobile_hub') }}">Mobile Hub</a>
+      {% if is_admin_role %}
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_practice_areas') }}">Practice Setup</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Scoped Matters</div>
+      <div class="value">{{ scoped_matter_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Conveyancing</div>
+      <div class="value">{{ conveyancing_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Labour / CCMA</div>
+      <div class="value">{{ labour_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Estates / Trusts</div>
+      <div class="value">{{ estates_count }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-lg-8">
+      <label class="form-label" for="sa-hub-matter">Focus Matter</label>
+      <select class="form-select" id="sa-hub-matter" name="matter_id">
+        <option value="">Choose a matter</option>
+        {% for matter in matters %}
+          <option value="{{ matter.id }}" {% if selected_matter and matter.id == selected_matter.id %}selected{% endif %}>
+            {{ matter.matter_no }} - {{ matter.title }}
+          </option>
+        {% endfor %}
+      </select>
+      <div class="form-help mt-1">Selecting a matter prioritizes the most relevant portals and internal shortcuts for that workflow.</div>
+    </div>
+    <div class="col-lg-4 d-grid">
+      <button class="btn btn-light" type="submit">Load South Africa Workflow</button>
+    </div>
+  </form>
+</div>
+
+<div class="row g-3">
+  <div class="col-xl-5">
+    <div class="card p-3 h-100">
+      <h4 class="mb-2">Matter Launchpad</h4>
+      {% if selected_matter %}
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <span class="badge badge-soft status-badge">{{ selected_matter.practice_area or "Unclassified" }}</span>
+          <span class="badge badge-soft status-badge">{{ selected_matter.case_type or "General" }}</span>
+          <span class="badge badge-soft status-badge">{{ selected_matter.jurisdiction or "ZA" }}</span>
+        </div>
+        <div class="d-grid gap-2">
+          {% for action in internal_actions %}
+            <a class="btn btn-outline-light text-start" href="{{ action.href }}">
+              <strong>{{ action.title }}</strong><br>
+              <span class="form-help">{{ action.summary }}</span>
+            </a>
+          {% endfor %}
+        </div>
+        <label class="form-label mt-3" for="sa-hub-reference">Copy-Ready Matter Reference</label>
+        <textarea class="form-control code-like" id="sa-hub-reference" rows="10" readonly>{{ matter_reference }}</textarea>
+      {% else %}
+        <div class="empty-state">Choose a matter to load its launchpad, filing context, and recommended external services.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-xl-7">
+    <div class="card p-3 h-100">
+      <h4 class="mb-2">Official South Africa Services</h4>
+      <div class="form-help mb-3">These links point to official practitioner systems or official reference sources used in South African legal operations.</div>
+      <div class="row g-2">
+        {% for portal in portal_cards %}
+          <div class="col-md-6">
+            <div class="card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-start gap-2">
+                <div>
+                  <div class="fw-semibold">{{ portal.title }}</div>
+                  <div class="form-help mt-1">{{ portal.summary }}</div>
+                </div>
+                <span class="badge badge-soft status-badge">{{ portal.lane }}</span>
+              </div>
+              <div class="d-flex flex-wrap gap-2 mt-3">
+                <span class="badge {% if portal.is_recommended %}status-badge status-open{% else %}badge-soft status-badge{% endif %}">
+                  {{ "Recommended" if portal.is_recommended else "Available" }}
+                </span>
+                {% if portal.relevance_score %}
+                  <span class="badge badge-soft status-badge">Match {{ portal.relevance_score }}</span>
+                {% endif %}
+              </div>
+              <div class="d-grid mt-3">
+                <a class="btn btn-light" href="{{ portal.url }}" target="_blank" rel="noreferrer">Open {{ portal.title }}</a>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-lg-6">
+    <div class="card p-3 h-100">
+      <h4 class="mb-2">Upcoming Matter Actions</h4>
+      {% if selected_matter %}
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr><th>Item</th><th>Due</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {% for deadline in upcoming_deadlines %}
+                <tr>
+                  <td>{{ deadline.title }}</td>
+                  <td>{{ deadline.due_at }}</td>
+                  <td><span class="badge badge-soft status-badge">{{ deadline.status }}</span></td>
+                </tr>
+              {% endfor %}
+              {% for task in open_tasks %}
+                <tr>
+                  <td>{{ task.title }}</td>
+                  <td>{{ task.due_date or "-" }}</td>
+                  <td><span class="badge badge-soft status-badge">{{ task.status }}</span></td>
+                </tr>
+              {% endfor %}
+              {% if not upcoming_deadlines and not open_tasks %}
+                <tr><td colspan="3" class="muted">No upcoming deadlines or open tasks for this matter.</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="empty-state">Select a matter to review upcoming filings, tasks, and follow-up work.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card p-3 h-100">
+      <h4 class="mb-2">South Africa Practice Lanes</h4>
+      <div class="form-help mb-3">These defaults appear in intake even before firm-specific setup, and admins can persist them from the Practice Areas screen.</div>
+      <div class="d-flex flex-wrap gap-2">
+        {% for area in practice_defaults %}
+          <span class="badge badge-soft status-badge">{{ area }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..models import ContractTemplate, Matter, MatterTemplate, PracticeArea
+from .sa_practice import DEFAULT_SA_PRACTICE_AREAS
 
 
 DEFAULT_LEGAL_CATEGORIES: tuple[str, ...] = (
@@ -55,7 +56,7 @@ def legal_category_options(*, extra_values: list[str | None] | None = None) -> l
 
 
 def practice_area_options(*, extra_values: list[str | None] | None = None) -> list[str]:
-    raw_values: list[str | None] = []
+    raw_values: list[str | None] = list(DEFAULT_SA_PRACTICE_AREAS)
     raw_values.extend(
         value
         for (value,) in PracticeArea.query.with_entities(PracticeArea.name)
