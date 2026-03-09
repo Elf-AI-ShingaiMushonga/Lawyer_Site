@@ -4,7 +4,7 @@ from functools import wraps
 
 from sqlalchemy import and_
 
-from flask import abort
+from flask import abort, g
 from flask_login import current_user
 
 from ..extensions import db
@@ -49,6 +49,23 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, dict[str, set[str]]] = {
 }
 
 
+def _request_cache() -> dict:
+    cache = getattr(g, "_access_policy_cache", None)
+    if cache is None:
+        cache = {}
+        g._access_policy_cache = cache
+    return cache
+
+
+def _clone_decision(decision: AccessDecision) -> AccessDecision:
+    return AccessDecision(
+        allow=bool(decision.allow),
+        deny_reason=decision.deny_reason,
+        ethical_wall_hit=bool(decision.ethical_wall_hit),
+        scope_ids=[int(item) for item in (decision.scope_ids or [])],
+    )
+
+
 def _models():
     from ..models import EthicalWallMatter, EthicalWallRule, Matter, MatterMember, PermissionGrant
 
@@ -72,9 +89,16 @@ def _default_permission_allows(role: str, resource: str, action: str) -> bool:
 def visible_matter_ids() -> list[int]:
     if not current_user.is_authenticated:
         return []
+    cache = _request_cache()
+    cache_key = ("visible_matter_ids", int(current_user.id))
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return [int(item) for item in cached]
     if is_admin():
         _, _, Matter, _, _ = _models()
-        return [row[0] for row in db.session.query(Matter.id).order_by(Matter.id.asc()).all()]
+        rows = [int(row[0]) for row in db.session.query(Matter.id).order_by(Matter.id.asc()).all()]
+        cache[cache_key] = tuple(rows)
+        return rows
 
     EthicalWallMatter, EthicalWallRule, _, MatterMember, _ = _models()
     rows = (
@@ -97,15 +121,22 @@ def visible_matter_ids() -> list[int]:
         .order_by(MatterMember.matter_id.asc())
         .all()
     )
-    return [int(row[0]) for row in rows]
+    scoped_rows = [int(row[0]) for row in rows]
+    cache[cache_key] = tuple(scoped_rows)
+    return scoped_rows
 
 
 def _ethical_wall_hit(matter_id: int) -> bool:
     if not current_user.is_authenticated or is_admin():
         return False
+    cache = _request_cache()
+    cache_key = ("ethical_wall_hit", int(current_user.id), int(matter_id))
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return bool(cached)
 
     EthicalWallMatter, EthicalWallRule, _, _, _ = _models()
-    return (
+    hit = (
         db.session.query(EthicalWallRule.id)
         .join(EthicalWallMatter, EthicalWallMatter.wall_id == EthicalWallRule.wall_id)
         .filter(
@@ -117,6 +148,8 @@ def _ethical_wall_hit(matter_id: int) -> bool:
         .first()
         is not None
     )
+    cache[cache_key] = bool(hit)
+    return bool(hit)
 
 
 def evaluate_matter_access(matter_id: int) -> AccessDecision:
@@ -124,6 +157,11 @@ def evaluate_matter_access(matter_id: int) -> AccessDecision:
         return AccessDecision(allow=False, deny_reason="not_authenticated")
     if is_admin():
         return AccessDecision(allow=True, scope_ids=[matter_id])
+    cache = _request_cache()
+    cache_key = ("matter_access", int(current_user.id), int(matter_id))
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return _clone_decision(cached)
 
     _, _, _, MatterMember, _ = _models()
     membership = (
@@ -132,16 +170,22 @@ def evaluate_matter_access(matter_id: int) -> AccessDecision:
         .first()
     )
     if membership is None:
-        return AccessDecision(allow=False, deny_reason="not_on_matter_team")
+        decision = AccessDecision(allow=False, deny_reason="not_on_matter_team")
+        cache[cache_key] = _clone_decision(decision)
+        return decision
 
     if _ethical_wall_hit(matter_id):
-        return AccessDecision(
+        decision = AccessDecision(
             allow=False,
             deny_reason="ethical_wall_deny",
             ethical_wall_hit=True,
         )
+        cache[cache_key] = _clone_decision(decision)
+        return decision
 
-    return AccessDecision(allow=True, scope_ids=[matter_id])
+    decision = AccessDecision(allow=True, scope_ids=[matter_id])
+    cache[cache_key] = _clone_decision(decision)
+    return decision
 
 
 def has_permission(resource: str, action: str) -> bool:
@@ -155,20 +199,27 @@ def has_permission(resource: str, action: str) -> bool:
     roles = {normalized_role}
     if raw_role:
         roles.add(raw_role)
+    cache = _request_cache()
+    decision_key = ("permission_decision", int(current_user.id), raw_role, resource, action)
+    cached_decision = cache.get(decision_key)
+    if cached_decision is not None:
+        return bool(cached_decision)
 
     _, _, _, _, PermissionGrant = _models()
-    grant_rows = (
-        PermissionGrant.query.filter(
-            PermissionGrant.role.in_(roles),
-            PermissionGrant.resource.in_([resource, "*"]),
-            PermissionGrant.action.in_([action, "*"]),
+    grants_key = ("permission_grants", tuple(sorted(roles)))
+    grant_rows = cache.get(grants_key)
+    if grant_rows is None:
+        grant_rows = (
+            PermissionGrant.query.filter(PermissionGrant.role.in_(roles))
+            .order_by(PermissionGrant.id.desc())
+            .all()
         )
-        .order_by(PermissionGrant.id.desc())
-        .all()
-    )
+        cache[grants_key] = grant_rows
     best_grant = None
     best_score = -1
     for row in grant_rows:
+        if row.resource not in {resource, "*"} or row.action not in {action, "*"}:
+            continue
         score = 0
         if row.resource == resource:
             score += 2
@@ -178,8 +229,12 @@ def has_permission(resource: str, action: str) -> bool:
             best_score = score
             best_grant = row
     if best_grant is not None:
-        return bool(best_grant.is_allowed)
-    return _default_permission_allows(normalized_role, resource, action)
+        decision = bool(best_grant.is_allowed)
+        cache[decision_key] = decision
+        return decision
+    decision = _default_permission_allows(normalized_role, resource, action)
+    cache[decision_key] = decision
+    return decision
 
 
 def enforce_matter_access(matter_id: int) -> None:

@@ -10,20 +10,95 @@
     return Boolean(element.isContentEditable);
   };
 
+  const prefersReducedMotion = () =>
+    Boolean(
+      window.matchMedia &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+
+  const resolveScrollBehavior = (requested = "auto") => {
+    if (requested !== "smooth") {
+      return requested;
+    }
+    return prefersReducedMotion() ? "auto" : "smooth";
+  };
+
+  const scrollElementIntoView = (element, options = {}) => {
+    if (!(element instanceof HTMLElement) || typeof element.scrollIntoView !== "function") {
+      return;
+    }
+    const requestedBehavior =
+      typeof options.behavior === "string" ? options.behavior : "auto";
+    element.scrollIntoView({
+      ...options,
+      behavior: resolveScrollBehavior(requestedBehavior),
+    });
+  };
+
   const initFlashDismiss = () => {
-    const dismissers = document.querySelectorAll("[data-dismiss-alert]");
-    dismissers.forEach((button) => {
-      button.addEventListener("click", () => {
-        const card = button.closest(".flash-card");
-        if (!card) {
+    const cards = Array.from(document.querySelectorAll(".flash-card")).filter(
+      (card) => card instanceof HTMLElement
+    );
+    if (cards.length === 0) {
+      return;
+    }
+
+    const removeCard = (card) => {
+      if (!(card instanceof HTMLElement) || card.dataset.dismissed === "1") {
+        return;
+      }
+      card.dataset.dismissed = "1";
+      card.style.opacity = "0";
+      card.style.transform = "translateY(-4px)";
+      const removeDelay = prefersReducedMotion() ? 0 : 160;
+      window.setTimeout(() => {
+        card.remove();
+      }, removeDelay);
+    };
+
+    cards.forEach((card) => {
+      const closeButton = card.querySelector("[data-dismiss-alert]");
+      if (closeButton instanceof HTMLButtonElement) {
+        closeButton.addEventListener("click", () => {
+          removeCard(card);
+        });
+      }
+
+      const autoDismissMs = Number.parseInt(
+        String(card.getAttribute("data-auto-dismiss-ms") || ""),
+        10
+      );
+      if (!Number.isFinite(autoDismissMs) || autoDismissMs < 1000) {
+        return;
+      }
+
+      let timer = 0;
+      const clearTimer = () => {
+        if (timer > 0) {
+          window.clearTimeout(timer);
+          timer = 0;
+        }
+      };
+      const scheduleAutoDismiss = () => {
+        clearTimer();
+        timer = window.setTimeout(() => {
+          removeCard(card);
+        }, autoDismissMs);
+      };
+
+      card.addEventListener("mouseenter", clearTimer);
+      card.addEventListener("mouseleave", scheduleAutoDismiss);
+      card.addEventListener("focusin", clearTimer);
+      card.addEventListener("focusout", (event) => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && card.contains(next)) {
           return;
         }
-        card.style.opacity = "0";
-        card.style.transform = "translateY(-4px)";
-        window.setTimeout(() => {
-          card.remove();
-        }, 160);
+        scheduleAutoDismiss();
       });
+
+      scheduleAutoDismiss();
     });
   };
 
@@ -407,12 +482,21 @@
 
     const isOpen = () => !palette.hasAttribute("hidden");
     let activeIndex = -1;
+    let focusReturnTarget = null;
 
     const visibleItems = () => items.filter((item) => !item.hidden);
 
     const clearActiveItem = () => {
       items.forEach((item) => item.classList.remove("is-active"));
       activeIndex = -1;
+    };
+
+    const setExpandedState = (expanded) => {
+      openers.forEach((button) => {
+        if (button instanceof HTMLElement) {
+          button.setAttribute("aria-expanded", expanded ? "true" : "false");
+        }
+      });
     };
 
     const setActiveItem = (index) => {
@@ -426,7 +510,7 @@
       const item = visible[wrappedIndex];
       item.classList.add("is-active");
       activeIndex = wrappedIndex;
-      item.scrollIntoView({ block: "nearest" });
+      scrollElementIntoView(item, { block: "nearest", inline: "nearest" });
       return item;
     };
 
@@ -474,8 +558,14 @@
     };
 
     const openPalette = () => {
+      if (isOpen()) {
+        return;
+      }
+      const activeElement = document.activeElement;
+      focusReturnTarget = activeElement instanceof HTMLElement ? activeElement : null;
       palette.removeAttribute("hidden");
       document.body.style.overflow = "hidden";
+      setExpandedState(true);
       filterItems();
       window.setTimeout(() => {
         input.focus();
@@ -484,9 +574,31 @@
     };
 
     const closePalette = () => {
+      if (!isOpen()) {
+        return;
+      }
       palette.setAttribute("hidden", "");
       document.body.style.overflow = "";
       clearActiveItem();
+      input.value = "";
+      items.forEach((item) => {
+        item.hidden = false;
+      });
+      if (empty) {
+        empty.hidden = true;
+      }
+      if (dynamicSearch && defaultSearchHref) {
+        dynamicSearch.setAttribute("href", defaultSearchHref);
+      }
+      setExpandedState(false);
+      const returnTarget =
+        focusReturnTarget && document.contains(focusReturnTarget)
+          ? focusReturnTarget
+          : openers[0];
+      if (returnTarget instanceof HTMLElement) {
+        returnTarget.focus();
+      }
+      focusReturnTarget = null;
     };
 
     openers.forEach((button) => {
@@ -515,6 +627,16 @@
 
     input.addEventListener("input", filterItems);
     input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (input.value.trim().length > 0) {
+          input.value = "";
+          filterItems();
+          return;
+        }
+        closePalette();
+        return;
+      }
       if (event.key === "ArrowDown") {
         event.preventDefault();
         setActiveItem(activeIndex + 1);
@@ -572,6 +694,8 @@
         }
       }
     });
+
+    setExpandedState(false);
   };
 
   const initMatterQuickFilters = () => {
@@ -2946,6 +3070,10 @@
         search.type = "search";
         search.placeholder = "Filter records...";
         search.setAttribute("data-table-search", "");
+        const labelSeed = normalizeCellText(
+          table.caption?.textContent || table.getAttribute("data-export-name") || table.id || "table"
+        );
+        search.setAttribute("aria-label", `Filter ${labelSeed} records`);
 
         const count = document.createElement("div");
         count.className = "table-count";
@@ -3248,7 +3376,7 @@
     toggle();
 
     button.addEventListener("click", () => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: resolveScrollBehavior("smooth") });
     });
   };
 
@@ -4053,7 +4181,7 @@
             focusedControl instanceof HTMLSelectElement
           ) {
             focusedControl.focus();
-            focusedControl.scrollIntoView({ block: "center", behavior: "smooth" });
+            scrollElementIntoView(focusedControl, { block: "center", behavior: "smooth" });
           }
         });
         item.appendChild(button);
@@ -4121,7 +4249,7 @@
             event.preventDefault();
             event.stopPropagation();
             invalidControls[0].focus();
-            invalidControls[0].scrollIntoView({ block: "center", behavior: "smooth" });
+            scrollElementIntoView(invalidControls[0], { block: "center", behavior: "smooth" });
           }
         },
         { capture: true }
@@ -4140,6 +4268,7 @@
       form.addEventListener(
         "submit",
         (event) => {
+          const submitEvent = event;
           if (form.dataset.submitting === "1") {
             event.preventDefault();
             return;
@@ -4150,29 +4279,191 @@
 
           form.dataset.submitting = "1";
           form.classList.add("is-submitting");
+          form.setAttribute("aria-busy", "true");
+          const requestedSubmitter =
+            submitEvent &&
+            typeof submitEvent === "object" &&
+            "submitter" in submitEvent &&
+            submitEvent.submitter instanceof HTMLElement
+              ? submitEvent.submitter
+              : null;
           const controls = Array.from(
             form.querySelectorAll("button[type='submit'], input[type='submit']")
           );
+          const activeSubmitter =
+            requestedSubmitter && controls.includes(requestedSubmitter)
+              ? requestedSubmitter
+              : controls[0] || null;
           controls.forEach((control) => {
+            const isActiveSubmitter = Boolean(activeSubmitter && control === activeSubmitter);
             if (control instanceof HTMLButtonElement) {
-              const nextText = control.getAttribute("data-submitting-text") || "Working...";
-              control.dataset.originalText = control.textContent || "";
-              control.textContent = nextText;
+              if (isActiveSubmitter) {
+                const nextText = control.getAttribute("data-submitting-text") || "Working...";
+                control.dataset.originalText = control.textContent || "";
+                control.textContent = nextText;
+              }
               control.setAttribute("disabled", "disabled");
               control.setAttribute("aria-busy", "true");
+              if (!isActiveSubmitter) {
+                control.setAttribute("aria-disabled", "true");
+              }
               return;
             }
             if (control instanceof HTMLInputElement) {
-              const nextValue = control.getAttribute("data-submitting-text") || "Working...";
-              control.dataset.originalText = control.value;
-              control.value = nextValue;
+              if (isActiveSubmitter) {
+                const nextValue = control.getAttribute("data-submitting-text") || "Working...";
+                control.dataset.originalText = control.value;
+                control.value = nextValue;
+              }
               control.setAttribute("disabled", "disabled");
               control.setAttribute("aria-busy", "true");
+              if (!isActiveSubmitter) {
+                control.setAttribute("aria-disabled", "true");
+              }
             }
           });
         },
         { capture: true }
       );
+    });
+  };
+
+  const initUnsavedChangesGuard = () => {
+    const forms = Array.from(document.querySelectorAll("form")).filter(
+      (form) => form instanceof HTMLFormElement
+    );
+    if (forms.length === 0) {
+      return;
+    }
+
+    const skipInputTypes = new Set([
+      "hidden",
+      "submit",
+      "button",
+      "reset",
+      "file",
+      "image",
+      "password",
+    ]);
+
+    const serializeForm = (form) => {
+      const pairs = [];
+      Array.from(form.elements).forEach((element) => {
+        if (
+          !(
+            element instanceof HTMLInputElement ||
+            element instanceof HTMLTextAreaElement ||
+            element instanceof HTMLSelectElement
+          )
+        ) {
+          return;
+        }
+        if (!element.name || element.disabled) {
+          return;
+        }
+        if (element instanceof HTMLInputElement && skipInputTypes.has(element.type)) {
+          return;
+        }
+
+        const fieldName = element.name;
+        if (element instanceof HTMLInputElement && element.type === "radio") {
+          if (!element.checked) {
+            return;
+          }
+          pairs.push(`${fieldName}=radio:${element.value}`);
+          return;
+        }
+        if (element instanceof HTMLInputElement && element.type === "checkbox") {
+          const checkedValue = element.checked ? "1" : "0";
+          pairs.push(`${fieldName}=checkbox:${checkedValue}:${element.value}`);
+          return;
+        }
+        if (element instanceof HTMLSelectElement && element.multiple) {
+          const selected = Array.from(element.selectedOptions)
+            .map((option) => option.value)
+            .join("\u241f");
+          pairs.push(`${fieldName}=multi:${selected}`);
+          return;
+        }
+        pairs.push(`${fieldName}=value:${element.value}`);
+      });
+      return pairs.join("\u241e");
+    };
+
+    const trackedDirtyStates = [];
+
+    forms.forEach((form) => {
+      const method = (form.getAttribute("method") || "get").toLowerCase();
+      const explicitGuard = String(form.getAttribute("data-unsaved-guard") || "").toLowerCase();
+      if (
+        method !== "post" ||
+        form.dataset.noUnsavedGuard === "true" ||
+        explicitGuard === "off"
+      ) {
+        return;
+      }
+
+      let initialState = serializeForm(form);
+      let dirty = false;
+      let interacted = false;
+
+      const updateDirty = () => {
+        dirty = interacted && serializeForm(form) !== initialState;
+        form.dataset.unsavedChanges = dirty ? "1" : "0";
+      };
+
+      const markClean = () => {
+        initialState = serializeForm(form);
+        interacted = false;
+        dirty = false;
+        form.dataset.unsavedChanges = "0";
+      };
+
+      form.addEventListener("input", (event) => {
+        if (!event.isTrusted) {
+          return;
+        }
+        interacted = true;
+        updateDirty();
+      });
+      form.addEventListener("change", (event) => {
+        if (!event.isTrusted) {
+          return;
+        }
+        interacted = true;
+        updateDirty();
+      });
+      form.addEventListener("reset", () => {
+        window.setTimeout(markClean, 0);
+      });
+      form.addEventListener(
+        "submit",
+        (event) => {
+          if (event.defaultPrevented) {
+            return;
+          }
+          if (typeof form.checkValidity === "function" && !form.checkValidity()) {
+            return;
+          }
+          markClean();
+        },
+        { capture: true }
+      );
+
+      trackedDirtyStates.push(() => dirty);
+    });
+
+    if (trackedDirtyStates.length === 0) {
+      return;
+    }
+
+    window.addEventListener("beforeunload", (event) => {
+      const hasDirtyForms = trackedDirtyStates.some((isDirty) => isDirty());
+      if (!hasDirtyForms) {
+        return;
+      }
+      event.preventDefault();
+      event.returnValue = "";
     });
   };
 
@@ -4469,6 +4760,7 @@
     initFormValidationUX();
     initSubmitState();
     initFormDrafts();
+    initUnsavedChangesGuard();
   };
 
   if (document.readyState === "loading") {

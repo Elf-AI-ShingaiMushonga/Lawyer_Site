@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 
 from flask_login import UserMixin
+from sqlalchemy import event
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .extensions import db
@@ -729,6 +730,14 @@ class DocumentOCRText(db.Model):
     document_version_id = db.Column(db.Integer, db.ForeignKey("document_version.id"), nullable=False, index=True)
     extracted_text = db.Column(db.Text, nullable=False)
     extracted_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+
+
+@event.listens_for(DocumentOCRText, "before_insert")
+@event.listens_for(DocumentOCRText, "before_update")
+def _sanitize_document_ocr_text(_mapper, _connection, target) -> None:
+    # PostgreSQL rejects NUL (0x00) in text/varchar fields.
+    text = target.extracted_text or ""
+    target.extracted_text = text.replace("\x00", "")
 
 
 class SavedSearch(db.Model):

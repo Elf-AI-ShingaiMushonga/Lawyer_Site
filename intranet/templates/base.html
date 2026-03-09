@@ -1119,12 +1119,19 @@
       background: #fff9f9;
       color: var(--text);
       padding: 11px 12px;
+      transition: opacity 0.16s ease, transform 0.16s ease;
     }
 
     .flash-card.is-warning {
       border-color: rgba(182, 121, 38, 0.45);
       background: #fff5e7;
       color: #6c4a18;
+    }
+
+    .flash-card.is-success {
+      border-color: rgba(33, 131, 70, 0.34);
+      background: #f2fbf5;
+      color: #1f6238;
     }
 
     .flash-icon {
@@ -1146,6 +1153,12 @@
       background: rgba(182, 121, 38, 0.2);
       border-color: rgba(182, 121, 38, 0.4);
       color: #6c4a18;
+    }
+
+    .flash-card.is-success .flash-icon {
+      background: rgba(33, 131, 70, 0.16);
+      border-color: rgba(33, 131, 70, 0.38);
+      color: #1f6238;
     }
 
     .flash-message {
@@ -3317,9 +3330,9 @@
       {% if messages %}
         <div class="flash-stack" aria-live="polite">
           {% for category, message in messages %}
-            {% set is_warning = category in ["warning", "error", "danger"] %}
-            <div class="flash-card {{ 'is-warning' if is_warning else '' }}">
-              <span class="flash-icon" aria-hidden="true">{{ "!" if is_warning else "i" }}</span>
+            {% set tone = "warning" if category in ["warning", "error", "danger"] else ("success" if category in ["success", "ok"] else "info") %}
+            <div class="flash-card {{ 'is-warning' if tone == 'warning' else '' }} {{ 'is-success' if tone == 'success' else '' }}" data-flash-tone="{{ tone }}" {% if tone != "warning" %}data-auto-dismiss-ms="6500"{% endif %} role="{{ 'alert' if tone == 'warning' else 'status' }}">
+              <span class="flash-icon" aria-hidden="true">{{ "!" if tone == "warning" else ("+" if tone == "success" else "i") }}</span>
               <div class="flash-message">{{ message }}</div>
               <button class="flash-close" type="button" data-dismiss-alert aria-label="Dismiss">&times;</button>
             </div>

@@ -50,6 +50,9 @@ from intranet.models import (
     MatterTimelineEvent,
     Notification,
     PaymentAllocation,
+    ProductionItem,
+    ProductionSet,
+    BatesRange,
     PortalMatterAccess,
     PortalMessage,
     PortalMessageThread,
@@ -1620,6 +1623,170 @@ def test_dms_saved_search_and_email_capture_dedup(app_ctx):
     )
     assert second_capture.status_code == 302
     assert EmailCapture.query.filter_by(matter_id=matter.id).count() == 1
+
+
+def test_dms_saved_search_scope_filter_applies_before_limit(app_ctx):
+    app = app_ctx
+    user = _seed_user("dms-saved-search-scope@example.com")
+    hidden_owner = _seed_user("dms-saved-search-hidden-owner@example.com")
+    visible_matter = _seed_matter(user, "2026-DMS-SEARCH-SCOPE-1", "Visible Matter", "Visible Client")
+    hidden_matter = _seed_matter(hidden_owner, "2026-DMS-SEARCH-SCOPE-2", "Hidden Matter", "Hidden Client")
+    db.session.add(MatterMember(matter_id=visible_matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.flush()
+
+    base_time = dt.datetime.utcnow() - dt.timedelta(minutes=20)
+    db.session.add(
+        SavedSearch(
+            user_id=user.id,
+            name="Visible search should remain",
+            query_json=json.dumps({"q": "visible"}),
+            matter_id=visible_matter.id,
+            created_at=base_time,
+        )
+    )
+    for idx in range(205):
+        db.session.add(
+            SavedSearch(
+                user_id=user.id,
+                name=f"Hidden search {idx}",
+                query_json=json.dumps({"q": "hidden"}),
+                matter_id=hidden_matter.id,
+                created_at=base_time + dt.timedelta(seconds=idx + 1),
+            )
+        )
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+
+    response = client.get("/dms/saved-searches")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Visible search should remain" in body
+    assert "Hidden search 0" not in body
+    assert "Hidden search 204" not in body
+
+
+def test_bates_range_assign_updates_existing_items_and_creates_missing(app_ctx):
+    app = app_ctx
+    user = _seed_user("dms-bates-user@example.com")
+    matter = _seed_matter(user, "2026-DMS-BATES-0001", "Bates Matter", "Bates Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.flush()
+
+    doc_one = DocumentRecord(
+        matter_id=matter.id,
+        title="Bates Doc One",
+        document_type="Memo",
+        confidentiality="Internal",
+        created_by=user.id,
+    )
+    doc_two = DocumentRecord(
+        matter_id=matter.id,
+        title="Bates Doc Two",
+        document_type="Memo",
+        confidentiality="Internal",
+        created_by=user.id,
+    )
+    db.session.add_all([doc_one, doc_two])
+    db.session.flush()
+
+    file_one = DocumentFile(
+        matter_id=matter.id,
+        original_filename="bates-one.txt",
+        stored_filename="matter_1_dms_bates-one.txt",
+        sha256="a" * 64,
+        content_type="text/plain",
+        category="Memo",
+        doc_version="1",
+        lifecycle_stage="Draft",
+        owner_name=user.full_name,
+        is_privileged=False,
+        uploaded_by=user.id,
+    )
+    file_two = DocumentFile(
+        matter_id=matter.id,
+        original_filename="bates-two.txt",
+        stored_filename="matter_1_dms_bates-two.txt",
+        sha256="b" * 64,
+        content_type="text/plain",
+        category="Memo",
+        doc_version="1",
+        lifecycle_stage="Draft",
+        owner_name=user.full_name,
+        is_privileged=False,
+        uploaded_by=user.id,
+    )
+    db.session.add_all([file_one, file_two])
+    db.session.flush()
+
+    ver_one = DocumentVersion(
+        document_id=doc_one.id,
+        document_file_id=file_one.id,
+        version_no=1,
+        original_filename="bates-one.txt",
+        stored_filename=file_one.stored_filename,
+        sha256=file_one.sha256,
+        hash_chain_prev=None,
+        hash_chain_current="c" * 64,
+        state="draft",
+        uploaded_by=user.id,
+    )
+    ver_two = DocumentVersion(
+        document_id=doc_two.id,
+        document_file_id=file_two.id,
+        version_no=1,
+        original_filename="bates-two.txt",
+        stored_filename=file_two.stored_filename,
+        sha256=file_two.sha256,
+        hash_chain_prev=None,
+        hash_chain_current="d" * 64,
+        state="draft",
+        uploaded_by=user.id,
+    )
+    db.session.add_all([ver_one, ver_two])
+    db.session.flush()
+
+    production = ProductionSet(matter_id=matter.id, name="Bates Set", created_by=user.id)
+    db.session.add(production)
+    db.session.flush()
+    existing_item = ProductionItem(
+        production_set_id=production.id,
+        document_version_id=ver_one.id,
+        bates_number="OLD000001",
+    )
+    db.session.add(existing_item)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.post(
+        "/bates/ranges",
+        data={
+            "csrf_token": "test-csrf",
+            "production_set_id": production.id,
+            "prefix": "BAT",
+            "start_no": 1,
+            "end_no": 2,
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    ranges = BatesRange.query.filter_by(production_set_id=production.id).all()
+    assert len(ranges) == 1
+
+    items = (
+        ProductionItem.query.filter_by(production_set_id=production.id)
+        .order_by(ProductionItem.document_version_id.asc())
+        .all()
+    )
+    assert len(items) == 2
+    assert items[0].document_version_id == ver_one.id
+    assert items[0].bates_number == "BAT000001"
+    assert items[1].document_version_id == ver_two.id
+    assert items[1].bates_number == "BAT000002"
 
 
 def test_matter_dms_ranked_search_filters_to_matching_documents(app_ctx):
