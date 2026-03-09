@@ -41,6 +41,7 @@ from .roles import (
 )
 from .schema_sync import sync_schema_compatibility
 from .security import register_security_handlers
+from .services.workspace_hub import build_workspace_quick_actions, load_user_workspace_mode, workspace_mode_meta
 
 HEALTH_ENDPOINTS = {"healthz", "readyz", "ufc_unavailable_healthz"}
 
@@ -280,6 +281,9 @@ def create_app() -> Flask:
     def inject_ui_state():
         active_matter = resolve_active_matter()
         active_timer_cue = None
+        workspace_command_actions: list[dict[str, str]] = []
+        workspace_command_mode = "practice"
+        workspace_command_meta = workspace_mode_meta(workspace_command_mode)
         raw_role = ""
         role_value = ""
         role_label = ""
@@ -301,6 +305,13 @@ def create_app() -> Flask:
             is_case_role = role_is_case(raw_role)
             is_support_role = role_is_support(raw_role)
             can_access_finance = role_can_access_finance(raw_role)
+            workspace_command_mode = load_user_workspace_mode(current_user.id, raw_role)
+            workspace_command_meta = workspace_mode_meta(workspace_command_mode)
+            workspace_command_actions = build_workspace_quick_actions(
+                raw_role,
+                workspace_command_mode,
+                active_matter=active_matter,
+            )
         ai_status = {
             "available": False,
             "label": "AI Off",
@@ -391,6 +402,9 @@ def create_app() -> Flask:
             "can_access_finance": can_access_finance,
             "role_display_name": role_display_name,
             "canonical_role": canonical_role,
+            "workspace_command_actions": workspace_command_actions,
+            "workspace_command_mode": workspace_command_mode,
+            "workspace_command_meta": workspace_command_meta,
         }
 
     db.init_app(app)

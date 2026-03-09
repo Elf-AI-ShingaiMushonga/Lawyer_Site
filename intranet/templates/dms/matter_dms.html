@@ -193,19 +193,22 @@
       {% if is_admin_role %}
         <div class="form-help mb-2">List values are managed in <a href="{{ url_for('admin_settings_firm') }}">Firm Settings</a> under DMS Metadata Lists.</div>
       {% endif %}
+      {% if prefill_document_title or prefill_privilege_label or prefill_retention_category %}
+        <div class="alert alert-light border mb-2">This document form was prefilled from a workflow shortcut.</div>
+      {% endif %}
       <div class="form-help mb-2">Create a document container and upload the initial version in one step.</div>
       <form method="post" enctype="multipart/form-data" class="row g-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="upload_document">
         <div class="col-12">
           <label class="form-label" for="dms-title">Document Title</label>
-          <input class="form-control" id="dms-title" name="title" placeholder="Document title" required>
+          <input class="form-control" id="dms-title" name="title" placeholder="Document title" value="{{ prefill_document_title or '' }}" required>
         </div>
         <div class="col-md-6">
           <label class="form-label" for="dms-type">Type</label>
           <select class="form-select" id="dms-type" name="document_type">
             {% for option in dms_document_types %}
-              <option value="{{ option }}" {% if option == default_document_type %}selected{% endif %}>{{ option }}</option>
+              <option value="{{ option }}" {% if option == prefill_document_type %}selected{% endif %}>{{ option }}</option>
             {% endfor %}
           </select>
         </div>
@@ -213,7 +216,7 @@
           <label class="form-label" for="dms-confidentiality">Confidentiality</label>
           <select class="form-select" id="dms-confidentiality" name="confidentiality">
             {% for option in dms_confidentialities %}
-              <option value="{{ option }}" {% if option == default_confidentiality %}selected{% endif %}>{{ option }}</option>
+              <option value="{{ option }}" {% if option == prefill_confidentiality %}selected{% endif %}>{{ option }}</option>
             {% endfor %}
           </select>
         </div>
@@ -222,7 +225,7 @@
           <select class="form-select" id="dms-privilege" name="privilege_label">
             <option value="">None</option>
             {% for option in dms_privilege_labels %}
-              <option value="{{ option }}">{{ option }}</option>
+              <option value="{{ option }}" {% if option == prefill_privilege_label %}selected{% endif %}>{{ option }}</option>
             {% endfor %}
           </select>
         </div>
@@ -231,7 +234,7 @@
           <select class="form-select" id="dms-retention" name="retention_category">
             <option value="">None</option>
             {% for option in dms_retention_categories %}
-              <option value="{{ option }}">{{ option }}</option>
+              <option value="{{ option }}" {% if option == prefill_retention_category %}selected{% endif %}>{{ option }}</option>
             {% endfor %}
           </select>
         </div>

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
+
+from flask import url_for
 
 from ..models import ContractTemplate, DocumentTemplate, Matter, MatterTemplate, PracticeArea, TaskTemplate, TaskTemplateItem
 
@@ -415,6 +418,219 @@ def south_africa_matter_reference(
         f"Team: {', '.join(team_names) if team_names else '-'}",
     ]
     return "\n".join(lines)
+
+
+def _practice_blob_has(blob: str, *keywords: str) -> bool:
+    return any(str(keyword).strip().lower() in blob for keyword in keywords if str(keyword).strip())
+
+
+def south_africa_workflow_packets(matter: Matter | None, *, today: dt.date | None = None) -> list[dict[str, object]]:
+    if matter is None:
+        return []
+
+    anchor = today or dt.date.today()
+    blob = practice_blob(matter)
+    matter_no = str(matter.matter_no or "").strip() or f"Matter {matter.id}"
+
+    packets: list[dict[str, object]] = []
+
+    if _practice_blob_has(blob, "convey", "transfer", "property"):
+        packets.append(
+            {
+                "title": "Conveyancing Packet",
+                "lane": "Conveyancing",
+                "summary": "Launch the next transfer actions with FICA, lodgement, and duty drafting already framed.",
+                "actions": [
+                    {
+                        "title": "Open FICA Task",
+                        "summary": "Create a follow-up task for outstanding KYC and source documents.",
+                        "href": url_for(
+                            "matter_task_create",
+                            matter_id=matter.id,
+                            prefill_title="Confirm FICA pack and transfer authorities",
+                            prefill_due_date=(anchor + dt.timedelta(days=2)).isoformat(),
+                            prefill_description=(
+                                "Verify all principals, FICA documents, transfer authorities, and outstanding supporting papers "
+                                "before lodgement."
+                            ),
+                        ),
+                    },
+                    {
+                        "title": "Plan Lodgement",
+                        "summary": "Seed the next lodgement target directly into the matter calendar.",
+                        "href": url_for(
+                            "calendar_matter",
+                            matter_id=matter.id,
+                            prefill_deadline_title="Lodge transfer documents",
+                            prefill_due_at=(anchor + dt.timedelta(days=7)).isoformat(),
+                            prefill_event_title="Transfer lodgement window",
+                            prefill_event_date=(anchor + dt.timedelta(days=7)).isoformat(),
+                            prefill_event_description="Coordinate prep, lodgement, and post-lodgement follow-up.",
+                        ),
+                    },
+                    {
+                        "title": "Draft Duty Pack",
+                        "summary": "Open DMS with a transfer duty support draft ready to finalize.",
+                        "href": url_for(
+                            "matter_dms",
+                            matter_id=matter.id,
+                            prefill_title=f"Transfer Duty Support - {matter_no}",
+                            prefill_document_type="Opinion",
+                            prefill_confidentiality="Confidential",
+                            prefill_privilege_label="Attorney-Client",
+                        ),
+                    },
+                ],
+            }
+        )
+
+    if _practice_blob_has(blob, "labour", "employment", "ccma", "dismissal"):
+        packets.append(
+            {
+                "title": "CCMA Packet",
+                "lane": "Labour / CCMA",
+                "summary": "Move the referral, conciliation, and client update cycle without re-entering matter context.",
+                "actions": [
+                    {
+                        "title": "Prepare Referral",
+                        "summary": "Seed the immediate referral and condonation work as a task.",
+                        "href": url_for(
+                            "matter_task_create",
+                            matter_id=matter.id,
+                            prefill_title="Prepare CCMA referral and condonation posture",
+                            prefill_due_date=(anchor + dt.timedelta(days=2)).isoformat(),
+                            prefill_description=(
+                                "Confirm the referral deadline, condonation risk, supporting documents, and witness position."
+                            ),
+                        ),
+                    },
+                    {
+                        "title": "Book Conciliation",
+                        "summary": "Create the likely conciliation milestone in the docket.",
+                        "href": url_for(
+                            "calendar_matter",
+                            matter_id=matter.id,
+                            prefill_deadline_title="CCMA referral service confirmation",
+                            prefill_due_at=(anchor + dt.timedelta(days=5)).isoformat(),
+                            prefill_event_title="CCMA conciliation",
+                            prefill_event_date=(anchor + dt.timedelta(days=10)).isoformat(),
+                            prefill_event_description="Prepare settlement posture, bundle, and representative attendance.",
+                        ),
+                    },
+                    {
+                        "title": "Draft Client Update",
+                        "summary": "Open a privileged labour update draft in DMS.",
+                        "href": url_for(
+                            "matter_dms",
+                            matter_id=matter.id,
+                            prefill_title=f"CCMA Status Update - {matter_no}",
+                            prefill_document_type="Correspondence",
+                            prefill_confidentiality="Confidential",
+                            prefill_privilege_label="Attorney-Client",
+                        ),
+                    },
+                ],
+            }
+        )
+
+    if _practice_blob_has(blob, "estate", "deceased", "trust", "master", "executor"):
+        packets.append(
+            {
+                "title": "Estates Packet",
+                "lane": "Estates / Trusts",
+                "summary": "Frame the Master filing, claims window, and executor follow-through in one pass.",
+                "actions": [
+                    {
+                        "title": "Open Executor Checklist",
+                        "summary": "Create the next administration task with executor and reporting focus.",
+                        "href": url_for(
+                            "matter_task_create",
+                            matter_id=matter.id,
+                            prefill_title="Confirm executor pack and reporting documents",
+                            prefill_due_date=(anchor + dt.timedelta(days=3)).isoformat(),
+                            prefill_description=(
+                                "Validate letters, reporting pack, asset schedule, and outstanding executor support documents."
+                            ),
+                        ),
+                    },
+                    {
+                        "title": "Set Claims Deadline",
+                        "summary": "Place the notice or claims cut-off directly into the calendar.",
+                        "href": url_for(
+                            "calendar_matter",
+                            matter_id=matter.id,
+                            prefill_deadline_title="Claims advertisement cut-off",
+                            prefill_due_at=(anchor + dt.timedelta(days=21)).isoformat(),
+                            prefill_event_title="Master follow-up review",
+                            prefill_event_date=(anchor + dt.timedelta(days=14)).isoformat(),
+                            prefill_event_description="Review outstanding Master feedback, claims posture, and asset collection progress.",
+                        ),
+                    },
+                    {
+                        "title": "Draft Master Pack",
+                        "summary": "Open DMS with a Master filing draft scaffolded.",
+                        "href": url_for(
+                            "matter_dms",
+                            matter_id=matter.id,
+                            prefill_title=f"Master Filing Pack - {matter_no}",
+                            prefill_document_type="Court Filing",
+                            prefill_confidentiality="Confidential",
+                            prefill_privilege_label="Attorney-Client",
+                        ),
+                    },
+                ],
+            }
+        )
+
+    if not packets or _practice_blob_has(blob, "litigation", "court", "appeal", "motion", "raf", "injury"):
+        packets.append(
+            {
+                "title": "Litigation Packet",
+                "lane": "Litigation",
+                "summary": "Push the next filing, hearing, and counsel preparation step from one control point.",
+                "actions": [
+                    {
+                        "title": "Create Filing Task",
+                        "summary": "Open a task for the next pleading, notice, or filing bundle.",
+                        "href": url_for(
+                            "matter_task_create",
+                            matter_id=matter.id,
+                            prefill_title="Prepare next filing bundle",
+                            prefill_due_date=(anchor + dt.timedelta(days=2)).isoformat(),
+                            prefill_description=(
+                                "Check service requirements, filing cut-off, annexures, and counsel input before dispatch."
+                            ),
+                        ),
+                    },
+                    {
+                        "title": "Seed Hearing Date",
+                        "summary": "Place the next hearing or filing deadline into the matter calendar.",
+                        "href": url_for(
+                            "calendar_matter",
+                            matter_id=matter.id,
+                            prefill_deadline_title="File next process / notice",
+                            prefill_due_at=(anchor + dt.timedelta(days=5)).isoformat(),
+                            prefill_event_title="Hearing or motion preparation",
+                            prefill_event_date=(anchor + dt.timedelta(days=14)).isoformat(),
+                            prefill_event_description="Confirm bundle readiness, authorities, and client attendance requirements.",
+                        ),
+                    },
+                    {
+                        "title": "Open Hearing Bundle",
+                        "summary": "Open DMS with a hearing bundle or advice draft ready to complete.",
+                        "href": url_for(
+                            "matter_dms",
+                            matter_id=matter.id,
+                            prefill_title=f"Hearing Bundle - {matter_no}",
+                            prefill_document_type="Court Filing",
+                            prefill_confidentiality="Confidential",
+                        ),
+                    },
+                ],
+            }
+        )
+
+    return packets[:3]
 
 
 def seed_south_africa_practice_areas(session) -> int:

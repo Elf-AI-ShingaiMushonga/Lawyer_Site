@@ -66,6 +66,11 @@
                   <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }}</span>
                 </div>
                 {% if m.last_update_note %}<div class="muted small mt-1">{{ m.last_update_note }}</div>{% endif %}
+                <div class="table-actions mt-2">
+                  <a class="btn btn-sm btn-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=m.id) }}">DMS</a>
+                </div>
               </div>
             {% endfor %}
           </div>
@@ -92,6 +97,13 @@
                     <span>Matter #{{ t.matter_id }}</span>
                   {% endif %}
                   <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
+                </div>
+                <div class="table-actions mt-2">
+                  {% if task_matter %}
+                    <a class="btn btn-sm btn-light" href="{{ url_for('matter_tasks', matter_id=task_matter.id) }}#task-{{ t.id }}">Open Task</a>
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=task_matter.id, task_id=t.id) }}">Log Time</a>
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_timers', matter_id=task_matter.id, task_id=t.id, label=t.title) }}">Start Timer</a>
+                  {% endif %}
                 </div>
               </div>
             {% endfor %}
@@ -122,6 +134,13 @@
                   <span>{{ d.category or "General" }}</span>
                   <span>{{ d.lifecycle_stage }}</span>
                   {% if d.is_privileged %}<span class="tag-chip">Privileged</span>{% endif %}
+                </div>
+                <div class="table-actions mt-2">
+                  <a class="btn btn-sm btn-light" href="{{ url_for('doc_download', doc_id=d.id) }}">Download</a>
+                  {% if doc_matter %}
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=doc_matter.id) }}">Matter</a>
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=doc_matter.id) }}">DMS</a>
+                  {% endif %}
                 </div>
               </div>
             {% endfor %}

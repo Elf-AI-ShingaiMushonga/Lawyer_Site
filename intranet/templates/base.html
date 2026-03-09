@@ -3178,6 +3178,24 @@
             <span class="code-like">/</span>
           </a>
 
+          {% if workspace_command_actions %}
+            <div class="command-section">Workspace Quick Actions</div>
+            {% for action in workspace_command_actions %}
+              <a
+                class="command-item"
+                href="{{ action.href }}"
+                data-command-item
+                data-keywords="{{ workspace_command_mode }} {{ workspace_command_meta.label }} {{ action.title }} {{ action.summary }} {{ action.badge }}"
+              >
+                <span>
+                  <span class="command-item-title">{{ action.title }}</span>
+                  <span class="command-item-meta">{{ action.summary }}</span>
+                </span>
+                <span class="code-like">{{ action.badge or 'Go' }}</span>
+              </a>
+            {% endfor %}
+          {% endif %}
+
           {% if active_matter %}
             <div class="command-section">Active Matter</div>
             <a class="command-item" href="{{ matter_workspace_href }}" data-command-item data-keywords="active matter workspace current case resume">

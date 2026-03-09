@@ -21,6 +21,8 @@ from ..models import (
     Invoice,
     Matter,
     MatterMember,
+    MatterPin,
+    MatterRecentView,
     Task,
     TaskAssignee,
     TimeEntry,
@@ -32,6 +34,7 @@ from ..services.sa_practice import (
     DEFAULT_SA_PRACTICE_AREAS,
     south_africa_matter_reference,
     south_africa_portal_recommendations,
+    south_africa_workflow_packets,
 )
 from ..templates import page
 
@@ -584,6 +587,7 @@ def register_integration_routes(app):
             ),
         ).count()
         portal_cards = south_africa_portal_recommendations(selected_matter)
+        workflow_packets = south_africa_workflow_packets(selected_matter, today=dt.date.today())
 
         return page(
             "South Africa Operations Hub",
@@ -596,6 +600,7 @@ def register_integration_routes(app):
             matter_reference=matter_reference,
             internal_actions=internal_actions,
             portal_cards=portal_cards,
+            workflow_packets=workflow_packets,
             practice_defaults=DEFAULT_SA_PRACTICE_AREAS,
             scoped_matter_count=len(scoped_ids),
             conveyancing_count=conveyancing_count,
@@ -954,6 +959,38 @@ def register_integration_routes(app):
         matters_query = Matter.query.filter(Matter.id.in_(matter_ids or [-1]))
         matters = matters_query.order_by(Matter.last_updated_at.desc()).limit(200).all()
         matter_by_id = {matter.id: matter for matter in matters}
+        selected_matter_id = request.args.get("matter_id", type=int)
+        if selected_matter_id not in matter_by_id:
+            selected_matter_id = None
+
+        shortcut_ids: list[int] = []
+        seen_shortcuts: set[int] = set()
+
+        def _remember_shortcut(matter_id: int | None) -> None:
+            if matter_id is None or matter_id in seen_shortcuts or matter_id not in matter_by_id:
+                return
+            seen_shortcuts.add(matter_id)
+            shortcut_ids.append(matter_id)
+
+        _remember_shortcut(selected_matter_id)
+        for row in (
+            MatterPin.query.filter_by(user_id=current_user.id)
+            .order_by(MatterPin.created_at.asc(), MatterPin.id.asc())
+            .limit(6)
+            .all()
+        ):
+            _remember_shortcut(int(row.matter_id))
+        for row in (
+            MatterRecentView.query.filter_by(user_id=current_user.id)
+            .order_by(MatterRecentView.last_viewed_at.desc(), MatterRecentView.id.desc())
+            .limit(8)
+            .all()
+        ):
+            _remember_shortcut(int(row.matter_id))
+        if not shortcut_ids:
+            for matter in matters[:6]:
+                _remember_shortcut(int(matter.id))
+        matter_shortcuts = [matter_by_id[matter_id] for matter_id in shortcut_ids if matter_id in matter_by_id]
 
         user_query = User.query
         if not is_admin():
@@ -1086,6 +1123,8 @@ def register_integration_routes(app):
             "Mobile Hub",
             "integrations/mobile_hub.html",
             matters=matters,
+            matter_shortcuts=matter_shortcuts,
+            selected_matter_id=selected_matter_id,
             users=users,
             my_recent_entries=my_recent_entries,
             my_recent_tasks=my_recent_tasks,

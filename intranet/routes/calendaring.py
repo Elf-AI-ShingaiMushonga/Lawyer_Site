@@ -426,6 +426,19 @@ def register_calendar_routes(app):
             .limit(200)
             .all()
         )
+        prefill_deadline_title = (request.args.get("prefill_deadline_title") or "").strip()
+        prefill_due_at_raw = (request.args.get("prefill_due_at") or "").strip()
+        prefill_event_title = (request.args.get("prefill_event_title") or "").strip()
+        prefill_event_date_raw = (request.args.get("prefill_event_date") or "").strip()
+        prefill_event_description = (request.args.get("prefill_event_description") or "").strip()
+        try:
+            prefill_due_at = dt.date.fromisoformat(prefill_due_at_raw).isoformat() if prefill_due_at_raw else ""
+        except ValueError:
+            prefill_due_at = ""
+        try:
+            prefill_event_date = dt.date.fromisoformat(prefill_event_date_raw).isoformat() if prefill_event_date_raw else ""
+        except ValueError:
+            prefill_event_date = ""
         return page(
             "Matter Calendar",
             "calendar/matter.html",
@@ -435,6 +448,11 @@ def register_calendar_routes(app):
             active_filter=active_filter,
             stats=stats,
             today=today,
+            prefill_deadline_title=prefill_deadline_title,
+            prefill_due_at=prefill_due_at,
+            prefill_event_title=prefill_event_title,
+            prefill_event_date=prefill_event_date,
+            prefill_event_description=prefill_event_description,
         )
 
     @app.post("/deadlines/<int:deadline_id>/override")

@@ -146,16 +146,19 @@
   <div class="col-lg-4">
     <div class="card p-3 mb-3">
       <h4 class="mb-2">Add Deadline</h4>
+      {% if prefill_deadline_title or prefill_due_at %}
+        <div class="alert alert-light border">This deadline form was prefilled from a workflow shortcut.</div>
+      {% endif %}
       <form method="post" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="create_deadline">
         <div class="col-12">
           <label class="form-label" for="deadline-title">Title</label>
-          <input class="form-control" id="deadline-title" name="title" placeholder="Deadline title" required>
+          <input class="form-control" id="deadline-title" name="title" placeholder="Deadline title" value="{{ prefill_deadline_title or '' }}" required>
         </div>
         <div class="col-12">
           <label class="form-label" for="deadline-due">Due Date</label>
-          <input class="form-control" id="deadline-due" name="due_at" type="date" required>
+          <input class="form-control" id="deadline-due" name="due_at" type="date" value="{{ prefill_due_at or '' }}" required>
         </div>
         <div class="col-12">
           <label class="form-label" for="deadline-task-id">Task ID</label>
@@ -173,20 +176,23 @@
 
     <div class="card p-3 mb-3">
       <h4 class="mb-2">Schedule Hearing</h4>
+      {% if prefill_event_title or prefill_event_date or prefill_event_description %}
+        <div class="alert alert-light border">This hearing form was prefilled from a workflow shortcut.</div>
+      {% endif %}
       <form method="post" class="row g-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="schedule_hearing">
         <div class="col-12">
           <label class="form-label" for="hearing-title">Hearing Title</label>
-          <input class="form-control" id="hearing-title" name="title" placeholder="Hearing title">
+          <input class="form-control" id="hearing-title" name="title" placeholder="Hearing title" value="{{ prefill_event_title or '' }}">
         </div>
         <div class="col-12">
           <label class="form-label" for="hearing-date">Date</label>
-          <input class="form-control" id="hearing-date" name="event_date" type="date" required>
+          <input class="form-control" id="hearing-date" name="event_date" type="date" value="{{ prefill_event_date or '' }}" required>
         </div>
         <div class="col-12">
           <label class="form-label" for="hearing-description">Description</label>
-          <textarea class="form-control" id="hearing-description" name="description" rows="2" placeholder="Hearing notes"></textarea>
+          <textarea class="form-control" id="hearing-description" name="description" rows="2" placeholder="Hearing notes">{{ prefill_event_description or '' }}</textarea>
         </div>
         <div class="col-12 d-grid"><button class="btn btn-light" type="submit" data-submitting-text="Scheduling...">Add Hearing</button></div>
       </form>

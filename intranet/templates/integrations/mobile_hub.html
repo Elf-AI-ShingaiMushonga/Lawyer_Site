@@ -1,5 +1,31 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+  .mobile-matter-shortcuts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 10px;
+  }
+
+  .mobile-matter-card {
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 14px;
+    padding: 12px;
+    background:
+      radial-gradient(circle at top right, rgba(225, 6, 0, 0.08), rgba(225, 6, 0, 0)),
+      linear-gradient(180deg, rgba(255, 250, 250, 0.98), rgba(255, 255, 255, 0.98));
+  }
+
+  .mobile-preset-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .mobile-preset-row .btn {
+    flex: 0 0 auto;
+  }
+</style>
 <div class="card p-3 mb-3">
   <div class="toolbar-row">
     <div>
@@ -10,6 +36,33 @@
       <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries') }}">Full Timekeeping</a>
       <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Matter Directory</a>
     </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h4 class="mb-0">Fast Matter Launcher</h4>
+      <div class="form-help mt-1">Tap a matter once to prefill both quick-capture forms, or jump straight into the right workspace.</div>
+    </div>
+  </div>
+  <div class="mobile-matter-shortcuts mt-3">
+    {% for matter in matter_shortcuts %}
+      <article class="mobile-matter-card">
+        <div class="fw-semibold">{{ matter.matter_no }} - {{ matter.title }}</div>
+        <div class="muted small mt-1">{{ matter.client_name }}</div>
+        <div class="list-meta mt-2">
+          <span class="badge status-badge status-{{ (matter.status or 'open')|lower|replace(' ', '-') }}">{{ matter.status or "Open" }}</span>
+          <span class="risk-chip risk-{{ (matter.risk_level or 'medium')|lower }}">{{ matter.risk_level or "Medium" }}</span>
+        </div>
+        <div class="table-actions mt-3">
+          <button class="btn btn-sm btn-light" type="button" data-mobile-matter-select="{{ matter.id }}">Use in Forms</button>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('mobile_hub', matter_id=matter.id) }}">Prefill</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=matter.id) }}">Workspace</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=matter.id) }}">DMS</a>
+        </div>
+      </article>
+    {% endfor %}
   </div>
 </div>
 
@@ -25,7 +78,7 @@
           <select class="form-select" id="mobile-fee-matter" name="matter_id" required>
             <option value="">Choose matter</option>
             {% for matter in matters %}
-              <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+              <option value="{{ matter.id }}" {% if selected_matter_id == matter.id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
             {% endfor %}
           </select>
         </div>
@@ -42,6 +95,13 @@
           <label class="form-label" for="mobile-fee-duration">Duration Minutes (optional)</label>
           <input class="form-control" id="mobile-fee-duration" name="duration_minutes" type="number" min="1" placeholder="e.g. 45">
           <div class="form-help">Used only when End is empty.</div>
+          <div class="mobile-preset-row mt-2">
+            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="15">15 min</button>
+            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="30">30 min</button>
+            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="45">45 min</button>
+            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="60">1 hr</button>
+            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-duration="90">90 min</button>
+          </div>
         </div>
         <div class="col-sm-6 d-flex align-items-end">
           <div class="form-check mb-2">
@@ -79,13 +139,19 @@
           <select class="form-select" id="mobile-task-matter" name="matter_id" required>
             <option value="">Choose matter</option>
             {% for matter in matters %}
-              <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+              <option value="{{ matter.id }}" {% if selected_matter_id == matter.id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-12">
           <label class="form-label" for="mobile-task-title">Task Title</label>
           <input class="form-control" id="mobile-task-title" name="title" placeholder="Task title" required>
+          <div class="mobile-preset-row mt-2">
+            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-task-title="Call client">Call client</button>
+            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-task-title="Review latest draft">Review latest draft</button>
+            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-task-title="Prepare filing bundle">Prepare filing bundle</button>
+            <button class="btn btn-sm btn-outline-light" type="button" data-mobile-task-title="Send status update">Send status update</button>
+          </div>
         </div>
         <div class="col-sm-6">
           <label class="form-label" for="mobile-task-due">Due Date</label>
@@ -171,4 +237,37 @@
     </div>
   </div>
 </div>
+<script>
+  (() => {
+    const feeMatter = document.getElementById('mobile-fee-matter');
+    const taskMatter = document.getElementById('mobile-task-matter');
+    const durationInput = document.getElementById('mobile-fee-duration');
+    const endInput = document.getElementById('mobile-fee-end');
+    const taskTitle = document.getElementById('mobile-task-title');
+
+    for (const button of document.querySelectorAll('[data-mobile-matter-select]')) {
+      button.addEventListener('click', () => {
+        const matterId = button.dataset.mobileMatterSelect || '';
+        if (feeMatter) feeMatter.value = matterId;
+        if (taskMatter) taskMatter.value = matterId;
+      });
+    }
+
+    for (const button of document.querySelectorAll('[data-mobile-duration]')) {
+      button.addEventListener('click', () => {
+        if (durationInput) durationInput.value = button.dataset.mobileDuration || '';
+        if (endInput) endInput.value = '';
+      });
+    }
+
+    for (const button of document.querySelectorAll('[data-mobile-task-title]')) {
+      button.addEventListener('click', () => {
+        if (taskTitle) {
+          taskTitle.value = button.dataset.mobileTaskTitle || '';
+          taskTitle.focus();
+        }
+      });
+    }
+  })();
+</script>
 {% endblock %}

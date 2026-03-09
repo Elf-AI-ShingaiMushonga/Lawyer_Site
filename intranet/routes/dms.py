@@ -270,6 +270,11 @@ def register_dms_routes(app):
         retention_category_options = list(dms_option_lists.get("retention_categories") or [])
         default_document_type = document_type_options[0] if document_type_options else "General"
         default_confidentiality = confidentiality_options[0] if confidentiality_options else "Internal"
+        prefill_document_title = (request.args.get("prefill_title") or "").strip()
+        prefill_document_type = _match_option(request.args.get("prefill_document_type"), document_type_options) or default_document_type
+        prefill_confidentiality = _match_option(request.args.get("prefill_confidentiality"), confidentiality_options) or default_confidentiality
+        prefill_privilege_label = _match_option(request.args.get("prefill_privilege_label"), privilege_label_options)
+        prefill_retention_category = _match_option(request.args.get("prefill_retention_category"), retention_category_options)
 
         if request.method == "POST":
             action = action or "upload_document"
@@ -761,6 +766,11 @@ def register_dms_routes(app):
             dms_retention_categories=retention_category_options,
             default_document_type=default_document_type,
             default_confidentiality=default_confidentiality,
+            prefill_document_title=prefill_document_title,
+            prefill_document_type=prefill_document_type,
+            prefill_confidentiality=prefill_confidentiality,
+            prefill_privilege_label=prefill_privilege_label,
+            prefill_retention_category=prefill_retention_category,
             template_requirements_map=template_requirements_map,
             matter_magic=matter_magic,
             dms_quick_starts=dms_quick_starts,

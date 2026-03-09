@@ -245,3 +245,43 @@ def test_dashboard_my_tasks_hides_done_tasks(app_ctx):
     body = response.get_data(as_text=True)
     assert "Active Dashboard Task" in body
     assert "Done Dashboard Task" not in body
+
+
+def test_dashboard_workspace_mode_persists_and_surfaces_command_actions(app_ctx):
+    user, password, secret = _seed_admin_with_mfa(email="workspace-mode-admin@example.com")
+    matter = Matter(
+        matter_no="2026-WORKSPACE-001",
+        title="Workspace Focus Matter",
+        client_name="Workspace Client",
+        status="Open",
+        created_by=user.id,
+        opened_at=utc_now(),
+        last_updated_at=utc_now(),
+        practice_area="General Litigation",
+    )
+    db.session.add(matter)
+    db.session.commit()
+
+    client = app_ctx.test_client()
+    csrf = _login(client, user.email, password, secret)
+
+    post_response = client.post(
+        "/dashboard/workspace-mode",
+        data={
+            "csrf_token": csrf,
+            "mode": "south_africa",
+        },
+        follow_redirects=False,
+    )
+    assert post_response.status_code == 302
+    row = FirmSetting.query.filter_by(setting_key=f"workspace_pref:user:{user.id}").first()
+    assert row is not None
+    assert '"mode": "south_africa"' in (row.setting_value_json or "")
+
+    response = client.get("/dashboard")
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Workspace Command Center" in body
+    assert "South Africa Desk" in body
+    assert "South Africa Practice Hub" in body
+    assert "Workspace Quick Actions" in body

@@ -15,6 +15,7 @@ from ..helpers import (
     is_admin,
     register_trusted_device,
     register_user_session,
+    resolve_active_matter,
     revoke_current_session,
 )
 from ..mfa import check_backup_code, verify_totp
@@ -35,6 +36,13 @@ from ..models import (
 )
 from ..policies import visible_matter_ids
 from ..services.matter_magic import build_dashboard_focus_board
+from ..services.workspace_hub import (
+    build_workspace_quick_actions,
+    load_user_workspace_mode,
+    save_user_workspace_mode,
+    workspace_mode_meta,
+    workspace_mode_options,
+)
 from ..roles import role_requires_mfa
 from ..services.priority_inbox import build_priority_inbox
 from ..templates import page
@@ -368,6 +376,15 @@ def register_auth_routes(app):
         focus_candidates.extend(item["matter"] for item in at_risk_matters)
         focus_candidates.extend(recent_matters)
         legal_desk = build_dashboard_focus_board(focus_candidates, today=today, limit=6)
+        workspace_mode = load_user_workspace_mode(current_user.id, getattr(current_user, "role", None))
+        active_workspace_matter = resolve_active_matter()
+        workspace_focus_matter = active_workspace_matter or (legal_desk[0]["matter"] if legal_desk else None)
+        workspace_quick_actions = build_workspace_quick_actions(
+            getattr(current_user, "role", None),
+            workspace_mode,
+            active_matter=active_workspace_matter,
+            focus_matter=workspace_focus_matter,
+        )
 
         stats = {
             "matter_count": matter_scope.count(),
@@ -406,4 +423,21 @@ def register_auth_routes(app):
             recent_views=recent_views,
             priority_inbox=priority_inbox,
             legal_desk=legal_desk,
+            workspace_mode=workspace_mode,
+            workspace_mode_meta=workspace_mode_meta(workspace_mode),
+            workspace_mode_choices=workspace_mode_options(getattr(current_user, "role", None)),
+            workspace_quick_actions=workspace_quick_actions,
+            workspace_focus_matter=workspace_focus_matter,
         )
+
+    @app.post("/dashboard/workspace-mode")
+    @login_required
+    def dashboard_workspace_mode():
+        save_user_workspace_mode(
+            current_user.id,
+            getattr(current_user, "role", None),
+            request.form.get("mode") or "",
+            updated_by=getattr(current_user, "id", None),
+        )
+        flash("Workspace mode updated.", "info")
+        return redirect(url_for("dashboard"))

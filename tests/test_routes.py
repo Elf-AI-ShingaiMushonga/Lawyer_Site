@@ -17,6 +17,7 @@ REQUIRED_ROUTES = {
     "/auth/sso/authorize",
     "/auth/sso/token",
     "/auth/sso/userinfo",
+    "/dashboard/workspace-mode",
     "/admin/settings/firm",
     "/admin/settings/offices",
     "/admin/settings/practice-areas",

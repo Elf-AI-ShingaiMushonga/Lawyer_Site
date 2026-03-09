@@ -27,6 +27,7 @@ This is a functional intranet website for a law firm:
 - Curated client portal (auth, scoped matter views, messages, uploads, invoices, payments)
 - Analytics dashboards (utilization, realization, EHR, workload, profitability, forecast, burnout)
 - Ops controls (backup status/run, restore verification, DR targets)
+- South Africa operations hub with official practitioner portal shortcuts and matter launch context
 - Contacts directory
 - Knowledge base (internal articles)
 - Search across core objects

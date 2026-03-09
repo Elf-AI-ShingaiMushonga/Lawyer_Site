@@ -11,6 +11,7 @@ from ..extensions import db
 from ..models import DocumentFile, Matter, MatterMember, MatterNote, MatterTimelineEvent, Task
 
 URGENCY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+TASK_PRIORITY_RANK = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
 
 _ACTION_TARGETS: dict[str, tuple[str, str | None, str]] = {
     "clear_overdue_tasks": ("matter_tasks", None, "Clear Tasks"),
@@ -196,6 +197,27 @@ def _action(code: str, title: str, summary: str, urgency: str, score: int, *, ba
         "score": score,
         "badge": badge or "",
     }
+
+
+def _task_priority_score(task: Task) -> int:
+    return TASK_PRIORITY_RANK.get(str(getattr(task, "priority", "") or "").title(), 0)
+
+
+def _task_due_date(task: Task) -> dt.date | None:
+    return _as_date(getattr(task, "due_date", None))
+
+
+def _task_sort_tuple(task: Task, today: dt.date) -> tuple[int, int, int, dt.date, int]:
+    due_date = _task_due_date(task) or dt.date.max
+    overdue_flag = 0 if (_task_due_date(task) and due_date < today) else 1
+    due_today_flag = 0 if (_task_due_date(task) == today) else 1
+    return (
+        overdue_flag,
+        due_today_flag,
+        -_task_priority_score(task),
+        due_date,
+        int(getattr(task, "id", 0) or 0),
+    )
 
 
 def build_matter_magic_snapshot(
@@ -646,6 +668,80 @@ def build_dashboard_focus_board(
         )
     )
     return cards[: max(1, int(limit))]
+
+
+def build_task_tracker_snapshot(
+    matter: Matter,
+    tasks: Sequence[Task],
+    *,
+    task_assignees_map: dict[int, Sequence[Any]] | None = None,
+    today: dt.date | None = None,
+    limit_tasks: int = 4,
+) -> dict[str, Any]:
+    today = today or dt.date.today()
+    task_assignees_map = task_assignees_map or {}
+    all_tasks = list(tasks or [])
+    open_tasks = [task for task in all_tasks if str(getattr(task, "status", "")) != "Done"]
+    sorted_open_tasks = sorted(open_tasks, key=lambda task: _task_sort_tuple(task, today))
+    overdue_tasks = [task for task in open_tasks if _task_due_date(task) and _task_due_date(task) < today]
+    due_today_tasks = [task for task in open_tasks if _task_due_date(task) == today]
+    due_week_tasks = [
+        task for task in open_tasks if _task_due_date(task) and today < _task_due_date(task) <= (today + dt.timedelta(days=7))
+    ]
+    unassigned_tasks = [task for task in open_tasks if not task_assignees_map.get(int(task.id)) and not getattr(task, "assigned_to", None)]
+    high_priority_tasks = [task for task in open_tasks if _task_priority_score(task) >= TASK_PRIORITY_RANK["High"]]
+    next_task = sorted_open_tasks[0] if sorted_open_tasks else None
+    spotlight_tasks = sorted_open_tasks[: max(1, int(limit_tasks))]
+
+    headline = "No open tasks on this matter."
+    if next_task is not None:
+        due_date = _task_due_date(next_task)
+        if due_date is not None:
+            headline = f"Move '{next_task.title}' next. It is due {_format_when(due_date, today)}."
+        else:
+            headline = f"Move '{next_task.title}' next to keep the matter progressing."
+
+    status_bits = [
+        f"{len(open_tasks)} open",
+        f"{len(overdue_tasks)} overdue",
+        f"{len(due_today_tasks)} due today",
+    ]
+    if unassigned_tasks:
+        status_bits.append(f"{len(unassigned_tasks)} unassigned")
+    status_line = " | ".join(status_bits)
+
+    handoff_lines = [
+        f"Task handoff for {matter.matter_no} - {matter.title}",
+        f"Open tasks: {len(open_tasks)} total | Overdue: {len(overdue_tasks)} | Due today: {len(due_today_tasks)} | Due this week: {len(due_week_tasks)}",
+    ]
+    if next_task is not None:
+        due_label = _task_due_date(next_task).isoformat() if _task_due_date(next_task) else "No due date"
+        handoff_lines.append(f"Next task to move: {next_task.title} ({next_task.status}, due {due_label})")
+    if spotlight_tasks:
+        handoff_lines.append("Priority queue:")
+        for task in spotlight_tasks[:3]:
+            assignees = task_assignees_map.get(int(task.id), [])
+            assignee_text = ", ".join(str(getattr(user, "full_name", "")) for user in assignees if getattr(user, "full_name", "")) or (
+                "Assigned" if getattr(task, "assigned_to", None) else "Unassigned"
+            )
+            due_text = _task_due_date(task).isoformat() if _task_due_date(task) else "No due date"
+            handoff_lines.append(
+                f"- #{task.id} {task.title} | {task.status} | priority {getattr(task, 'priority', None) or 'Medium'} | due {due_text} | {assignee_text}"
+            )
+
+    return {
+        "headline": headline,
+        "status_line": status_line,
+        "next_task": next_task,
+        "spotlight_tasks": spotlight_tasks,
+        "handoff_text": "\n".join(handoff_lines),
+        "open_count": len(open_tasks),
+        "overdue_count": len(overdue_tasks),
+        "due_today_count": len(due_today_tasks),
+        "due_week_count": len(due_week_tasks),
+        "unassigned_count": len(unassigned_tasks),
+        "high_priority_count": len(high_priority_tasks),
+    }
 
 
 def _pick_option(options: Sequence[str], candidates: Sequence[str], default: str = "") -> str:

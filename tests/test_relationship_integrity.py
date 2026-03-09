@@ -48,6 +48,8 @@ from intranet.models import (
     MatterMember,
     MatterNote,
     MatterNoteACL,
+    MatterPin,
+    MatterRecentView,
     MatterTemplate,
     MatterTimelineEvent,
     Notification,
@@ -2987,6 +2989,168 @@ def test_mobile_hub_captures_fee_and_assigns_task(app_ctx):
     assert task is not None
     assignee_count = TaskAssignee.query.filter_by(task_id=task.id).count()
     assert assignee_count == 2
+
+
+def test_mobile_hub_renders_fast_launcher_and_presets(app_ctx):
+    app = app_ctx
+    user = _seed_user("mobile-launcher@example.com")
+    matter = _seed_matter(user, "2026-MOBILE-FAST-1", "Fast Launcher Matter", "Launcher Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.flush()
+    db.session.add(MatterPin(user_id=user.id, matter_id=matter.id))
+    db.session.add(MatterRecentView(user_id=user.id, matter_id=matter.id))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/mobile/hub?matter_id={matter.id}")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Fast Matter Launcher" in body
+    assert f'data-mobile-matter-select="{matter.id}"' in body
+    assert "15 min" in body
+    assert "Call client" in body
+
+
+def test_search_results_render_operational_actions(app_ctx):
+    app = app_ctx
+    user = _seed_user("search-actions@example.com")
+    matter = _seed_matter(user, "2026-SEARCH-ACT-1", "Action Search Matter", "Search Action Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.flush()
+    task = Task(
+        matter_id=matter.id,
+        title="Alpha review task",
+        status="Todo",
+        created_by=user.id,
+    )
+    db.session.add(task)
+    db.session.flush()
+    doc = DocumentFile(
+        matter_id=matter.id,
+        original_filename="alpha-brief.pdf",
+        stored_filename="alpha-brief.pdf",
+        sha256="a" * 64,
+        content_type="application/pdf",
+        category="Memo",
+        lifecycle_stage="Draft",
+        uploaded_by=user.id,
+    )
+    db.session.add(doc)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get("/search?q=alpha")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Workspace" in body
+    assert "Start Timer" in body
+    assert "Download" in body
+
+
+def test_matter_tasks_renders_task_radar_and_handoff(app_ctx):
+    app = app_ctx
+    user = _seed_user("task-radar@example.com")
+    matter = _seed_matter(user, "2026-TASK-RADAR-1", "Task Radar Matter", "Radar Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.flush()
+    db.session.add(
+        Task(
+            matter_id=matter.id,
+            title="Overdue brief review",
+            status="Todo",
+            due_date=dt.date.today() - dt.timedelta(days=1),
+            priority="High",
+            created_by=user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/matters/{matter.id}/tasks")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Task Radar" in body
+    assert "Handoff Brief" in body
+    assert "Overdue brief review" in body
+
+
+def test_south_africa_hub_renders_workflow_packets(app_ctx):
+    app = app_ctx
+    user = _seed_user("sa-packets@example.com")
+    matter = _seed_matter(user, "2026-SA-PACKETS-1", "Transfer Matter", "Transfer Client")
+    matter.practice_area = "Conveyancing"
+    matter.case_type = "Property Transfer"
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/integrations/south-africa?matter_id={matter.id}")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Workflow Packets" in body
+    assert "Conveyancing Packet" in body
+    assert "Open FICA Task" in body
+    assert "Draft Duty Pack" in body
+
+
+def test_sa_workflow_shortcuts_prefill_task_calendar_and_dms_forms(app_ctx):
+    app = app_ctx
+    user = _seed_user("sa-prefill@example.com")
+    matter = _seed_matter(user, "2026-SA-PREFILL-1", "Workflow Matter", "Workflow Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+
+    task_response = client.get(
+        f"/matters/{matter.id}/tasks/new"
+        "?prefill_title=Prepare%20CCMA%20referral"
+        "&prefill_due_date=2026-03-20"
+        "&prefill_description=Confirm%20deadline%20and%20supporting%20papers"
+    )
+    task_body = task_response.get_data(as_text=True)
+    assert task_response.status_code == 200
+    assert 'value="Prepare CCMA referral"' in task_body
+    assert 'value="2026-03-20"' in task_body
+    assert "Confirm deadline and supporting papers" in task_body
+
+    calendar_response = client.get(
+        f"/calendar/matter/{matter.id}"
+        "?prefill_deadline_title=File%20notice%20of%20set%20down"
+        "&prefill_due_at=2026-03-21"
+        "&prefill_event_title=High%20Court%20hearing"
+        "&prefill_event_date=2026-03-28"
+        "&prefill_event_description=Prepare%20bundle%20and%20counsel%20brief"
+    )
+    calendar_body = calendar_response.get_data(as_text=True)
+    assert calendar_response.status_code == 200
+    assert 'value="File notice of set down"' in calendar_body
+    assert 'value="2026-03-21"' in calendar_body
+    assert 'value="High Court hearing"' in calendar_body
+    assert 'value="2026-03-28"' in calendar_body
+    assert "Prepare bundle and counsel brief" in calendar_body
+
+    dms_response = client.get(
+        f"/matters/{matter.id}/dms"
+        "?prefill_title=Client%20Advice%20-%202026-SA-PREFILL-1"
+        "&prefill_document_type=Opinion"
+        "&prefill_confidentiality=Confidential"
+        "&prefill_privilege_label=Attorney-Client"
+    )
+    dms_body = dms_response.get_data(as_text=True)
+    assert dms_response.status_code == 200
+    assert 'value="Client Advice - 2026-SA-PREFILL-1"' in dms_body
+    assert 'option value="Opinion" selected' in dms_body
+    assert 'option value="Confidential" selected' in dms_body
 
 
 def test_third_party_cost_recovery_import_export_roundtrip(app_ctx):

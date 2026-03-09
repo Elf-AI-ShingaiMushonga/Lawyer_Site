@@ -68,7 +68,7 @@ from ..services.contracts import (
 )
 from ..services.assist_ai import suggest_matter_client_update, suggest_matter_executive_summary
 from ..services.director_team import director_team_member_ids, user_in_director_scope
-from ..services.matter_magic import attach_matter_magic_links, build_matter_magic_snapshot
+from ..services.matter_magic import attach_matter_magic_links, build_matter_magic_snapshot, build_task_tracker_snapshot
 from ..services.matter_option_lists import legal_category_options
 from ..services.storage_paths import build_matter_storage_name, harden_private_file, resolve_upload_path
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
@@ -1465,6 +1465,12 @@ def register_matter_routes(app):
             fallback_user = users_map.get(task.assigned_to)
             if fallback_user is not None:
                 task_assignees_map[task.id] = [fallback_user]
+        task_tracker = build_task_tracker_snapshot(
+            m,
+            tasks,
+            task_assignees_map=task_assignees_map,
+            today=dt.date.today(),
+        )
 
         return page(
             "Matter Tasks",
@@ -1472,6 +1478,8 @@ def register_matter_routes(app):
             m=m,
             tasks=tasks,
             task_assignees_map=task_assignees_map,
+            task_tracker=task_tracker,
+            today=dt.date.today(),
         )
 
     @app.route("/matters/<int:matter_id>/tasks/new", methods=["GET", "POST"])
@@ -1487,6 +1495,13 @@ def register_matter_routes(app):
             return _create_task_from_request(m)
 
         users, task_templates, template_primary_items = _task_form_context()
+        prefill_title = (request.args.get("prefill_title") or "").strip()
+        prefill_description = (request.args.get("prefill_description") or "").strip()
+        prefill_due_date_raw = (request.args.get("prefill_due_date") or "").strip()
+        try:
+            prefill_due_date = dt.date.fromisoformat(prefill_due_date_raw).isoformat() if prefill_due_date_raw else ""
+        except ValueError:
+            prefill_due_date = ""
         return page(
             "Add Task",
             "matters/task_new.html",
@@ -1494,6 +1509,9 @@ def register_matter_routes(app):
             users=users,
             task_templates=task_templates,
             template_primary_items=template_primary_items,
+            prefill_title=prefill_title,
+            prefill_description=prefill_description,
+            prefill_due_date=prefill_due_date,
         )
 
     @app.post("/tasks/<int:task_id>/status")
