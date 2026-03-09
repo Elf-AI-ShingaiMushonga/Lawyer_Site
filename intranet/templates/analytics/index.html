@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-shell">
+  {% set report_title = "Analytics Command Center" %}
+  {% set report_summary = "Read revenue, utilization, staffing pressure, and wellbeing risk from one command surface before deciding where to intervene." %}
+  {% include "analytics/_header.html" %}
+
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Revenue and Capacity Signal</div>
+            <h2 class="panel-title">Operating pulse</h2>
+            <div class="panel-summary">These summary readings answer the first management question: are we capturing time, turning it into cash, and carrying a sustainable team load?</div>
+          </div>
+        </div>
+        <div class="analytics-spotlight-grid">
+          <article class="analytics-spotlight-card">
+            <div class="glance-eyebrow">Utilization</div>
+            <div class="glance-title">{{ '%.1f'|format(snapshot.utilization * 100) }}%</div>
+            <div class="analytics-mini-meta">{{ '%.2f'|format(snapshot.metrics.billable_hours) }} billable hours against a {{ '%.0f'|format(available_hours_per_month) }} hour operating baseline.</div>
+          </article>
+          <article class="analytics-spotlight-card">
+            <div class="glance-eyebrow">Realization</div>
+            <div class="glance-title">{{ '%.1f'|format(snapshot.realization * 100) }}%</div>
+            <div class="analytics-mini-meta">R {{ '{:,.2f}'.format(snapshot.metrics.collected) }} collected from R {{ '{:,.2f}'.format(snapshot.metrics.billed) }} billed.</div>
+          </article>
+          <article class="analytics-spotlight-card">
+            <div class="glance-eyebrow">Effective Hourly Rate</div>
+            <div class="glance-title">R {{ '{:,.2f}'.format(snapshot.effective_hourly_rate) }}</div>
+            <div class="analytics-mini-meta">Commercial yield per billable hour in the current scope.</div>
+          </article>
+          <article class="analytics-spotlight-card">
+            <div class="glance-eyebrow">Signals Surfaced</div>
+            <div class="glance-title">{{ analytics.watchlist|length }}</div>
+            <div class="analytics-mini-meta">Combined revenue, workload, forecast, and burnout alerts requiring operational judgment.</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Intervention Queue</div>
+            <h2 class="panel-title">Where leadership should look first</h2>
+            <div class="panel-summary">The lists below rank the most actionable pressure points from each analytics lane so you can pivot directly into the underlying work.</div>
+          </div>
+        </div>
+        <div class="analytics-spotlight-grid">
+          <article class="analytics-spotlight-card">
+            <div class="glance-eyebrow">Workload Pressure</div>
+            <div class="glance-title">Capacity pressure</div>
+            <div class="analytics-list mt-2">
+              {% for row in workload_rows[:5] %}
+                <div class="analytics-data-row">
+                  <div class="analytics-row-head">
+                    <div>
+                      <div class="glance-title">{{ row.user.full_name }}</div>
+                      <div class="analytics-data-meta">{{ role_display_name(row.user.role) }}</div>
+                    </div>
+                    <span class="badge status-badge tone-{{ row.tone }}">{{ row.pressure_label }}</span>
+                  </div>
+                  <div class="analytics-mini-meta">{{ row.open_tasks }} open task(s) • {{ '%.2f'|format(row.hours_7d) }} hours in the last 7 days</div>
+                </div>
+              {% else %}
+                <div class="section-note">No workload signals are available yet.</div>
+              {% endfor %}
+            </div>
+          </article>
+          <article class="analytics-spotlight-card">
+            <div class="glance-eyebrow">Profitability Leakage</div>
+            <div class="glance-title">Collection gap matters</div>
+            <div class="analytics-list mt-2">
+              {% for row in profitability_rows[:5] %}
+                <div class="analytics-data-row">
+                  <div class="analytics-row-head">
+                    <div>
+                      <div class="glance-title">{{ row.matter.matter_no }}</div>
+                      <div class="analytics-data-meta">{{ row.matter.title }}</div>
+                    </div>
+                    <span class="badge status-badge tone-{{ row.tone }}">{{ '%.1f'|format(row.realization * 100) }}%</span>
+                  </div>
+                  <div class="analytics-mini-meta">R {{ '{:,.2f}'.format(row.collection_gap) }} outstanding gap on R {{ '{:,.2f}'.format(row.billed) }} billed.</div>
+                </div>
+              {% else %}
+                <div class="section-note">No profitability rows are available yet.</div>
+              {% endfor %}
+            </div>
+          </article>
+          <article class="analytics-spotlight-card">
+            <div class="glance-eyebrow">Forecast</div>
+            <div class="glance-title">Upcoming pressure</div>
+            <div class="analytics-list mt-2">
+              {% for row in forecast_rows[:5] %}
+                {% set forecast_user = forecast_users_by_id.get(row.user_id) if forecast_users_by_id else None %}
+                <div class="analytics-data-row">
+                  <div class="analytics-row-head">
+                    <div>
+                      <div class="glance-title">{{ forecast_user.full_name if forecast_user else ('User #' ~ row.user_id) }}</div>
+                      <div class="analytics-data-meta">{{ row.as_of_date }}</div>
+                    </div>
+                    <span class="badge status-badge tone-{{ 'warning' if row.predicted_hours >= 40 else 'positive' }}">{{ '%.2f'|format(row.predicted_hours) }}h</span>
+                  </div>
+                  <div class="analytics-mini-meta">Confidence {{ '%.2f'|format(row.confidence or 0) }}.</div>
+                </div>
+              {% else %}
+                <div class="section-note">No workload forecasts have been generated yet.</div>
+              {% endfor %}
+            </div>
+          </article>
+          <article class="analytics-spotlight-card">
+            <div class="glance-eyebrow">Burnout</div>
+            <div class="glance-title">Wellbeing risk</div>
+            <div class="analytics-list mt-2">
+              {% for row in burnout_rows[:5] %}
+                {% set burnout_user = burnout_users_by_id.get(row.user_id) if burnout_users_by_id else None %}
+                <div class="analytics-data-row">
+                  <div class="analytics-row-head">
+                    <div>
+                      <div class="glance-title">{{ burnout_user.full_name if burnout_user else ('User #' ~ row.user_id) }}</div>
+                      <div class="analytics-data-meta">{{ row.as_of_date }}</div>
+                    </div>
+                    <span class="badge status-badge tone-{{ 'danger' if row.score >= 0.7 else 'warning' if row.score >= 0.5 else 'positive' }}">{{ '%.2f'|format(row.score) }}</span>
+                  </div>
+                  <div class="analytics-mini-meta">{{ row.reason or 'No reason captured.' }}</div>
+                </div>
+              {% else %}
+                <div class="section-note">No burnout signals are available yet.</div>
+              {% endfor %}
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      {% include "analytics/_rail.html" %}
+    </div>
+  </div>
+</div>
+{% endblock %}

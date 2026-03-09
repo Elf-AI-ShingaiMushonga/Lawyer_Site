@@ -545,27 +545,54 @@
   }
 </style>
 
-{% set portal_count = priority_inbox.portal_response_watchlist|length %}
-{% set followup_count = priority_inbox.crm_followup_watchlist|length %}
-{% set billing_count = priority_inbox.unbilled_time_watchlist|length %}
+{% set stats = stats or {} %}
+{% set my_tasks = my_tasks or [] %}
+{% set task_matter_map = task_matter_map or {} %}
+{% set legal_desk = legal_desk or [] %}
+{% set workspace_quick_actions = workspace_quick_actions or [] %}
+{% set workspace_mode_choices = workspace_mode_choices or [] %}
+{% set at_risk_matters = at_risk_matters or [] %}
+{% set workspace_mode_meta = workspace_mode_meta or {'label': 'Workspace', 'summary': 'Choose a workspace mode to tailor quick actions.'} %}
+{% set priority_inbox = priority_inbox or {} %}
+{% set priority_portal_watchlist = priority_inbox.get('portal_response_watchlist', []) %}
+{% set priority_followup_watchlist = priority_inbox.get('crm_followup_watchlist', []) %}
+{% set priority_billing_watchlist = priority_inbox.get('unbilled_time_watchlist', []) %}
+{% set priority_total_actions = priority_inbox.get('total_actions', 0) %}
+{% set priority_portal_sla = priority_inbox.get('portal_response_sla_hours', 0) %}
+{% set priority_followup_horizon = priority_inbox.get('followup_horizon_hours', 0) %}
+{% set priority_billing_sla = priority_inbox.get('billing_capture_sla_hours', 0) %}
+{% set priority_unbilled_hours = priority_inbox.get('unbilled_total_hours', 0) %}
+{% set today_briefing = today_briefing or {} %}
+{% set briefing_headline = today_briefing.get('headline') or "Your workday is organized." %}
+{% set briefing_summary = today_briefing.get('summary') or "Use the command center below to pick the next high-value move." %}
+{% set briefing_focus_matter = today_briefing.get('focus_matter') %}
+{% set briefing_cards = today_briefing.get('cards', []) %}
+{% set portal_count = priority_portal_watchlist|length %}
+{% set followup_count = priority_followup_watchlist|length %}
+{% set billing_count = priority_billing_watchlist|length %}
+{% set stats_matter_count = stats.get('matter_count', 0) %}
+{% set stats_assigned_open_tasks = stats.get('assigned_open_tasks', 0) %}
+{% set stats_overdue_tasks = stats.get('overdue_tasks', 0) %}
+{% set stats_due_this_week = stats.get('due_this_week', 0) %}
+{% set stats_urgent_unassigned = stats.get('urgent_unassigned', 0) %}
 
 <div class="page-shell">
   <section class="page-hero">
     <div class="page-hero-top">
       <div class="page-hero-main">
         <div class="page-hero-kicker">Personal Daily Briefing</div>
-        <h1 class="page-hero-title">{{ today_briefing.headline }}</h1>
-        <div class="page-hero-summary">{{ today_briefing.summary }}</div>
+        <h1 class="page-hero-title">{{ briefing_headline }}</h1>
+        <div class="page-hero-summary">{{ briefing_summary }}</div>
         <div class="page-hero-meta">
-          <span class="tag-chip">{{ priority_inbox.total_actions }} inbox action(s)</span>
-          <span class="tag-chip">{{ stats.assigned_open_tasks }} open task(s)</span>
-          <span class="tag-chip">{{ stats.due_this_week }} due this week</span>
-          {% if today_briefing.focus_matter %}<span class="tag-chip">Focus {{ today_briefing.focus_matter.matter_no }}</span>{% endif %}
+          <span class="tag-chip">{{ priority_total_actions }} inbox action(s)</span>
+          <span class="tag-chip">{{ stats_assigned_open_tasks }} open task(s)</span>
+          <span class="tag-chip">{{ stats_due_this_week }} due this week</span>
+          {% if briefing_focus_matter %}<span class="tag-chip">Focus {{ briefing_focus_matter.matter_no }}</span>{% endif %}
         </div>
       </div>
       <div class="page-hero-actions">
-        {% if today_briefing.focus_matter %}
-          <a class="btn btn-sm btn-light" href="{{ url_for('matter_workspace', matter_id=today_briefing.focus_matter.id) }}">Focus {{ today_briefing.focus_matter.matter_no }}</a>
+        {% if briefing_focus_matter %}
+          <a class="btn btn-sm btn-light" href="{{ url_for('matter_workspace', matter_id=briefing_focus_matter.id) }}">Focus {{ briefing_focus_matter.matter_no }}</a>
         {% endif %}
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_create') }}">Open New Matter</a>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('search') }}">Global Search</a>
@@ -577,43 +604,45 @@
     <div class="page-stat-grid">
       <div class="page-stat-card">
         <div class="page-stat-label">Accessible Matters</div>
-        <div class="page-stat-value">{{ stats.matter_count }}</div>
+        <div class="page-stat-value">{{ stats_matter_count }}</div>
         <div class="page-stat-meta">Files visible in your current scope.</div>
       </div>
       <div class="page-stat-card">
         <div class="page-stat-label">My Open Tasks</div>
-        <div class="page-stat-value">{{ stats.assigned_open_tasks }}</div>
+        <div class="page-stat-value">{{ stats_assigned_open_tasks }}</div>
         <div class="page-stat-meta">Active work assigned to you.</div>
       </div>
       <div class="page-stat-card">
         <div class="page-stat-label">Overdue Tasks</div>
-        <div class="page-stat-value">{{ stats.overdue_tasks }}</div>
+        <div class="page-stat-value">{{ stats_overdue_tasks }}</div>
         <div class="page-stat-meta">Tasks already past due.</div>
       </div>
       <div class="page-stat-card">
         <div class="page-stat-label">Due This Week</div>
-        <div class="page-stat-value">{{ stats.due_this_week }}</div>
+        <div class="page-stat-value">{{ stats_due_this_week }}</div>
         <div class="page-stat-meta">Upcoming work across your scope.</div>
       </div>
       <div class="page-stat-card">
         <div class="page-stat-label">Urgent Unassigned</div>
-        <div class="page-stat-value">{{ stats.urgent_unassigned }}</div>
+        <div class="page-stat-value">{{ stats_urgent_unassigned }}</div>
         <div class="page-stat-meta">Items needing ownership decisions.</div>
       </div>
       <div class="page-stat-card">
         <div class="page-stat-label">Priority Inbox</div>
-        <div class="page-stat-value">{{ priority_inbox.total_actions }}</div>
+        <div class="page-stat-value">{{ priority_total_actions }}</div>
         <div class="page-stat-meta">Client, intake, and billing pressure.</div>
       </div>
     </div>
     <div class="action-grid dashboard-briefing-grid">
-      {% for card in today_briefing.cards %}
+      {% for card in briefing_cards %}
         <a class="action-card {{ 'is-primary' if card.emphasis == 'strong' else '' }}" href="{{ card.href }}">
           {% if card.badge %}<span class="dashboard-badge">{{ card.badge }}</span>{% endif %}
           <span class="action-card-kicker">Briefing Action</span>
           <span class="action-card-title">{{ card.title }}</span>
           <span class="action-card-summary">{{ card.summary }}</span>
         </a>
+      {% else %}
+        <div class="section-note">No briefing actions are available yet. Use the priority inbox and legal desk below to pick the next step.</div>
       {% endfor %}
     </div>
   </section>
@@ -627,18 +656,18 @@
             <h2 class="panel-title">Inbox and work queue pressure</h2>
             <div class="panel-summary">Focus by issue type and clear high-impact actions before they turn into client delay, intake loss, or billing leakage.</div>
           </div>
-          <span class="badge status-badge status-critical">{{ priority_inbox.total_actions }}</span>
+          <span class="badge status-badge status-critical">{{ priority_total_actions }}</span>
         </div>
         <div class="priority-inbox-layout">
           <aside class="priority-inbox-sidebar">
             <div>
               <div class="priority-sidebar-label">Inbox Folders</div>
-              <div class="priority-sidebar-total">{{ priority_inbox.total_actions }} actionable items</div>
+              <div class="priority-sidebar-total">{{ priority_total_actions }} actionable items</div>
             </div>
             <div class="priority-folder-list" role="group" aria-label="Priority issue filter">
               <button class="priority-folder-btn is-active" type="button" data-priority-toggle="all" aria-pressed="true">
                 <span>All Priority</span>
-                <span class="priority-folder-count">{{ priority_inbox.total_actions }}</span>
+                <span class="priority-folder-count">{{ priority_total_actions }}</span>
               </button>
               <button class="priority-folder-btn" type="button" data-priority-toggle="client" aria-pressed="false">
                 <span>Client Response</span>
@@ -654,10 +683,10 @@
               </button>
             </div>
             <div class="priority-sla-list">
-              <div class="priority-sla-item">Client response SLA: {{ priority_inbox.portal_response_sla_hours }}h</div>
-              <div class="priority-sla-item">Follow-up horizon: {{ priority_inbox.followup_horizon_hours }}h</div>
-              <div class="priority-sla-item">Billing capture SLA: {{ priority_inbox.billing_capture_sla_hours }}h</div>
-              <div class="priority-sla-item">Unbilled hours: {{ priority_inbox.unbilled_total_hours }}</div>
+              <div class="priority-sla-item">Client response SLA: {{ priority_portal_sla }}h</div>
+              <div class="priority-sla-item">Follow-up horizon: {{ priority_followup_horizon }}h</div>
+              <div class="priority-sla-item">Billing capture SLA: {{ priority_billing_sla }}h</div>
+              <div class="priority-sla-item">Unbilled hours: {{ priority_unbilled_hours }}</div>
             </div>
           </aside>
           <div class="priority-pane-stack">
@@ -670,8 +699,8 @@
                 <span class="badge status-badge status-critical">{{ portal_count }}</span>
               </div>
               <div class="priority-pane-body">
-                {% if priority_inbox.portal_response_watchlist %}
-                  {% for row in priority_inbox.portal_response_watchlist %}
+                {% if priority_portal_watchlist %}
+                  {% for row in priority_portal_watchlist %}
                     <article class="priority-message">
                       <div class="priority-message-main">
                         <div class="priority-message-top">
@@ -701,8 +730,8 @@
                 <span class="badge status-badge status-on-hold">{{ followup_count }}</span>
               </div>
               <div class="priority-pane-body">
-                {% if priority_inbox.crm_followup_watchlist %}
-                  {% for row in priority_inbox.crm_followup_watchlist %}
+                {% if priority_followup_watchlist %}
+                  {% for row in priority_followup_watchlist %}
                     <article class="priority-message">
                       <div class="priority-message-main">
                         <div class="priority-message-top">
@@ -743,8 +772,8 @@
                 <span class="badge status-badge status-on-hold">{{ billing_count }}</span>
               </div>
               <div class="priority-pane-body">
-                {% if priority_inbox.unbilled_time_watchlist %}
-                  {% for row in priority_inbox.unbilled_time_watchlist %}
+                {% if priority_billing_watchlist %}
+                  {% for row in priority_billing_watchlist %}
                     <article class="priority-message">
                       <div class="priority-message-main">
                         <div class="priority-message-top">
@@ -922,22 +951,22 @@
           <div class="dashboard-snapshot-grid">
             <a class="dashboard-snapshot-item" href="{{ url_for('matters') }}">
               <div class="dashboard-snapshot-label">Accessible Matters</div>
-              <div class="dashboard-snapshot-value">{{ stats.matter_count }}</div>
+              <div class="dashboard-snapshot-value">{{ stats_matter_count }}</div>
               <div class="dashboard-snapshot-meta">Open the matter directory.</div>
             </a>
             <a class="dashboard-snapshot-item" href="{{ url_for('calendar_my', filter='overdue') }}">
               <div class="dashboard-snapshot-label">Overdue Tasks</div>
-              <div class="dashboard-snapshot-value">{{ stats.overdue_tasks }}</div>
+              <div class="dashboard-snapshot-value">{{ stats_overdue_tasks }}</div>
               <div class="dashboard-snapshot-meta">Jump into the overdue calendar view.</div>
             </a>
             <a class="dashboard-snapshot-item" href="{{ url_for('calendar_my', filter='next7') }}">
               <div class="dashboard-snapshot-label">Due This Week</div>
-              <div class="dashboard-snapshot-value">{{ stats.due_this_week }}</div>
+              <div class="dashboard-snapshot-value">{{ stats_due_this_week }}</div>
               <div class="dashboard-snapshot-meta">Open the next 7 days calendar.</div>
             </a>
             <a class="dashboard-snapshot-item" href="{{ url_for('admin_automation') if is_admin_role else url_for('matters') }}">
               <div class="dashboard-snapshot-label">Urgent Unassigned</div>
-              <div class="dashboard-snapshot-value">{{ stats.urgent_unassigned }}</div>
+              <div class="dashboard-snapshot-value">{{ stats_urgent_unassigned }}</div>
               <div class="dashboard-snapshot-meta">{{ 'Open Automation Studio' if is_admin_role else 'Open matter directory' }}.</div>
             </a>
           </div>

@@ -1,0 +1,54 @@
+{% set analytics = analytics or {} %}
+{% set analytics_watchlist = analytics.get('watchlist', []) %}
+{% set analytics_actions = analytics.get('report_actions', []) %}
+<div class="sticky-stack">
+  <section class="panel-card is-accent">
+    <div class="panel-header">
+      <div class="panel-header-main">
+        <div class="panel-kicker">Watchlist</div>
+        <h2 class="panel-title">Signals that need action</h2>
+        <div class="panel-summary">These are the operational consequences implied by the numbers on this page.</div>
+      </div>
+    </div>
+    <div class="analytics-watchlist">
+      {% for item in analytics_watchlist %}
+        <article class="analytics-watch-item">
+          <div class="analytics-watch-head">
+            <div>
+              <div class="glance-eyebrow">{{ item.badge }}</div>
+              <div class="glance-title">{{ item.title }}</div>
+            </div>
+            <span class="badge status-badge tone-{{ item.tone|default('neutral') }}">{{ item.badge }}</span>
+          </div>
+          <div class="analytics-mini-meta">{{ item.summary }}</div>
+          <div class="table-actions">
+            <a class="btn btn-sm btn-outline-light" href="{{ item.href }}">{{ item.button_label }}</a>
+          </div>
+        </article>
+      {% else %}
+        <div class="section-note">No urgent analytics watch items are currently surfaced.</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel-card">
+    <div class="panel-header">
+      <div class="panel-header-main">
+        <div class="panel-kicker">Action Path</div>
+        <h2 class="panel-title">Next operational moves</h2>
+      </div>
+    </div>
+    <div class="glance-list">
+      {% for action in analytics_actions %}
+        <div class="glance-item">
+          <div class="glance-eyebrow">{{ action.badge }}</div>
+          <div class="glance-title">{{ action.title }}</div>
+          <div class="glance-meta">{{ action.summary }}</div>
+          <div class="table-actions mt-2">
+            <a class="btn btn-sm btn-outline-light" href="{{ action.href }}">Open</a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>

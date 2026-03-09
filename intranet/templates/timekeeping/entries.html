@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
+{% set entries = entries or [] %}
+{% set validations = validations or [] %}
+{% set matters = matters or [] %}
+{% set matter_lookup = matter_lookup or {} %}
+{% set time_code_assist = time_code_assist or {'global': {'task_codes': [], 'activity_codes': [], 'pairs': []}, 'by_matter': {}} %}
+{% set has_accessible_matters = matters|length > 0 %}
 {% set approved_count = entries | selectattr('status', 'equalto', 'approved') | list | length %}
 {% set review_count = entries | selectattr('status', 'equalto', 'needs_review') | list | length %}
 <style>
@@ -40,6 +46,11 @@
         <div class="page-hero-kicker">Time Entries</div>
         <h1 class="page-hero-title">Time Capture Desk</h1>
         <div class="page-hero-summary">Capture work logs with narrative and coding so entries are ready for review, billing, and audit.</div>
+        <div class="page-hero-meta">
+          <span class="tag-chip">{{ matters|length }} accessible matter(s)</span>
+          <span class="tag-chip">{{ entries|length }} recent entry row(s)</span>
+          {% if not has_accessible_matters %}<span class="tag-chip">No matters available for capture</span>{% endif %}
+        </div>
       </div>
       <div class="page-hero-actions">
         <a class="btn btn-sm btn-light" href="{{ url_for('time_timers') }}">Start/Manage Timers</a>
@@ -102,97 +113,102 @@
             <div class="panel-summary">Use one form for matter, task linkage, timings, coding, and narrative. The AI narrative assistant and recent code pairs remain available here.</div>
           </div>
         </div>
-        <form
-          method="post"
-          class="time-capture-grid"
-          data-time-prompt-form
-          data-time-prompt-endpoint="{{ url_for('time_prompts') }}"
-          data-time-code-assist="{{ time_code_assist | tojson | forceescape }}"
-          data-time-narrative-widget
-          data-time-narrative-endpoint="{{ url_for('time_ai_narrative') }}"
-          data-time-narrative-timeout-ms="90000"
-        >
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="form-section">
-            <div class="field-grid columns-4">
-              <div>
-                <label class="form-label" for="entry-matter-id">Matter</label>
-                <select class="form-select" id="entry-matter-id" name="matter_id" required>
-                  {% for matter in matters %}
-                    <option value="{{ matter.id }}" {% if prefill_matter_id and matter.id == prefill_matter_id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div>
-                <label class="form-label" for="entry-task-id">Task ID</label>
-                <input class="form-control" id="entry-task-id" name="task_id" type="number" min="1" placeholder="Optional" value="{{ prefill_task_id or '' }}">
-              </div>
-              <div>
-                <label class="form-label" for="entry-start-at">Start At</label>
-                <input class="form-control" id="entry-start-at" name="start_at" type="datetime-local" value="{{ prefill_start_at }}" required>
-              </div>
-              <div>
-                <label class="form-label" for="entry-end-at">End At</label>
-                <input class="form-control" id="entry-end-at" name="end_at" type="datetime-local" value="{{ prefill_end_at }}" required>
-              </div>
-            </div>
-          </div>
-          <div class="form-section">
-            <div class="field-grid columns-3">
-              <div>
-                <label class="form-label" for="entry-task-code">Task Code</label>
-                <input
-                  class="form-control"
-                  id="entry-task-code"
-                  name="task_code"
-                  list="entry-task-code-options"
-                  placeholder="Task code"
-                  value="{{ prefill_task_code or '' }}"
-                  autocomplete="off"
-                >
-                <datalist id="entry-task-code-options"></datalist>
-              </div>
-              <div>
-                <label class="form-label" for="entry-activity-code">Activity Code</label>
-                <input
-                  class="form-control"
-                  id="entry-activity-code"
-                  name="activity_code"
-                  list="entry-activity-code-options"
-                  placeholder="Activity code"
-                  value="{{ prefill_activity_code or '' }}"
-                  autocomplete="off"
-                >
-                <datalist id="entry-activity-code-options"></datalist>
-              </div>
-              <div>
-                <label class="form-label" for="entry-code-pair">Recent Code Pair</label>
-                <select class="form-select" id="entry-code-pair" data-time-code-pair>
-                  <option value="">Select recent pair...</option>
-                </select>
+        {% if has_accessible_matters %}
+          <form
+            method="post"
+            class="time-capture-grid"
+            data-time-prompt-form
+            data-time-prompt-endpoint="{{ url_for('time_prompts') }}"
+            data-time-code-assist="{{ time_code_assist | tojson | forceescape }}"
+            data-time-narrative-widget
+            data-time-narrative-endpoint="{{ url_for('time_ai_narrative') }}"
+            data-time-narrative-timeout-ms="90000"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-section">
+              <div class="field-grid columns-4">
+                <div>
+                  <label class="form-label" for="entry-matter-id">Matter</label>
+                  <select class="form-select" id="entry-matter-id" name="matter_id" required>
+                    <option value="" {% if not prefill_matter_id %}selected{% endif %}>Choose matter</option>
+                    {% for matter in matters %}
+                      <option value="{{ matter.id }}" {% if prefill_matter_id and matter.id == prefill_matter_id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label" for="entry-task-id">Task ID</label>
+                  <input class="form-control" id="entry-task-id" name="task_id" type="number" min="1" placeholder="Optional" value="{{ prefill_task_id or '' }}">
+                </div>
+                <div>
+                  <label class="form-label" for="entry-start-at">Start At</label>
+                  <input class="form-control" id="entry-start-at" name="start_at" type="datetime-local" value="{{ prefill_start_at }}" required>
+                </div>
+                <div>
+                  <label class="form-label" for="entry-end-at">End At</label>
+                  <input class="form-control" id="entry-end-at" name="end_at" type="datetime-local" value="{{ prefill_end_at }}" required>
+                </div>
               </div>
             </div>
-            <div class="form-check mt-3">
-              <input class="form-check-input" id="entry-billable" type="checkbox" name="is_billable" value="1" {% if prefill_is_billable %}checked{% endif %}>
-              <label class="form-check-label" for="entry-billable">Billable</label>
+            <div class="form-section">
+              <div class="field-grid columns-3">
+                <div>
+                  <label class="form-label" for="entry-task-code">Task Code</label>
+                  <input
+                    class="form-control"
+                    id="entry-task-code"
+                    name="task_code"
+                    list="entry-task-code-options"
+                    placeholder="Task code"
+                    value="{{ prefill_task_code or '' }}"
+                    autocomplete="off"
+                  >
+                  <datalist id="entry-task-code-options"></datalist>
+                </div>
+                <div>
+                  <label class="form-label" for="entry-activity-code">Activity Code</label>
+                  <input
+                    class="form-control"
+                    id="entry-activity-code"
+                    name="activity_code"
+                    list="entry-activity-code-options"
+                    placeholder="Activity code"
+                    value="{{ prefill_activity_code or '' }}"
+                    autocomplete="off"
+                  >
+                  <datalist id="entry-activity-code-options"></datalist>
+                </div>
+                <div>
+                  <label class="form-label" for="entry-code-pair">Recent Code Pair</label>
+                  <select class="form-select" id="entry-code-pair" data-time-code-pair>
+                    <option value="">Select recent pair...</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-check mt-3">
+                <input class="form-check-input" id="entry-billable" type="checkbox" name="is_billable" value="1" {% if prefill_is_billable %}checked{% endif %}>
+                <label class="form-check-label" for="entry-billable">Billable</label>
+              </div>
             </div>
-          </div>
-          <div class="form-section">
-            <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
-              <label class="form-label mb-0" for="entry-narrative">Narrative</label>
-              <button class="btn btn-sm btn-outline-light" type="button" data-ai-time-narrative-generate>Draft Narrative with AI</button>
+            <div class="form-section">
+              <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                <label class="form-label mb-0" for="entry-narrative">Narrative</label>
+                <button class="btn btn-sm btn-outline-light" type="button" data-ai-time-narrative-generate>Draft Narrative with AI</button>
+              </div>
+              <textarea class="form-control mt-2" id="entry-narrative" name="narrative" rows="4" placeholder="Describe work completed">{{ prefill_narrative or '' }}</textarea>
+              <div class="form-help mt-1" data-ai-time-narrative-status></div>
             </div>
-            <textarea class="form-control mt-2" id="entry-narrative" name="narrative" rows="4" placeholder="Describe work completed">{{ prefill_narrative or '' }}</textarea>
-            <div class="form-help mt-1" data-ai-time-narrative-status></div>
-          </div>
-          <div class="time-prompts" data-time-prompts hidden>
-            <div class="time-prompts-title">Real-time fee capture prompts</div>
-            <ul class="time-prompts-list mb-0" data-time-prompts-list></ul>
-          </div>
-          <div class="d-grid d-md-flex justify-content-md-end">
-            <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Entry</button>
-          </div>
-        </form>
+            <div class="time-prompts" data-time-prompts hidden>
+              <div class="time-prompts-title">Real-time fee capture prompts</div>
+              <ul class="time-prompts-list mb-0" data-time-prompts-list></ul>
+            </div>
+            <div class="d-grid d-md-flex justify-content-md-end">
+              <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Entry</button>
+            </div>
+          </form>
+        {% else %}
+          <div class="section-note">No accessible matters are available for time capture yet. Join a matter or create one first, then return here to log time.</div>
+        {% endif %}
       </section>
 
       <section id="time-entry-ledger" class="panel-card time-entry-ledger">

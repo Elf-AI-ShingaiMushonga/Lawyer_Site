@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
+{% set docs = docs or [] %}
+{% set matter_magic = matter_magic or {} %}
+{% set matter_magic_status_line = matter_magic.get('status_line') or "Use matter-aware quick starts to classify the next document." %}
+{% set matter_magic_brief_text = matter_magic.get('brief_text') or "No matter brief is available yet." %}
+{% set matter_magic_health_tone = matter_magic.get('health_tone') or "neutral" %}
+{% set dms_quick_starts = dms_quick_starts or [] %}
 <style>
   .matter-dms-filter-actions {
     display: flex;
@@ -355,7 +361,7 @@
 
     <div class="workbench-rail">
       <div class="sticky-stack">
-        <section id="dms-quick-starts-panel" class="panel-card dms-magic-card tone-{{ matter_magic.health_tone }}">
+        <section id="dms-quick-starts-panel" class="panel-card dms-magic-card tone-{{ matter_magic_health_tone }}">
           <div class="panel-header">
             <div class="panel-header-main">
               <div class="panel-kicker">DMS Quick Starts</div>
@@ -363,7 +369,7 @@
               <div class="panel-summary">Matter-aware shortcuts that prefill document metadata so the user spends less time classifying files.</div>
             </div>
           </div>
-          <div class="dms-magic-status">{{ matter_magic.status_line }}</div>
+          <div class="dms-magic-status">{{ matter_magic_status_line }}</div>
           <div class="dms-quick-start-grid mt-2">
             {% for preset in dms_quick_starts %}
               <button
@@ -382,11 +388,13 @@
                 </div>
                 <div class="dms-quick-start-summary">{{ preset.summary }}</div>
               </button>
+            {% else %}
+              <div class="empty-state">No quick-start presets are available for this matter yet. You can still upload manually below.</div>
             {% endfor %}
           </div>
           <div class="panel-body mt-2">
             <label class="form-label" for="dms-matter-brief">Matter Brief</label>
-            <textarea class="form-control" id="dms-matter-brief" rows="8" readonly>{{ matter_magic.brief_text }}</textarea>
+            <textarea class="form-control" id="dms-matter-brief" rows="8" readonly>{{ matter_magic_brief_text }}</textarea>
             <div class="d-flex gap-2 align-items-center">
               <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="dms-matter-brief" data-copy-success-text="Copied">Copy Brief</button>
               <span class="form-help" data-copy-feedback-for="dms-matter-brief"></span>

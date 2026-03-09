@@ -369,7 +369,7 @@ def register_auth_routes(app):
         at_risk_candidates.sort(key=lambda row: row[0], reverse=True)
         at_risk_matters = [payload for _, payload in at_risk_candidates[:8]]
 
-        priority_inbox = build_priority_inbox(current_user, scoped_matter_ids=scoped_ids)
+        priority_inbox = build_priority_inbox(current_user, scoped_matter_ids=scoped_ids) or {}
         focus_candidates: list[Matter] = []
         focus_candidates.extend(pinned_matters)
         focus_candidates.extend(item["matter"] for item in recent_views)
@@ -407,14 +407,14 @@ def register_auth_routes(app):
             "draft_invoices": invoice_scope.filter(Invoice.status == "draft").count(),
             "pinned_matters": len(pinned_matters),
             "recent_views": len(recent_views),
-            "priority_actions": priority_inbox["total_actions"],
+            "priority_actions": int(priority_inbox.get("total_actions", 0) or 0),
         }
         today_briefing = build_today_briefing(
             active_matter=active_workspace_matter,
             legal_desk=legal_desk,
             stats=stats,
             priority_inbox=priority_inbox,
-        )
+        ) or {}
 
         return page(
             "Dashboard",

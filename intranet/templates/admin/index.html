@@ -1,61 +1,349 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3">
-  <div class="toolbar-row">
-    <div>
-      <h3 class="section-title">Admin Control Center</h3>
-      <div class="page-intro mt-1">User provisioning, governance, templates, and operational controls.</div>
-    </div>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
-  </div>
+{% set console = console or {} %}
+{% set summary = console.get('summary', {}) %}
+{% set quick_actions = console.get('quick_actions', []) %}
+{% set watchlist = console.get('watchlist', []) %}
+{% set setup_checks = console.get('setup_checks', []) %}
+{% set launchpads = console.get('launchpads', []) %}
+{% set recent_logs = console.get('recent_logs', []) %}
+{% set actors_by_id = console.get('actors_by_id', {}) %}
+<style>
+  .admin-watchlist {
+    display: grid;
+    gap: 10px;
+  }
 
+  .admin-watch-item {
+    display: grid;
+    gap: 10px;
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 14px;
+    padding: 12px 13px;
+    background: rgba(255, 255, 255, 0.88);
+  }
 
-  <div class="row g-3 mt-1">
-    <div class="col-lg-4">
-      <div class="form-section h-100">
-        <div class="form-label">Identity and Access</div>
-        <div class="table-actions mt-2">
-          <a class="btn btn-sm btn-light" href="{{ url_for('admin_users') }}">Internal Users</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_portal_users') }}">Portal Users</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_sso_apps') }}">SSO Apps</a>
+  .admin-watch-head,
+  .admin-log-head,
+  .analytics-row-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .admin-check-grid,
+  .admin-launchpad-grid,
+  .analytics-spotlight-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+
+  .admin-check-card,
+  .admin-launchpad,
+  .analytics-spotlight-card {
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 16px;
+    padding: 13px;
+    background: rgba(255, 255, 255, 0.9);
+    display: grid;
+    gap: 8px;
+  }
+
+  .admin-check-card.is-missing {
+    border-color: rgba(225, 6, 0, 0.34);
+    background: rgba(255, 245, 245, 0.96);
+  }
+
+  .admin-check-status,
+  .analytics-mini-stat {
+    font-size: 12px;
+    color: #7b6363;
+    line-height: 1.45;
+  }
+
+  .admin-log-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .admin-log-row {
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 14px;
+    padding: 11px 12px;
+    background: rgba(255, 255, 255, 0.88);
+  }
+
+  .admin-log-meta,
+  .admin-watch-summary,
+  .analytics-mini-meta {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #6f5f5f;
+  }
+
+  .admin-rail-stat {
+    display: grid;
+    gap: 8px;
+  }
+</style>
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Admin Console</div>
+        <h1 class="page-hero-title">Admin Command Center</h1>
+        <div class="page-hero-summary">Operate identity, governance, templates, and control posture from one screen. The console now surfaces gaps, not just links.</div>
+        <div class="page-hero-meta">
+          <span class="tag-chip">{{ summary.get('configured_checks', 0) }}/{{ summary.get('setup_check_total', 0) }} setup lanes configured</span>
+          <span class="tag-chip">{{ summary.get('open_incidents', 0) }} open incident(s)</span>
+          <span class="tag-chip">{{ summary.get('pending_trust_approvals', 0) }} trust approval(s)</span>
+          <span class="tag-chip">{{ summary.get('active_legal_holds', 0) }} legal hold(s)</span>
         </div>
       </div>
-    </div>
-    <div class="col-lg-4">
-      <div class="form-section h-100">
-        <div class="form-label">Content and Compliance</div>
-        <div class="table-actions mt-2">
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_announcements') }}">Announcements</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_audit') }}">Audit Log</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_incidents') }}">Incidents</a>
-        </div>
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-light" href="{{ url_for('admin_users') }}">Manage Users</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_automation') }}">Automation Studio</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_audit') }}">Audit Log</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('ops_backup_status') }}">Ops Controls</a>
       </div>
     </div>
-    <div class="col-lg-4">
-      <div class="form-section h-100">
-        <div class="form-label">Operations</div>
-        <div class="table-actions mt-2">
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('ops_backup_status') }}">Ops Controls</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_rules_deadlines') }}">Deadline Rules</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_rules_retention') }}">Retention Rules</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_rules_trust') }}">Trust Rules</a>
-        </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Internal Users</div>
+        <div class="page-stat-value">{{ summary.get('total_users', 0) }}</div>
+        <div class="page-stat-meta">{{ summary.get('active_users', 0) }} active internal accounts.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">MFA Coverage</div>
+        <div class="page-stat-value">{{ summary.get('mfa_coverage_pct', 0) }}%</div>
+        <div class="page-stat-meta">{{ summary.get('mfa_enabled_users', 0) }} active users enrolled.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Portal Users</div>
+        <div class="page-stat-value">{{ summary.get('portal_users', 0) }}</div>
+        <div class="page-stat-meta">{{ summary.get('active_portal_users', 0) }} active client-facing identities.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Open Incidents</div>
+        <div class="page-stat-value">{{ summary.get('open_incidents', 0) }}</div>
+        <div class="page-stat-meta">Governance or trust issues still open.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Trust Approvals</div>
+        <div class="page-stat-value">{{ summary.get('pending_trust_approvals', 0) }}</div>
+        <div class="page-stat-meta">Pending disbursement or control decisions.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Template Coverage</div>
+        <div class="page-stat-value">{{ summary.get('active_template_count', 0) }}</div>
+        <div class="page-stat-meta">Active matter, task, contract, and document templates.</div>
       </div>
     </div>
-  </div>
+    <div class="action-grid">
+      {% for action in quick_actions %}
+        <a class="action-card {{ 'is-primary' if loop.first else '' }}" href="{{ action.href }}">
+          <span class="action-card-kicker">{{ action.badge }}</span>
+          <span class="action-card-title">{{ action.title }}</span>
+          <span class="action-card-summary">{{ action.summary }}</span>
+        </a>
+      {% else %}
+        <div class="section-note">No quick actions are configured.</div>
+      {% endfor %}
+    </div>
+  </section>
 
-  <div class="form-section mt-3">
-    <div class="form-label">Configuration and Templates</div>
-    <div class="table-actions mt-2">
-      <a class="btn btn-sm btn-light" href="{{ url_for('admin_automation') }}">Automation Studio</a>
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_firm') }}">Firm Settings</a>
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_offices') }}">Offices</a>
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_practice_areas') }}">Practice Areas</a>
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_rates') }}">Rates</a>
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_matters') }}">Matter Archetypes</a>
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_contracts') }}">Contract Templates</a>
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_tasks') }}">Task Templates</a>
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_documents') }}">Document Templates</a>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Control Watchlist</div>
+            <h2 class="panel-title">What needs admin attention now</h2>
+            <div class="panel-summary">This list is built from access posture, governance risk, trust workflow, and missing setup so you can clear operational blockers in order.</div>
+          </div>
+          <span class="badge status-badge tone-danger">{{ watchlist|length }} item(s)</span>
+        </div>
+        <div class="admin-watchlist">
+          {% for item in watchlist %}
+            <article class="admin-watch-item">
+              <div class="admin-watch-head">
+                <div>
+                  <div class="glance-eyebrow">{{ item.badge }}</div>
+                  <div class="glance-title">{{ item.title }}</div>
+                </div>
+                <span class="badge status-badge tone-{{ item.tone|default('neutral') }}">{{ item.badge }}</span>
+              </div>
+              <div class="admin-watch-summary">{{ item.summary }}</div>
+              <div class="table-actions">
+                <a class="btn btn-sm btn-outline-light" href="{{ item.href }}">{{ item.button_label }}</a>
+              </div>
+            </article>
+          {% else %}
+            <div class="section-note">No urgent admin gaps are currently surfaced. Use the setup and audit sections below to keep the control surface clean.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Configuration Coverage</div>
+            <h2 class="panel-title">Setup lanes and template readiness</h2>
+            <div class="panel-summary">Each lane below maps directly to a production workflow. Missing entries show where the firm will hit friction or inconsistent behavior.</div>
+          </div>
+          <span class="badge status-badge tone-accent">{{ summary.get('configured_checks', 0) }}/{{ summary.get('setup_check_total', 0) }} ready</span>
+        </div>
+        <div class="admin-check-grid">
+          {% for item in setup_checks %}
+            <article class="admin-check-card {{ 'is-missing' if not item.configured else '' }}">
+              <div class="admin-watch-head">
+                <div>
+                  <div class="glance-eyebrow">{{ item.label }}</div>
+                  <div class="glance-title">{{ item.count }}</div>
+                </div>
+                <span class="badge status-badge tone-{{ item.tone|default('neutral') }}">{{ item.status_label }}</span>
+              </div>
+              <div class="admin-check-status">{{ item.label }} drives related workflows, defaults, and operational shortcuts.</div>
+              <div class="table-actions">
+                <a class="btn btn-sm btn-outline-light" href="{{ item.href }}">{{ item.button_label }}</a>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Launchpads</div>
+            <h2 class="panel-title">Operational admin domains</h2>
+            <div class="panel-summary">Use these grouped launchpads when you already know which domain you are working in and want the shortest path into the relevant tools.</div>
+          </div>
+        </div>
+        <div class="admin-launchpad-grid">
+          {% for launchpad in launchpads %}
+            <article class="admin-launchpad">
+              <div class="glance-eyebrow">Launchpad</div>
+              <div class="glance-title">{{ launchpad.title }}</div>
+              <div class="glance-meta">{{ launchpad.summary }}</div>
+              <div class="table-actions">
+                {% for action in launchpad.actions %}
+                  <a class="btn btn-sm btn-outline-light" href="{{ action.href }}">{{ action.label }}</a>
+                {% endfor %}
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Recent Audit Activity</div>
+            <h2 class="panel-title">Latest sensitive changes</h2>
+            <div class="panel-summary">This makes the audit trail usable without forcing you to jump immediately into the raw log view.</div>
+          </div>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_audit') }}">Open Full Audit Log</a>
+        </div>
+        <div class="admin-log-list">
+          {% for row in recent_logs %}
+            {% set actor = actors_by_id.get(row.actor_user_id) if actors_by_id else None %}
+            <article class="admin-log-row">
+              <div class="admin-log-head">
+                <div>
+                  <div class="glance-eyebrow">{{ row.entity_type or 'System Event' }}</div>
+                  <div class="glance-title">{{ row.action|replace('_', ' ')|title }}</div>
+                </div>
+                <span class="badge status-badge tone-neutral">{{ row.at.strftime('%Y-%m-%d %H:%M') if row.at else '-' }}</span>
+              </div>
+              <div class="admin-log-meta">
+                {% if actor %}{{ actor.full_name }}{% else %}System{% endif %}
+                {% if row.entity_id %} • {{ row.entity_type or 'Entity' }} #{{ row.entity_id }}{% endif %}
+                {% if row.ip %} • {{ row.ip }}{% endif %}
+              </div>
+            </article>
+          {% else %}
+            <div class="section-note">No audit entries are available yet.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card is-accent">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Identity Posture</div>
+              <h2 class="panel-title">Access health snapshot</h2>
+              <div class="panel-summary">Use this to assess whether the identity layer is production-safe before you dive into detailed admin pages.</div>
+            </div>
+          </div>
+          <div class="admin-rail-stat">
+            <div class="glance-item">
+              <div class="glance-eyebrow">Internal Access</div>
+              <div class="glance-title">{{ summary.get('active_users', 0) }} active / {{ summary.get('total_users', 0) }} total</div>
+              <div class="glance-meta">Inactive accounts should reflect deliberate offboarding or dormant provisioning only.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-eyebrow">MFA</div>
+              <div class="glance-title">{{ summary.get('mfa_coverage_pct', 0) }}% coverage</div>
+              <div class="glance-meta">The remaining gap is the fastest route to access-risk reduction.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-eyebrow">Portal Surface</div>
+              <div class="glance-title">{{ summary.get('active_portal_users', 0) }} active portal user(s)</div>
+              <div class="glance-meta">Client-facing identities should be reviewed alongside matter access rules.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Governance Snapshot</div>
+              <h2 class="panel-title">Controls with legal impact</h2>
+              <div class="panel-summary">These are the controls most likely to affect compliance, trust movement, and defensibility.</div>
+            </div>
+          </div>
+          <div class="glance-list">
+            <div class="glance-item">
+              <div class="glance-eyebrow">Trust Workflow</div>
+              <div class="glance-title">{{ summary.get('pending_trust_approvals', 0) }} pending approval(s)</div>
+              <div class="glance-meta">Pending trust requests should not sit longer than the firm’s approval SLA.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-eyebrow">Legal Holds</div>
+              <div class="glance-title">{{ summary.get('active_legal_holds', 0) }} active hold(s)</div>
+              <div class="glance-meta">Active holds require disciplined document handling and archival controls.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-eyebrow">Announcements</div>
+              <div class="glance-title">{{ summary.get('announcement_count', 0) }} published message(s)</div>
+              <div class="glance-meta">Use firm-wide announcements for operational changes that affect legal staff behavior.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Admin Path</div>
+              <h2 class="panel-title">Most-used control surfaces</h2>
+            </div>
+          </div>
+          <div class="table-actions">
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_settings_firm') }}">Firm Settings</a>
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_portal_users') }}">Portal Users</a>
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_rules_deadlines') }}">Deadline Rules</a>
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_rules_retention') }}">Retention Rules</a>
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('trust_incidents') }}">Incident Register</a>
+          </div>
+        </section>
+      </div>
     </div>
   </div>
 </div>

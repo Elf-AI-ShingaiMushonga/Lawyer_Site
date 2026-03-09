@@ -1,5 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
+{% set tasks = tasks or [] %}
+{% set task_assignees_map = task_assignees_map or {} %}
+{% set task_tracker = task_tracker or {} %}
+{% set task_tracker_headline = task_tracker.get('headline') or "No task radar signal is available yet." %}
+{% set task_tracker_status_line = task_tracker.get('status_line') or "Use the task list below to move the matter forward." %}
+{% set task_tracker_spotlight = task_tracker.get('spotlight_tasks', []) %}
+{% set task_tracker_handoff_text = task_tracker.get('handoff_text') or "No handoff brief is available yet." %}
+{% set task_tracker_overdue_count = task_tracker.get('overdue_count', 0) %}
+{% set task_tracker_due_today_count = task_tracker.get('due_today_count', 0) %}
+{% set task_tracker_due_week_count = task_tracker.get('due_week_count', 0) %}
+{% set task_tracker_unassigned_count = task_tracker.get('unassigned_count', 0) %}
 {% set counts = namespace(todo=0, doing=0, done=0) %}
 {% for t in tasks %}
   {% if t.status == "Todo" %}
@@ -78,35 +89,35 @@
   </div>
 
   <div class="card p-3 mt-3 task-radar-card">
-    <div class="toolbar-row">
-      <div>
-        <h4 class="mb-0">Task Radar</h4>
-        <div class="muted small mt-1">{{ task_tracker.headline }}</div>
+      <div class="toolbar-row">
+        <div>
+          <h4 class="mb-0">Task Radar</h4>
+          <div class="muted small mt-1">{{ task_tracker_headline }}</div>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
       </div>
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
-    </div>
-    <div class="task-radar-status">{{ task_tracker.status_line }}</div>
+    <div class="task-radar-status">{{ task_tracker_status_line }}</div>
     <div class="kpi-strip mt-3">
       <div class="kpi-pill">
         <div class="label">Overdue</div>
-        <div class="value">{{ task_tracker.overdue_count }}</div>
+        <div class="value">{{ task_tracker_overdue_count }}</div>
       </div>
       <div class="kpi-pill">
         <div class="label">Due Today</div>
-        <div class="value">{{ task_tracker.due_today_count }}</div>
+        <div class="value">{{ task_tracker_due_today_count }}</div>
       </div>
       <div class="kpi-pill">
         <div class="label">Due This Week</div>
-        <div class="value">{{ task_tracker.due_week_count }}</div>
+        <div class="value">{{ task_tracker_due_week_count }}</div>
       </div>
       <div class="kpi-pill">
         <div class="label">Unassigned</div>
-        <div class="value">{{ task_tracker.unassigned_count }}</div>
+        <div class="value">{{ task_tracker_unassigned_count }}</div>
       </div>
     </div>
-    {% if task_tracker.spotlight_tasks %}
+    {% if task_tracker_spotlight %}
       <div class="task-radar-spotlight">
-        {% for t in task_tracker.spotlight_tasks %}
+        {% for t in task_tracker_spotlight %}
           {% set assignees = task_assignees_map.get(t.id, []) %}
           <article class="task-radar-item">
             <div class="d-flex justify-content-between gap-2 align-items-start">
@@ -139,7 +150,7 @@
     {% endif %}
     <div class="mt-3">
       <label class="form-label" for="task-handoff-brief">Handoff Brief</label>
-      <textarea class="form-control" id="task-handoff-brief" rows="7" readonly>{{ task_tracker.handoff_text }}</textarea>
+      <textarea class="form-control" id="task-handoff-brief" rows="7" readonly>{{ task_tracker_handoff_text }}</textarea>
       <div class="d-flex gap-2 align-items-center mt-2">
         <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="task-handoff-brief" data-copy-success-text="Copied">Copy Handoff</button>
         <span class="form-help" data-copy-feedback-for="task-handoff-brief"></span>

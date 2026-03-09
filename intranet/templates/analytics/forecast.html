@@ -1,34 +1,83 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3">
-  <h3 class="section-title">Workload Forecast</h3>
-  <div class="page-intro mt-1">Predicted hours and confidence levels for upcoming capacity needs.</div>
+{% set ns = namespace(high=0, confidence_total=0.0) %}
+{% for row in rows %}
+  {% if row.predicted_hours >= 40 and (row.confidence or 0) >= 0.6 %}{% set ns.high = ns.high + 1 %}{% endif %}
+  {% set ns.confidence_total = ns.confidence_total + (row.confidence or 0) %}
+{% endfor %}
+<div class="page-shell">
+  {% set report_title = "Workload Forecast" %}
+  {% set report_summary = "Look ahead to where capacity will tighten so leadership can reassign work before deadlines or morale are hit." %}
+  {% include "analytics/_header.html" %}
 
-  <div class="table-responsive mt-3">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>User</th>
-          <th>Predicted Hours</th>
-          <th>Confidence</th>
-          <th>Features</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in rows %}
-          <tr>
-            <td>{{ r.as_of_date }}</td>
-            <td>{{ users_by_id[r.user_id].full_name if users_by_id and users_by_id.get(r.user_id) else ('User #' ~ r.user_id) }}</td>
-            <td>{{ r.predicted_hours }}</td>
-            <td>{{ r.confidence or '-' }}</td>
-            <td><code>{{ r.features_json or '{}' }}</code></td>
-          </tr>
-        {% else %}
-          <tr><td colspan="5" class="muted">No forecasts yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Forward View</div>
+            <h2 class="panel-title">Forecast summary</h2>
+          </div>
+        </div>
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-label">Forecast Rows</div>
+            <div class="metric-value">{{ rows|length }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">High Pressure</div>
+            <div class="metric-value">{{ ns.high }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Average Confidence</div>
+            <div class="metric-value">{{ '%.2f'|format((ns.confidence_total / (rows|length)) if rows else 0) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Max Predicted Hours</div>
+            <div class="metric-value">{{ '%.2f'|format((rows|map(attribute='predicted_hours')|max) if rows else 0) }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Forecast Table</div>
+            <h2 class="panel-title">Upcoming capacity signals</h2>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table analytics-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>User</th>
+                <th>Predicted Hours</th>
+                <th>Confidence</th>
+                <th>Features</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+                <tr>
+                  <td>{{ row.as_of_date }}</td>
+                  <td>{{ users_by_id[row.user_id].full_name if users_by_id and users_by_id.get(row.user_id) else ('User #' ~ row.user_id) }}</td>
+                  <td><span class="badge status-badge tone-{{ 'warning' if row.predicted_hours >= 40 else 'positive' }}">{{ '%.2f'|format(row.predicted_hours) }}h</span></td>
+                  <td>{{ '%.2f'|format(row.confidence or 0) }}</td>
+                  <td><code>{{ row.features_json or '{}' }}</code></td>
+                </tr>
+              {% else %}
+                <tr><td colspan="5" class="muted">No forecasts have been generated yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      {% include "analytics/_rail.html" %}
+    </div>
   </div>
 </div>
 {% endblock %}

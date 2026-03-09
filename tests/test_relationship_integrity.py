@@ -1941,6 +1941,30 @@ def test_matter_dms_renders_quick_starts_and_matter_brief(app_ctx):
     assert "Matter Brief" in body
 
 
+def test_matter_dms_handles_missing_snapshot_payloads(monkeypatch, app_ctx):
+    from intranet.routes import dms as dms_routes
+
+    app = app_ctx
+    user = _seed_user("dms-fallbacks@example.com")
+    matter = _seed_matter(user, "2026-DMS-FALLBACK-1", "Fallback DMS Matter", "Fallback Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    monkeypatch.setattr(dms_routes, "build_matter_magic_snapshot", lambda *args, **kwargs: {})
+    monkeypatch.setattr(dms_routes, "attach_matter_magic_links", lambda actions, matter_id: actions or [])
+    monkeypatch.setattr(dms_routes, "build_dms_quick_starts", lambda *args, **kwargs: [])
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/matters/{matter.id}/dms")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Document Operations Hub" in body
+    assert "No quick-start presets are available for this matter yet." in body
+    assert "No matter brief is available yet." in body
+
+
 def test_matter_create_auto_generates_linked_archetype_document_templates(app_ctx):
     app = app_ctx
     user = _seed_user("archetype-doc-autogen@example.com")
@@ -2969,6 +2993,7 @@ def test_mobile_hub_captures_fee_and_assigns_task(app_ctx):
         follow_redirects=False,
     )
     assert fee_response.status_code == 302
+    assert f"/mobile/hub?matter_id={matter.id}" in fee_response.headers["Location"]
     assert TimeEntry.query.filter_by(matter_id=matter.id, user_id=user.id).count() == 1
 
     task_response = client.post(
@@ -2986,6 +3011,7 @@ def test_mobile_hub_captures_fee_and_assigns_task(app_ctx):
         follow_redirects=False,
     )
     assert task_response.status_code == 302
+    assert f"/mobile/hub?matter_id={matter.id}" in task_response.headers["Location"]
     task = Task.query.filter_by(matter_id=matter.id, title="Mobile-assigned task").first()
     assert task is not None
     assignee_count = TaskAssignee.query.filter_by(task_id=task.id).count()
@@ -3013,6 +3039,23 @@ def test_mobile_hub_renders_fast_launcher_and_presets(app_ctx):
     assert f'data-mobile-matter-select="{matter.id}"' in body
     assert "15 min" in body
     assert "Call client" in body
+
+
+def test_mobile_hub_renders_empty_state_without_matters(app_ctx):
+    app = app_ctx
+    user = _seed_user("mobile-empty@example.com")
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get("/mobile/hub")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Touch-First Capture Desk" in body
+    assert "No accessible matters" in body
+    assert "No matters are currently available on this device profile." in body
+    assert "No pinned or recently viewed matters are available yet." in body
 
 
 def test_search_results_render_operational_actions(app_ctx):
@@ -3056,6 +3099,30 @@ def test_search_results_render_operational_actions(app_ctx):
     assert "Download" in body
 
 
+def test_search_handles_partial_launch_pack_payloads(monkeypatch, app_ctx):
+    from intranet.routes import content as content_routes
+
+    app = app_ctx
+    user = _seed_user("search-launch-fallback@example.com")
+    matter = _seed_matter(user, "2026-SEARCH-FALLBACK-1", "Fallback Search Matter", "Fallback Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    monkeypatch.setattr(content_routes, "build_matter_magic_snapshot", lambda *args, **kwargs: {})
+    monkeypatch.setattr(content_routes, "build_matter_launch_pack", lambda *args, **kwargs: {"headline": "Ready"})
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get("/search?q=fallback")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Smart Launch Pack" in body
+    assert "Jump straight into the likely matter workflow." in body
+    assert "Search found a likely matter match." in body
+    assert "Search identified a likely matter, but no direct launch actions are available yet." in body
+
+
 def test_matter_tasks_renders_task_radar_and_handoff(app_ctx):
     app = app_ctx
     user = _seed_user("task-radar@example.com")
@@ -3083,6 +3150,28 @@ def test_matter_tasks_renders_task_radar_and_handoff(app_ctx):
     assert "Task Radar" in body
     assert "Handoff Brief" in body
     assert "Overdue brief review" in body
+
+
+def test_matter_tasks_handles_missing_tracker_payloads(monkeypatch, app_ctx):
+    from intranet.routes import matters as matters_routes
+
+    app = app_ctx
+    user = _seed_user("task-tracker-fallback@example.com")
+    matter = _seed_matter(user, "2026-TASK-FALLBACK-1", "Fallback Tasks Matter", "Fallback Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    monkeypatch.setattr(matters_routes, "build_task_tracker_snapshot", lambda *args, **kwargs: {})
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/matters/{matter.id}/tasks")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Task Radar" in body
+    assert "No task radar signal is available yet." in body
+    assert "No handoff brief is available yet." in body
 
 
 def test_matter_workspace_renders_war_room_launch_pack(app_ctx):
@@ -3114,6 +3203,72 @@ def test_matter_workspace_renders_war_room_launch_pack(app_ctx):
     assert "Start Timer" in body
     assert "Draft Document" in body
     assert "War Room Brief" in body
+
+
+def test_matter_workspace_handles_missing_snapshot_payloads(monkeypatch, app_ctx):
+    from intranet.routes import matters_plus as matters_plus_routes
+
+    app = app_ctx
+    user = _seed_user("workspace-fallbacks@example.com")
+    archetype = MatterTemplate(
+        name="Fallback Archetype",
+        legal_category="General Litigation",
+        required_fields_json=json.dumps([]),
+        created_by=user.id,
+    )
+    db.session.add(archetype)
+    db.session.flush()
+    matter = _seed_matter(user, "2026-WORKSPACE-FALLBACK-1", "Fallback Workspace Matter", "Fallback Client")
+    matter.archetype_id = archetype.id
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    monkeypatch.setattr(matters_plus_routes, "build_archetype_compliance_snapshot", lambda *args, **kwargs: None)
+    monkeypatch.setattr(matters_plus_routes, "build_matter_magic_snapshot", lambda *args, **kwargs: {})
+    monkeypatch.setattr(matters_plus_routes, "attach_matter_magic_links", lambda actions, matter_id: actions or [])
+    monkeypatch.setattr(matters_plus_routes, "build_matter_launch_pack", lambda *args, **kwargs: {})
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/matters/{matter.id}/workspace")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "No matter guidance is available yet." in body
+    assert "Launch common matter actions from one place." in body
+
+
+def test_matter_detail_handles_missing_snapshot_payloads(monkeypatch, app_ctx):
+    from intranet.routes import matters as matters_routes
+
+    app = app_ctx
+    user = _seed_user("detail-fallbacks@example.com")
+    archetype = MatterTemplate(
+        name="Detail Fallback Archetype",
+        legal_category="General Litigation",
+        required_fields_json=json.dumps([]),
+        created_by=user.id,
+    )
+    db.session.add(archetype)
+    db.session.flush()
+    matter = _seed_matter(user, "2026-DETAIL-FALLBACK-1", "Fallback Detail Matter", "Fallback Client")
+    matter.archetype_id = archetype.id
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    monkeypatch.setattr(matters_routes, "build_archetype_compliance_snapshot", lambda *args, **kwargs: None)
+    monkeypatch.setattr(matters_routes, "build_matter_magic_snapshot", lambda *args, **kwargs: {})
+    monkeypatch.setattr(matters_routes, "attach_matter_magic_links", lambda actions, matter_id: actions or [])
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/matters/{matter.id}")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Matter Command Deck" in body
+    assert "No matter guidance is available yet." in body
+    assert "Compliance metrics are temporarily unavailable for this matter." in body
 
 
 def test_south_africa_hub_renders_workflow_packets(app_ctx):

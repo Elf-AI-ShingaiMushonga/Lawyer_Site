@@ -1,5 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
+{% set checklist = checklist or [] %}
+{% set matter_magic = matter_magic or {} %}
+{% set matter_magic_actions = matter_magic.get('actions', []) %}
+{% set matter_magic_headline = matter_magic.get('headline') or "No matter guidance is available yet." %}
+{% set matter_magic_status_line = matter_magic.get('status_line') or "Work directly from the matter workspace." %}
+{% set matter_magic_health_tone = matter_magic.get('health_tone') or "neutral" %}
+{% set matter_launch_pack = matter_launch_pack or {} %}
+{% set matter_launch_actions = matter_launch_pack.get('quick_actions', []) %}
+{% set matter_launch_subheadline = matter_launch_pack.get('subheadline') or "Launch common matter actions from one place." %}
+{% set matter_launch_status_line = matter_launch_pack.get('status_line') or "Use the workspace to move quickly between execution tasks." %}
+{% set matter_launch_brief_text = matter_launch_pack.get('brief_text') or "" %}
+{% set matter_launch_health_tone = matter_launch_pack.get('health_tone') or "neutral" %}
 {% set done_checklist = checklist | selectattr('is_done') | list | length %}
 {% set open_checklist = (checklist | length) - done_checklist %}
 {% set archetype_missing = archetype_compliance.required_missing_labels if archetype_compliance else [] %}
@@ -181,7 +193,7 @@
         <div class="page-stat-value">{{ stats.notes }}</div>
         <div class="page-stat-meta">Matter notes and internal context captured.</div>
       </div>
-      {% if archetype %}
+      {% if archetype and archetype_compliance %}
         <div class="page-stat-card">
           <div class="page-stat-label">Compliance</div>
           <div class="page-stat-value">{{ archetype_compliance.compliance_pct }}%</div>
@@ -263,18 +275,18 @@
 
     <div class="workbench-rail">
       <div class="sticky-stack">
-        <section class="panel-card workspace-war-room-card tone-{{ matter_launch_pack.health_tone }}">
+        <section class="panel-card workspace-war-room-card tone-{{ matter_launch_health_tone }}">
           <div class="panel-header">
             <div class="panel-header-main">
               <div class="panel-kicker">Matter War Room</div>
               <h2 class="panel-title">Launch the next action</h2>
-              <div class="panel-summary">{{ matter_launch_pack.subheadline }}</div>
+              <div class="panel-summary">{{ matter_launch_subheadline }}</div>
             </div>
             <a class="btn btn-sm btn-outline-light" href="{{ url_for('integrations_south_africa', matter_id=m.id) }}">ZA Desk</a>
           </div>
-          <div class="workspace-magic-status">{{ matter_launch_pack.status_line }}</div>
+          <div class="workspace-magic-status">{{ matter_launch_status_line }}</div>
           <div class="war-room-grid">
-            {% for action in matter_launch_pack.quick_actions %}
+            {% for action in matter_launch_actions %}
               <article class="war-room-action {{ 'is-strong' if action.emphasis == 'strong' else '' }}">
                 {% if action.badge %}<span class="workspace-action-badge">{{ action.badge }}</span>{% endif %}
                 <div class="war-room-action-title">{{ action.title }}</div>
@@ -287,7 +299,7 @@
           </div>
           <div class="panel-body mt-2">
             <label class="form-label" for="matter-war-room-brief">War Room Brief</label>
-            <textarea class="form-control" id="matter-war-room-brief" rows="8" readonly>{{ matter_launch_pack.brief_text }}</textarea>
+            <textarea class="form-control" id="matter-war-room-brief" rows="8" readonly>{{ matter_launch_brief_text }}</textarea>
             <div class="d-flex gap-2 align-items-center">
               <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="matter-war-room-brief" data-copy-success-text="Copied">Copy Brief</button>
               <span class="form-help" data-copy-feedback-for="matter-war-room-brief"></span>
@@ -295,18 +307,18 @@
           </div>
         </section>
 
-        <section class="panel-card workspace-war-room-card tone-{{ matter_magic.health_tone }}">
+        <section class="panel-card workspace-war-room-card tone-{{ matter_magic_health_tone }}">
           <div class="panel-header">
             <div class="panel-header-main">
               <div class="panel-kicker">Next Best Moves</div>
               <h2 class="panel-title">What should happen next</h2>
-              <div class="panel-summary">{{ matter_magic.headline }}</div>
+              <div class="panel-summary">{{ matter_magic_headline }}</div>
             </div>
             <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
           </div>
-          <div class="workspace-magic-status">{{ matter_magic.status_line }}</div>
+          <div class="workspace-magic-status">{{ matter_magic_status_line }}</div>
           <div class="workspace-magic-list">
-            {% for action in matter_magic.actions[:3] %}
+            {% for action in matter_magic_actions[:3] %}
               <article class="workspace-magic-item urgency-{{ action.urgency }}">
                 <div class="d-flex justify-content-between gap-2 align-items-start">
                   <div class="fw-semibold">{{ action.title }}</div>
@@ -359,25 +371,29 @@
                 <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Syncing...">Sync Checklist</button>
               </form>
             </div>
-            <div class="page-stat-grid">
-              <div class="page-stat-card">
-                <div class="page-stat-label">Required Fields</div>
-                <div class="page-stat-value">{{ archetype_compliance.required_filled }}/{{ archetype_compliance.required_total }}</div>
+            {% if archetype_compliance %}
+              <div class="page-stat-grid">
+                <div class="page-stat-card">
+                  <div class="page-stat-label">Required Fields</div>
+                  <div class="page-stat-value">{{ archetype_compliance.required_filled }}/{{ archetype_compliance.required_total }}</div>
+                </div>
+                <div class="page-stat-card">
+                  <div class="page-stat-label">Checklist</div>
+                  <div class="page-stat-value">{{ archetype_compliance.checklist_done }}/{{ archetype_compliance.checklist_total }}</div>
+                </div>
+                <div class="page-stat-card">
+                  <div class="page-stat-label">Unsynced</div>
+                  <div class="page-stat-value">{{ archetype_compliance.checklist_unsynced }}</div>
+                </div>
               </div>
-              <div class="page-stat-card">
-                <div class="page-stat-label">Checklist</div>
-                <div class="page-stat-value">{{ archetype_compliance.checklist_done }}/{{ archetype_compliance.checklist_total }}</div>
-              </div>
-              <div class="page-stat-card">
-                <div class="page-stat-label">Unsynced</div>
-                <div class="page-stat-value">{{ archetype_compliance.checklist_unsynced }}</div>
-              </div>
-            </div>
-            {% if archetype_missing %}
-              <div class="section-note">Missing required fields: {{ archetype_missing|join(", ") }}</div>
-            {% endif %}
-            {% if archetype_compliance.checklist_remaining > 0 %}
-              <div class="section-note">Checklist remaining: {{ archetype_compliance.checklist_remaining }} item(s).</div>
+              {% if archetype_missing %}
+                <div class="section-note">Missing required fields: {{ archetype_missing|join(", ") }}</div>
+              {% endif %}
+              {% if archetype_compliance.checklist_remaining > 0 %}
+                <div class="section-note">Checklist remaining: {{ archetype_compliance.checklist_remaining }} item(s).</div>
+              {% endif %}
+            {% else %}
+              <div class="section-note">Compliance metrics are temporarily unavailable for this matter. You can still sync the checklist and continue working.</div>
             {% endif %}
           </section>
         {% endif %}

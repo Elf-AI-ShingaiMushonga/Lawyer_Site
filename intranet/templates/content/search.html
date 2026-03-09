@@ -1,5 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
+{% set matters = matters or [] %}
+{% set tasks = tasks or [] %}
+{% set docs = docs or [] %}
+{% set articles = articles or [] %}
+{% set contacts = contacts or [] %}
+{% set semantic_hits = semantic_hits or [] %}
+{% set matter_by_id = matter_by_id or {} %}
+{% set launch_pack = launch_pack or {} %}
+{% set launch_pack_actions = launch_pack.get('quick_actions', []) %}
+{% set launch_pack_subheadline = launch_pack.get('subheadline') or "Jump straight into the likely matter workflow." %}
+{% set launch_pack_headline = launch_pack.get('headline') or "Ready" %}
+{% set launch_pack_status_line = launch_pack.get('status_line') or "Search found a likely matter match." %}
+{% set launch_pack_brief_text = launch_pack.get('brief_text') or "No search brief is available yet." %}
 <style>
   .search-launch-pack {
     border: 1px solid rgba(225, 6, 0, 0.18);
@@ -392,13 +405,13 @@
               <div class="panel-header-main">
                 <div class="panel-kicker">Smart Launch Pack</div>
                 <h2 class="panel-title">Fastest path into the likely matter</h2>
-                <div class="panel-summary">{{ launch_pack.subheadline }}</div>
+                <div class="panel-summary">{{ launch_pack_subheadline }}</div>
               </div>
-              <span class="badge status-badge status-open">{{ launch_pack.headline }}</span>
+              <span class="badge status-badge status-open">{{ launch_pack_headline }}</span>
             </div>
-            <div class="muted small">{{ launch_pack.status_line }}</div>
+            <div class="muted small">{{ launch_pack_status_line }}</div>
             <div class="search-launch-grid mt-2">
-              {% for action in launch_pack.quick_actions %}
+              {% for action in launch_pack_actions %}
                 <article class="search-launch-action {{ 'is-strong' if action.emphasis == 'strong' else '' }}">
                   {% if action.badge %}<span class="workspace-action-badge">{{ action.badge }}</span>{% endif %}
                   <div class="search-launch-title">{{ action.title }}</div>
@@ -407,11 +420,13 @@
                     <a class="btn btn-sm btn-light" href="{{ action.href }}">Launch</a>
                   </div>
                 </article>
+              {% else %}
+                <div class="empty-state">Search identified a likely matter, but no direct launch actions are available yet.</div>
               {% endfor %}
             </div>
             <div class="mt-3">
               <label class="form-label" for="search-launch-brief">Search Brief</label>
-              <textarea class="form-control" id="search-launch-brief" rows="7" readonly>{{ launch_pack.brief_text }}</textarea>
+              <textarea class="form-control" id="search-launch-brief" rows="7" readonly>{{ launch_pack_brief_text }}</textarea>
               <div class="d-flex gap-2 align-items-center mt-2">
                 <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="search-launch-brief" data-copy-success-text="Copied">Copy Brief</button>
                 <span class="form-help" data-copy-feedback-for="search-launch-brief"></span>

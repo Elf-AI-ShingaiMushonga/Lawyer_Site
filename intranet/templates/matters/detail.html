@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
+{% set matter_magic = matter_magic or {} %}
+{% set matter_magic_actions = matter_magic.get('actions', []) %}
+{% set matter_magic_headline = matter_magic.get('headline') or "No matter guidance is available yet." %}
+{% set matter_magic_status_line = matter_magic.get('status_line') or "Use the matter command deck to capture the next move." %}
+{% set matter_magic_brief_text = matter_magic.get('brief_text') or "No handoff brief is available yet." %}
+{% set matter_magic_health_tone = matter_magic.get('health_tone') or "neutral" %}
+{% set archetype_missing = archetype_compliance.required_missing_labels if archetype_compliance else [] %}
 <style>
   .matter-detail-jumpbar {
     position: sticky;
@@ -182,15 +189,15 @@
         <h1 class="page-hero-title">{{ m.matter_no }}</h1>
         <div class="page-hero-summary">{{ m.title }} • {{ m.client_name }}</div>
         <div class="page-hero-meta">
-          <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
+          <span class="badge status-badge status-{{ (m.status or 'open')|lower|replace(' ', '-') }}">{{ m.status or "Open" }}</span>
           {% if is_pinned %}<span class="tag-chip">Pinned</span>{% endif %}
-          <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }} risk</span>
+          <span class="risk-chip risk-{{ (m.risk_level or 'medium')|lower }}">{{ m.risk_level or "Medium" }} risk</span>
           {% if m.budget_status %}<span class="badge status-badge status-{{ m.budget_status|lower|replace(' ', '-') }}">{{ m.budget_status }}</span>{% endif %}
           {% if m.legal_category %}<span class="tag-chip">{{ m.legal_category }}</span>{% endif %}
           {% if archetype %}<span class="tag-chip">{{ archetype.name }}</span>{% endif %}
           {% if m.stage %}<span class="tag-chip">Stage {{ m.stage }}</span>{% endif %}
         </div>
-        <div class="page-hero-summary">{{ matter_magic.status_line }}</div>
+        <div class="page-hero-summary">{{ matter_magic_status_line }}</div>
       </div>
       <div class="page-hero-actions">
         <form method="post" action="{{ url_for('matter_pin_toggle', matter_id=m.id) }}">
@@ -422,32 +429,36 @@
             <span class="tag-chip">Archetype {{ archetype.name }}</span>
             {% if archetype_compliance %}<span class="tag-chip">Compliance {{ archetype_compliance.compliance_pct }}%</span>{% endif %}
           </div>
-          <div class="page-stat-grid">
-            <div class="page-stat-card">
-              <div class="page-stat-label">Required Fields</div>
-              <div class="page-stat-value">{{ archetype_compliance.required_filled }}/{{ archetype_compliance.required_total }}</div>
+          {% if archetype_compliance %}
+            <div class="page-stat-grid">
+              <div class="page-stat-card">
+                <div class="page-stat-label">Required Fields</div>
+                <div class="page-stat-value">{{ archetype_compliance.required_filled }}/{{ archetype_compliance.required_total }}</div>
+              </div>
+              <div class="page-stat-card">
+                <div class="page-stat-label">Checklist</div>
+                <div class="page-stat-value">{{ archetype_compliance.checklist_done }}/{{ archetype_compliance.checklist_total }}</div>
+              </div>
+              <div class="page-stat-card">
+                <div class="page-stat-label">Unsynced Items</div>
+                <div class="page-stat-value">{{ archetype_compliance.checklist_unsynced }}</div>
+              </div>
+              <div class="page-stat-card">
+                <div class="page-stat-label">Compliance</div>
+                <div class="page-stat-value">{{ archetype_compliance.compliance_pct }}%</div>
+              </div>
             </div>
-            <div class="page-stat-card">
-              <div class="page-stat-label">Checklist</div>
-              <div class="page-stat-value">{{ archetype_compliance.checklist_done }}/{{ archetype_compliance.checklist_total }}</div>
-            </div>
-            <div class="page-stat-card">
-              <div class="page-stat-label">Unsynced Items</div>
-              <div class="page-stat-value">{{ archetype_compliance.checklist_unsynced }}</div>
-            </div>
-            <div class="page-stat-card">
-              <div class="page-stat-label">Compliance</div>
-              <div class="page-stat-value">{{ archetype_compliance.compliance_pct }}%</div>
-            </div>
-          </div>
-          {% if archetype_compliance.required_missing_labels %}
-            <div class="section-note">Missing required fields: {{ archetype_compliance.required_missing_labels|join(", ") }}</div>
-          {% endif %}
-          {% if archetype_compliance.checklist_remaining > 0 %}
-            <div class="section-note">Checklist remaining: {{ archetype_compliance.checklist_remaining }} item(s).</div>
-          {% endif %}
-          {% if archetype_compliance.checklist_unsynced > 0 %}
-            <div class="section-note">Archetype playbook changed: {{ archetype_compliance.checklist_unsynced }} checklist item(s) are not yet on this matter.</div>
+            {% if archetype_missing %}
+              <div class="section-note">Missing required fields: {{ archetype_missing|join(", ") }}</div>
+            {% endif %}
+            {% if archetype_compliance.checklist_remaining > 0 %}
+              <div class="section-note">Checklist remaining: {{ archetype_compliance.checklist_remaining }} item(s).</div>
+            {% endif %}
+            {% if archetype_compliance.checklist_unsynced > 0 %}
+              <div class="section-note">Archetype playbook changed: {{ archetype_compliance.checklist_unsynced }} checklist item(s) are not yet on this matter.</div>
+            {% endif %}
+          {% else %}
+            <div class="section-note">Compliance metrics are temporarily unavailable for this matter. You can still update archetype fields and sync the checklist.</div>
           {% endif %}
           {% if archetype_fields %}
             <form method="post" action="{{ url_for('matter_archetype_fields_update', matter_id=m.id) }}">
@@ -577,18 +588,18 @@
 
     <div class="workbench-rail">
       <div class="sticky-stack">
-        <section id="matter-magic-section" class="panel-card matter-detail-anchor matter-magic-card tone-{{ matter_magic.health_tone }}">
+        <section id="matter-magic-section" class="panel-card matter-detail-anchor matter-magic-card tone-{{ matter_magic_health_tone }}">
           <div class="panel-header">
             <div class="panel-header-main">
               <div class="panel-kicker">Matter Magic</div>
               <h2 class="panel-title">Next Best Moves</h2>
-              <div class="panel-summary">{{ matter_magic.headline }}</div>
+              <div class="panel-summary">{{ matter_magic_headline }}</div>
             </div>
             <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
           </div>
-          <div class="matter-magic-status">{{ matter_magic.status_line }}</div>
+          <div class="matter-magic-status">{{ matter_magic_status_line }}</div>
           <div class="matter-magic-list">
-            {% for action in matter_magic.actions %}
+            {% for action in matter_magic_actions %}
               <article class="matter-magic-item urgency-{{ action.urgency }}">
                 <div class="d-flex justify-content-between gap-2 align-items-start">
                   <div class="matter-magic-item-title">{{ action.title }}</div>
@@ -600,11 +611,13 @@
                   <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
                 </div>
               </article>
+            {% else %}
+              <div class="empty-state">No next-best-move suggestions are available yet. Use the summary, timeline, or tasks panels to build the file context.</div>
             {% endfor %}
           </div>
           <div class="matter-magic-brief">
             <label class="form-label" for="matter-magic-brief-text">Quick Brief</label>
-            <textarea class="form-control" id="matter-magic-brief-text" rows="9" readonly>{{ matter_magic.brief_text }}</textarea>
+            <textarea class="form-control" id="matter-magic-brief-text" rows="9" readonly>{{ matter_magic_brief_text }}</textarea>
             <div class="d-flex gap-2 align-items-center">
               <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="matter-magic-brief-text" data-copy-success-text="Copied">Copy Brief</button>
               <span class="form-help" data-copy-feedback-for="matter-magic-brief-text"></span>

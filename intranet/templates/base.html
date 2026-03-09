@@ -3153,7 +3153,7 @@
   {% set crm_endpoints = ["crm_leads", "crm_lead_detail"] %}
   {% set knowledge_endpoints = ["contacts", "kb", "kb_view", "search"] %}
   {% set integration_endpoints = ["integrations_south_africa", "integrations_office365", "integrations_office365_outlook_feed", "integrations_office365_excel_time_entries", "integrations_office365_excel_invoices", "integrations_office365_word_matter_summary", "integrations_office365_word_matter_summary_query", "integrations_third_party", "integrations_export_cost_recovery", "integrations_export_conveyancing", "integrations_import_cost_recovery", "integrations_import_conveyancing", "mobile_hub"] %}
-  {% set analytics_endpoints = ["analytics_utilization", "analytics_realization", "analytics_ehr", "analytics_workload", "analytics_profitability", "analytics_forecast", "analytics_burnout"] %}
+  {% set analytics_endpoints = ["analytics_home", "analytics_utilization", "analytics_realization", "analytics_ehr", "analytics_workload", "analytics_profitability", "analytics_forecast", "analytics_burnout"] %}
   {% set personnel_endpoints = ["director_personnel"] %}
   {% set ops_endpoints = ["ops_backup_status", "ops_restore_verify", "ops_dr_targets"] %}
   {% set trust_account_endpoints = ["trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
@@ -3209,7 +3209,7 @@
   {% elif endpoint in analytics_endpoints %}
     {% set section_label = "Analytics and Forecasting" %}
     {% set section_meta = "Utilization, realization, profitability, and burnout signals" %}
-    {% set section_href = url_for('analytics_utilization') %}
+    {% set section_href = url_for('analytics_home') %}
   {% elif endpoint in personnel_endpoints %}
     {% set section_label = "Personnel Management" %}
     {% set section_meta = "Director team assignments and personnel analytics" %}
@@ -3300,7 +3300,7 @@
                 <div class="nav-menu-section">
                   <span class="nav-menu-label">Insights & Platform</span>
                   {% if is_lawyer_role %}
-                    <a class="nav-menu-item {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_utilization') }}">Analytics</a>
+                    <a class="nav-menu-item {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_home') }}">Analytics</a>
                   {% endif %}
                   {% if is_director_role %}
                     <a class="nav-menu-item {{ 'is-active' if endpoint in personnel_endpoints else '' }}" href="{{ url_for('director_personnel') }}">Personnel</a>
@@ -3587,7 +3587,7 @@
             </a>
           {% endif %}
           {% if is_lawyer_role %}
-            <a class="command-item" href="{{ url_for('analytics_utilization') }}" data-command-item data-keywords="analytics utilization realization profitability forecast">
+            <a class="command-item" href="{{ url_for('analytics_home') }}" data-command-item data-keywords="analytics utilization realization profitability forecast burnout command center">
               <span>
                 <span class="command-item-title">Analytics</span>
                 <span class="command-item-meta">Utilization, realization, workload, burnout</span>

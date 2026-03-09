@@ -1,0 +1,98 @@
+{% set analytics = analytics or {} %}
+{% set analytics_nav = analytics.get('nav', []) %}
+{% set analytics_summary_cards = analytics.get('summary_cards', []) %}
+{% set analytics_actions = analytics.get('report_actions', []) %}
+<style>
+  .analytics-watchlist {
+    display: grid;
+    gap: 10px;
+  }
+
+  .analytics-watch-item,
+  .analytics-spotlight-card,
+  .analytics-data-row {
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 14px;
+    padding: 12px 13px;
+    background: rgba(255, 255, 255, 0.9);
+  }
+
+  .analytics-watch-head,
+  .analytics-row-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .analytics-spotlight-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+
+  .analytics-mini-stat,
+  .analytics-mini-meta,
+  .analytics-data-meta {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #6f5f5f;
+  }
+
+  .analytics-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .analytics-table td,
+  .analytics-table th {
+    vertical-align: top;
+  }
+</style>
+<section class="page-hero">
+  <div class="page-hero-top">
+    <div class="page-hero-main">
+      <div class="page-hero-kicker">{{ analytics.get('headline', 'Analytics') }}</div>
+      <h1 class="page-hero-title">{{ report_title }}</h1>
+      <div class="page-hero-summary">{{ report_summary }}</div>
+      <div class="page-hero-meta">
+        <span class="tag-chip">{{ analytics.get('scope_label', 'Firm-wide') }}</span>
+        <span class="tag-chip">As of {{ analytics.get('as_of_label', '-') }}</span>
+        <span class="tag-chip">{{ analytics.get('watchlist', [])|length }} issue(s) surfaced</span>
+      </div>
+    </div>
+    <div class="page-hero-actions">
+      {% for action in analytics_actions[:4] %}
+        <a class="btn btn-sm {{ 'btn-light' if loop.first else 'btn-outline-light' }}" href="{{ action.href }}">{{ action.title }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="page-stat-grid">
+    {% for card in analytics_summary_cards[:6] %}
+      <div class="page-stat-card">
+        <div class="page-stat-label">{{ card.label }}</div>
+        <div class="page-stat-value">{{ card.value }}</div>
+        <div class="page-stat-meta">{{ card.meta }}</div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+<section class="panel-card is-accent">
+  <div class="panel-header">
+    <div class="panel-header-main">
+      <div class="panel-kicker">Report Navigation</div>
+      <h2 class="panel-title">Move between analytics lanes</h2>
+      <div class="panel-summary">Each lane answers a different management question. The navigation badges expose the current signal before you open the full view.</div>
+    </div>
+  </div>
+  <div class="action-grid">
+    {% for item in analytics_nav %}
+      <a class="action-card {{ 'is-primary' if item.active else '' }}" href="{{ item.href }}">
+        <span class="action-card-kicker">{{ item.badge }}</span>
+        <span class="action-card-title">{{ item.label }}</span>
+        <span class="action-card-summary">{{ item.summary }}</span>
+      </a>
+    {% endfor %}
+  </div>
+</section>

@@ -1,23 +1,79 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3">
-  <h3 class="section-title">Utilization</h3>
-  <div class="page-intro mt-1">Billable output versus available time for the selected analytics scope.</div>
+<div class="page-shell">
+  {% set report_title = "Utilization" %}
+  {% set report_summary = "Measure whether the current scope is converting available lawyer time into billable output at a sustainable level." %}
+  {% include "analytics/_header.html" %}
 
-  <div class="metric-grid mt-3">
-    <div class="metric-card">
-      <div class="metric-label">Utilization</div>
-      <div class="metric-value">{{ (snapshot.utilization * 100)|round(2) }}%</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Billable Hours</div>
-      <div class="metric-value">{{ snapshot.metrics.billable_hours }}</div>
-    </div>
-  </div>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Utilization Reading</div>
+            <h2 class="panel-title">Billable output versus available time</h2>
+            <div class="panel-summary">This view helps leadership decide whether the issue is idle capacity, missing capture discipline, or sustained overload.</div>
+          </div>
+        </div>
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-label">Utilization</div>
+            <div class="metric-value">{{ '%.1f'|format(snapshot.utilization * 100) }}%</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Billable Hours</div>
+            <div class="metric-value">{{ '%.2f'|format(snapshot.metrics.billable_hours) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Operating Baseline</div>
+            <div class="metric-value">{{ '%.0f'|format(available_hours_per_month) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Collection Gap</div>
+            <div class="metric-value">R {{ '{:,.2f}'.format(collection_gap) }}</div>
+          </div>
+        </div>
+      </section>
 
-  <div class="form-section mt-3">
-    <div class="form-label">Underlying Metrics</div>
-    <pre class="audit-json mt-2">{{ snapshot.metrics }}</pre>
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Interpretation</div>
+            <h2 class="panel-title">What this utilization level means</h2>
+          </div>
+        </div>
+        <div class="glance-list">
+          {% if snapshot.utilization < 0.65 %}
+            <div class="glance-item">
+              <div class="glance-eyebrow">Below Operating Floor</div>
+              <div class="glance-title">Time capture or staffing allocation needs correction</div>
+              <div class="glance-meta">If lawyers are busy but utilization is low, the problem is normally delayed time capture, non-billable drift, or matters being held by the wrong people.</div>
+            </div>
+          {% elif snapshot.utilization > 0.92 %}
+            <div class="glance-item">
+              <div class="glance-eyebrow">Overextended</div>
+              <div class="glance-title">The team is running too hot</div>
+              <div class="glance-meta">Sustained utilization at this level can degrade service quality and drive burnout. Rebalance ownership and inspect deadlines immediately.</div>
+            </div>
+          {% else %}
+            <div class="glance-item">
+              <div class="glance-eyebrow">Healthy Band</div>
+              <div class="glance-title">Utilization is inside a workable range</div>
+              <div class="glance-meta">The focus should shift to realization, profitability, and workload equity rather than pure time generation.</div>
+            </div>
+          {% endif %}
+          <div class="glance-item">
+            <div class="glance-eyebrow">Underlying Metrics</div>
+            <div class="glance-title">{{ snapshot.metrics.billable_hours }} billable hours</div>
+            <div class="glance-meta">Billed value: R {{ '{:,.2f}'.format(snapshot.metrics.billed) }} • Collected value: R {{ '{:,.2f}'.format(snapshot.metrics.collected) }}</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      {% include "analytics/_rail.html" %}
+    </div>
   </div>
 </div>
 {% endblock %}

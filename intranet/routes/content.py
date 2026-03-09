@@ -242,8 +242,8 @@ def register_content_routes(app):
                     team_size=MatterMember.query.filter_by(matter_id=matter_id).count(),
                     notes_count=MatterNote.query.filter_by(matter_id=matter_id).count(),
                     limit_actions=4,
-                )
-                launch_pack = build_matter_launch_pack(primary_matter, snapshot=snapshot, today=dt.date.today())
+                ) or {}
+                launch_pack = build_matter_launch_pack(primary_matter, snapshot=snapshot, today=dt.date.today()) or {}
 
         return page(
             "Search",

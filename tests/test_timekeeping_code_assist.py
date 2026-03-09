@@ -135,3 +135,44 @@ def test_time_entries_exposes_recent_code_assist_payload(app_ctx):
         pair["task_code"] == "L120" and pair["activity_code"] == "A101"
         for pair in primary_bucket["pairs"]
     )
+
+
+def test_time_entries_handles_empty_state_without_matters(app_ctx):
+    app = app_ctx
+    user = _seed_user("time-empty-state@example.com")
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get("/time/entries")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Time Capture Desk" in body
+    assert "No accessible matters are available for time capture yet." in body
+
+
+def test_time_entries_preserves_matter_context_after_save(app_ctx):
+    app = app_ctx
+    user = _seed_user("time-context@example.com")
+    matter = _seed_matter(user, "2026-TIME-CONTEXT-001", "Context Matter")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.post(
+        "/time/entries",
+        data={
+            "csrf_token": "test-csrf",
+            "matter_id": matter.id,
+            "start_at": "2026-05-01T09:00",
+            "end_at": "2026-05-01T09:30",
+            "narrative": "Captured with context",
+            "is_billable": "1",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert f"/time/entries?matter_id={matter.id}" in response.headers["Location"]

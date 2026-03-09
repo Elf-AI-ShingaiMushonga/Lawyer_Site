@@ -131,6 +131,7 @@ REQUIRED_ROUTES = {
     "/portal/uploads",
     "/portal/invoices",
     "/portal/payments/<int:invoice_id>",
+    "/analytics",
     "/analytics/utilization",
     "/analytics/realization",
     "/analytics/ehr",

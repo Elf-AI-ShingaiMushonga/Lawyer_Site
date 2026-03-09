@@ -1,34 +1,84 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3">
-  <h3 class="section-title">Burnout Signals</h3>
-  <div class="page-intro mt-1">Early warning indicators derived from workload and delivery patterns.</div>
+{% set ns = namespace(high=0, open=0, top_score=0.0) %}
+{% for row in rows %}
+  {% if row.score >= 0.7 %}{% set ns.high = ns.high + 1 %}{% endif %}
+  {% if row.status|lower in ['open', 'watch', 'critical'] %}{% set ns.open = ns.open + 1 %}{% endif %}
+  {% if row.score > ns.top_score %}{% set ns.top_score = row.score %}{% endif %}
+{% endfor %}
+<div class="page-shell">
+  {% set report_title = "Burnout Signals" %}
+  {% set report_summary = "Use workload strain signals to intervene before service quality, retention, or lawyer wellbeing deteriorates." %}
+  {% include "analytics/_header.html" %}
 
-  <div class="table-responsive mt-3">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>User</th>
-          <th>Score</th>
-          <th>Reason</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in rows %}
-          <tr>
-            <td>{{ r.as_of_date }}</td>
-            <td>{{ users_by_id[r.user_id].full_name if users_by_id and users_by_id.get(r.user_id) else ('User #' ~ r.user_id) }}</td>
-            <td>{{ r.score }}</td>
-            <td>{{ r.reason or '-' }}</td>
-            <td><span class="badge status-badge status-{{ r.status|lower|replace(' ', '-') }}">{{ r.status }}</span></td>
-          </tr>
-        {% else %}
-          <tr><td colspan="5" class="muted">No burnout signals.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Wellbeing Risk</div>
+            <h2 class="panel-title">Burnout signal summary</h2>
+          </div>
+        </div>
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-label">Signals</div>
+            <div class="metric-value">{{ rows|length }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">High Risk</div>
+            <div class="metric-value">{{ ns.high }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Open Status</div>
+            <div class="metric-value">{{ ns.open }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Top Score</div>
+            <div class="metric-value">{{ '%.2f'|format(ns.top_score) }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Signal Table</div>
+            <h2 class="panel-title">People requiring follow-up</h2>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table analytics-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>User</th>
+                <th>Score</th>
+                <th>Reason</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+                <tr>
+                  <td>{{ row.as_of_date }}</td>
+                  <td>{{ users_by_id[row.user_id].full_name if users_by_id and users_by_id.get(row.user_id) else ('User #' ~ row.user_id) }}</td>
+                  <td>{{ '%.2f'|format(row.score) }}</td>
+                  <td>{{ row.reason or '-' }}</td>
+                  <td><span class="badge status-badge tone-{{ 'danger' if row.score >= 0.7 else 'warning' if row.score >= 0.5 else 'positive' }}">{{ row.status }}</span></td>
+                </tr>
+              {% else %}
+                <tr><td colspan="5" class="muted">No burnout signals are available yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      {% include "analytics/_rail.html" %}
+    </div>
   </div>
 </div>
 {% endblock %}

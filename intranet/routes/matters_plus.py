@@ -450,9 +450,9 @@ def register_matters_plus_routes(app):
             notes_count=stats["notes"],
             checklist_remaining=sum(1 for item in checklist if not item.is_done),
             archetype_compliance=archetype_compliance,
-        )
-        matter_magic["actions"] = attach_matter_magic_links(matter_magic["actions"], m.id)
-        matter_launch_pack = build_matter_launch_pack(m, snapshot=matter_magic, today=dt.date.today())
+        ) or {}
+        matter_magic["actions"] = attach_matter_magic_links(list(matter_magic.get("actions", [])), m.id)
+        matter_launch_pack = build_matter_launch_pack(m, snapshot=matter_magic, today=dt.date.today()) or {}
 
         return page(
             f"Matter Workspace {m.matter_no}",

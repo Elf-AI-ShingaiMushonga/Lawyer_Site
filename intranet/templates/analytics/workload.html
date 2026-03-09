@@ -1,30 +1,84 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3">
-  <h3 class="section-title">Workload</h3>
-  <div class="page-intro mt-1">Open task count and recent effort by team member.</div>
+{% set ns = namespace(open_tasks=0, hours=0.0, flagged=0) %}
+{% for row in rows %}
+  {% set ns.open_tasks = ns.open_tasks + row.open_tasks %}
+  {% set ns.hours = ns.hours + row.hours_7d %}
+  {% if row.tone in ['warning', 'danger'] %}{% set ns.flagged = ns.flagged + 1 %}{% endif %}
+{% endfor %}
+<div class="page-shell">
+  {% set report_title = "Workload" %}
+  {% set report_summary = "See how open tasks and recent effort concentrate across the team so you can rebalance work before service quality or wellbeing slips." %}
+  {% include "analytics/_header.html" %}
 
-  <div class="table-responsive mt-3">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>User</th>
-          <th>Open Tasks</th>
-          <th>Hours (7d)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in rows %}
-          <tr>
-            <td>{{ r.user.full_name }} ({{ role_display_name(r.user.role) }})</td>
-            <td>{{ r.open_tasks }}</td>
-            <td>{{ r.hours_7d }}</td>
-          </tr>
-        {% else %}
-          <tr><td colspan="3" class="muted">No workload data.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Capacity Pressure</div>
+            <h2 class="panel-title">Team workload summary</h2>
+          </div>
+        </div>
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-label">People Tracked</div>
+            <div class="metric-value">{{ rows|length }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Open Tasks</div>
+            <div class="metric-value">{{ ns.open_tasks }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Hours (7d)</div>
+            <div class="metric-value">{{ '%.2f'|format(ns.hours) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Flagged People</div>
+            <div class="metric-value">{{ ns.flagged }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Team Table</div>
+            <h2 class="panel-title">Who is carrying the work</h2>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table analytics-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>Open Tasks</th>
+                <th>Hours (7d)</th>
+                <th>Pressure</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+                <tr>
+                  <td>{{ row.user.full_name }}</td>
+                  <td>{{ role_display_name(row.user.role) }}</td>
+                  <td>{{ row.open_tasks }}</td>
+                  <td>{{ '%.2f'|format(row.hours_7d) }}</td>
+                  <td><span class="badge status-badge tone-{{ row.tone }}">{{ row.pressure_label }}</span></td>
+                </tr>
+              {% else %}
+                <tr><td colspan="5" class="muted">No workload data is available yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      {% include "analytics/_rail.html" %}
+    </div>
   </div>
 </div>
 {% endblock %}

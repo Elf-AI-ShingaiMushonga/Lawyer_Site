@@ -622,30 +622,37 @@ def register_timekeeping_routes(app):
     def time_entries_import_photo():
         upload = request.files.get("timesheet_photo")
         default_matter_id = request.form.get("default_matter_id", type=int)
+
+        def _entries_redirect() -> Response:
+            params: dict[str, int] = {}
+            if default_matter_id:
+                params["matter_id"] = default_matter_id
+            return redirect(url_for("time_entries", **params))
+
         if default_matter_id and not can_access_matter(default_matter_id):
             abort(403)
 
         if upload is None or not (upload.filename or "").strip():
             flash("Select a timesheet image to upload.", "warning")
-            return redirect(url_for("time_entries"))
+            return _entries_redirect()
 
         filename = secure_filename(upload.filename or "").strip()
         extension = filename.rsplit(".", 1)[1].lower() if "." in filename else ""
         content_type = (upload.mimetype or "").strip().lower()
         if extension not in _TIMESHEET_IMAGE_EXTENSIONS:
             flash("Timesheet photo must be PNG, JPG, JPEG, or WEBP.", "warning")
-            return redirect(url_for("time_entries"))
+            return _entries_redirect()
         if not content_type.startswith(_TIMESHEET_IMAGE_MIME_PREFIX):
             flash("Uploaded file is not recognized as an image.", "warning")
-            return redirect(url_for("time_entries"))
+            return _entries_redirect()
 
         image_bytes = upload.read()
         if not image_bytes:
             flash("Uploaded image is empty.", "warning")
-            return redirect(url_for("time_entries"))
+            return _entries_redirect()
         if len(image_bytes) > 12 * 1024 * 1024:
             flash("Image is too large. Please upload a file smaller than 12MB.", "warning")
-            return redirect(url_for("time_entries"))
+            return _entries_redirect()
 
         parse_result = parse_timesheet_image_entries(
             image_bytes=image_bytes,
@@ -668,7 +675,7 @@ def register_timekeeping_routes(app):
                 )
             else:
                 flash("No legible timesheet rows were detected in the uploaded image.", "warning")
-            return redirect(url_for("time_entries"))
+            return _entries_redirect()
 
         scoped_matters = _scoped_matters_for_current_user(limit=500)
         matter_by_id = {int(matter.id): matter for matter in scoped_matters}
@@ -850,7 +857,7 @@ def register_timekeeping_routes(app):
             preview = "; ".join(skipped_reasons[:4])
             flash(f"Skipped {skipped} row(s): {preview}", "warning")
 
-        return redirect(url_for("time_entries"))
+        return _entries_redirect()
 
     @app.get("/time/timers")
     @login_required
@@ -1159,13 +1166,22 @@ def register_timekeeping_routes(app):
     @app.route("/time/entries", methods=["GET", "POST"])
     @login_required
     def time_entries():
+        def _entries_redirect(*, matter_id: int | None = None, task_id: int | None = None) -> Response:
+            params: dict[str, int] = {}
+            if matter_id:
+                params["matter_id"] = matter_id
+            if task_id:
+                params["task_id"] = task_id
+            return redirect(url_for("time_entries", **params))
+
         if request.method == "POST":
             matter_id = request.form.get("matter_id", type=int)
+            task_id = request.form.get("task_id", type=int)
             if not matter_id or not can_access_matter(matter_id):
                 abort(403)
             if _matter_is_closed(matter_id):
                 flash("Matter is closed. Reopen it before posting new time.", "warning")
-                return redirect(url_for("time_entries"))
+                return _entries_redirect(matter_id=matter_id, task_id=task_id)
 
             start_raw = (request.form.get("start_at") or "").strip()
             end_raw = (request.form.get("end_at") or "").strip()
@@ -1176,11 +1192,11 @@ def register_timekeeping_routes(app):
                 end_at = dt.datetime.fromisoformat(end_raw) if end_raw else None
             except ValueError:
                 flash("Invalid datetime. Use ISO format.", "warning")
-                return redirect(url_for("time_entries"))
+                return _entries_redirect(matter_id=matter_id, task_id=task_id)
 
             if end_at and end_at <= start_at:
                 flash("End time must be after start time.", "warning")
-                return redirect(url_for("time_entries"))
+                return _entries_redirect(matter_id=matter_id, task_id=task_id)
 
             hours = ((end_at - start_at).total_seconds() / 3600.0) if end_at else 0.0
             policy = _policy_for_matter(matter_id)
@@ -1189,7 +1205,7 @@ def register_timekeeping_routes(app):
             entry = TimeEntry(
                 user_id=current_user.id,
                 matter_id=matter_id,
-                task_id=request.form.get("task_id", type=int),
+                task_id=task_id,
                 start_at=start_at,
                 end_at=end_at,
                 hours=round(hours, 4),
@@ -1213,7 +1229,7 @@ def register_timekeeping_routes(app):
             set_active_matter_context(matter_id)
             audit("time_entry_create", "TimeEntry", entry.id, {"issues": issues})
             flash("Time entry saved." if not issues else "Time entry saved with validation issues.", "info")
-            return redirect(url_for("time_entries"))
+            return _entries_redirect(matter_id=matter_id, task_id=task_id)
 
         entries = TimeEntry.query.filter_by(user_id=current_user.id).order_by(TimeEntry.start_at.desc()).limit(200).all()
         time_code_assist = _build_time_code_assist(entries)

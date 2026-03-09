@@ -100,6 +100,25 @@ def test_dashboard_renders_legal_desk_with_next_best_move(app_ctx):
     assert b"Inbox and work queue pressure" in response.data
 
 
+def test_dashboard_handles_missing_briefing_payloads(monkeypatch, app_ctx):
+    from intranet.routes import auth as auth_routes
+
+    user, password, secret = _seed_admin_with_mfa(email="dashboard-fallback-admin@example.com")
+    client = app_ctx.test_client()
+    _login(client, user.email, password, secret)
+
+    monkeypatch.setattr(auth_routes, "build_priority_inbox", lambda *args, **kwargs: {})
+    monkeypatch.setattr(auth_routes, "build_today_briefing", lambda *args, **kwargs: {})
+    monkeypatch.setattr(auth_routes, "build_dashboard_focus_board", lambda *args, **kwargs: [])
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert b"Your workday is organized." in response.data
+    assert b"No briefing actions are available yet." in response.data
+    assert b"No matters are currently competing for your attention." in response.data
+
+
 def test_dashboard_uses_configured_priority_inbox_sla_values(app_ctx):
     user, password, secret = _seed_admin_with_mfa(email="priority-config-admin@example.com")
     db.session.add(

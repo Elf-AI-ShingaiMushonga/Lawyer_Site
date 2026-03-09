@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
+{% set rows = rows or [] %}
+{% set pending_payment_rows = pending_payment_rows or [] %}
+{% set payment_status_counts = payment_status_counts or {} %}
+{% set selected_txn_type = selected_txn_type or 'all' %}
+{% set selected_status = selected_status or 'all' %}
 <div class="card p-3 mb-3">
   <div class="toolbar-row">
     <div>

@@ -1137,8 +1137,8 @@ def register_matter_routes(app):
             team_size=len(members),
             notes_count=notes_count,
             archetype_compliance=archetype_compliance,
-        )
-        matter_magic["actions"] = attach_matter_magic_links(matter_magic["actions"], m.id)
+        ) or {}
+        matter_magic["actions"] = attach_matter_magic_links(list(matter_magic.get("actions", [])), m.id)
 
         return page(
             f"Matter {m.matter_no}",
@@ -1470,7 +1470,7 @@ def register_matter_routes(app):
             tasks,
             task_assignees_map=task_assignees_map,
             today=dt.date.today(),
-        )
+        ) or {}
 
         return page(
             "Matter Tasks",

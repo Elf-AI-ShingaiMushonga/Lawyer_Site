@@ -737,8 +737,8 @@ def register_dms_routes(app):
             timeline=upcoming_timeline,
             team_size=MatterMember.query.filter_by(matter_id=matter_id).count(),
             notes_count=MatterNote.query.filter_by(matter_id=matter_id).count(),
-        )
-        matter_magic["actions"] = attach_matter_magic_links(matter_magic["actions"], m.id)
+        ) or {}
+        matter_magic["actions"] = attach_matter_magic_links(list(matter_magic.get("actions", [])), m.id)
         dms_quick_starts = build_dms_quick_starts(
             m,
             document_type_options,

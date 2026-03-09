@@ -1006,6 +1006,12 @@ def register_integration_routes(app):
             user_query = user_query.filter(User.id.in_(ids or [-1]))
         users = user_query.order_by(User.full_name.asc()).limit(500).all()
 
+        def _mobile_redirect(matter_id: int | None = None):
+            params: dict[str, int] = {}
+            if matter_id:
+                params["matter_id"] = matter_id
+            return redirect(url_for("mobile_hub", **params))
+
         if request.method == "POST":
             action = (request.form.get("action") or "").strip().lower()
             if action == "capture_fee":
@@ -1019,15 +1025,15 @@ def register_integration_routes(app):
                 duration_minutes = request.form.get("duration_minutes", type=int)
                 if start_at is None:
                     flash("Start datetime is required.", "warning")
-                    return redirect(url_for("mobile_hub"))
+                    return _mobile_redirect(matter.id)
                 if end_at is None and duration_minutes:
                     end_at = start_at + dt.timedelta(minutes=max(1, duration_minutes))
                 if end_at is None:
                     flash("End datetime or duration is required.", "warning")
-                    return redirect(url_for("mobile_hub"))
+                    return _mobile_redirect(matter.id)
                 if end_at <= start_at:
                     flash("End must be after start.", "warning")
-                    return redirect(url_for("mobile_hub"))
+                    return _mobile_redirect(matter.id)
 
                 hours = max(0.0, (end_at - start_at).total_seconds() / 3600.0)
                 policy = _active_rounding_policy(matter)
@@ -1049,7 +1055,7 @@ def register_integration_routes(app):
                 db.session.commit()
                 audit("mobile_fee_capture", "TimeEntry", entry.id, {"matter_id": matter.id})
                 flash("Fee entry captured from mobile hub.", "info")
-                return redirect(url_for("mobile_hub"))
+                return _mobile_redirect(matter.id)
 
             if action == "assign_task":
                 matter_id = request.form.get("matter_id", type=int)
@@ -1059,7 +1065,7 @@ def register_integration_routes(app):
                 title = (request.form.get("title") or "").strip()
                 if not title:
                     flash("Task title is required.", "warning")
-                    return redirect(url_for("mobile_hub"))
+                    return _mobile_redirect(matter.id)
                 due_date = None
                 due_raw = (request.form.get("due_date") or "").strip()
                 if due_raw:
@@ -1067,7 +1073,7 @@ def register_integration_routes(app):
                         due_date = dt.date.fromisoformat(due_raw)
                     except ValueError:
                         flash("Invalid due date.", "warning")
-                        return redirect(url_for("mobile_hub"))
+                        return _mobile_redirect(matter.id)
 
                 assignee_ids: list[int] = []
                 seen: set[int] = set()
@@ -1102,10 +1108,10 @@ def register_integration_routes(app):
                 db.session.commit()
                 audit("mobile_task_assign", "Task", task.id, {"matter_id": matter.id, "assignee_count": len(assignee_ids)})
                 flash("Task assigned from mobile hub.", "info")
-                return redirect(url_for("mobile_hub"))
+                return _mobile_redirect(matter.id)
 
             flash("Unsupported mobile action.", "warning")
-            return redirect(url_for("mobile_hub"))
+            return _mobile_redirect(selected_matter_id)
 
         my_recent_entries = (
             TimeEntry.query.filter_by(user_id=current_user.id)

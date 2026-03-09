@@ -1,27 +1,64 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3">
-  <h3 class="section-title">Effective Hourly Rate</h3>
-  <div class="page-intro mt-1">Collected value per billable hour across the selected scope.</div>
+<div class="page-shell">
+  {% set report_title = "Effective Hourly Rate" %}
+  {% set report_summary = "Measure the commercial yield of billable work by showing how much collected value each billable hour is generating." %}
+  {% include "analytics/_header.html" %}
 
-  <div class="metric-grid mt-3">
-    <div class="metric-card">
-      <div class="metric-label">EHR</div>
-      <div class="metric-value">{{ snapshot.effective_hourly_rate }}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Collected</div>
-      <div class="metric-value">{{ snapshot.metrics.collected }}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Billable Hours</div>
-      <div class="metric-value">{{ snapshot.metrics.billable_hours }}</div>
-    </div>
-  </div>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Commercial Yield</div>
+            <h2 class="panel-title">Collected value per billable hour</h2>
+          </div>
+        </div>
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-label">EHR</div>
+            <div class="metric-value">R {{ '{:,.2f}'.format(snapshot.effective_hourly_rate) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Collected</div>
+            <div class="metric-value">R {{ '{:,.2f}'.format(snapshot.metrics.collected) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Billable Hours</div>
+            <div class="metric-value">{{ '%.2f'|format(snapshot.metrics.billable_hours) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Baseline Hours</div>
+            <div class="metric-value">{{ '%.0f'|format(available_hours_per_month) }}</div>
+          </div>
+        </div>
+      </section>
 
-  <div class="form-section mt-3">
-    <div class="form-label">Underlying Metrics</div>
-    <pre class="audit-json mt-2">{{ snapshot.metrics }}</pre>
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Reading the Metric</div>
+            <h2 class="panel-title">How to use EHR operationally</h2>
+          </div>
+        </div>
+        <div class="glance-list">
+          <div class="glance-item">
+            <div class="glance-eyebrow">If EHR is low</div>
+            <div class="glance-title">Either billing rates are weak or collections are lagging</div>
+            <div class="glance-meta">Pair this report with realization and profitability to determine whether the issue is pricing, matter mix, write-downs, or slow settlement.</div>
+          </div>
+          <div class="glance-item">
+            <div class="glance-eyebrow">If EHR is healthy but utilization is low</div>
+            <div class="glance-title">Commercial quality is good but volume may be thin</div>
+            <div class="glance-meta">That usually shifts the management question toward pipeline, staffing, or assignment flow rather than collections.</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      {% include "analytics/_rail.html" %}
+    </div>
   </div>
 </div>
 {% endblock %}

@@ -1,27 +1,79 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3">
-  <h3 class="section-title">Realization</h3>
-  <div class="page-intro mt-1">How much billed value is collected in the current scope.</div>
+<div class="page-shell">
+  {% set report_title = "Realization" %}
+  {% set report_summary = "Track whether billed work is turning into settled cash and identify the matters where revenue leakage is concentrated." %}
+  {% include "analytics/_header.html" %}
 
-  <div class="metric-grid mt-3">
-    <div class="metric-card">
-      <div class="metric-label">Realization</div>
-      <div class="metric-value">{{ (snapshot.realization * 100)|round(2) }}%</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Collected</div>
-      <div class="metric-value">{{ snapshot.metrics.collected }}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Billed</div>
-      <div class="metric-value">{{ snapshot.metrics.billed }}</div>
-    </div>
-  </div>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Cash Conversion</div>
+            <h2 class="panel-title">Billed versus collected</h2>
+          </div>
+        </div>
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-label">Realization</div>
+            <div class="metric-value">{{ '%.1f'|format(snapshot.realization * 100) }}%</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Billed</div>
+            <div class="metric-value">R {{ '{:,.2f}'.format(snapshot.metrics.billed) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Collected</div>
+            <div class="metric-value">R {{ '{:,.2f}'.format(snapshot.metrics.collected) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Gap</div>
+            <div class="metric-value">R {{ '{:,.2f}'.format(collection_gap) }}</div>
+          </div>
+        </div>
+      </section>
 
-  <div class="form-section mt-3">
-    <div class="form-label">Underlying Metrics</div>
-    <pre class="audit-json mt-2">{{ snapshot.metrics }}</pre>
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Matter Leakage</div>
+            <h2 class="panel-title">Matters dragging realization</h2>
+            <div class="panel-summary">Use this list to target collection follow-up, invoice cleanup, or client communication where the gap is largest.</div>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table analytics-table">
+            <thead>
+              <tr>
+                <th>Matter</th>
+                <th>Billed</th>
+                <th>Collected</th>
+                <th>Gap</th>
+                <th>Realization</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in profitability_rows %}
+                <tr>
+                  <td><a href="{{ url_for('matter_detail', matter_id=row.matter.id) }}">{{ row.matter.matter_no }}</a><br><span class="muted">{{ row.matter.title }}</span></td>
+                  <td>R {{ '{:,.2f}'.format(row.billed) }}</td>
+                  <td>R {{ '{:,.2f}'.format(row.collected) }}</td>
+                  <td>R {{ '{:,.2f}'.format(row.collection_gap) }}</td>
+                  <td><span class="badge status-badge tone-{{ row.tone }}">{{ '%.1f'|format(row.realization * 100) }}%</span></td>
+                </tr>
+              {% else %}
+                <tr><td colspan="5" class="muted">No profitability data is available yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      {% include "analytics/_rail.html" %}
+    </div>
   </div>
 </div>
 {% endblock %}
