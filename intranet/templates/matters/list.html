@@ -11,7 +11,17 @@
     display: grid;
     grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.92fr) auto auto;
     gap: 12px;
-    align-items: end;
+    align-items: start;
+  }
+
+  .matter-directory-filter-field {
+    display: grid;
+    gap: 6px;
+    align-content: start;
+  }
+
+  .matter-directory-filter-action {
+    align-self: end;
   }
 
   .matter-directory-chip-groups {
@@ -191,12 +201,12 @@
     </div>
 
     <form method="get" class="matter-directory-filter-grid">
-      <div>
+      <div class="matter-directory-filter-field">
         <label class="form-label" for="matter-search">Find Matter</label>
         <input class="form-control" id="matter-search" name="q" placeholder="Search matter number, title, or client..." value="{{ q }}">
         <div class="form-help">Use partial client names, matter numbers, or keywords.</div>
       </div>
-      <div>
+      <div class="matter-directory-filter-field">
         <label class="form-label" for="matter-sort">Sort</label>
         <select class="form-select" id="matter-sort" name="sort" aria-label="Sort matter directory">
           {% for value, label in sort_options %}
@@ -204,10 +214,10 @@
           {% endfor %}
         </select>
       </div>
-      <div class="d-grid">
+      <div class="d-grid matter-directory-filter-action">
         <button class="btn btn-outline-light" type="submit">Apply</button>
       </div>
-      <div class="d-grid">
+      <div class="d-grid matter-directory-filter-action">
         <a class="btn btn-outline-light" href="{{ url_for('matters') }}">Clear</a>
       </div>
     </form>

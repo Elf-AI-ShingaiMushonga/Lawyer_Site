@@ -168,12 +168,12 @@
                   <form method="post" action="{{ url_for('deadline_ack', deadline_id=deadline.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
-                    <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Acking...">Ack</button>
+                    <button class="btn btn-sm btn-outline-light deadline-action-btn" type="submit" data-submitting-text="Acking...">Ack</button>
                   </form>
                 {% endif %}
-                <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_matter', matter_id=deadline.matter_id) }}">Open Matter</a>
-                <a class="btn btn-sm btn-outline-light matter-quick-action" href="{{ url_for('matter_tasks', matter_id=deadline.matter_id) }}">Tasks</a>
-                <a class="btn btn-sm btn-outline-light matter-quick-action" href="{{ url_for('time_entries', matter_id=deadline.matter_id) }}">Log Time</a>
+                <a class="btn btn-sm btn-outline-light deadline-action-btn" href="{{ url_for('calendar_matter', matter_id=deadline.matter_id) }}">Open Matter</a>
+                <a class="btn btn-sm btn-outline-light deadline-action-btn" href="{{ url_for('matter_tasks', matter_id=deadline.matter_id) }}">Tasks</a>
+                <a class="btn btn-sm btn-outline-light deadline-action-btn" href="{{ url_for('time_entries', matter_id=deadline.matter_id) }}">Log Time</a>
               </div>
             </td>
           </tr>
