@@ -96,6 +96,7 @@ def test_dashboard_renders_legal_desk_with_next_best_move(app_ctx):
     assert b"Legal Desk" in response.data
     assert b"Next Best Move" in response.data
     assert b"Clear overdue tasks" in response.data
+    assert b"Personal Daily Briefing" in response.data
 
 
 def test_dashboard_uses_configured_priority_inbox_sla_values(app_ctx):

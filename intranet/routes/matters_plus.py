@@ -65,7 +65,7 @@ from ..services.contracts import (
     validate_contract_field_values,
 )
 from ..services.intake_ai import suggest_matter_intake
-from ..services.matter_magic import attach_matter_magic_links, build_matter_magic_snapshot
+from ..services.matter_magic import attach_matter_magic_links, build_matter_launch_pack, build_matter_magic_snapshot
 from ..services.matter_option_lists import legal_category_options, practice_area_options
 from ..services.storage_paths import harden_private_file, resolve_upload_path
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
@@ -452,6 +452,7 @@ def register_matters_plus_routes(app):
             archetype_compliance=archetype_compliance,
         )
         matter_magic["actions"] = attach_matter_magic_links(matter_magic["actions"], m.id)
+        matter_launch_pack = build_matter_launch_pack(m, snapshot=matter_magic, today=dt.date.today())
 
         return page(
             f"Matter Workspace {m.matter_no}",
@@ -463,6 +464,7 @@ def register_matters_plus_routes(app):
             archetype=archetype,
             archetype_compliance=archetype_compliance,
             matter_magic=matter_magic,
+            matter_launch_pack=matter_launch_pack,
         )
 
     @app.post("/matters/<int:matter_id>/archetype/sync-checklist")

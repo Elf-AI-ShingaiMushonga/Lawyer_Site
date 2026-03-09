@@ -10,14 +10,64 @@ from flask_login import current_user, login_required
 from ..config import is_valid_email
 from ..extensions import db
 from ..helpers import audit, is_admin, normalize_query
-from ..models import Contact, DocumentFile, JobQueue, KnowledgeBase, Matter, Task
+from ..models import Contact, DocumentFile, JobQueue, KnowledgeBase, Matter, MatterMember, MatterNote, MatterTimelineEvent, Task
 from ..policies import visible_matter_ids
 from ..roles import role_is_admin
+from ..services.matter_magic import build_matter_launch_pack, build_matter_magic_snapshot
 from ..services.semantic_search import SemanticSearchService
 from ..templates import page
 
 
 def register_content_routes(app):
+    def _search_primary_matter(query: str, matters: list[Matter], matter_by_id: dict[int, Matter], tasks: list[Task], docs: list[DocumentFile]) -> Matter | None:
+        normalized = str(query or "").strip().casefold()
+        if not normalized:
+            return matters[0] if matters else None
+
+        scored: list[tuple[int, Matter]] = []
+        seen_ids: set[int] = set()
+        linked_task_counts: dict[int, int] = {}
+        linked_doc_counts: dict[int, int] = {}
+        for row in tasks:
+            if row.matter_id:
+                linked_task_counts[int(row.matter_id)] = linked_task_counts.get(int(row.matter_id), 0) + 1
+        for row in docs:
+            if row.matter_id:
+                linked_doc_counts[int(row.matter_id)] = linked_doc_counts.get(int(row.matter_id), 0) + 1
+
+        for matter in list(matters) + list(matter_by_id.values()):
+            if matter is None or getattr(matter, "id", None) is None:
+                continue
+            matter_id = int(matter.id)
+            if matter_id in seen_ids:
+                continue
+            seen_ids.add(matter_id)
+            score = 0
+            matter_no = str(getattr(matter, "matter_no", "") or "").casefold()
+            title = str(getattr(matter, "title", "") or "").casefold()
+            client_name = str(getattr(matter, "client_name", "") or "").casefold()
+            if matter_no == normalized:
+                score += 120
+            elif normalized in matter_no:
+                score += 80
+            if title == normalized:
+                score += 90
+            elif normalized in title:
+                score += 55
+            if client_name == normalized:
+                score += 70
+            elif normalized in client_name:
+                score += 40
+            score += linked_task_counts.get(matter_id, 0) * 12
+            score += linked_doc_counts.get(matter_id, 0) * 8
+            if score > 0:
+                scored.append((score, matter))
+
+        if scored:
+            scored.sort(key=lambda row: (-row[0], str(row[1].matter_no or "")))
+            return scored[0][1]
+        return matters[0] if matters else (next(iter(matter_by_id.values()), None) if matter_by_id else None)
+
     @app.route("/contacts", methods=["GET", "POST"])
     @login_required
     def contacts():
@@ -114,6 +164,7 @@ def register_content_routes(app):
         matters = tasks = docs = articles = contacts = []
         semantic_hits = []
         matter_by_id: dict[int, Matter] = {}
+        launch_pack = None
         query_too_short = bool(q) and len(q) < 2
         scoped_matter_ids: set[int] | None = None
         if q and not query_too_short:
@@ -168,6 +219,32 @@ def register_content_routes(app):
                     current_app.logger.warning("Semantic search unavailable: %s", exc)
                     semantic_hits = []
 
+            primary_matter = _search_primary_matter(q, matters, matter_by_id, tasks, docs)
+            if primary_matter is not None:
+                matter_id = int(primary_matter.id)
+                launch_tasks = [row for row in tasks if int(getattr(row, "matter_id", 0) or 0) == matter_id][:8]
+                launch_docs = [row for row in docs if int(getattr(row, "matter_id", 0) or 0) == matter_id][:8]
+                launch_timeline = (
+                    MatterTimelineEvent.query.filter(
+                        MatterTimelineEvent.matter_id == matter_id,
+                        MatterTimelineEvent.event_date >= dt.date.today(),
+                    )
+                    .order_by(MatterTimelineEvent.event_date.asc(), MatterTimelineEvent.id.asc())
+                    .limit(8)
+                    .all()
+                )
+                snapshot = build_matter_magic_snapshot(
+                    primary_matter,
+                    today=dt.date.today(),
+                    tasks=launch_tasks,
+                    docs=launch_docs,
+                    timeline=launch_timeline,
+                    team_size=MatterMember.query.filter_by(matter_id=matter_id).count(),
+                    notes_count=MatterNote.query.filter_by(matter_id=matter_id).count(),
+                    limit_actions=4,
+                )
+                launch_pack = build_matter_launch_pack(primary_matter, snapshot=snapshot, today=dt.date.today())
+
         return page(
             "Search",
             "content/search.html",
@@ -180,6 +257,7 @@ def register_content_routes(app):
             semantic_hits=semantic_hits,
             matter_by_id=matter_by_id,
             query_too_short=query_too_short,
+            launch_pack=launch_pack,
         )
 
     @app.get("/api/ai/jobs/<int:job_id>")

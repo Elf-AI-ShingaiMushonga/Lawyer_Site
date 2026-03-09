@@ -744,6 +744,210 @@ def build_task_tracker_snapshot(
     }
 
 
+def _launch_action(title: str, summary: str, href: str, *, badge: str = "", emphasis: str = "") -> dict[str, str]:
+    return {
+        "title": title,
+        "summary": summary,
+        "href": href,
+        "badge": badge,
+        "emphasis": emphasis,
+    }
+
+
+def build_matter_launch_pack(
+    matter: Matter,
+    *,
+    snapshot: dict[str, Any] | None = None,
+    today: dt.date | None = None,
+) -> dict[str, Any]:
+    today = today or dt.date.today()
+    snapshot = snapshot or build_matter_magic_snapshot(matter, today=today)
+    linked_actions = attach_matter_magic_links(snapshot.get("actions", []), int(matter.id))
+    top_action = linked_actions[0] if linked_actions else None
+    draft_title = f"Working Draft - {matter.matter_no} - {today.isoformat()}"
+    timer_label = top_action["title"] if top_action else f"Work on {matter.matter_no}"
+    time_narrative = timer_label if top_action else f"Work on matter {matter.matter_no}"
+
+    quick_actions = [
+        _launch_action(
+            "Start Timer",
+            "Capture live work against this matter without leaving the current context.",
+            url_for("time_timers", matter_id=matter.id, label=timer_label),
+            badge="Time",
+            emphasis="strong",
+        ),
+        _launch_action(
+            "Log Time",
+            "Post completed work with the matter already selected.",
+            url_for("time_entries", matter_id=matter.id, narrative=time_narrative),
+            badge="Time",
+        ),
+        _launch_action(
+            "Add Task",
+            "Create the next action for this matter with no extra navigation.",
+            url_for(
+                "matter_task_create",
+                matter_id=matter.id,
+                prefill_title=(top_action["title"] if top_action else ""),
+                prefill_description=(top_action["summary"] if top_action else ""),
+            ),
+            badge="Task",
+        ),
+        _launch_action(
+            "Schedule Date",
+            "Seed the next filing, hearing, or milestone directly into the docket.",
+            url_for(
+                "calendar_matter",
+                matter_id=matter.id,
+                prefill_deadline_title=(top_action["title"] if top_action else ""),
+            ),
+            badge="Calendar",
+        ),
+        _launch_action(
+            "Draft Document",
+            "Open DMS with a working draft title already set for this matter.",
+            url_for(
+                "matter_dms",
+                matter_id=matter.id,
+                prefill_title=draft_title,
+                prefill_document_type="General",
+                prefill_confidentiality="Confidential",
+            ),
+            badge="DMS",
+        ),
+        _launch_action(
+            "South Africa Desk",
+            "Jump into local practitioner workflows against the current matter.",
+            url_for("integrations_south_africa", matter_id=matter.id),
+            badge="ZA",
+        ),
+    ]
+
+    briefing_lines = [
+        f"War room for {matter.matter_no} - {matter.title}",
+        f"Client: {matter.client_name}",
+        snapshot.get("status_line", ""),
+    ]
+    if top_action is not None:
+        briefing_lines.append(f"Next move: {top_action['title']} - {top_action['summary']}")
+    if snapshot.get("next_event_summary"):
+        briefing_lines.append(f"Next event: {snapshot['next_event_summary']}")
+    briefing_lines.append(
+        "Execution posture: "
+        f"{snapshot.get('open_task_count', 0)} open tasks, "
+        f"{snapshot.get('overdue_task_count', 0)} overdue, "
+        f"{snapshot.get('document_count', 0)} documents, "
+        f"{snapshot.get('notes_count', 0)} notes."
+    )
+    if snapshot.get("recent_document_labels"):
+        briefing_lines.append("Recent docs: " + ", ".join(snapshot["recent_document_labels"][:3]))
+
+    return {
+        "headline": top_action["title"] if top_action else "Matter launch pack",
+        "subheadline": top_action["summary"] if top_action else snapshot.get("headline", "Move the matter from one place."),
+        "quick_actions": quick_actions,
+        "brief_text": "\n".join(line for line in briefing_lines if line),
+        "top_action": top_action,
+        "health_tone": snapshot.get("health_tone", "steady"),
+        "status_line": snapshot.get("status_line", ""),
+    }
+
+
+def build_today_briefing(
+    *,
+    active_matter: Matter | None,
+    legal_desk: Sequence[dict[str, Any]],
+    stats: dict[str, int],
+    priority_inbox: dict[str, Any],
+) -> dict[str, Any]:
+    cards: list[dict[str, str]] = []
+    focus_card = legal_desk[0] if legal_desk else None
+    focus_matter = focus_card.get("matter") if isinstance(focus_card, dict) else None
+    focus_action = focus_card.get("top_action") if isinstance(focus_card, dict) else None
+
+    if active_matter is not None:
+        cards.append(
+            _launch_action(
+                f"Resume {active_matter.matter_no}",
+                active_matter.title,
+                url_for("matter_workspace", matter_id=active_matter.id),
+                badge="Active",
+                emphasis="strong",
+            )
+        )
+
+    if focus_matter is not None and focus_action is not None:
+        cards.append(
+            _launch_action(
+                focus_action["title"],
+                f"{focus_matter.matter_no} - {focus_action['summary']}",
+                focus_action["href"],
+                badge="Focus",
+            )
+        )
+
+    if int(stats.get("due_today_tasks", 0) or 0) > 0:
+        cards.append(
+            _launch_action(
+                "Clear today's due work",
+                f"{int(stats.get('due_today_tasks', 0) or 0)} task(s) need attention today.",
+                url_for("calendar_my", filter="today"),
+                badge="Today",
+            )
+        )
+
+    if int(priority_inbox.get("total_actions", 0) or 0) > 0:
+        cards.append(
+            _launch_action(
+                "Work the priority inbox",
+                f"{int(priority_inbox.get('total_actions', 0) or 0)} client, intake, or billing action(s) are waiting.",
+                url_for("dashboard") + "#dashboard-priority-inbox",
+                badge="Inbox",
+            )
+        )
+
+    if int(stats.get("my_time_needs_review", 0) or 0) > 0:
+        cards.append(
+            _launch_action(
+                "Review my draft time",
+                f"{int(stats.get('my_time_needs_review', 0) or 0)} time entry or entries still need cleanup.",
+                url_for("time_entries"),
+                badge="Time",
+            )
+        )
+
+    if int(stats.get("urgent_unassigned", 0) or 0) > 0:
+        cards.append(
+            _launch_action(
+                "Cover urgent unassigned work",
+                f"{int(stats.get('urgent_unassigned', 0) or 0)} urgent task(s) still lack ownership.",
+                url_for("matters"),
+                badge="Risk",
+            )
+        )
+
+    deduped: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for card in cards:
+        key = (card["title"], card["href"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(card)
+
+    summary_bits = [
+        f"{int(stats.get('due_today_tasks', 0) or 0)} due today",
+        f"{int(priority_inbox.get('total_actions', 0) or 0)} inbox",
+        f"{int(stats.get('my_time_needs_review', 0) or 0)} time to review",
+    ]
+    return {
+        "headline": "Personal Daily Briefing",
+        "summary": " | ".join(summary_bits),
+        "cards": deduped[:4],
+        "focus_matter": focus_matter,
+    }
+
+
 def _pick_option(options: Sequence[str], candidates: Sequence[str], default: str = "") -> str:
     lookup = {
         str(option).strip().casefold(): str(option).strip()

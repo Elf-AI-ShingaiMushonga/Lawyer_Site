@@ -35,7 +35,7 @@ from ..models import (
     UserMFABackupCode,
 )
 from ..policies import visible_matter_ids
-from ..services.matter_magic import build_dashboard_focus_board
+from ..services.matter_magic import build_dashboard_focus_board, build_today_briefing
 from ..services.workspace_hub import (
     build_workspace_quick_actions,
     load_user_workspace_mode,
@@ -409,6 +409,12 @@ def register_auth_routes(app):
             "recent_views": len(recent_views),
             "priority_actions": priority_inbox["total_actions"],
         }
+        today_briefing = build_today_briefing(
+            active_matter=active_workspace_matter,
+            legal_desk=legal_desk,
+            stats=stats,
+            priority_inbox=priority_inbox,
+        )
 
         return page(
             "Dashboard",
@@ -428,6 +434,7 @@ def register_auth_routes(app):
             workspace_mode_choices=workspace_mode_options(getattr(current_user, "role", None)),
             workspace_quick_actions=workspace_quick_actions,
             workspace_focus_matter=workspace_focus_matter,
+            today_briefing=today_briefing,
         )
 
     @app.post("/dashboard/workspace-mode")

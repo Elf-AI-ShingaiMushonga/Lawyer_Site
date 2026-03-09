@@ -3046,6 +3046,8 @@ def test_search_results_render_operational_actions(app_ctx):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
+    assert "Smart Launch Pack" in body
+    assert "Search Brief" in body
     assert "Workspace" in body
     assert "Start Timer" in body
     assert "Download" in body
@@ -3078,6 +3080,36 @@ def test_matter_tasks_renders_task_radar_and_handoff(app_ctx):
     assert "Task Radar" in body
     assert "Handoff Brief" in body
     assert "Overdue brief review" in body
+
+
+def test_matter_workspace_renders_war_room_launch_pack(app_ctx):
+    app = app_ctx
+    user = _seed_user("war-room@example.com")
+    matter = _seed_matter(user, "2026-WAR-ROOM-1", "War Room Matter", "War Room Client")
+    matter.practice_area = "General Litigation"
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.add(
+        Task(
+            matter_id=matter.id,
+            title="Prepare argument outline",
+            status="Todo",
+            due_date=dt.date.today() + dt.timedelta(days=1),
+            created_by=user.id,
+            priority="High",
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/matters/{matter.id}/workspace")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Matter War Room" in body
+    assert "Start Timer" in body
+    assert "Draft Document" in body
+    assert "War Room Brief" in body
 
 
 def test_south_africa_hub_renders_workflow_packets(app_ctx):
