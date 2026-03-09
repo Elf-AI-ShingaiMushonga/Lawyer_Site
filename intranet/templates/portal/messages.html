@@ -1,120 +1,206 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3">
-  <div class="toolbar-row">
-    <div>
-      <h3 class="section-title">Portal Messages</h3>
-      <div class="page-intro mt-1">Start a new message or reply in an existing thread.</div>
-    </div>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
-  </div>
-
-  <form method="post" class="mt-3">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="form-section">
-      <div class="row g-2">
-        <div class="col-md-4">
-          <label class="form-label" for="portal-message-matter">Matter</label>
-          <select class="form-select" id="portal-message-matter" name="matter_id" data-thread-matter-target required>
-            {% for m in matters %}
-              <option value="{{ m.id }}" {% if prefill_matter_id and m.id == prefill_matter_id %}selected{% endif %}>{{ m.matter_no }} - {{ m.title }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label" for="portal-message-subject">Subject (New Thread)</label>
-          <input class="form-control" id="portal-message-subject" name="subject" placeholder="Subject">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label" for="portal-message-thread">Reply to Existing Thread (Optional)</label>
-          <select class="form-select" id="portal-message-thread" name="thread_id" data-thread-matter-source>
-            <option value="">Start new thread</option>
-            {% for t in threads %}
-              {% set thread_matter = matter_map.get(t.matter_id) if matter_map else None %}
-              <option
-                value="{{ t.id }}"
-                data-matter-id="{{ t.matter_id }}"
-                {% if prefill_thread_id and t.id == prefill_thread_id %}selected{% endif %}
-              >
-                #{{ t.id }} · {{ thread_matter.matter_no ~ ' - ' ~ thread_matter.title if thread_matter else ('Matter #' ~ t.matter_id) }} · {{ t.subject }}
-              </option>
-            {% endfor %}
-          </select>
-          <div class="form-help" data-thread-matter-hint>Select a thread to lock matter and subject automatically.</div>
-        </div>
-      </div>
-    </div>
-    <div class="form-section mt-2">
-      <label class="form-label" for="portal-message-body">Message</label>
-      <textarea class="form-control" id="portal-message-body" name="body" rows="3" placeholder="Message body" required></textarea>
-    </div>
-    <div class="d-grid mt-2">
-      <button class="btn btn-light">Send Message</button>
-    </div>
-  </form>
-</div>
-
-<div class="card p-3 mb-3">
-  <h4 class="mb-1">Threads</h4>
-  <div class="table-tools mt-2" data-table-tools data-table-target="portal-threads-table">
-    <input class="form-control" type="search" data-table-search placeholder="Filter by thread ID, matter, or subject...">
-    <div class="table-count" data-table-count aria-live="polite"></div>
-  </div>
-  <div class="table-responsive mt-2">
-    <table class="table" id="portal-threads-table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Matter</th>
-          <th>Subject</th>
-          <th>Created</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for t in threads %}
-          {% set thread_matter = matter_map.get(t.matter_id) if matter_map else None %}
-          <tr data-table-row data-search="{{ t.id }} {{ thread_matter.matter_no if thread_matter else '' }} {{ thread_matter.title if thread_matter else '' }} {{ t.subject }} {{ t.created_at }}">
-            <td>{{ t.id }}</td>
-            <td>{{ thread_matter.matter_no ~ ' - ' ~ thread_matter.title if thread_matter else ('Matter #' ~ t.matter_id) }}</td>
-            <td>{{ t.subject }}</td>
-            <td>{{ t.created_at }}</td>
-            <td class="table-actions">
-              <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=t.matter_id, thread_id=t.id) }}#portal-message-body">Reply</a>
-              <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_links', matter_id=t.matter_id) }}">Secure Link</a>
-            </td>
-          </tr>
-        {% else %}
-          <tr><td colspan="5" class="muted">No threads.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<div class="card p-3">
-  <h4 class="mb-1">Recent Messages</h4>
-  {% if messages %}
-    {% for m in messages %}
-      {% set message_thread = namespace(subject='Thread #' ~ m.thread_id, matter_id=None) %}
-      {% for t in threads %}
-        {% if t.id == m.thread_id %}
-          {% set message_thread.subject = t.subject %}
-          {% set message_thread.matter_id = t.matter_id %}
-        {% endif %}
-      {% endfor %}
-      <div class="activity-item">
-        <div class="fw-semibold d-flex flex-wrap align-items-center gap-2">
-          <span>{{ message_thread.subject }} • {{ m.created_at }}</span>
-          {% if message_thread.matter_id %}
-            <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=message_thread.matter_id, thread_id=m.thread_id) }}#portal-message-body">Reply</a>
+{% set selected_matter = matter_map.get(prefill_matter_id) if matter_map else None %}
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Client Portal</div>
+        <h1 class="page-hero-title">Portal Messages</h1>
+        <div class="page-hero-summary">
+          Start a new message or reply in an existing thread.
+          {% if selected_matter %}
+            Current matter context: {{ selected_matter.matter_no }} - {{ selected_matter.title }}.
           {% endif %}
         </div>
-        <div class="mt-1">{{ m.body }}</div>
+        <div class="page-hero-meta">
+          <span class="tag-chip">{{ matters|length }} message-enabled matter(s)</span>
+          <span class="tag-chip">{{ threads|length }} thread(s)</span>
+          <span class="tag-chip">{{ messages|length }} recent message(s)</span>
+        </div>
       </div>
-    {% endfor %}
-  {% else %}
-    <div class="muted">No messages.</div>
-  {% endif %}
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_uploads', matter_id=prefill_matter_id) if prefill_matter_id else url_for('portal_uploads') }}">Uploads</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_links', matter_id=prefill_matter_id) if prefill_matter_id else url_for('portal_links') }}">Secure Links</a>
+      </div>
+    </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Threads</div>
+        <div class="page-stat-value">{{ threads|length }}</div>
+        <div class="page-stat-meta">Conversation threads currently open to this portal user.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Recent Messages</div>
+        <div class="page-stat-value">{{ messages|length }}</div>
+        <div class="page-stat-meta">Recent message activity loaded into this workspace.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Matters</div>
+        <div class="page-stat-value">{{ matters|length }}</div>
+        <div class="page-stat-meta">Matters where full-curated collaboration is currently enabled.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Compose</div>
+            <h2 class="panel-title">Send a portal message</h2>
+            <div class="panel-summary">Replying inside an existing thread keeps matter context and subject lines aligned automatically.</div>
+          </div>
+        </div>
+        {% if matters %}
+          <form method="post" class="field-grid">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="field-grid columns-3">
+              <div>
+                <label class="form-label" for="portal-message-matter">Matter</label>
+                <select class="form-select" id="portal-message-matter" name="matter_id" data-thread-matter-target required>
+                  {% for m in matters %}
+                    <option value="{{ m.id }}" {% if prefill_matter_id and m.id == prefill_matter_id %}selected{% endif %}>{{ m.matter_no }} - {{ m.title }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="portal-message-subject">Subject</label>
+                <input class="form-control" id="portal-message-subject" name="subject" placeholder="Subject for a new thread">
+              </div>
+              <div>
+                <label class="form-label" for="portal-message-thread">Existing Thread</label>
+                <select class="form-select" id="portal-message-thread" name="thread_id" data-thread-matter-source>
+                  <option value="">Start a new thread</option>
+                  {% for t in threads %}
+                    {% set thread_matter = matter_map.get(t.matter_id) if matter_map else None %}
+                    <option
+                      value="{{ t.id }}"
+                      data-matter-id="{{ t.matter_id }}"
+                      {% if prefill_thread_id and t.id == prefill_thread_id %}selected{% endif %}
+                    >
+                      #{{ t.id }} · {{ thread_matter.matter_no ~ ' - ' ~ thread_matter.title if thread_matter else ('Matter #' ~ t.matter_id) }} · {{ t.subject }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <div class="form-help" data-thread-matter-hint>Selecting a thread will lock the matter and use that thread context automatically.</div>
+              </div>
+            </div>
+            <div>
+              <label class="form-label" for="portal-message-body">Message</label>
+              <textarea class="form-control" id="portal-message-body" name="body" rows="5" placeholder="Type the message you want the legal team to receive." required></textarea>
+            </div>
+            <div class="section-note">Use existing threads when the topic already exists. Start a new thread only when the subject materially changes.</div>
+            <div class="d-grid d-md-flex justify-content-md-end">
+              <button class="btn btn-light" type="submit">Send Message</button>
+            </div>
+          </form>
+        {% else %}
+          <div class="empty-state">This portal account does not currently have any matters with full-curated messaging access.</div>
+        {% endif %}
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Recent Activity</div>
+            <h2 class="panel-title">Latest portal messages</h2>
+            <div class="panel-summary">The most recent communication is surfaced first so the next reply is obvious.</div>
+          </div>
+        </div>
+        {% if messages %}
+          <div class="glance-list">
+            {% for m in messages[:12] %}
+              {% set message_thread = namespace(subject='Thread #' ~ m.thread_id, matter_id=None) %}
+              {% for t in threads %}
+                {% if t.id == m.thread_id %}
+                  {% set message_thread.subject = t.subject %}
+                  {% set message_thread.matter_id = t.matter_id %}
+                {% endif %}
+              {% endfor %}
+              <article class="glance-item">
+                <div class="list-row">
+                  <div>
+                    <div class="glance-title">{{ message_thread.subject }}</div>
+                    <div class="glance-meta">
+                      {{ m.created_at }}
+                      {% if message_thread.matter_id and matter_map.get(message_thread.matter_id) %}
+                        • {{ matter_map[message_thread.matter_id].matter_no }} - {{ matter_map[message_thread.matter_id].title }}
+                      {% endif %}
+                    </div>
+                  </div>
+                  {% if message_thread.matter_id %}
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=message_thread.matter_id, thread_id=m.thread_id) }}#portal-message-body">Reply</a>
+                  {% endif %}
+                </div>
+                <div class="section-note mt-3">{{ m.body }}</div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">No message activity has been recorded yet.</div>
+        {% endif %}
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Threads</div>
+              <h2 class="panel-title">Open thread directory</h2>
+              <div class="panel-summary">Use threads when you need to jump back into an existing matter conversation.</div>
+            </div>
+          </div>
+          {% if threads %}
+            <div class="glance-list">
+              {% for t in threads[:8] %}
+                {% set thread_matter = matter_map.get(t.matter_id) if matter_map else None %}
+                <div class="glance-item">
+                  <div class="glance-title">{{ t.subject }}</div>
+                  <div class="glance-meta">
+                    {{ thread_matter.matter_no ~ ' - ' ~ thread_matter.title if thread_matter else ('Matter #' ~ t.matter_id) }}
+                    • {{ t.created_at }}
+                  </div>
+                  <div class="table-actions mt-3">
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=t.matter_id, thread_id=t.id) }}#portal-message-body">Reply</a>
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matter_detail', matter_id=t.matter_id) }}">Open Matter</a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="empty-state">No threads are currently available to this portal user.</div>
+          {% endif %}
+        </section>
+
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Good Practice</div>
+              <h2 class="panel-title">Messaging guidance</h2>
+            </div>
+          </div>
+          <div class="glance-list">
+            <div class="glance-item">
+              <div class="glance-title">Keep one thread per topic</div>
+              <div class="glance-meta">That makes later review and legal context reconstruction much easier for both client and firm.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-title">Use uploads for files</div>
+              <div class="glance-meta">Send the explanation here, but attach documents via the uploads workspace so they file into the DMS correctly.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-title">Reply in context</div>
+              <div class="glance-meta">When a thread already exists, reply there instead of creating parallel discussions on the same issue.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

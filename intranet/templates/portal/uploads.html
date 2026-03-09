@@ -1,80 +1,158 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3">
-  <div class="toolbar-row">
-    <div>
-      <h3 class="section-title">Portal Upload</h3>
-      <div class="page-intro mt-1">Securely upload client files tied to a visible matter.</div>
-    </div>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
-  </div>
-
-  <form method="post" enctype="multipart/form-data" class="mt-3">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="form-section">
-      <div class="row g-2">
-        <div class="col-md-4">
-          <label class="form-label" for="portal-upload-matter">Matter</label>
-          <select class="form-select" id="portal-upload-matter" name="matter_id" required>
-            {% for m in matters %}
-              <option value="{{ m.id }}" {% if prefill_matter_id and m.id == prefill_matter_id %}selected{% endif %}>{{ m.matter_no }} - {{ m.title }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label" for="portal-upload-file">File</label>
-          <input class="form-control" id="portal-upload-file" type="file" name="file" required>
-        </div>
-        <div class="col-md-2 d-grid">
-          <button class="btn btn-light">Upload</button>
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Client Portal</div>
+        <h1 class="page-hero-title">Portal Uploads</h1>
+        <div class="page-hero-summary">Securely upload client files tied to a visible matter. Every file is pushed into the DMS review flow after upload.</div>
+        <div class="page-hero-meta">
+          <span class="tag-chip">{{ matters|length }} matter(s) accept uploads</span>
+          <span class="tag-chip">{{ full_curated_matter_ids|length }} matter(s) also allow messaging follow-up</span>
         </div>
       </div>
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=prefill_matter_id) if prefill_matter_id else url_for('portal_messages') }}">Messages</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_links', matter_id=prefill_matter_id) if prefill_matter_id else url_for('portal_links') }}">Secure Links</a>
+      </div>
     </div>
-  </form>
-</div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Uploads</div>
+        <div class="page-stat-value">{{ uploads|length }}</div>
+        <div class="page-stat-meta">Portal-uploaded files currently visible in this workspace.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Upload Matters</div>
+        <div class="page-stat-value">{{ matters|length }}</div>
+        <div class="page-stat-meta">Matters where document sharing is enabled for this portal user.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Message Ready</div>
+        <div class="page-stat-value">{{ full_curated_matter_ids|length }}</div>
+        <div class="page-stat-meta">Uploaded files on these matters can be followed by a message thread immediately.</div>
+      </div>
+    </div>
+  </section>
 
-<div class="card p-3">
-  <h4 class="mb-1">Uploads</h4>
-  <div class="table-tools mt-2" data-table-tools data-table-target="portal-uploads-table">
-    <input class="form-control" type="search" data-table-search placeholder="Filter by matter, filename, hash, or date...">
-    <div class="table-count" data-table-count aria-live="polite"></div>
-  </div>
-  <div class="table-responsive mt-2">
-    <table class="table" id="portal-uploads-table">
-      <thead>
-        <tr>
-          <th>Matter</th>
-          <th>Filename</th>
-          <th>SHA256</th>
-          <th>Uploaded</th>
-          <th>Next Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for u in uploads %}
-          {% set upload_matter = namespace(label='Matter #' ~ u.matter_id) %}
-          {% for m in matters %}
-            {% if m.id == u.matter_id %}
-              {% set upload_matter.label = m.matter_no ~ ' - ' ~ m.title %}
-            {% endif %}
-          {% endfor %}
-          <tr data-table-row data-search="{{ upload_matter.label }} {{ u.filename }} {{ u.sha256 }} {{ u.uploaded_at }}">
-            <td>{{ upload_matter.label }}</td>
-            <td>{{ u.filename }}</td>
-            <td><code>{{ u.sha256[:16] }}...</code></td>
-            <td>{{ u.uploaded_at }}</td>
-            <td class="table-actions">
-              {% if full_curated_matter_ids and u.matter_id in full_curated_matter_ids %}
-                <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=u.matter_id) }}">Message</a>
-              {% endif %}
-              <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_links', matter_id=u.matter_id) }}">Secure Link</a>
-            </td>
-          </tr>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Upload</div>
+            <h2 class="panel-title">Submit a file into the matter workspace</h2>
+            <div class="panel-summary">Files uploaded here are secured, hashed, and filed into the DMS so internal review can start without re-uploading.</div>
+          </div>
+        </div>
+        {% if matters %}
+          <form method="post" enctype="multipart/form-data" class="field-grid">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="field-grid columns-3">
+              <div>
+                <label class="form-label" for="portal-upload-matter">Matter</label>
+                <select class="form-select" id="portal-upload-matter" name="matter_id" required>
+                  {% for m in matters %}
+                    <option value="{{ m.id }}" {% if prefill_matter_id and m.id == prefill_matter_id %}selected{% endif %}>{{ m.matter_no }} - {{ m.title }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="portal-upload-file">File</label>
+                <input class="form-control" id="portal-upload-file" type="file" name="file" required>
+              </div>
+              <div class="d-grid align-items-end">
+                <button class="btn btn-light" type="submit">Upload File</button>
+              </div>
+            </div>
+            <div class="section-note">Supported document types only. After upload, the file is hashed, stored privately, and linked to a review task if the workflow requires it.</div>
+          </form>
         {% else %}
-          <tr><td colspan="5" class="muted">No uploads.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+          <div class="empty-state">No matters currently allow uploads for this portal account.</div>
+        {% endif %}
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">History</div>
+            <h2 class="panel-title">Uploaded file register</h2>
+            <div class="panel-summary">Search by matter, filename, file hash, or upload date.</div>
+          </div>
+        </div>
+        <div class="table-tools" data-table-tools data-table-target="portal-uploads-table">
+          <input class="form-control" type="search" data-table-search placeholder="Filter by matter, filename, hash, or date...">
+          <div class="table-count" data-table-count aria-live="polite"></div>
+        </div>
+        <div class="table-responsive table-responsive-unbounded">
+          <table class="table" id="portal-uploads-table">
+            <thead>
+              <tr>
+                <th>Matter</th>
+                <th>Filename</th>
+                <th>SHA256</th>
+                <th>Uploaded</th>
+                <th>Next Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for u in uploads %}
+                {% set upload_matter = namespace(label='Matter #' ~ u.matter_id) %}
+                {% for m in matters %}
+                  {% if m.id == u.matter_id %}
+                    {% set upload_matter.label = m.matter_no ~ ' - ' ~ m.title %}
+                  {% endif %}
+                {% endfor %}
+                <tr data-table-row data-search="{{ upload_matter.label }} {{ u.filename }} {{ u.sha256 }} {{ u.uploaded_at }}">
+                  <td>{{ upload_matter.label }}</td>
+                  <td class="fw-semibold">{{ u.filename }}</td>
+                  <td><code>{{ u.sha256[:16] }}...</code></td>
+                  <td>{{ u.uploaded_at }}</td>
+                  <td class="table-actions">
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matter_detail', matter_id=u.matter_id) }}">Open Matter</a>
+                    {% if full_curated_matter_ids and u.matter_id in full_curated_matter_ids %}
+                      <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=u.matter_id) }}">Message</a>
+                    {% endif %}
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_links', matter_id=u.matter_id) }}">Secure Link</a>
+                  </td>
+                </tr>
+              {% else %}
+                <tr><td colspan="5" class="muted">No uploads.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">What Happens Next</div>
+              <h2 class="panel-title">Post-upload workflow</h2>
+            </div>
+          </div>
+          <div class="glance-list">
+            <div class="glance-item">
+              <div class="glance-title">The file is stored privately</div>
+              <div class="glance-meta">The portal file is saved with a hardened name and hash before it is filed into the matter DMS.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-title">Review can be queued automatically</div>
+              <div class="glance-meta">Where the workflow is configured, the upload creates the internal review task without any second step.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-title">Message only when needed</div>
+              <div class="glance-meta">If the uploaded file needs explanation, use portal messages on full-curated matters to add context.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

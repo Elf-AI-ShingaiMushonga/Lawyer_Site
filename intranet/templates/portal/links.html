@@ -1,105 +1,189 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3">
-  <div class="toolbar-row">
-    <div>
-      <h3 class="section-title">Time-Limited Links</h3>
-      <div class="page-intro mt-1">Create secure, expiring links for matter summaries or specific document versions.</div>
-    </div>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
-  </div>
-
-  {% if last_link_url %}
-    <div class="form-section mt-3">
-      <div class="form-label mb-1">New link ready to share</div>
-      <div class="row g-2 align-items-center">
-        <div class="col-md-8">
-          <input class="form-control" id="portal-last-link" type="text" value="{{ last_link_url }}" readonly data-copy-source>
-        </div>
-        <div class="col-md-4 table-actions">
-          <button class="btn btn-outline-light" type="button" data-copy-target="portal-last-link" data-copy-success-text="Copied">Copy Link</button>
-          <a class="btn btn-outline-light" href="{{ last_link_url }}" target="_blank" rel="noopener">Open</a>
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Client Portal</div>
+        <h1 class="page-hero-title">Time-Limited Links</h1>
+        <div class="page-hero-summary">Create secure, expiring links for a matter summary or a specific document version without exposing the full portal session.</div>
+        <div class="page-hero-meta">
+          <span class="tag-chip">{{ matters|length }} matter(s)</span>
+          <span class="tag-chip">{{ versions|length }} document version(s)</span>
+          <span class="tag-chip">{{ tokens|length }} recent link(s)</span>
         </div>
       </div>
-      <div class="form-help mt-1" data-copy-feedback-for="portal-last-link">Copy before creating another link.</div>
-    </div>
-  {% endif %}
-
-  <form method="post" class="mt-3">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="form-section">
-      <div class="row g-2">
-        <div class="col-md-3">
-          <label class="form-label" for="portal-link-matter">Matter</label>
-          <select class="form-select" id="portal-link-matter" name="matter_id" required>
-            {% for m in matters %}
-              <option value="{{ m.id }}" {% if prefill_matter_id and m.id == prefill_matter_id %}selected{% endif %}>{{ m.matter_no }} - {{ m.title }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label" for="portal-link-document">Document Version (Optional)</label>
-          <select class="form-select" id="portal-link-document" name="document_version_id">
-            <option value="">Matter summary link</option>
-            {% for pair in versions %}
-              {% set v = pair[0] %}
-              {% set d = pair[1] %}
-              <option value="{{ v.id }}" data-matter-id="{{ d.matter_id }}">Doc {{ d.id }} • v{{ v.version_no }} • {{ v.original_filename }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label" for="portal-link-expiry">Expires In (Minutes)</label>
-          <input class="form-control" id="portal-link-expiry" type="number" name="expires_minutes" min="1" max="10080" value="60">
-        </div>
-        <div class="col-md-2 d-grid">
-          <button class="btn btn-light">Create Link</button>
-        </div>
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_uploads', matter_id=prefill_matter_id) if prefill_matter_id else url_for('portal_uploads') }}">Uploads</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=prefill_matter_id) if prefill_matter_id else url_for('portal_messages') }}">Messages</a>
       </div>
     </div>
-  </form>
-</div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Links</div>
+        <div class="page-stat-value">{{ tokens|length }}</div>
+        <div class="page-stat-meta">Recently created portal access tokens visible in this workspace.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Matters</div>
+        <div class="page-stat-value">{{ matters|length }}</div>
+        <div class="page-stat-meta">Matters currently eligible for secure shared links.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Versions</div>
+        <div class="page-stat-value">{{ versions|length }}</div>
+        <div class="page-stat-meta">Recent document versions that can be targeted directly by a secure link.</div>
+      </div>
+    </div>
+  </section>
 
-<div class="card p-3">
-  <h4 class="mb-1">Recent Links</h4>
-  <div class="table-tools mt-2" data-table-tools data-table-target="portal-links-table">
-    <input class="form-control" type="search" data-table-search placeholder="Filter by matter, document, or expiry...">
-    <div class="table-count" data-table-count aria-live="polite"></div>
-  </div>
-  <div class="table-responsive mt-2">
-    <table class="table" id="portal-links-table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Matter</th>
-          <th>Document Version</th>
-          <th>Expires</th>
-          <th>Used</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for t in tokens %}
-          {% set matter_label = 'Matter #' ~ (t.matter_id or '-') %}
-          {% if matter_map and t.matter_id and matter_map.get(t.matter_id) %}
-            {% set matter_label = matter_map[t.matter_id].matter_no ~ ' - ' ~ matter_map[t.matter_id].title %}
-          {% endif %}
-          {% set version_label = t.document_version_id or '-' %}
-          {% if version_map and t.document_version_id and version_map.get(t.document_version_id) %}
-            {% set version_pair = version_map[t.document_version_id] %}
-            {% set version_label = 'Doc ' ~ version_pair[1].id ~ ' • v' ~ version_pair[0].version_no ~ ' • ' ~ version_pair[0].original_filename %}
-          {% endif %}
-          <tr data-table-row data-search="{{ t.id }} {{ matter_label }} {{ version_label }} {{ t.expires_at }} {{ t.used_at or '' }}">
-            <td>{{ t.id }}</td>
-            <td>{{ matter_label }}</td>
-            <td>{{ version_label }}</td>
-            <td>{{ t.expires_at }}</td>
-            <td>{{ t.used_at or '-' }}</td>
-          </tr>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      {% if last_link_url %}
+        <section class="panel-card is-accent">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Last Link</div>
+              <h2 class="panel-title">New secure link ready to share</h2>
+              <div class="panel-summary">Copy or open the new link before generating another one.</div>
+            </div>
+          </div>
+          <div class="field-grid columns-3">
+            <div style="grid-column: 1 / -1;">
+              <input class="form-control" id="portal-last-link" type="text" value="{{ last_link_url }}" readonly data-copy-source>
+              <div class="form-help mt-2" data-copy-feedback-for="portal-last-link">This token is single-use and time-limited.</div>
+            </div>
+            <div class="table-actions">
+              <button class="btn btn-light" type="button" data-copy-target="portal-last-link" data-copy-success-text="Copied">Copy Link</button>
+              <a class="btn btn-outline-light" href="{{ last_link_url }}" target="_blank" rel="noopener">Open Link</a>
+            </div>
+          </div>
+        </section>
+      {% endif %}
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Create</div>
+            <h2 class="panel-title">Issue a new secure link</h2>
+            <div class="panel-summary">Choose a matter, optionally narrow to a document version, and define the expiry window.</div>
+          </div>
+        </div>
+        {% if matters %}
+          <form method="post" class="field-grid">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="field-grid columns-4">
+              <div>
+                <label class="form-label" for="portal-link-matter">Matter</label>
+                <select class="form-select" id="portal-link-matter" name="matter_id" required>
+                  {% for m in matters %}
+                    <option value="{{ m.id }}" {% if prefill_matter_id and m.id == prefill_matter_id %}selected{% endif %}>{{ m.matter_no }} - {{ m.title }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="portal-link-document">Document Version</label>
+                <select class="form-select" id="portal-link-document" name="document_version_id">
+                  <option value="">Matter summary link</option>
+                  {% for pair in versions %}
+                    {% set v = pair[0] %}
+                    {% set d = pair[1] %}
+                    <option value="{{ v.id }}" data-matter-id="{{ d.matter_id }}">Doc {{ d.id }} • v{{ v.version_no }} • {{ v.original_filename }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="portal-link-expiry">Expires In (Minutes)</label>
+                <input class="form-control" id="portal-link-expiry" type="number" name="expires_minutes" min="1" max="10080" value="60">
+              </div>
+              <div class="d-grid align-items-end">
+                <button class="btn btn-light" type="submit">Create Link</button>
+              </div>
+            </div>
+            <div class="section-note">Matter summary links redirect to the portal matter workspace. Document links are single-use and expire automatically.</div>
+          </form>
         {% else %}
-          <tr><td colspan="5" class="muted">No links yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+          <div class="empty-state">No matters currently allow secure-link creation for this portal user.</div>
+        {% endif %}
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">History</div>
+            <h2 class="panel-title">Recent links</h2>
+            <div class="panel-summary">Search recent links by matter, document, expiry, or whether the token has already been used.</div>
+          </div>
+        </div>
+        <div class="table-tools" data-table-tools data-table-target="portal-links-table">
+          <input class="form-control" type="search" data-table-search placeholder="Filter by matter, document, or expiry...">
+          <div class="table-count" data-table-count aria-live="polite"></div>
+        </div>
+        <div class="table-responsive table-responsive-unbounded">
+          <table class="table" id="portal-links-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Matter</th>
+                <th>Document Version</th>
+                <th>Expires</th>
+                <th>Used</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for t in tokens %}
+                {% set matter_label = 'Matter #' ~ (t.matter_id or '-') %}
+                {% if matter_map and t.matter_id and matter_map.get(t.matter_id) %}
+                  {% set matter_label = matter_map[t.matter_id].matter_no ~ ' - ' ~ matter_map[t.matter_id].title %}
+                {% endif %}
+                {% set version_label = t.document_version_id or '-' %}
+                {% if version_map and t.document_version_id and version_map.get(t.document_version_id) %}
+                  {% set version_pair = version_map[t.document_version_id] %}
+                  {% set version_label = 'Doc ' ~ version_pair[1].id ~ ' • v' ~ version_pair[0].version_no ~ ' • ' ~ version_pair[0].original_filename %}
+                {% endif %}
+                <tr data-table-row data-search="{{ t.id }} {{ matter_label }} {{ version_label }} {{ t.expires_at }} {{ t.used_at or '' }}">
+                  <td>{{ t.id }}</td>
+                  <td>{{ matter_label }}</td>
+                  <td>{{ version_label }}</td>
+                  <td>{{ t.expires_at }}</td>
+                  <td>{{ t.used_at or '-' }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="5" class="muted">No links yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Security</div>
+              <h2 class="panel-title">Link behaviour</h2>
+            </div>
+          </div>
+          <div class="glance-list">
+            <div class="glance-item">
+              <div class="glance-title">Single-use by design</div>
+              <div class="glance-meta">Once a secure token is consumed, the link is closed and cannot be reused.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-title">Expiry is enforced server-side</div>
+              <div class="glance-meta">The token remains invalid after the configured window even if someone still has the URL.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-title">Document links stay matter-bound</div>
+              <div class="glance-meta">A document token only works where the version still belongs to the selected matter and portal access remains valid.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

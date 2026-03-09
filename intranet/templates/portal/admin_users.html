@@ -1,253 +1,350 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="row g-3">
-  <div class="col-lg-5">
-    <div class="card p-3 mb-3">
-      <h3 class="mb-1">Create Portal User</h3>
-      <div class="page-intro">Set up a client account and optional MFA bootstrap.</div>
-      <form method="post" class="mt-3">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="action" value="create_user">
-        <div class="form-section">
-          <label class="form-label" for="portal-admin-email">Email</label>
-          <input class="form-control" id="portal-admin-email" name="email" type="email" placeholder="client@example.com" required>
-        </div>
-        <div class="form-section mt-2">
-          <label class="form-label" for="portal-admin-full-name">Full Name</label>
-          <input class="form-control" id="portal-admin-full-name" name="full_name" placeholder="Full name">
-        </div>
-        <div class="form-section mt-2">
-          <label class="form-label" for="portal-admin-password">Password</label>
-          <input class="form-control" id="portal-admin-password" name="password" type="password" placeholder="Password" required>
-          <div class="form-help">Minimum 12 characters.</div>
-        </div>
-        <div class="form-check mt-2">
-          <input class="form-check-input" type="checkbox" name="enable_mfa" value="1" id="portal-enable-mfa">
-          <label class="form-check-label" for="portal-enable-mfa">Enable MFA at creation</label>
-        </div>
-        <div class="d-grid mt-2"><button class="btn btn-light">Create User</button></div>
-      </form>
-    </div>
+<style>
+  .portal-admin-form-stack {
+    display: grid;
+    gap: 18px;
+  }
 
-    <div class="card p-3">
-      <h3 class="mb-1">Grant Matter Access</h3>
-      <div class="page-intro">Assign scope and visibility by matter.</div>
-      <form method="post" class="mt-3">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="action" value="grant_access">
-        <div class="form-section">
-          <label class="form-label" for="portal-grant-user">Portal User</label>
-          <select class="form-select" id="portal-grant-user" name="portal_user_id" required>
-            {% for u in grant_users %}
-              <option value="{{ u.id }}">{{ u.email }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="form-section mt-2">
-          <label class="form-label" for="portal-grant-matter">Matter</label>
-          <select class="form-select" id="portal-grant-matter" name="matter_id" required>
-            {% for m in matters %}
-              <option value="{{ m.id }}">{{ m.matter_no }} - {{ m.title }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="form-section mt-2">
-          <label class="form-label" for="portal-grant-visibility">Visibility</label>
-          <select class="form-select" id="portal-grant-visibility" name="visibility_level">
-            <option>summary_only</option>
-            <option>shared_docs</option>
-            <option>full_curated</option>
-            <option>hidden</option>
-          </select>
-        </div>
-        <div class="d-grid mt-2"><button class="btn btn-light">Grant Access</button></div>
-      </form>
-    </div>
-  </div>
+  .portal-admin-table-card .table-responsive {
+    max-height: none;
+  }
+</style>
 
-  <div class="col-lg-7">
-    <div class="card p-3 mb-3">
-      <h3 class="mb-1">Portal Users</h3>
-      <div class="muted small">Showing {{ users|length }} of {{ user_pagination.total }} users on page {{ user_pagination.page }} of {{ user_pagination.pages or 1 }}.</div>
-      <div class="table-responsive mt-2">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Email</th>
-              <th>Name</th>
-              <th>MFA</th>
-              <th>Active</th>
-              <th>Last Login</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for u in users %}
-              <tr>
-                <td>{{ u.id }}</td>
-                <td class="fw-semibold">{{ u.email }}</td>
-                <td>{{ u.full_name }}</td>
-                <td>{{ "Enabled" if u.mfa_enabled else "Disabled" }}</td>
-                <td>{{ "Yes" if u.is_active else "No" }}</td>
-                <td>{{ u.last_login_at or "-" }}</td>
-                <td>
-                  <div class="table-actions">
-                    {% if u.mfa_enabled %}
-                      <form method="post">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="toggle_mfa">
-                        <input type="hidden" name="portal_user_id" value="{{ u.id }}">
-                        <input type="hidden" name="mode" value="rotate">
-                        <button class="btn btn-sm btn-outline-light">Rotate MFA</button>
-                      </form>
-                      <form method="post">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="toggle_mfa">
-                        <input type="hidden" name="portal_user_id" value="{{ u.id }}">
-                        <input type="hidden" name="mode" value="disable">
-                        <button class="btn btn-sm btn-outline-light">Disable MFA</button>
-                      </form>
-                    {% else %}
-                      <form method="post">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="toggle_mfa">
-                        <input type="hidden" name="portal_user_id" value="{{ u.id }}">
-                        <input type="hidden" name="mode" value="enable">
-                        <button class="btn btn-sm btn-outline-light">Enable MFA</button>
-                      </form>
-                    {% endif %}
-                  </div>
-                </td>
-              </tr>
-            {% else %}
-              <tr><td colspan="7" class="muted">No users.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Client Portal Admin</div>
+        <h1 class="page-hero-title">Portal user administration</h1>
+        <div class="page-hero-summary">Manage client identities, rotate MFA, and control matter-by-matter visibility from one operational console.</div>
+        <div class="page-hero-meta">
+          <span class="tag-chip">{{ user_pagination.total }} portal user(s)</span>
+          <span class="tag-chip">{{ access_pagination.total }} access grant(s)</span>
+          <span class="tag-chip">{{ matters|length }} matter option(s)</span>
+        </div>
       </div>
-      {% if user_pagination.pages > 1 %}
-        {% set start_page = user_pagination.page - 2 if user_pagination.page - 2 > 1 else 1 %}
-        {% set end_page = user_pagination.page + 2 if user_pagination.page + 2 < user_pagination.pages else user_pagination.pages %}
-        <nav class="mt-3" aria-label="Portal user pages">
-          <ul class="pagination pagination-sm mb-0 flex-wrap">
-            <li class="page-item {{ 'disabled' if not user_pagination.has_prev }}">
-              {% if user_pagination.has_prev %}
-                <a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.prev_num, access_page=access_pagination.page) }}">Previous</a>
-              {% else %}
-                <span class="page-link">Previous</span>
-              {% endif %}
-            </li>
-            {% if start_page > 1 %}
-              <li class="page-item"><a class="page-link" href="{{ url_for('admin_portal_users', user_page=1, access_page=access_pagination.page) }}">1</a></li>
-              {% if start_page > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
-            {% endif %}
-            {% for page_no in range(start_page, end_page + 1) %}
-              <li class="page-item {{ 'active' if page_no == user_pagination.page }}">
-                {% if page_no == user_pagination.page %}
-                  <span class="page-link">{{ page_no }}</span>
-                {% else %}
-                  <a class="page-link" href="{{ url_for('admin_portal_users', user_page=page_no, access_page=access_pagination.page) }}">{{ page_no }}</a>
-                {% endif %}
-              </li>
-            {% endfor %}
-            {% if end_page < user_pagination.pages %}
-              {% if end_page < user_pagination.pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
-              <li class="page-item"><a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.pages, access_page=access_pagination.page) }}">{{ user_pagination.pages }}</a></li>
-            {% endif %}
-            <li class="page-item {{ 'disabled' if not user_pagination.has_next }}">
-              {% if user_pagination.has_next %}
-                <a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.next_num, access_page=access_pagination.page) }}">Next</a>
-              {% else %}
-                <span class="page-link">Next</span>
-              {% endif %}
-            </li>
-          </ul>
-        </nav>
-      {% endif %}
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-light" href="{{ url_for('admin') }}">Back to Admin</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matters') }}">Portal Home</a>
+      </div>
+    </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Portal Users</div>
+        <div class="page-stat-value">{{ user_pagination.total }}</div>
+        <div class="page-stat-meta">Client-facing identities currently registered.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Visible Users</div>
+        <div class="page-stat-value">{{ users|length }}</div>
+        <div class="page-stat-meta">Rows currently visible on this page.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">MFA Enabled</div>
+        <div class="page-stat-value">{{ users|selectattr('mfa_enabled')|list|length }}</div>
+        <div class="page-stat-meta">Visible users on this page with MFA enabled.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Active Users</div>
+        <div class="page-stat-value">{{ users|selectattr('is_active')|list|length }}</div>
+        <div class="page-stat-meta">Visible users on this page with active access.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Access Grants</div>
+        <div class="page-stat-value">{{ access_pagination.total }}</div>
+        <div class="page-stat-meta">Matter visibility records in the portal control plane.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <div class="portal-admin-form-stack">
+        <section class="panel-card is-accent">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Create User</div>
+              <h2 class="panel-title">Provision a portal identity</h2>
+              <div class="panel-summary">Create the client account, set the initial password, and optionally bootstrap MFA at the same time.</div>
+            </div>
+          </div>
+          <form method="post" class="field-grid">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="create_user">
+            <div class="field-grid columns-2">
+              <div>
+                <label class="form-label" for="portal-admin-email">Email</label>
+                <input class="form-control" id="portal-admin-email" name="email" type="email" placeholder="client@example.com" required>
+              </div>
+              <div>
+                <label class="form-label" for="portal-admin-full-name">Full Name</label>
+                <input class="form-control" id="portal-admin-full-name" name="full_name" placeholder="Full name">
+              </div>
+            </div>
+            <div>
+              <label class="form-label" for="portal-admin-password">Password</label>
+              <input class="form-control" id="portal-admin-password" name="password" type="password" placeholder="Password" required>
+              <div class="form-help">Minimum 12 characters.</div>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="enable_mfa" value="1" id="portal-enable-mfa">
+              <label class="form-check-label" for="portal-enable-mfa">Enable MFA at creation</label>
+            </div>
+            <div class="d-grid d-md-flex justify-content-md-end">
+              <button class="btn btn-light" type="submit">Create User</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Grant Access</div>
+              <h2 class="panel-title">Assign matter visibility</h2>
+              <div class="panel-summary">Choose the user, the matter, and the visibility band that matches the client’s entitlement.</div>
+            </div>
+          </div>
+          <form method="post" class="field-grid">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="grant_access">
+            <div>
+              <label class="form-label" for="portal-grant-user">Portal User</label>
+              <select class="form-select" id="portal-grant-user" name="portal_user_id" required>
+                {% for u in grant_users %}
+                  <option value="{{ u.id }}">{{ u.email }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label" for="portal-grant-matter">Matter</label>
+              <select class="form-select" id="portal-grant-matter" name="matter_id" required>
+                {% for m in matters %}
+                  <option value="{{ m.id }}">{{ m.matter_no }} - {{ m.title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label" for="portal-grant-visibility">Visibility</label>
+              <select class="form-select" id="portal-grant-visibility" name="visibility_level">
+                <option>summary_only</option>
+                <option>shared_docs</option>
+                <option>full_curated</option>
+                <option>hidden</option>
+              </select>
+            </div>
+            <div class="d-grid d-md-flex justify-content-md-end">
+              <button class="btn btn-light" type="submit">Grant Access</button>
+            </div>
+          </form>
+        </section>
+      </div>
     </div>
 
-    <div class="card p-3">
-      <h3 class="mb-1">Access Grants</h3>
-      <div class="muted small">Showing {{ accesses|length }} of {{ access_pagination.total }} grants on page {{ access_pagination.page }} of {{ access_pagination.pages or 1 }}.</div>
-      <div class="table-responsive mt-2">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>User</th>
-              <th>Matter</th>
-              <th>Visibility</th>
-              <th>Revoked</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for a in accesses %}
-              {% set access_user = user_map[a.portal_user_id] if user_map and user_map.get(a.portal_user_id) else None %}
-              {% set access_matter = matter_map[a.matter_id] if matter_map and matter_map.get(a.matter_id) else None %}
-              <tr>
-                <td>{{ a.id }}</td>
-                <td>{{ access_user.email if access_user else ('User #' ~ a.portal_user_id) }}</td>
-                <td>{{ (access_matter.matter_no ~ ' - ' ~ access_matter.title) if access_matter else ('Matter #' ~ a.matter_id) }}</td>
-                <td>{{ a.visibility_level }}</td>
-                <td>{{ a.revoked_at or "-" }}</td>
-                <td>
-                  {% if not a.revoked_at %}
-                    <form method="post">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <input type="hidden" name="action" value="revoke_access">
-                      <input type="hidden" name="access_id" value="{{ a.id }}">
-                      <button class="btn btn-sm btn-outline-light">Revoke</button>
-                    </form>
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card portal-admin-table-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Portal Users</div>
+              <h2 class="panel-title">Identity list</h2>
+              <div class="panel-summary">Showing {{ users|length }} of {{ user_pagination.total }} users on page {{ user_pagination.page }} of {{ user_pagination.pages or 1 }}.</div>
+            </div>
+          </div>
+          <div class="table-tools" data-table-tools data-table-target="portal-admin-users-table">
+            <input class="form-control" type="search" data-table-search placeholder="Filter by email, name, MFA, or activity...">
+            <div class="table-count" data-table-count aria-live="polite"></div>
+          </div>
+          <div class="table-responsive">
+            <table class="table" id="portal-admin-users-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Email</th>
+                  <th>Name</th>
+                  <th>MFA</th>
+                  <th>Active</th>
+                  <th>Last Login</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for u in users %}
+                  <tr data-table-row data-search="{{ u.id }} {{ u.email }} {{ u.full_name or '' }} {{ 'enabled' if u.mfa_enabled else 'disabled' }} {{ 'active' if u.is_active else 'inactive' }} {{ u.last_login_at or '' }}">
+                    <td>{{ u.id }}</td>
+                    <td class="fw-semibold">{{ u.email }}</td>
+                    <td>{{ u.full_name }}</td>
+                    <td>{{ "Enabled" if u.mfa_enabled else "Disabled" }}</td>
+                    <td>{{ "Yes" if u.is_active else "No" }}</td>
+                    <td>{{ u.last_login_at or "-" }}</td>
+                    <td>
+                      <div class="table-actions">
+                        {% if u.mfa_enabled %}
+                          <form method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="toggle_mfa">
+                            <input type="hidden" name="portal_user_id" value="{{ u.id }}">
+                            <input type="hidden" name="mode" value="rotate">
+                            <button class="btn btn-sm btn-outline-light">Rotate MFA</button>
+                          </form>
+                          <form method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="toggle_mfa">
+                            <input type="hidden" name="portal_user_id" value="{{ u.id }}">
+                            <input type="hidden" name="mode" value="disable">
+                            <button class="btn btn-sm btn-outline-light">Disable MFA</button>
+                          </form>
+                        {% else %}
+                          <form method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="toggle_mfa">
+                            <input type="hidden" name="portal_user_id" value="{{ u.id }}">
+                            <input type="hidden" name="mode" value="enable">
+                            <button class="btn btn-sm btn-outline-light">Enable MFA</button>
+                          </form>
+                        {% endif %}
+                      </div>
+                    </td>
+                  </tr>
+                {% else %}
+                  <tr><td colspan="7" class="muted">No users.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if user_pagination.pages > 1 %}
+            {% set start_page = user_pagination.page - 2 if user_pagination.page - 2 > 1 else 1 %}
+            {% set end_page = user_pagination.page + 2 if user_pagination.page + 2 < user_pagination.pages else user_pagination.pages %}
+            <nav aria-label="Portal user pages">
+              <ul class="pagination pagination-sm mb-0 flex-wrap">
+                <li class="page-item {{ 'disabled' if not user_pagination.has_prev }}">
+                  {% if user_pagination.has_prev %}
+                    <a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.prev_num, access_page=access_pagination.page) }}">Previous</a>
+                  {% else %}
+                    <span class="page-link">Previous</span>
                   {% endif %}
-                </td>
-              </tr>
-            {% else %}
-              <tr><td colspan="6" class="muted">No grants.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% if access_pagination.pages > 1 %}
-        {% set start_page = access_pagination.page - 2 if access_pagination.page - 2 > 1 else 1 %}
-        {% set end_page = access_pagination.page + 2 if access_pagination.page + 2 < access_pagination.pages else access_pagination.pages %}
-        <nav class="mt-3" aria-label="Portal access pages">
-          <ul class="pagination pagination-sm mb-0 flex-wrap">
-            <li class="page-item {{ 'disabled' if not access_pagination.has_prev }}">
-              {% if access_pagination.has_prev %}
-                <a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.page, access_page=access_pagination.prev_num) }}">Previous</a>
-              {% else %}
-                <span class="page-link">Previous</span>
-              {% endif %}
-            </li>
-            {% if start_page > 1 %}
-              <li class="page-item"><a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.page, access_page=1) }}">1</a></li>
-              {% if start_page > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
-            {% endif %}
-            {% for page_no in range(start_page, end_page + 1) %}
-              <li class="page-item {{ 'active' if page_no == access_pagination.page }}">
-                {% if page_no == access_pagination.page %}
-                  <span class="page-link">{{ page_no }}</span>
-                {% else %}
-                  <a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.page, access_page=page_no) }}">{{ page_no }}</a>
+                </li>
+                {% if start_page > 1 %}
+                  <li class="page-item"><a class="page-link" href="{{ url_for('admin_portal_users', user_page=1, access_page=access_pagination.page) }}">1</a></li>
+                  {% if start_page > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
                 {% endif %}
-              </li>
-            {% endfor %}
-            {% if end_page < access_pagination.pages %}
-              {% if end_page < access_pagination.pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
-              <li class="page-item"><a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.page, access_page=access_pagination.pages) }}">{{ access_pagination.pages }}</a></li>
-            {% endif %}
-            <li class="page-item {{ 'disabled' if not access_pagination.has_next }}">
-              {% if access_pagination.has_next %}
-                <a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.page, access_page=access_pagination.next_num) }}">Next</a>
-              {% else %}
-                <span class="page-link">Next</span>
-              {% endif %}
-            </li>
-          </ul>
-        </nav>
-      {% endif %}
+                {% for page_no in range(start_page, end_page + 1) %}
+                  <li class="page-item {{ 'active' if page_no == user_pagination.page }}">
+                    {% if page_no == user_pagination.page %}
+                      <span class="page-link">{{ page_no }}</span>
+                    {% else %}
+                      <a class="page-link" href="{{ url_for('admin_portal_users', user_page=page_no, access_page=access_pagination.page) }}">{{ page_no }}</a>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+                {% if end_page < user_pagination.pages %}
+                  {% if end_page < user_pagination.pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+                  <li class="page-item"><a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.pages, access_page=access_pagination.page) }}">{{ user_pagination.pages }}</a></li>
+                {% endif %}
+                <li class="page-item {{ 'disabled' if not user_pagination.has_next }}">
+                  {% if user_pagination.has_next %}
+                    <a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.next_num, access_page=access_pagination.page) }}">Next</a>
+                  {% else %}
+                    <span class="page-link">Next</span>
+                  {% endif %}
+                </li>
+              </ul>
+            </nav>
+          {% endif %}
+        </section>
+
+        <section class="panel-card portal-admin-table-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Access Grants</div>
+              <h2 class="panel-title">Matter visibility map</h2>
+              <div class="panel-summary">Showing {{ accesses|length }} of {{ access_pagination.total }} grants on page {{ access_pagination.page }} of {{ access_pagination.pages or 1 }}.</div>
+            </div>
+          </div>
+          <div class="table-tools" data-table-tools data-table-target="portal-access-table">
+            <input class="form-control" type="search" data-table-search placeholder="Filter by user, matter, visibility, or revoked state...">
+            <div class="table-count" data-table-count aria-live="polite"></div>
+          </div>
+          <div class="table-responsive">
+            <table class="table" id="portal-access-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>User</th>
+                  <th>Matter</th>
+                  <th>Visibility</th>
+                  <th>Revoked</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in accesses %}
+                  {% set access_user = user_map[a.portal_user_id] if user_map and user_map.get(a.portal_user_id) else None %}
+                  {% set access_matter = matter_map[a.matter_id] if matter_map and matter_map.get(a.matter_id) else None %}
+                  <tr data-table-row data-search="{{ a.id }} {{ access_user.email if access_user else ('User ' ~ a.portal_user_id) }} {{ access_matter.matter_no if access_matter else ('Matter ' ~ a.matter_id) }} {{ access_matter.title if access_matter else '' }} {{ a.visibility_level }} {{ a.revoked_at or 'active' }}">
+                    <td>{{ a.id }}</td>
+                    <td>{{ access_user.email if access_user else ('User #' ~ a.portal_user_id) }}</td>
+                    <td>{{ (access_matter.matter_no ~ ' - ' ~ access_matter.title) if access_matter else ('Matter #' ~ a.matter_id) }}</td>
+                    <td>{{ a.visibility_level }}</td>
+                    <td>{{ a.revoked_at or "-" }}</td>
+                    <td>
+                      {% if not a.revoked_at %}
+                        <form method="post">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <input type="hidden" name="action" value="revoke_access">
+                          <input type="hidden" name="access_id" value="{{ a.id }}">
+                          <button class="btn btn-sm btn-outline-light">Revoke</button>
+                        </form>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% else %}
+                  <tr><td colspan="6" class="muted">No grants.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if access_pagination.pages > 1 %}
+            {% set start_page = access_pagination.page - 2 if access_pagination.page - 2 > 1 else 1 %}
+            {% set end_page = access_pagination.page + 2 if access_pagination.page + 2 < access_pagination.pages else access_pagination.pages %}
+            <nav aria-label="Portal access pages">
+              <ul class="pagination pagination-sm mb-0 flex-wrap">
+                <li class="page-item {{ 'disabled' if not access_pagination.has_prev }}">
+                  {% if access_pagination.has_prev %}
+                    <a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.page, access_page=access_pagination.prev_num) }}">Previous</a>
+                  {% else %}
+                    <span class="page-link">Previous</span>
+                  {% endif %}
+                </li>
+                {% if start_page > 1 %}
+                  <li class="page-item"><a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.page, access_page=1) }}">1</a></li>
+                  {% if start_page > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+                {% endif %}
+                {% for page_no in range(start_page, end_page + 1) %}
+                  <li class="page-item {{ 'active' if page_no == access_pagination.page }}">
+                    {% if page_no == access_pagination.page %}
+                      <span class="page-link">{{ page_no }}</span>
+                    {% else %}
+                      <a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.page, access_page=page_no) }}">{{ page_no }}</a>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+                {% if end_page < access_pagination.pages %}
+                  {% if end_page < access_pagination.pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+                  <li class="page-item"><a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.page, access_page=access_pagination.pages) }}">{{ access_pagination.pages }}</a></li>
+                {% endif %}
+                <li class="page-item {{ 'disabled' if not access_pagination.has_next }}">
+                  {% if access_pagination.has_next %}
+                    <a class="page-link" href="{{ url_for('admin_portal_users', user_page=user_pagination.page, access_page=access_pagination.next_num) }}">Next</a>
+                  {% else %}
+                    <span class="page-link">Next</span>
+                  {% endif %}
+                </li>
+              </ul>
+            </nav>
+          {% endif %}
+        </section>
+      </div>
     </div>
   </div>
 </div>

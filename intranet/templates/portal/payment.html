@@ -1,73 +1,151 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3">
-  <div class="toolbar-row">
-    <div>
-      <h3 class="section-title">Invoice #{{ invoice.id }} Payment</h3>
-      <div class="page-intro mt-1">Total {{ invoice.total }} • Outstanding {{ "%.2f"|format(outstanding_amount or 0.0) }} • <span class="badge status-badge status-{{ invoice.status|lower|replace(' ', '-') }}">{{ invoice.status }}</span></div>
-    </div>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_invoices') }}">Back to Invoices</a>
-  </div>
-
-  <form method="post" class="mt-3">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="form-section">
-      <div class="row g-2">
-        <div class="col-md-4">
-          <label class="form-label" for="portal-payment-amount">Amount</label>
-          <input class="form-control" id="portal-payment-amount" name="amount" type="number" step="0.01" value="{{ "%.2f"|format(prefill_amount or 0.0) }}" placeholder="Amount" required>
-          <div class="table-actions mt-2">
-            <button class="btn btn-sm btn-outline-light" type="button" data-fill-target="portal-payment-amount" data-fill-value="{{ '%.2f'|format(outstanding_amount or 0.0) }}">Use Outstanding</button>
-            <button class="btn btn-sm btn-outline-light" type="button" data-fill-target="portal-payment-amount" data-fill-value="{{ '%.2f'|format(invoice.total or 0.0) }}">Use Invoice Total</button>
-          </div>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label" for="portal-payment-currency">Currency</label>
-          <input class="form-control" id="portal-payment-currency" name="currency" value="{{ prefill_currency or 'ZAR' }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label" for="portal-payment-reference">Reference</label>
-          <input class="form-control" id="portal-payment-reference" name="reference" placeholder="Reference">
-        </div>
-        <div class="col-md-2 d-grid">
-          <button class="btn btn-light">Record</button>
+{% set receipt_total = receipts|sum(attribute='amount') if receipts else 0 %}
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Client Portal</div>
+        <h1 class="page-hero-title">Invoice #{{ invoice.id }} Payments</h1>
+        <div class="page-hero-summary">Total {{ "%.2f"|format(invoice.total or 0.0) }} • Outstanding {{ "%.2f"|format(outstanding_amount or 0.0) }} • Record a payment receipt against this invoice and review the receipts already captured in the portal ledger.</div>
+        <div class="page-hero-meta">
+          <span class="badge status-badge status-{{ invoice.status|lower|replace(' ', '-') }}">{{ invoice.status }}</span>
+          <span class="tag-chip">Matter {{ invoice.matter_id }}</span>
         </div>
       </div>
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-light" href="{{ url_for('portal_invoices') }}">Back to Invoices</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matter_detail', matter_id=invoice.matter_id) }}">Open Matter</a>
+      </div>
     </div>
-  </form>
-</div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Invoice Total</div>
+        <div class="page-stat-value">{{ "%.2f"|format(invoice.total or 0.0) }}</div>
+        <div class="page-stat-meta">The total billed amount on this invoice.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Outstanding</div>
+        <div class="page-stat-value">{{ "%.2f"|format(outstanding_amount or 0.0) }}</div>
+        <div class="page-stat-meta">Remaining amount still open based on settled allocations.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Receipts</div>
+        <div class="page-stat-value">{{ receipts|length }}</div>
+        <div class="page-stat-meta">Portal-recorded payment receipts currently attached to this invoice.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Recorded Total</div>
+        <div class="page-stat-value">{{ "%.2f"|format(receipt_total or 0.0) }}</div>
+        <div class="page-stat-meta">Sum of the payment receipts visible in this ledger.</div>
+      </div>
+    </div>
+  </section>
 
-<div class="card p-3">
-  <h4 class="mb-1">Receipts</h4>
-  <div class="table-tools mt-2" data-table-tools data-table-target="portal-receipts-table">
-    <input class="form-control" type="search" data-table-search placeholder="Filter by amount, status, reference, or date...">
-    <div class="table-count" data-table-count aria-live="polite"></div>
-  </div>
-  <div class="table-responsive mt-2">
-    <table class="table" id="portal-receipts-table">
-      <thead>
-        <tr>
-          <th>Amount</th>
-          <th>Currency</th>
-          <th>Status</th>
-          <th>Reference</th>
-          <th>Recorded At</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in receipts %}
-          <tr data-table-row data-search="{{ r.amount }} {{ r.currency }} {{ r.status }} {{ r.reference or '' }} {{ r.created_at }}">
-            <td>{{ r.amount }}</td>
-            <td>{{ r.currency }}</td>
-            <td><span class="badge status-badge status-{{ r.status|lower|replace(' ', '-') }}">{{ r.status }}</span></td>
-            <td>{{ r.reference or '-' }}</td>
-            <td>{{ r.created_at }}</td>
-          </tr>
-        {% else %}
-          <tr><td colspan="5" class="muted">No receipts.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Record Receipt</div>
+            <h2 class="panel-title">Capture a payment entry</h2>
+            <div class="panel-summary">This records the client-side receipt notice and places the entry into the finance settlement workflow.</div>
+          </div>
+        </div>
+        <form method="post" class="field-grid">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="field-grid columns-4">
+            <div>
+              <label class="form-label" for="portal-payment-amount">Amount</label>
+              <input class="form-control" id="portal-payment-amount" name="amount" type="number" step="0.01" value="{{ "%.2f"|format(prefill_amount or 0.0) }}" placeholder="Amount" required>
+              <div class="table-actions mt-2">
+                <button class="btn btn-sm btn-outline-light" type="button" data-fill-target="portal-payment-amount" data-fill-value="{{ '%.2f'|format(outstanding_amount or 0.0) }}">Use Outstanding</button>
+                <button class="btn btn-sm btn-outline-light" type="button" data-fill-target="portal-payment-amount" data-fill-value="{{ '%.2f'|format(invoice.total or 0.0) }}">Use Invoice Total</button>
+              </div>
+            </div>
+            <div>
+              <label class="form-label" for="portal-payment-currency">Currency</label>
+              <input class="form-control" id="portal-payment-currency" name="currency" value="{{ prefill_currency or 'ZAR' }}">
+            </div>
+            <div>
+              <label class="form-label" for="portal-payment-reference">Reference</label>
+              <input class="form-control" id="portal-payment-reference" name="reference" placeholder="Bank or payment reference">
+            </div>
+            <div class="d-grid align-items-end">
+              <button class="btn btn-light" type="submit">Record Receipt</button>
+            </div>
+          </div>
+          <div class="section-note">Portal payments are recorded as receipt notices first, then matched and settled by the internal finance workflow.</div>
+        </form>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Receipt Ledger</div>
+            <h2 class="panel-title">Recorded portal receipts</h2>
+            <div class="panel-summary">Search by amount, status, reference, or timestamp.</div>
+          </div>
+        </div>
+        <div class="table-tools" data-table-tools data-table-target="portal-receipts-table">
+          <input class="form-control" type="search" data-table-search placeholder="Filter by amount, status, reference, or date...">
+          <div class="table-count" data-table-count aria-live="polite"></div>
+        </div>
+        <div class="table-responsive table-responsive-unbounded">
+          <table class="table" id="portal-receipts-table">
+            <thead>
+              <tr>
+                <th>Amount</th>
+                <th>Currency</th>
+                <th>Status</th>
+                <th>Reference</th>
+                <th>Recorded At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in receipts %}
+                <tr data-table-row data-search="{{ r.amount }} {{ r.currency }} {{ r.status }} {{ r.reference or '' }} {{ r.created_at }}">
+                  <td>{{ r.amount }}</td>
+                  <td>{{ r.currency }}</td>
+                  <td><span class="badge status-badge status-{{ r.status|lower|replace(' ', '-') }}">{{ r.status }}</span></td>
+                  <td>{{ r.reference or '-' }}</td>
+                  <td>{{ r.created_at }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="5" class="muted">No receipts.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Finance Flow</div>
+              <h2 class="panel-title">What this does</h2>
+            </div>
+          </div>
+          <div class="glance-list">
+            <div class="glance-item">
+              <div class="glance-title">Captures the client-side receipt</div>
+              <div class="glance-meta">The portal records what the client says was paid, with amount, currency, and reference.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-title">Feeds internal settlement review</div>
+              <div class="glance-meta">Finance can reconcile and settle the allocation without re-keying the client submission.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-title">Keeps billing and matter context together</div>
+              <div class="glance-meta">Open the matter workspace when the payment needs surrounding legal or operational context.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

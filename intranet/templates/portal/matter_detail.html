@@ -1,67 +1,198 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3">
-  <div class="toolbar-row">
-    <div>
-      <h3 class="section-title">{{ matter.matter_no }} - {{ matter.title }}</h3>
-      <div class="page-intro mt-1">Visibility level: <span class="fw-semibold">{{ access.visibility_level }}</span></div>
-    </div>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
-  </div>
-
-  <div class="table-actions mt-2">
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages') }}">Messages</a>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_uploads') }}">Uploads</a>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_invoices') }}">Invoices</a>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_links') }}">Time-Limited Links</a>
-  </div>
-</div>
-
-<div class="row g-3">
-  <div class="col-lg-4">
-    <div class="card p-3 h-100">
-      <h4 class="mb-1">Matter Status</h4>
-      <div class="list-meta mt-1">
-        <span>Stage: {{ matter.stage or "-" }}</span>
-        <span class="risk-chip risk-{{ (matter.risk_level or 'medium')|lower }}">{{ matter.risk_level or "Medium" }}</span>
+{% set can_view_docs = access.visibility_level in ["shared_docs", "full_curated"] %}
+{% set can_view_full = access.visibility_level == "full_curated" %}
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Shared Matter</div>
+        <h1 class="page-hero-title">{{ matter.matter_no }} - {{ matter.title }}</h1>
+        <div class="page-hero-summary">{{ matter.client_name }}{% if matter.last_update_note %} • Shared updates are currently live on this matter workspace.{% endif %}</div>
+        <div class="page-hero-meta">
+          <span class="tag-chip">Visibility {{ access.visibility_level }}</span>
+          <span class="badge status-badge status-{{ matter.status|lower|replace(' ', '-') }}">{{ matter.status }}</span>
+          <span class="risk-chip risk-{{ (matter.risk_level or 'medium')|lower }}">{{ matter.risk_level or "Medium" }}</span>
+          <span class="tag-chip">Stage {{ matter.stage or "-" }}</span>
+        </div>
       </div>
-      <div class="mt-2">
-        <div class="form-label">Latest Update</div>
-        <div>{{ matter.last_update_note or "-" }}</div>
+      <div class="page-hero-actions">
+        {% if can_view_full %}
+          <a class="btn btn-sm btn-light" href="{{ url_for('portal_messages', matter_id=matter.id) }}">Messages</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_invoices') }}">Invoices</a>
+        {% endif %}
+        {% if can_view_docs %}
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_uploads', matter_id=matter.id) }}">Uploads</a>
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_links', matter_id=matter.id) }}">Secure Links</a>
+        {% endif %}
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
       </div>
     </div>
-  </div>
-  <div class="col-lg-4">
-    <div class="card p-3 h-100">
-      <h4 class="mb-1">Threads</h4>
-      {% if threads %}
-        {% for t in threads %}
-          <div class="activity-item">#{{ t.id }} • {{ t.subject }}</div>
-        {% endfor %}
-      {% else %}
-        <div class="muted">No threads.</div>
-      {% endif %}
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Visibility</div>
+        <div class="page-stat-value">{{ access.visibility_level|replace('_', ' ')|title }}</div>
+        <div class="page-stat-meta">The current portal access level granted on this matter.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Threads</div>
+        <div class="page-stat-value">{{ threads|length }}</div>
+        <div class="page-stat-meta">Message threads currently visible on this matter.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Uploads</div>
+        <div class="page-stat-value">{{ uploads|length }}</div>
+        <div class="page-stat-meta">Client uploads already recorded against this matter.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Invoices</div>
+        <div class="page-stat-value">{{ invoices|length }}</div>
+        <div class="page-stat-meta">Invoices exposed to the portal user for this matter.</div>
+      </div>
     </div>
-  </div>
-  <div class="col-lg-4">
-    <div class="card p-3 h-100">
-      <h4 class="mb-1">Uploads</h4>
-      {% if uploads %}
-        {% for u in uploads %}
-          <div class="activity-item">{{ u.filename }} • {{ u.uploaded_at }}</div>
-        {% endfor %}
-      {% else %}
-        <div class="muted">No uploads.</div>
-      {% endif %}
+  </section>
 
-      <h4 class="mt-3 mb-1">Invoices</h4>
-      {% if invoices %}
-        {% for i in invoices %}
-          <div class="activity-item">#{{ i.id }} • {{ i.total }} • <span class="badge status-badge status-{{ i.status|lower|replace(' ', '-') }}">{{ i.status }}</span></div>
-        {% endfor %}
-      {% else %}
-        <div class="muted">No invoices.</div>
-      {% endif %}
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Shared Update</div>
+            <h2 class="panel-title">Current client-facing status</h2>
+            <div class="panel-summary">This note is the latest matter update currently surfaced to the client on the portal.</div>
+          </div>
+        </div>
+        <div class="section-note">{{ matter.last_update_note or "No update note has been published to the portal for this matter yet." }}</div>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Client Actions</div>
+            <h2 class="panel-title">Continue without hunting for the right tab</h2>
+            <div class="panel-summary">Only the actions covered by the current visibility profile are shown as primary next steps.</div>
+          </div>
+        </div>
+        <div class="action-grid">
+          {% if can_view_full %}
+            <a class="action-card is-primary" href="{{ url_for('portal_messages', matter_id=matter.id) }}">
+              <span class="action-card-kicker">Communication</span>
+              <span class="action-card-title">Open Message Threads</span>
+              <span class="action-card-summary">Reply directly inside the curated conversation history for this matter.</span>
+            </a>
+            <a class="action-card" href="{{ url_for('portal_invoices') }}">
+              <span class="action-card-kicker">Billing</span>
+              <span class="action-card-title">Review Invoices</span>
+              <span class="action-card-summary">Check invoice status, payment history, and current totals for this matter.</span>
+            </a>
+          {% endif %}
+          {% if can_view_docs %}
+            <a class="action-card {% if not can_view_full %}is-primary{% endif %}" href="{{ url_for('portal_uploads', matter_id=matter.id) }}">
+              <span class="action-card-kicker">Documents</span>
+              <span class="action-card-title">Upload Supporting Files</span>
+              <span class="action-card-summary">Submit new client documents and have them filed straight into the DMS review flow.</span>
+            </a>
+            <a class="action-card" href="{{ url_for('portal_links', matter_id=matter.id) }}">
+              <span class="action-card-kicker">Sharing</span>
+              <span class="action-card-title">Create Secure Links</span>
+              <span class="action-card-summary">Generate expiring, time-limited links for matter summaries or selected document versions.</span>
+            </a>
+          {% endif %}
+        </div>
+        <div class="section-note">
+          Current visibility on this matter is <strong>{{ access.visibility_level|replace('_', ' ')|title }}</strong>.
+          {% if access.visibility_level == "summary_only" %}
+            Messaging, invoices, and document sharing have not been opened on this matter yet.
+          {% elif access.visibility_level == "shared_docs" %}
+            Shared documents and uploads are enabled; curated messaging and invoices remain restricted.
+          {% else %}
+            Full curated access is enabled, including shared documents, messaging, and invoices.
+          {% endif %}
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Threads</div>
+              <h2 class="panel-title">Recent communication</h2>
+            </div>
+          </div>
+          {% if can_view_full and threads %}
+            <div class="glance-list">
+              {% for t in threads[:6] %}
+                <div class="glance-item">
+                  <div class="list-row">
+                    <div>
+                      <div class="glance-title">{{ t.subject }}</div>
+                      <div class="glance-meta">Thread #{{ t.id }} • {{ t.created_at }}</div>
+                    </div>
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=matter.id, thread_id=t.id) }}#portal-message-body">Reply</a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% elif can_view_full %}
+            <div class="empty-state">No message threads have been shared on this matter yet.</div>
+          {% else %}
+            <div class="empty-state">Messaging is not available on this matter under the current visibility profile.</div>
+          {% endif %}
+        </section>
+
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Uploads</div>
+              <h2 class="panel-title">Files on record</h2>
+            </div>
+          </div>
+          {% if can_view_docs and uploads %}
+            <div class="glance-list">
+              {% for u in uploads[:6] %}
+                <div class="glance-item">
+                  <div class="glance-title">{{ u.filename }}</div>
+                  <div class="glance-meta">{{ u.uploaded_at }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% elif can_view_docs %}
+            <div class="empty-state">No uploads have been recorded for this matter yet.</div>
+          {% else %}
+            <div class="empty-state">Shared document access is not enabled on this matter yet.</div>
+          {% endif %}
+        </section>
+
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Invoices</div>
+              <h2 class="panel-title">Billing visibility</h2>
+            </div>
+          </div>
+          {% if can_view_full and invoices %}
+            <div class="glance-list">
+              {% for i in invoices[:6] %}
+                <div class="glance-item">
+                  <div class="list-row">
+                    <div>
+                      <div class="glance-title">Invoice #{{ i.id }}</div>
+                      <div class="glance-meta">{{ i.total }} • {{ i.status }}</div>
+                    </div>
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_payments', invoice_id=i.id) }}">Payments</a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% elif can_view_full %}
+            <div class="empty-state">No invoices are currently visible for this matter.</div>
+          {% else %}
+            <div class="empty-state">Invoice visibility is not enabled on this matter under the current access level.</div>
+          {% endif %}
+        </section>
+      </div>
     </div>
   </div>
 </div>

@@ -253,7 +253,7 @@
           <article
             class="matter-directory-item list-item is-clickable"
             data-matter-item
-            data-matter-link="{{ url_for('matter_detail', matter_id=m.id) }}"
+            data-card-href="{{ url_for('matter_detail', matter_id=m.id) }}"
             data-status="{{ m.status|lower|replace(' ', '-') }}"
             data-risk="{{ m.risk_level|lower }}"
           >

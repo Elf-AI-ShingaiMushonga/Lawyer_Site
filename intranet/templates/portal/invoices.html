@@ -1,45 +1,121 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3">
-  <div class="toolbar-row">
-    <div>
-      <h3 class="section-title">Portal Invoices</h3>
-      <div class="page-intro mt-1">View invoice periods, current status, and recorded totals.</div>
+{% set invoice_total = invoices|sum(attribute='total') if invoices else 0 %}
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Client Portal</div>
+        <h1 class="page-hero-title">Portal Invoices</h1>
+        <div class="page-hero-summary">Review invoice periods, current status, and recorded totals across every matter shared with this portal user.</div>
+        <div class="page-hero-meta">
+          <span class="tag-chip">{{ invoices|length }} invoice(s)</span>
+          <span class="tag-chip">{{ matter_map|length }} matter(s)</span>
+        </div>
+      </div>
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages') }}">Messages</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_uploads') }}">Uploads</a>
+      </div>
     </div>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matters') }}">Back to Matters</a>
-  </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Invoices</div>
+        <div class="page-stat-value">{{ invoices|length }}</div>
+        <div class="page-stat-meta">Portal-visible invoices currently loaded.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Total Value</div>
+        <div class="page-stat-value">{{ "%.2f"|format(invoice_total or 0) }}</div>
+        <div class="page-stat-meta">Combined value of the currently visible invoice set.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Matters Covered</div>
+        <div class="page-stat-value">{{ matter_map|length }}</div>
+        <div class="page-stat-meta">Matters represented by the invoice records shown here.</div>
+      </div>
+    </div>
+  </section>
 
-  <div class="table-responsive mt-3">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Matter</th>
-          <th>Period</th>
-          <th>Status</th>
-          <th>Total</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for i in invoices %}
-          {% set label = 'Matter #' ~ i.matter_id %}
-          {% if matter_map and matter_map.get(i.matter_id) %}
-            {% set label = matter_map[i.matter_id].matter_no ~ ' - ' ~ matter_map[i.matter_id].title %}
-          {% endif %}
-          <tr>
-            <td>{{ i.id }}</td>
-            <td>{{ label }}</td>
-            <td>{{ i.period_start }} to {{ i.period_end }}</td>
-            <td><span class="badge status-badge status-{{ i.status|lower|replace(' ', '-') }}">{{ i.status }}</span></td>
-            <td>{{ i.total }}</td>
-            <td><a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_payments', invoice_id=i.id) }}">Payments</a></td>
-          </tr>
-        {% else %}
-          <tr><td colspan="6" class="muted">No invoices.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Ledger</div>
+            <h2 class="panel-title">Invoice register</h2>
+            <div class="panel-summary">Search invoice ID, matter, period, or status and jump directly into payment receipts where needed.</div>
+          </div>
+        </div>
+        <div class="table-tools" data-table-tools data-table-target="portal-invoices-table">
+          <input class="form-control" type="search" data-table-search placeholder="Filter by matter, period, status, or total...">
+          <div class="table-count" data-table-count aria-live="polite"></div>
+        </div>
+        <div class="table-responsive table-responsive-unbounded">
+          <table class="table" id="portal-invoices-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Matter</th>
+                <th>Period</th>
+                <th>Status</th>
+                <th>Total</th>
+                <th>Next Step</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for i in invoices %}
+                {% set label = 'Matter #' ~ i.matter_id %}
+                {% if matter_map and matter_map.get(i.matter_id) %}
+                  {% set label = matter_map[i.matter_id].matter_no ~ ' - ' ~ matter_map[i.matter_id].title %}
+                {% endif %}
+                <tr data-table-row data-search="{{ i.id }} {{ label }} {{ i.period_start }} {{ i.period_end }} {{ i.status }} {{ i.total }}">
+                  <td>{{ i.id }}</td>
+                  <td class="fw-semibold">{{ label }}</td>
+                  <td>{{ i.period_start }} to {{ i.period_end }}</td>
+                  <td><span class="badge status-badge status-{{ i.status|lower|replace(' ', '-') }}">{{ i.status }}</span></td>
+                  <td>{{ i.total }}</td>
+                  <td class="table-actions">
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_payments', invoice_id=i.id) }}">Payments</a>
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_matter_detail', matter_id=i.matter_id) }}">Open Matter</a>
+                  </td>
+                </tr>
+              {% else %}
+                <tr><td colspan="6" class="muted">No invoices.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">How To Use This</div>
+              <h2 class="panel-title">Billing workflow</h2>
+            </div>
+          </div>
+          <div class="glance-list">
+            <div class="glance-item">
+              <div class="glance-title">Review period and status first</div>
+              <div class="glance-meta">Use the ledger to confirm the invoice period and whether the bill is already paid, pending, or still open.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-title">Open payments for receipt history</div>
+              <div class="glance-meta">Each invoice has its own receipt ledger so finance communication stays attached to the right bill.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-title">Jump back to the matter when context matters</div>
+              <div class="glance-meta">Billing rarely stands alone. Open the matter when you need the wider legal context around a specific invoice.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

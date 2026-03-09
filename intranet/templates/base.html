@@ -955,16 +955,22 @@
 
     .table-responsive {
       border: 1px solid rgba(225, 6, 0, 0.16);
-      border-radius: 12px;
+      border-radius: 16px;
       overflow: auto;
       max-height: var(--table-scroll-max-height);
       overscroll-behavior: contain;
       scrollbar-gutter: stable;
-      background: #ffffff;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 249, 249, 0.98));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
     }
 
     .table-responsive.table-responsive-unbounded {
       max-height: none;
+    }
+
+    .table-responsive .table {
+      margin-bottom: 0;
+      min-width: 100%;
     }
 
     .table-responsive .table thead th {
@@ -972,6 +978,30 @@
       top: 0;
       background: #fff9f9;
       z-index: 1;
+      padding-top: 0.82rem;
+      padding-bottom: 0.82rem;
+      border-bottom-color: rgba(225, 6, 0, 0.12);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: #8a6666;
+      white-space: nowrap;
+    }
+
+    .table-responsive .table tbody td {
+      padding-top: 0.82rem;
+      padding-bottom: 0.82rem;
+      vertical-align: middle;
+      border-bottom-color: rgba(225, 6, 0, 0.08);
+    }
+
+    .table-responsive .table tbody tr:last-child td {
+      border-bottom-color: transparent;
+    }
+
+    .table-responsive .table tbody tr:hover td {
+      background: rgba(225, 6, 0, 0.028);
     }
 
     .table-tools {
@@ -2327,7 +2357,7 @@
 
     .field-grid {
       display: grid;
-      gap: 12px;
+      gap: 14px;
     }
 
     .field-grid.columns-2 {
@@ -3290,6 +3320,7 @@
   {% set ops_endpoints = ["ops_backup_status", "ops_restore_verify", "ops_dr_targets"] %}
   {% set trust_account_endpoints = ["trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
   {% set billing_ops_endpoints = ["billing_rates", "billing_ar_aging", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses"] %}
+  {% set portal_session_active = session.get('portal_user_id') %}
   {% set more_endpoints = workflow_endpoints + crm_endpoints + portal_endpoints + integration_endpoints + analytics_endpoints + personnel_endpoints + trust_endpoints + ops_endpoints + admin_endpoints + automation_endpoints + knowledge_endpoints + trust_account_endpoints + billing_ops_endpoints %}
   {% set role = current_user_role if current_user.is_authenticated else "" %}
   {% set role_label = current_user_role_label if current_user.is_authenticated else "" %}
@@ -3361,11 +3392,11 @@
   <nav class="navbar px-3 py-2 mb-2" data-collapsible-nav>
     <div class="nav-head" data-collapsible-nav-body>
       <div class="nav-brand">
-        <a class="brand" href="{{ url_for('dashboard') }}">
+        <a class="brand" href="{{ url_for('portal_matters') if portal_session_active and endpoint in portal_endpoints and not current_user.is_authenticated else url_for('dashboard') }}">
           <span class="brand-mark">DM</span>
           <span>
-            <span class="brand-title d-block">DM-Inc Intranet</span>
-            <span class="brand-sub d-block">Client-ready demonstration workspace</span>
+            <span class="brand-title d-block">{{ "DM-Inc Client Portal" if portal_session_active and endpoint in portal_endpoints and not current_user.is_authenticated else "DM-Inc Intranet" }}</span>
+            <span class="brand-sub d-block">{{ "Secure shared matter workspace" if portal_session_active and endpoint in portal_endpoints and not current_user.is_authenticated else "Client-ready demonstration workspace" }}</span>
           </span>
         </a>
         {% if current_user.is_authenticated %}
@@ -3503,6 +3534,11 @@
             <form method="post" action="{{ url_for('logout') }}" class="d-inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm btn-light" type="submit">Logout</button>
+            </form>
+          {% elif portal_session_active and endpoint in portal_endpoints %}
+            <form method="post" action="{{ url_for('portal_logout') }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-light" type="submit">Portal Logout</button>
             </form>
           {% else %}
             <a class="btn btn-sm btn-light" href="{{ url_for('login') }}">Login</a>

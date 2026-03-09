@@ -893,7 +893,7 @@
   };
 
   const initDashboardCardLinks = () => {
-    const cards = Array.from(document.querySelectorAll("[data-card-href]")).filter(
+    const cards = Array.from(document.querySelectorAll("[data-card-href], [data-matter-link]")).filter(
       (item) => item instanceof HTMLElement
     );
     if (cards.length === 0) {
@@ -911,7 +911,7 @@
       if (isInteractiveTarget(event.target)) {
         return;
       }
-      const href = card.dataset.cardHref || "";
+      const href = card.dataset.cardHref || card.dataset.matterLink || "";
       if (!href) {
         return;
       }

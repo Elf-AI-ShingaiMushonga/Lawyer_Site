@@ -1,82 +1,117 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card p-3 mb-3">
-  <div class="toolbar-row">
-    <div>
-      <h3 class="section-title">Automation Studio</h3>
-      <div class="page-intro mt-1">Centralized template automation for matters, contracts, workflow tasks, and documents.</div>
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Automation Studio</div>
+        <h1 class="page-hero-title">Template automation control desk</h1>
+        <div class="page-hero-summary">Manage the firm’s matter archetypes, contract builders, workflow checklists, and document precedents from one automation surface.</div>
+        <div class="page-hero-meta">
+          <span class="tag-chip">{{ stats.matter_archetypes }} matter archetype(s)</span>
+          <span class="tag-chip">{{ stats.contract_templates }} contract template(s)</span>
+          <span class="tag-chip">{{ stats.task_templates }} task template(s)</span>
+          <span class="tag-chip">{{ stats.document_templates }} document template(s)</span>
+        </div>
+      </div>
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-light" href="{{ url_for('admin') }}">Back to Admin</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_matters') }}">Matter Builder</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_documents') }}">Document Builder</a>
+      </div>
     </div>
-    <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin') }}">Back to Admin</a>
-  </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Matter Archetypes</div>
+        <div class="page-stat-value">{{ stats.matter_archetypes }}</div>
+        <div class="page-stat-meta">Legal-category playbooks with required fields and boilerplate.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Contract Templates</div>
+        <div class="page-stat-value">{{ stats.contract_templates }}</div>
+        <div class="page-stat-meta">{{ stats.linked_contract_templates }} linked to archetypes.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Task Templates</div>
+        <div class="page-stat-value">{{ stats.task_templates }}</div>
+        <div class="page-stat-meta">Reusable workflow checklists for operational consistency.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Document Templates</div>
+        <div class="page-stat-value">{{ stats.document_templates }}</div>
+        <div class="page-stat-meta">{{ stats.linked_document_templates }} linked to archetypes.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Auto Contracts</div>
+        <div class="page-stat-value">{{ stats.auto_contract_templates }}</div>
+        <div class="page-stat-meta">Contracts configured to auto-generate on matter creation.</div>
+      </div>
+    </div>
+  </section>
 
-  <div class="row g-2 mt-2">
-    <div class="col-md-3">
-      <div class="kpi-pill h-100">
-        <div class="label">Matter Archetypes</div>
-        <div class="value">{{ stats.matter_archetypes }}</div>
-      </div>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Builders</div>
+            <h2 class="panel-title">Open the automation builders</h2>
+            <div class="panel-summary">Each builder controls a distinct automation layer. Keep these maintained and the rest of the ERP behaves more consistently.</div>
+          </div>
+        </div>
+        <div class="action-grid">
+          <a class="action-card is-primary" href="{{ url_for('admin_templates_matters') }}">
+            <span class="action-card-kicker">Matter</span>
+            <span class="action-card-title">Matter Archetypes</span>
+            <span class="action-card-summary">Define practice-specific templates with required intake fields, statuses, and boilerplate content.</span>
+          </a>
+          <a class="action-card" href="{{ url_for('admin_templates_contracts') }}">
+            <span class="action-card-kicker">Contracts</span>
+            <span class="action-card-title">Contract Templates</span>
+            <span class="action-card-summary">Configure standalone and archetype-linked contracts, including auto-create behaviour.</span>
+          </a>
+          <a class="action-card" href="{{ url_for('admin_templates_tasks') }}">
+            <span class="action-card-kicker">Tasks</span>
+            <span class="action-card-title">Task Templates</span>
+            <span class="action-card-summary">Build the repeatable checklists that make intake, review, and execution predictable.</span>
+          </a>
+          <a class="action-card" href="{{ url_for('admin_templates_documents') }}">
+            <span class="action-card-kicker">Documents</span>
+            <span class="action-card-title">Document Templates</span>
+            <span class="action-card-summary">Manage reusable precedent text and merge-ready templates for the DMS.</span>
+          </a>
+        </div>
+      </section>
     </div>
-    <div class="col-md-3">
-      <div class="kpi-pill h-100">
-        <div class="label">Contract Templates</div>
-        <div class="value">{{ stats.contract_templates }}</div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="kpi-pill h-100">
-        <div class="label">Task Templates</div>
-        <div class="value">{{ stats.task_templates }}</div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="kpi-pill h-100">
-        <div class="label">Document Templates</div>
-        <div class="value">{{ stats.document_templates }}</div>
-      </div>
-    </div>
-  </div>
-</div>
 
-<div class="row g-3">
-  <div class="col-lg-6">
-    <div class="card p-3 h-100">
-      <h4 class="mb-1">Matter Archetypes</h4>
-      <div class="form-help mb-2">Define legal category templates with required intake fields and boilerplate.</div>
-      <div class="table-actions mt-auto">
-        <a class="btn btn-light btn-sm" href="{{ url_for('admin_templates_matters') }}">Open Builder</a>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card p-3 h-100">
-      <h4 class="mb-1">Contract Templates</h4>
-      <div class="form-help mb-2">
-        Create standalone contracts or link contracts to archetypes for automatic matter-time generation.
-        Linked: {{ stats.linked_contract_templates }} | Auto-create active: {{ stats.auto_contract_templates }}
-      </div>
-      <div class="table-actions mt-auto">
-        <a class="btn btn-light btn-sm" href="{{ url_for('admin_templates_contracts') }}">Open Builder</a>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card p-3 h-100">
-      <h4 class="mb-1">Task Templates</h4>
-      <div class="form-help mb-2">Configure repeatable workflow checklists used for task orchestration and approvals.</div>
-      <div class="table-actions mt-auto">
-        <a class="btn btn-light btn-sm" href="{{ url_for('admin_templates_tasks') }}">Open Builder</a>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card p-3 h-100">
-      <h4 class="mb-1">Document Templates</h4>
-      <div class="form-help mb-2">
-        Maintain reusable precedent text and merge fields for fast DMS draft generation.
-        Linked to archetypes: {{ stats.linked_document_templates }}.
-      </div>
-      <div class="table-actions mt-auto">
-        <a class="btn btn-light btn-sm" href="{{ url_for('admin_templates_documents') }}">Open Builder</a>
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Operational Notes</div>
+              <h2 class="panel-title">What to check next</h2>
+              <div class="panel-summary">Automation drift usually shows up as inconsistent matter setup, document generation friction, or tasks that stop auto-appearing.</div>
+            </div>
+          </div>
+          <div class="glance-list">
+            <div class="glance-item">
+              <div class="glance-eyebrow">Coverage</div>
+              <div class="glance-title">Keep archetypes current</div>
+              <div class="glance-meta">Matter archetypes should reflect current practice areas, intake fields, and filing realities.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-eyebrow">Contracts</div>
+              <div class="glance-title">Audit auto-create rules</div>
+              <div class="glance-meta">Review linked and auto-create contract templates whenever matter intake rules change.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-eyebrow">Documents</div>
+              <div class="glance-title">Retire stale precedents</div>
+              <div class="glance-meta">A small set of current templates beats a large set of unreliable ones.</div>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
