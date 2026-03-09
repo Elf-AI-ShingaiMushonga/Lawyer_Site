@@ -2,238 +2,358 @@
 {% block content %}
 {% set approved_count = entries | selectattr('status', 'equalto', 'approved') | list | length %}
 {% set review_count = entries | selectattr('status', 'equalto', 'needs_review') | list | length %}
+<style>
+  .time-capture-grid {
+    display: grid;
+    gap: 12px;
+  }
 
-<div class="card p-3 mb-3">
-  <div class="toolbar-row">
-    <div>
-      <h3 class="mb-1">Time Entries</h3>
-      <p class="page-intro mb-0">Capture work logs with narrative and coding so entries are ready for review and billing.</p>
-    </div>
-    <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-sm btn-light" href="{{ url_for('time_timers') }}">Start/Manage Timers</a>
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_review') }}">Open Review Queue</a>
-    </div>
-  </div>
-  <div class="kpi-strip mt-3">
-    <div class="kpi-pill">
-      <div class="label">Entries</div>
-      <div class="value">{{ entries | length }}</div>
-    </div>
-    <div class="kpi-pill">
-      <div class="label">Needs Review</div>
-      <div class="value">{{ review_count }}</div>
-    </div>
-    <div class="kpi-pill">
-      <div class="label">Approved</div>
-      <div class="value">{{ approved_count }}</div>
-    </div>
-  </div>
-</div>
+  .time-capture-grid .form-section {
+    margin: 0;
+  }
 
-<div class="card p-3 mb-3">
-  <h4 class="mb-2">New Time Entry</h4>
-  <form
-    method="post"
-    class="row g-3"
-    data-time-prompt-form
-    data-time-prompt-endpoint="{{ url_for('time_prompts') }}"
-    data-time-code-assist="{{ time_code_assist | tojson | forceescape }}"
-    data-time-narrative-widget
-    data-time-narrative-endpoint="{{ url_for('time_ai_narrative') }}"
-    data-time-narrative-timeout-ms="90000"
-  >
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-md-4">
-      <label class="form-label" for="entry-matter-id">Matter</label>
-      <select class="form-select" id="entry-matter-id" name="matter_id" required>
-        {% for matter in matters %}
-          <option value="{{ matter.id }}" {% if prefill_matter_id and matter.id == prefill_matter_id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label" for="entry-task-id">Task ID</label>
-      <input class="form-control" id="entry-task-id" name="task_id" type="number" min="1" placeholder="Optional" value="{{ prefill_task_id or '' }}">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label" for="entry-start-at">Start At</label>
-      <input class="form-control" id="entry-start-at" name="start_at" type="datetime-local" value="{{ prefill_start_at }}" required>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label" for="entry-end-at">End At</label>
-      <input class="form-control" id="entry-end-at" name="end_at" type="datetime-local" value="{{ prefill_end_at }}" required>
-    </div>
-    <div class="col-md-4">
-      <label class="form-label" for="entry-task-code">Task Code</label>
-      <input
-        class="form-control"
-        id="entry-task-code"
-        name="task_code"
-        list="entry-task-code-options"
-        placeholder="Task code"
-        value="{{ prefill_task_code or '' }}"
-        autocomplete="off"
-      >
-      <datalist id="entry-task-code-options"></datalist>
-    </div>
-    <div class="col-md-4">
-      <label class="form-label" for="entry-activity-code">Activity Code</label>
-      <input
-        class="form-control"
-        id="entry-activity-code"
-        name="activity_code"
-        list="entry-activity-code-options"
-        placeholder="Activity code"
-        value="{{ prefill_activity_code or '' }}"
-        autocomplete="off"
-      >
-      <datalist id="entry-activity-code-options"></datalist>
-    </div>
-    <div class="col-md-4">
-      <label class="form-label" for="entry-code-pair">Recent Code Pair</label>
-      <select class="form-select" id="entry-code-pair" data-time-code-pair>
-        <option value="">Select recent pair...</option>
-      </select>
-    </div>
-    <div class="col-12">
-      <div class="form-check">
-        <input class="form-check-input" id="entry-billable" type="checkbox" name="is_billable" value="1" {% if prefill_is_billable %}checked{% endif %}>
-        <label class="form-check-label" for="entry-billable">Billable</label>
+  .time-capture-actions .action-card {
+    min-height: 120px;
+  }
+
+  .time-entry-ledger .table-responsive,
+  .time-validation-ledger .table-responsive {
+    max-height: 430px;
+  }
+
+  .time-side-note {
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 14px;
+    padding: 11px 12px;
+    background: rgba(255, 248, 248, 0.92);
+  }
+
+  .time-side-note + .time-side-note {
+    margin-top: 8px;
+  }
+</style>
+
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Time Entries</div>
+        <h1 class="page-hero-title">Time Capture Desk</h1>
+        <div class="page-hero-summary">Capture work logs with narrative and coding so entries are ready for review, billing, and audit.</div>
+      </div>
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-light" href="{{ url_for('time_timers') }}">Start/Manage Timers</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_review') }}">Open Review Queue</a>
       </div>
     </div>
-    <div class="col-12">
-      <div class="d-flex justify-content-between align-items-center">
-        <label class="form-label mb-0" for="entry-narrative">Narrative</label>
-        <button class="btn btn-sm btn-outline-light" type="button" data-ai-time-narrative-generate>Draft Narrative with AI</button>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Entries</div>
+        <div class="page-stat-value">{{ entries | length }}</div>
+        <div class="page-stat-meta">Visible time entries in the current ledger.</div>
       </div>
-      <textarea class="form-control" id="entry-narrative" name="narrative" rows="3" placeholder="Describe work completed">{{ prefill_narrative or '' }}</textarea>
-      <div class="form-help mt-1" data-ai-time-narrative-status></div>
-    </div>
-    <div class="col-12">
-      <div class="time-prompts" data-time-prompts hidden>
-        <div class="time-prompts-title">Real-time fee capture prompts</div>
-        <ul class="time-prompts-list mb-0" data-time-prompts-list></ul>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Needs Review</div>
+        <div class="page-stat-value">{{ review_count }}</div>
+        <div class="page-stat-meta">Entries that still need attention before billing.</div>
       </div>
-    </div>
-    <div class="col-12 d-grid d-md-flex justify-content-md-end">
-      <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Entry</button>
-    </div>
-  </form>
-</div>
-
-<div class="card p-3 mb-3">
-  <h4 class="mb-2">Import Physical Timesheet Photo</h4>
-  <div class="form-help mb-2">
-    Upload a photo of a handwritten/printed timesheet. AI will extract entries and save them as draft time entries.
-  </div>
-  <form method="post" action="{{ url_for('time_entries_import_photo') }}" enctype="multipart/form-data" class="row g-3">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-md-6">
-      <label class="form-label" for="timesheet-photo-file">Timesheet Photo</label>
-      <input
-        class="form-control"
-        id="timesheet-photo-file"
-        name="timesheet_photo"
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        required
-      >
-      <div class="form-help mt-1">Supported formats: PNG, JPG/JPEG, WEBP. Max 12MB.</div>
-    </div>
-    <div class="col-md-6">
-      <label class="form-label" for="timesheet-default-matter">Default Matter (optional)</label>
-      <select class="form-select" id="timesheet-default-matter" name="default_matter_id">
-        <option value="">Resolve per row from matter number in image...</option>
-        {% for matter in matters %}
-          <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
-        {% endfor %}
-      </select>
-      <div class="form-help mt-1">
-        If the photo does not clearly include matter numbers, choose a default matter for unresolved rows.
+      <div class="page-stat-card">
+        <div class="page-stat-label">Approved</div>
+        <div class="page-stat-value">{{ approved_count }}</div>
+        <div class="page-stat-meta">Entries already cleared for downstream use.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Validation Events</div>
+        <div class="page-stat-value">{{ validations|length }}</div>
+        <div class="page-stat-meta">Captured warnings and audit trail events on time entries.</div>
       </div>
     </div>
-    <div class="col-12 d-grid d-md-flex justify-content-md-end">
-      <button class="btn btn-outline-light" type="submit" data-submitting-text="Importing...">Import Timesheet Photo</button>
+    <div class="action-grid time-capture-actions">
+      <a class="action-card is-primary" href="#new-time-entry">
+        <span class="action-card-kicker">Manual Capture</span>
+        <span class="action-card-title">New Time Entry</span>
+        <span class="action-card-summary">Enter matter, coding, timings, and narrative in one focused form.</span>
+      </a>
+      <a class="action-card" href="#timesheet-import">
+        <span class="action-card-kicker">Import</span>
+        <span class="action-card-title">Timesheet Photo</span>
+        <span class="action-card-summary">Convert a handwritten or printed timesheet photo into draft time entries.</span>
+      </a>
+      <a class="action-card" href="#time-entry-ledger">
+        <span class="action-card-kicker">Ledger</span>
+        <span class="action-card-title">Entries Table</span>
+        <span class="action-card-summary">Filter and review the current time ledger without leaving the page.</span>
+      </a>
+      <a class="action-card" href="#time-validation-ledger">
+        <span class="action-card-kicker">Quality</span>
+        <span class="action-card-title">Validation Events</span>
+        <span class="action-card-summary">See why entries were flagged before they become a billing problem.</span>
+      </a>
     </div>
-  </form>
-</div>
+  </section>
 
-<div class="card p-3 mb-3">
-  <h4 class="mb-2">Entries</h4>
-  <div class="table-tools" data-table-tools data-table-target="time-entries-table">
-    <input class="form-control" type="search" data-table-search placeholder="Filter by matter, status, or narrative...">
-    <div class="table-count" data-table-count aria-live="polite"></div>
-  </div>
-  <div class="table-responsive">
-    <table class="table" id="time-entries-table">
-      <thead>
-        <tr>
-          <th data-sort-index="0" data-sort-type="number">ID</th>
-          <th data-sort-index="1" data-sort-type="number">Matter</th>
-          <th data-sort-index="2" data-sort-type="date">Start</th>
-          <th data-sort-index="3" data-sort-type="date">End</th>
-          <th data-sort-index="4" data-sort-type="number">Hours</th>
-          <th data-sort-index="5" data-sort-type="number">Rounded</th>
-          <th data-sort-index="6">Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for entry in entries %}
-          {% set matter = matter_lookup.get(entry.matter_id) if matter_lookup else None %}
-          <tr data-table-row data-search="{{ entry.id }} {{ entry.matter_id }} {{ entry.status }} {{ entry.narrative or '' }} {{ entry.task_code or '' }} {{ entry.activity_code or '' }}">
-            <td>{{ entry.id }}</td>
-            <td>
-              {% if matter %}
-                <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=matter.id) }}">{{ matter.matter_no }} - {{ matter.title }}</a>
-              {% else %}
-                {{ entry.matter_id }}
-              {% endif %}
-            </td>
-            <td>{{ entry.start_at }}</td>
-            <td>{{ entry.end_at }}</td>
-            <td>{{ entry.hours }}</td>
-            <td>{{ entry.rounded_hours }}</td>
-            <td><span class="badge badge-soft status-badge">{{ entry.status }}</span></td>
-          </tr>
-        {% endfor %}
-        <tr data-table-empty-row class="table-empty-row" {% if entries|length > 0 %}hidden{% endif %}>
-          <td colspan="7" class="muted">No entries yet.</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section id="new-time-entry" class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">New Time Entry</div>
+            <h2 class="panel-title">Capture work cleanly the first time</h2>
+            <div class="panel-summary">Use one form for matter, task linkage, timings, coding, and narrative. The AI narrative assistant and recent code pairs remain available here.</div>
+          </div>
+        </div>
+        <form
+          method="post"
+          class="time-capture-grid"
+          data-time-prompt-form
+          data-time-prompt-endpoint="{{ url_for('time_prompts') }}"
+          data-time-code-assist="{{ time_code_assist | tojson | forceescape }}"
+          data-time-narrative-widget
+          data-time-narrative-endpoint="{{ url_for('time_ai_narrative') }}"
+          data-time-narrative-timeout-ms="90000"
+        >
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="form-section">
+            <div class="field-grid columns-4">
+              <div>
+                <label class="form-label" for="entry-matter-id">Matter</label>
+                <select class="form-select" id="entry-matter-id" name="matter_id" required>
+                  {% for matter in matters %}
+                    <option value="{{ matter.id }}" {% if prefill_matter_id and matter.id == prefill_matter_id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="entry-task-id">Task ID</label>
+                <input class="form-control" id="entry-task-id" name="task_id" type="number" min="1" placeholder="Optional" value="{{ prefill_task_id or '' }}">
+              </div>
+              <div>
+                <label class="form-label" for="entry-start-at">Start At</label>
+                <input class="form-control" id="entry-start-at" name="start_at" type="datetime-local" value="{{ prefill_start_at }}" required>
+              </div>
+              <div>
+                <label class="form-label" for="entry-end-at">End At</label>
+                <input class="form-control" id="entry-end-at" name="end_at" type="datetime-local" value="{{ prefill_end_at }}" required>
+              </div>
+            </div>
+          </div>
+          <div class="form-section">
+            <div class="field-grid columns-3">
+              <div>
+                <label class="form-label" for="entry-task-code">Task Code</label>
+                <input
+                  class="form-control"
+                  id="entry-task-code"
+                  name="task_code"
+                  list="entry-task-code-options"
+                  placeholder="Task code"
+                  value="{{ prefill_task_code or '' }}"
+                  autocomplete="off"
+                >
+                <datalist id="entry-task-code-options"></datalist>
+              </div>
+              <div>
+                <label class="form-label" for="entry-activity-code">Activity Code</label>
+                <input
+                  class="form-control"
+                  id="entry-activity-code"
+                  name="activity_code"
+                  list="entry-activity-code-options"
+                  placeholder="Activity code"
+                  value="{{ prefill_activity_code or '' }}"
+                  autocomplete="off"
+                >
+                <datalist id="entry-activity-code-options"></datalist>
+              </div>
+              <div>
+                <label class="form-label" for="entry-code-pair">Recent Code Pair</label>
+                <select class="form-select" id="entry-code-pair" data-time-code-pair>
+                  <option value="">Select recent pair...</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-check mt-3">
+              <input class="form-check-input" id="entry-billable" type="checkbox" name="is_billable" value="1" {% if prefill_is_billable %}checked{% endif %}>
+              <label class="form-check-label" for="entry-billable">Billable</label>
+            </div>
+          </div>
+          <div class="form-section">
+            <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+              <label class="form-label mb-0" for="entry-narrative">Narrative</label>
+              <button class="btn btn-sm btn-outline-light" type="button" data-ai-time-narrative-generate>Draft Narrative with AI</button>
+            </div>
+            <textarea class="form-control mt-2" id="entry-narrative" name="narrative" rows="4" placeholder="Describe work completed">{{ prefill_narrative or '' }}</textarea>
+            <div class="form-help mt-1" data-ai-time-narrative-status></div>
+          </div>
+          <div class="time-prompts" data-time-prompts hidden>
+            <div class="time-prompts-title">Real-time fee capture prompts</div>
+            <ul class="time-prompts-list mb-0" data-time-prompts-list></ul>
+          </div>
+          <div class="d-grid d-md-flex justify-content-md-end">
+            <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Entry</button>
+          </div>
+        </form>
+      </section>
 
-<div class="card p-3">
-  <h4 class="mb-2">Validation Events</h4>
-  <div class="table-tools" data-table-tools data-table-target="time-validations-table">
-    <input class="form-control" type="search" data-table-search placeholder="Filter by event type, entry id, or message...">
-    <div class="table-count" data-table-count aria-live="polite"></div>
-  </div>
-  <div class="table-responsive">
-    <table class="table" id="time-validations-table">
-      <thead>
-        <tr>
-          <th data-sort-index="0" data-sort-type="number">Entry</th>
-          <th data-sort-index="1">Event</th>
-          <th data-sort-index="2">Message</th>
-          <th data-sort-index="3" data-sort-type="date">At</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for validation in validations %}
-          <tr data-table-row data-search="{{ validation.time_entry_id }} {{ validation.event_type }} {{ validation.message }} {{ validation.created_at }}">
-            <td>{{ validation.time_entry_id }}</td>
-            <td>{{ validation.event_type }}</td>
-            <td>{{ validation.message }}</td>
-            <td>{{ validation.created_at }}</td>
-          </tr>
-        {% endfor %}
-        <tr data-table-empty-row class="table-empty-row" {% if validations|length > 0 %}hidden{% endif %}>
-          <td colspan="4" class="muted">No validation events recorded.</td>
-        </tr>
-      </tbody>
-    </table>
+      <section id="time-entry-ledger" class="panel-card time-entry-ledger">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Entries</div>
+            <h2 class="panel-title">Time ledger</h2>
+            <div class="panel-summary">Filter the ledger by matter, status, or narrative to review what is ready and what still needs attention.</div>
+          </div>
+        </div>
+        <div class="table-tools" data-table-tools data-table-target="time-entries-table">
+          <input class="form-control" type="search" data-table-search placeholder="Filter by matter, status, or narrative...">
+          <div class="table-count" data-table-count aria-live="polite"></div>
+        </div>
+        <div class="table-responsive">
+          <table class="table" id="time-entries-table">
+            <thead>
+              <tr>
+                <th data-sort-index="0" data-sort-type="number">ID</th>
+                <th data-sort-index="1" data-sort-type="number">Matter</th>
+                <th data-sort-index="2" data-sort-type="date">Start</th>
+                <th data-sort-index="3" data-sort-type="date">End</th>
+                <th data-sort-index="4" data-sort-type="number">Hours</th>
+                <th data-sort-index="5" data-sort-type="number">Rounded</th>
+                <th data-sort-index="6">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in entries %}
+                {% set matter = matter_lookup.get(entry.matter_id) if matter_lookup else None %}
+                <tr data-table-row data-search="{{ entry.id }} {{ entry.matter_id }} {{ entry.status }} {{ entry.narrative or '' }} {{ entry.task_code or '' }} {{ entry.activity_code or '' }}">
+                  <td>{{ entry.id }}</td>
+                  <td>
+                    {% if matter %}
+                      <a class="text-decoration-none" href="{{ url_for('matter_detail', matter_id=matter.id) }}">{{ matter.matter_no }} - {{ matter.title }}</a>
+                    {% else %}
+                      {{ entry.matter_id }}
+                    {% endif %}
+                  </td>
+                  <td>{{ entry.start_at }}</td>
+                  <td>{{ entry.end_at }}</td>
+                  <td>{{ entry.hours }}</td>
+                  <td>{{ entry.rounded_hours }}</td>
+                  <td><span class="badge badge-soft status-badge">{{ entry.status }}</span></td>
+                </tr>
+              {% endfor %}
+              <tr data-table-empty-row class="table-empty-row" {% if entries|length > 0 %}hidden{% endif %}>
+                <td colspan="7" class="muted">No entries yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="time-validation-ledger" class="panel-card time-validation-ledger">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Validation Events</div>
+            <h2 class="panel-title">Quality and audit trail</h2>
+            <div class="panel-summary">See entry-level warnings and system checks before they become invoice leakage or review churn.</div>
+          </div>
+        </div>
+        <div class="table-tools" data-table-tools data-table-target="time-validations-table">
+          <input class="form-control" type="search" data-table-search placeholder="Filter by event type, entry id, or message...">
+          <div class="table-count" data-table-count aria-live="polite"></div>
+        </div>
+        <div class="table-responsive">
+          <table class="table" id="time-validations-table">
+            <thead>
+              <tr>
+                <th data-sort-index="0" data-sort-type="number">Entry</th>
+                <th data-sort-index="1">Event</th>
+                <th data-sort-index="2">Message</th>
+                <th data-sort-index="3" data-sort-type="date">At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for validation in validations %}
+                <tr data-table-row data-search="{{ validation.time_entry_id }} {{ validation.event_type }} {{ validation.message }} {{ validation.created_at }}">
+                  <td>{{ validation.time_entry_id }}</td>
+                  <td>{{ validation.event_type }}</td>
+                  <td>{{ validation.message }}</td>
+                  <td>{{ validation.created_at }}</td>
+                </tr>
+              {% endfor %}
+              <tr data-table-empty-row class="table-empty-row" {% if validations|length > 0 %}hidden{% endif %}>
+                <td colspan="4" class="muted">No validation events recorded.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card is-accent">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Capture Flow</div>
+              <h2 class="panel-title">Keep fee capture friction low</h2>
+              <div class="panel-summary">Use this sequence whenever you want clean billing records with minimal back-and-forth.</div>
+            </div>
+          </div>
+          <div class="time-side-note">
+            <div class="glance-eyebrow">1. Pick the matter</div>
+            <div class="glance-meta">Start with the right matter so code assist and recent pairs work for the specific file.</div>
+          </div>
+          <div class="time-side-note">
+            <div class="glance-eyebrow">2. Confirm codes</div>
+            <div class="glance-meta">Use task and activity codes or the recent code pair selector so entries map cleanly into billing.</div>
+          </div>
+          <div class="time-side-note">
+            <div class="glance-eyebrow">3. Write the narrative</div>
+            <div class="glance-meta">Use the AI draft if needed, then tighten the wording so the client can understand what work was done.</div>
+          </div>
+          <div class="time-side-note">
+            <div class="glance-eyebrow">4. Watch prompts and validation</div>
+            <div class="glance-meta">Prompts help with missing data in real time; validation events show where review friction is building up.</div>
+          </div>
+        </section>
+
+        <section id="timesheet-import" class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Import Physical Timesheet Photo</div>
+              <h2 class="panel-title">Bring paper into the system</h2>
+              <div class="panel-summary">Upload a photo of a handwritten or printed timesheet. AI will extract rows and save draft entries for review.</div>
+            </div>
+          </div>
+          <form method="post" action="{{ url_for('time_entries_import_photo') }}" enctype="multipart/form-data" class="field-grid">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+              <label class="form-label" for="timesheet-photo-file">Timesheet Photo</label>
+              <input
+                class="form-control"
+                id="timesheet-photo-file"
+                name="timesheet_photo"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                required
+              >
+              <div class="form-help mt-1">Supported formats: PNG, JPG/JPEG, WEBP. Max 12MB.</div>
+            </div>
+            <div>
+              <label class="form-label" for="timesheet-default-matter">Default Matter (optional)</label>
+              <select class="form-select" id="timesheet-default-matter" name="default_matter_id">
+                <option value="">Resolve per row from matter number in image...</option>
+                {% for matter in matters %}
+                  <option value="{{ matter.id }}">{{ matter.matter_no }} - {{ matter.title }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-help mt-1">If the photo does not clearly include matter numbers, choose a default matter for unresolved rows.</div>
+            </div>
+            <div class="d-grid">
+              <button class="btn btn-outline-light" type="submit" data-submitting-text="Importing...">Import Timesheet Photo</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

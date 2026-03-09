@@ -109,6 +109,8 @@ def test_time_entries_exposes_recent_code_assist_payload(app_ctx):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
+    assert "Time Capture Desk" in body
+    assert "Capture work cleanly the first time" in body
     assert 'id="entry-task-code-options"' in body
     assert 'id="entry-activity-code-options"' in body
     assert 'data-time-code-pair' in body

@@ -4,95 +4,42 @@
 {% set open_checklist = (checklist | length) - done_checklist %}
 {% set archetype_missing = archetype_compliance.required_missing_labels if archetype_compliance else [] %}
 <style>
-  .workspace-overview-title {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 9px;
+  .workspace-welcome-line {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #705c5c;
   }
 
-  .workspace-title-meta {
-    color: var(--muted);
-    font-size: 13px;
-  }
-
-  .workspace-section {
-    height: auto;
-  }
-
-  .workspace-section.card {
-    padding: 0.9rem !important;
-  }
-
-  .workspace-section-title {
-    margin-bottom: 6px;
-    line-height: 1.25;
-  }
-
-  .workspace-actions-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .workspace-actions-grid .matter-workspace-link-btn {
-    width: 100%;
-  }
-
-  .workspace-metric-strip {
-    margin-top: 8px;
-    gap: 8px;
-  }
-
-  .workspace-kpi-label {
-    font-size: 11px;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-  }
-
-  .workspace-section .kpi-pill {
-    padding: 8px 10px;
-  }
-
-  .workspace-section .kpi-pill .value {
-    font-size: 18px;
-  }
-
-  .workspace-section .table-tools {
-    margin-bottom: 8px;
-  }
-
-  .workspace-section .table td,
-  .workspace-section .table th {
-    padding-top: 0.55rem;
-    padding-bottom: 0.55rem;
-  }
-
-  .workspace-magic-card {
-    border: 1px solid rgba(225, 6, 0, 0.18);
-    border-radius: 16px;
+  .workspace-war-room-card {
+    border: 1px solid rgba(225, 6, 0, 0.22);
+    border-radius: 18px;
     background:
-      linear-gradient(180deg, rgba(255, 251, 251, 0.98), rgba(255, 255, 255, 0.97)),
-      radial-gradient(circle at top right, rgba(225, 6, 0, 0.08), rgba(225, 6, 0, 0));
+      radial-gradient(circle at top right, rgba(225, 6, 0, 0.08), rgba(225, 6, 0, 0)),
+      linear-gradient(180deg, rgba(255, 252, 252, 0.99), rgba(255, 248, 248, 0.97));
   }
 
-  .workspace-magic-card.tone-critical {
+  .workspace-war-room-card.tone-critical {
     border-color: rgba(180, 31, 31, 0.34);
   }
 
-  .workspace-magic-card.tone-watch {
+  .workspace-war-room-card.tone-watch {
     border-color: rgba(201, 117, 23, 0.3);
+  }
+
+  .workspace-magic-status {
+    font-size: 12px;
+    color: #705b5b;
+    line-height: 1.45;
   }
 
   .workspace-magic-list {
     display: grid;
     gap: 10px;
-    margin-top: 12px;
   }
 
   .workspace-magic-item {
     border: 1px solid rgba(225, 6, 0, 0.14);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 10px 11px;
     background: rgba(255, 255, 255, 0.92);
   }
@@ -109,28 +56,21 @@
     border-left: 4px solid #936431;
   }
 
-  .workspace-magic-status {
-    margin-top: 6px;
-    font-size: 12px;
-    color: #705b5b;
-    line-height: 1.45;
-  }
-
   .war-room-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin-top: 12px;
+    gap: 10px;
   }
 
   .war-room-action {
     border: 1px solid rgba(225, 6, 0, 0.15);
-    border-radius: 12px;
+    border-radius: 14px;
     background: rgba(255, 255, 255, 0.94);
     padding: 11px;
     display: flex;
     flex-direction: column;
     gap: 6px;
+    min-height: 142px;
   }
 
   .war-room-action.is-strong {
@@ -165,235 +105,310 @@
     text-transform: uppercase;
   }
 
-  @media (max-width: 991.98px) {
-    .workspace-actions-grid {
-      grid-template-columns: 1fr;
-    }
+  .workspace-action-grid .action-card {
+    min-height: 118px;
+  }
 
+  .workspace-section .table td,
+  .workspace-section .table th {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+  }
+
+  .workspace-checklist-item {
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 12px;
+    padding: 10px 11px;
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .workspace-checklist-item + .workspace-checklist-item {
+    margin-top: 8px;
+  }
+
+  @media (max-width: 991.98px) {
     .war-room-grid {
       grid-template-columns: 1fr;
     }
   }
 </style>
 
-<div class="row g-3 align-items-start">
-  <div class="col-lg-8">
-    <div class="card p-3 mb-3 workspace-section">
-      <div class="workspace-overview-title">
-        <h3 class="mb-0">{{ m.matter_no }} Workspace</h3>
-        <span class="workspace-title-meta">{{ m.title }} • {{ m.client_name }}</span>
-      </div>
-      <div class="list-meta mt-2">
-        <span class="badge status-badge status-{{ (m.status or 'open')|lower|replace(' ', '-') }}">{{ m.status or "Open" }}</span>
-        <span class="risk-chip risk-{{ (m.risk_level or 'medium')|lower }}">{{ m.risk_level or "Medium" }}</span>
-        <span>Stage: {{ m.stage or "-" }}</span>
-      </div>
-      <div class="kpi-strip workspace-metric-strip">
-        <div class="kpi-pill">
-          <div class="label workspace-kpi-label">Stage</div>
-          <div class="value" style="font-size: 17px;">{{ m.stage or '-' }}</div>
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Workspace Flight Deck</div>
+        <h1 class="page-hero-title">{{ m.matter_no }} Workspace</h1>
+        <div class="page-hero-summary">{{ m.title }} • {{ m.client_name }}</div>
+        <div class="page-hero-meta">
+          <span class="badge status-badge status-{{ (m.status or 'open')|lower|replace(' ', '-') }}">{{ m.status or "Open" }}</span>
+          <span class="risk-chip risk-{{ (m.risk_level or 'medium')|lower }}">{{ m.risk_level or "Medium" }}</span>
+          <span class="tag-chip">Stage {{ m.stage or "-" }}</span>
+          {% if archetype %}<span class="tag-chip">{{ archetype.name }}</span>{% endif %}
         </div>
-        <div class="kpi-pill">
-          <div class="label workspace-kpi-label">Open Tasks</div>
-          <div class="value">{{ stats.open_tasks }}</div>
-        </div>
-        <div class="kpi-pill">
-          <div class="label workspace-kpi-label">Deadlines</div>
-          <div class="value">{{ stats.deadlines }}</div>
-        </div>
-        <div class="kpi-pill">
-          <div class="label workspace-kpi-label">Documents</div>
-          <div class="value">{{ stats.documents }}</div>
-        </div>
-        <div class="kpi-pill">
-          <div class="label workspace-kpi-label">Notes</div>
-          <div class="value">{{ stats.notes }}</div>
-        </div>
-        {% if archetype %}
-          <div class="kpi-pill">
-            <div class="label workspace-kpi-label">Archetype</div>
-            <div class="value" style="font-size: 15px;">{{ archetype.name }}</div>
-          </div>
-          <div class="kpi-pill">
-            <div class="label workspace-kpi-label">Compliance</div>
-            <div class="value">{{ archetype_compliance.compliance_pct }}%</div>
-          </div>
-        {% endif %}
+        <div class="workspace-welcome-line">Run the matter from here: launch work, move the stage, and see what the file needs next without leaving context.</div>
       </div>
-    </div>
-
-    <div class="card p-3 workspace-section">
-      <div class="toolbar-row">
-        <h4 class="mb-0 workspace-section-title">Stage History</h4>
-      </div>
-      <div class="table-tools" data-table-tools data-table-target="matter-stage-history-table">
-        <input class="form-control" type="search" data-table-search placeholder="Filter by stage or reason...">
-        <div class="table-count" data-table-count aria-live="polite"></div>
-      </div>
-      <div class="table-responsive">
-        <table class="table" id="matter-stage-history-table">
-          <thead>
-            <tr>
-              <th data-sort-index="0" data-sort-type="date">When</th>
-              <th data-sort-index="1">From</th>
-              <th data-sort-index="2">To</th>
-              <th data-sort-index="3">Reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in stage_history %}
-              <tr data-table-row data-search="{{ row.changed_at }} {{ row.from_stage or '' }} {{ row.to_stage }} {{ row.reason or '' }}">
-                <td>{{ row.changed_at }}</td>
-                <td>{{ row.from_stage or '-' }}</td>
-                <td>{{ row.to_stage }}</td>
-                <td>{{ row.reason or '-' }}</td>
-              </tr>
-            {% endfor %}
-            <tr data-table-empty-row class="table-empty-row" {% if stage_history|length > 0 %}hidden{% endif %}>
-              <td colspan="4" class="muted">No stage history yet.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-lg-4">
-    <div class="card p-3 mb-3 workspace-section workspace-magic-card tone-{{ matter_launch_pack.health_tone }}">
-      <div class="toolbar-row">
-        <div>
-          <h4 class="mb-0 workspace-section-title">Matter War Room</h4>
-          <div class="muted small mt-1">{{ matter_launch_pack.subheadline }}</div>
-        </div>
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter Summary</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=m.id) }}">DMS</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_matter', matter_id=m.id) }}">Calendar</a>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('integrations_south_africa', matter_id=m.id) }}">ZA Desk</a>
       </div>
-      <div class="workspace-magic-status">{{ matter_launch_pack.status_line }}</div>
-      <div class="war-room-grid">
-        {% for action in matter_launch_pack.quick_actions %}
-          <article class="war-room-action {{ 'is-strong' if action.emphasis == 'strong' else '' }}">
-            {% if action.badge %}<span class="workspace-action-badge">{{ action.badge }}</span>{% endif %}
-            <div class="war-room-action-title">{{ action.title }}</div>
-            <div class="war-room-action-summary">{{ action.summary }}</div>
-            <div class="mt-auto">
-              <a class="btn btn-sm btn-light" href="{{ action.href }}">Launch</a>
+    </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Stage</div>
+        <div class="page-stat-value">{{ m.stage or '-' }}</div>
+        <div class="page-stat-meta">Current operating stage on the matter.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Open Tasks</div>
+        <div class="page-stat-value">{{ stats.open_tasks }}</div>
+        <div class="page-stat-meta">Execution load still open on the file.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Deadlines</div>
+        <div class="page-stat-value">{{ stats.deadlines }}</div>
+        <div class="page-stat-meta">Calendar obligations linked to this matter.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Documents</div>
+        <div class="page-stat-value">{{ stats.documents }}</div>
+        <div class="page-stat-meta">Repository items and working drafts.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Notes</div>
+        <div class="page-stat-value">{{ stats.notes }}</div>
+        <div class="page-stat-meta">Matter notes and internal context captured.</div>
+      </div>
+      {% if archetype %}
+        <div class="page-stat-card">
+          <div class="page-stat-label">Compliance</div>
+          <div class="page-stat-value">{{ archetype_compliance.compliance_pct }}%</div>
+          <div class="page-stat-meta">Archetype field and checklist completion.</div>
+        </div>
+      {% endif %}
+    </div>
+    <div class="action-grid workspace-action-grid">
+      <a class="action-card is-primary" href="{{ url_for('matter_parties', matter_id=m.id) }}">
+        <span class="action-card-kicker">People</span>
+        <span class="action-card-title">Parties</span>
+        <span class="action-card-summary">Jump straight into the parties and relationship map for the matter.</span>
+      </a>
+      <a class="action-card" href="{{ url_for('matter_notes', matter_id=m.id) }}">
+        <span class="action-card-kicker">Record</span>
+        <span class="action-card-title">Notes</span>
+        <span class="action-card-summary">Capture internal guidance, strategy, and meeting context in place.</span>
+      </a>
+      <a class="action-card" href="{{ url_for('calendar_matter', matter_id=m.id) }}">
+        <span class="action-card-kicker">Calendar</span>
+        <span class="action-card-title">Dates</span>
+        <span class="action-card-summary">Add or review hearings, filing dates, and internal deadlines.</span>
+      </a>
+      <a class="action-card" href="{{ url_for('matter_dms', matter_id=m.id) }}">
+        <span class="action-card-kicker">Documents</span>
+        <span class="action-card-title">DMS</span>
+        <span class="action-card-summary">Open the document hub with matter metadata and shortcuts already loaded.</span>
+      </a>
+      <a class="action-card" href="{{ url_for('matter_detail', matter_id=m.id) }}">
+        <span class="action-card-kicker">Control</span>
+        <span class="action-card-title">Summary</span>
+        <span class="action-card-summary">Return to the executive matter view when you need the broader picture.</span>
+      </a>
+    </div>
+  </section>
+
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card workspace-section is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Stage History</div>
+            <h2 class="panel-title">How the matter has moved</h2>
+            <div class="panel-summary">Track stage changes and the reasons behind them so handovers and reviews stay grounded.</div>
+          </div>
+        </div>
+        <div class="section-note">Use this as the operating history for the file. It should answer what changed, when it changed, and why the team moved the matter forward.</div>
+        <div class="table-tools" data-table-tools data-table-target="matter-stage-history-table">
+          <input class="form-control" type="search" data-table-search placeholder="Filter by stage or reason...">
+          <div class="table-count" data-table-count aria-live="polite"></div>
+        </div>
+        <div class="table-responsive">
+          <table class="table" id="matter-stage-history-table">
+            <thead>
+              <tr>
+                <th data-sort-index="0" data-sort-type="date">When</th>
+                <th data-sort-index="1">From</th>
+                <th data-sort-index="2">To</th>
+                <th data-sort-index="3">Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in stage_history %}
+                <tr data-table-row data-search="{{ row.changed_at }} {{ row.from_stage or '' }} {{ row.to_stage }} {{ row.reason or '' }}">
+                  <td>{{ row.changed_at }}</td>
+                  <td>{{ row.from_stage or '-' }}</td>
+                  <td>{{ row.to_stage }}</td>
+                  <td>{{ row.reason or '-' }}</td>
+                </tr>
+              {% endfor %}
+              <tr data-table-empty-row class="table-empty-row" {% if stage_history|length > 0 %}hidden{% endif %}>
+                <td colspan="4" class="muted">No stage history yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card workspace-war-room-card tone-{{ matter_launch_pack.health_tone }}">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Matter War Room</div>
+              <h2 class="panel-title">Launch the next action</h2>
+              <div class="panel-summary">{{ matter_launch_pack.subheadline }}</div>
             </div>
-          </article>
-        {% endfor %}
-      </div>
-      <div class="mt-3">
-        <label class="form-label" for="matter-war-room-brief">War Room Brief</label>
-        <textarea class="form-control" id="matter-war-room-brief" rows="8" readonly>{{ matter_launch_pack.brief_text }}</textarea>
-        <div class="d-flex gap-2 align-items-center mt-2">
-          <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="matter-war-room-brief" data-copy-success-text="Copied">Copy Brief</button>
-          <span class="form-help" data-copy-feedback-for="matter-war-room-brief"></span>
-        </div>
-      </div>
-    </div>
-
-    <div class="card p-3 mb-3 workspace-section workspace-magic-card tone-{{ matter_magic.health_tone }}">
-      <div class="toolbar-row">
-        <div>
-          <h4 class="mb-0 workspace-section-title">Next Best Moves</h4>
-          <div class="muted small mt-1">{{ matter_magic.headline }}</div>
-        </div>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
-      </div>
-      <div class="workspace-magic-status">{{ matter_magic.status_line }}</div>
-      <div class="workspace-magic-list">
-        {% for action in matter_magic.actions[:3] %}
-          <article class="workspace-magic-item urgency-{{ action.urgency }}">
-            <div class="d-flex justify-content-between gap-2 align-items-start">
-              <div class="fw-semibold">{{ action.title }}</div>
-              {% if action.badge %}<span class="badge badge-soft">{{ action.badge }}</span>{% endif %}
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('integrations_south_africa', matter_id=m.id) }}">ZA Desk</a>
+          </div>
+          <div class="workspace-magic-status">{{ matter_launch_pack.status_line }}</div>
+          <div class="war-room-grid">
+            {% for action in matter_launch_pack.quick_actions %}
+              <article class="war-room-action {{ 'is-strong' if action.emphasis == 'strong' else '' }}">
+                {% if action.badge %}<span class="workspace-action-badge">{{ action.badge }}</span>{% endif %}
+                <div class="war-room-action-title">{{ action.title }}</div>
+                <div class="war-room-action-summary">{{ action.summary }}</div>
+                <div class="mt-auto">
+                  <a class="btn btn-sm btn-light" href="{{ action.href }}">Launch</a>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+          <div class="panel-body mt-2">
+            <label class="form-label" for="matter-war-room-brief">War Room Brief</label>
+            <textarea class="form-control" id="matter-war-room-brief" rows="8" readonly>{{ matter_launch_pack.brief_text }}</textarea>
+            <div class="d-flex gap-2 align-items-center">
+              <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="matter-war-room-brief" data-copy-success-text="Copied">Copy Brief</button>
+              <span class="form-help" data-copy-feedback-for="matter-war-room-brief"></span>
             </div>
-            <div class="muted small mt-1">{{ action.summary }}</div>
-            <div class="table-actions mt-2">
-              <a class="btn btn-sm btn-light" href="{{ action.href }}">{{ action.button_label }}</a>
+          </div>
+        </section>
+
+        <section class="panel-card workspace-war-room-card tone-{{ matter_magic.health_tone }}">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Next Best Moves</div>
+              <h2 class="panel-title">What should happen next</h2>
+              <div class="panel-summary">{{ matter_magic.headline }}</div>
             </div>
-          </article>
-        {% endfor %}
-      </div>
-    </div>
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
+          </div>
+          <div class="workspace-magic-status">{{ matter_magic.status_line }}</div>
+          <div class="workspace-magic-list">
+            {% for action in matter_magic.actions[:3] %}
+              <article class="workspace-magic-item urgency-{{ action.urgency }}">
+                <div class="d-flex justify-content-between gap-2 align-items-start">
+                  <div class="fw-semibold">{{ action.title }}</div>
+                  {% if action.badge %}<span class="badge badge-soft">{{ action.badge }}</span>{% endif %}
+                </div>
+                <div class="muted small mt-1">{{ action.summary }}</div>
+                <div class="table-actions mt-2">
+                  <a class="btn btn-sm btn-light" href="{{ action.href }}">{{ action.button_label }}</a>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        </section>
 
-    <div class="card p-3 mb-3 workspace-section">
-      <h4 class="mb-2 workspace-section-title">Workspace Actions</h4>
-      <div class="workspace-actions-grid">
-        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_parties', matter_id=m.id) }}">Parties</a>
-        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_notes', matter_id=m.id) }}">Notes</a>
-        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('calendar_matter', matter_id=m.id) }}">Calendar</a>
-        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_dms', matter_id=m.id) }}">DMS</a>
-        <a class="btn btn-sm btn-outline-light matter-workspace-link-btn" href="{{ url_for('matter_detail', matter_id=m.id) }}">Summary</a>
-      </div>
-    </div>
-
-    <div class="card p-3 mb-3 workspace-section">
-      <h4 class="mb-2 workspace-section-title">Stage Transition</h4>
-      <form method="post" action="{{ url_for('matter_stage_update', matter_id=m.id) }}" class="row g-2 align-items-end">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="col-12">
-          <label class="form-label" for="workspace-stage">Next Stage</label>
-          <input class="form-control" id="workspace-stage" name="stage" placeholder="Discovery" required>
-        </div>
-        <div class="col-12">
-          <label class="form-label" for="workspace-stage-reason">Reason</label>
-          <input class="form-control" id="workspace-stage-reason" name="reason" placeholder="Milestone reached">
-        </div>
-        <div class="col-12 d-grid">
-          <label class="form-label visually-hidden" for="workspace-stage-submit">Update</label>
-          <button class="btn btn-outline-light" id="workspace-stage-submit" type="submit" data-submitting-text="Updating...">Update Stage</button>
-        </div>
-      </form>
-    </div>
-
-    {% if archetype %}
-      <div class="card p-3 mb-3 workspace-section">
-        <div class="toolbar-row">
-          <h4 class="mb-0">Archetype Compliance</h4>
-          <form method="post" action="{{ url_for('matter_archetype_sync_checklist', matter_id=m.id) }}">
+        <section class="panel-card workspace-section">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Stage Transition</div>
+              <h2 class="panel-title">Move the matter forward</h2>
+              <div class="panel-summary">Update the stage as the file advances so the rest of the system stays aligned.</div>
+            </div>
+          </div>
+          <form method="post" action="{{ url_for('matter_stage_update', matter_id=m.id) }}" class="field-grid">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Syncing...">Sync Checklist</button>
+            <div>
+              <label class="form-label" for="workspace-stage">Next Stage</label>
+              <input class="form-control" id="workspace-stage" name="stage" placeholder="Discovery" required>
+            </div>
+            <div>
+              <label class="form-label" for="workspace-stage-reason">Reason</label>
+              <input class="form-control" id="workspace-stage-reason" name="reason" placeholder="Milestone reached">
+            </div>
+            <div class="d-grid">
+              <label class="form-label visually-hidden" for="workspace-stage-submit">Update</label>
+              <button class="btn btn-outline-light" id="workspace-stage-submit" type="submit" data-submitting-text="Updating...">Update Stage</button>
+            </div>
           </form>
-        </div>
-        <div class="kpi-strip mt-2">
-          <div class="kpi-pill">
-            <div class="label">Required Fields</div>
-            <div class="value">{{ archetype_compliance.required_filled }}/{{ archetype_compliance.required_total }}</div>
-          </div>
-          <div class="kpi-pill">
-            <div class="label">Checklist</div>
-            <div class="value">{{ archetype_compliance.checklist_done }}/{{ archetype_compliance.checklist_total }}</div>
-          </div>
-          <div class="kpi-pill">
-            <div class="label">Unsynced</div>
-            <div class="value">{{ archetype_compliance.checklist_unsynced }}</div>
-          </div>
-        </div>
-        {% if archetype_missing %}
-          <div class="form-help mt-2 text-danger">Missing required fields: {{ archetype_missing|join(", ") }}</div>
-        {% endif %}
-        {% if archetype_compliance.checklist_remaining > 0 %}
-          <div class="form-help mt-1 text-danger">Checklist remaining: {{ archetype_compliance.checklist_remaining }} item(s).</div>
-        {% endif %}
-      </div>
-    {% endif %}
+        </section>
 
-    <div class="card p-3 workspace-section">
-      <h4 class="mb-2 workspace-section-title">Closing Checklist</h4>
-      <div class="muted small mb-2">Open: {{ open_checklist }} • Done: {{ done_checklist }}</div>
-      <form method="post" action="{{ url_for('matter_close', matter_id=m.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        {% for item in checklist %}
-          <div class="form-check mb-1">
-            <input class="form-check-input" type="checkbox" name="checklist_done" value="{{ item.id }}" id="item_{{ item.id }}" {% if item.is_done %}checked{% endif %}>
-            <label class="form-check-label" for="item_{{ item.id }}">
-              {{ item.item_text }} {% if item.is_done %}<span class="muted">(done)</span>{% endif %}
-            </label>
+        {% if archetype %}
+          <section class="panel-card workspace-section">
+            <div class="panel-header">
+              <div class="panel-header-main">
+                <div class="panel-kicker">Archetype Compliance</div>
+                <h2 class="panel-title">Required controls</h2>
+                <div class="panel-summary">Check how close the file is to the archetype standard and resync when the playbook changes.</div>
+              </div>
+              <form method="post" action="{{ url_for('matter_archetype_sync_checklist', matter_id=m.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-light" type="submit" data-submitting-text="Syncing...">Sync Checklist</button>
+              </form>
+            </div>
+            <div class="page-stat-grid">
+              <div class="page-stat-card">
+                <div class="page-stat-label">Required Fields</div>
+                <div class="page-stat-value">{{ archetype_compliance.required_filled }}/{{ archetype_compliance.required_total }}</div>
+              </div>
+              <div class="page-stat-card">
+                <div class="page-stat-label">Checklist</div>
+                <div class="page-stat-value">{{ archetype_compliance.checklist_done }}/{{ archetype_compliance.checklist_total }}</div>
+              </div>
+              <div class="page-stat-card">
+                <div class="page-stat-label">Unsynced</div>
+                <div class="page-stat-value">{{ archetype_compliance.checklist_unsynced }}</div>
+              </div>
+            </div>
+            {% if archetype_missing %}
+              <div class="section-note">Missing required fields: {{ archetype_missing|join(", ") }}</div>
+            {% endif %}
+            {% if archetype_compliance.checklist_remaining > 0 %}
+              <div class="section-note">Checklist remaining: {{ archetype_compliance.checklist_remaining }} item(s).</div>
+            {% endif %}
+          </section>
+        {% endif %}
+
+        <section class="panel-card workspace-section is-accent">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Closing Checklist</div>
+              <h2 class="panel-title">Close with confidence</h2>
+              <div class="panel-summary">Use the checklist to make sure the file is actually ready to close.</div>
+            </div>
           </div>
-        {% else %}
-          <div class="muted">No checklist items configured.</div>
-        {% endfor %}
-        <button class="btn btn-light mt-3" type="submit" data-submitting-text="Closing...">Close Matter</button>
-      </form>
+          <div class="section-note">Open: {{ open_checklist }} • Done: {{ done_checklist }}</div>
+          <form method="post" action="{{ url_for('matter_close', matter_id=m.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% for item in checklist %}
+              <div class="workspace-checklist-item">
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" name="checklist_done" value="{{ item.id }}" id="item_{{ item.id }}" {% if item.is_done %}checked{% endif %}>
+                  <label class="form-check-label" for="item_{{ item.id }}">
+                    {{ item.item_text }} {% if item.is_done %}<span class="muted">(done)</span>{% endif %}
+                  </label>
+                </div>
+              </div>
+            {% else %}
+              <div class="empty-state">No checklist items configured.</div>
+            {% endfor %}
+            <button class="btn btn-light mt-3" type="submit" data-submitting-text="Closing...">Close Matter</button>
+          </form>
+        </section>
+      </div>
     </div>
   </div>
 </div>

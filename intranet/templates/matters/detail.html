@@ -2,13 +2,18 @@
 {% block content %}
 <style>
   .matter-detail-jumpbar {
+    position: sticky;
+    top: 86px;
+    z-index: 6;
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    padding: 8px;
-    border: 1px solid rgba(225, 6, 0, 0.2);
-    border-radius: 12px;
-    background: rgba(255, 250, 250, 0.9);
+    padding: 10px;
+    border: 1px solid rgba(225, 6, 0, 0.18);
+    border-radius: 16px;
+    background: rgba(255, 251, 251, 0.94);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 12px 24px rgba(109, 39, 39, 0.08);
   }
 
   .matter-detail-jumpbar .nav-pill {
@@ -25,17 +30,45 @@
   }
 
   .matter-detail-anchor {
-    scroll-margin-top: 110px;
+    scroll-margin-top: 144px;
   }
 
-  .matter-detail-list-tools {
-    margin-top: 8px;
-    margin-bottom: 8px;
+  .matter-command-grid {
+    margin-top: 14px;
+  }
+
+  .matter-command-grid .action-card {
+    min-height: 136px;
+  }
+
+  .matter-summary-form,
+  .matter-ai-panel,
+  .matter-archetype-panel,
+  .matter-timeline-panel {
+    display: grid;
+    gap: 12px;
+  }
+
+  .matter-compact-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .matter-note-band {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .matter-note-band .glance-item {
+    min-height: 100%;
   }
 
   .matter-magic-card {
-    border: 1px solid rgba(225, 6, 0, 0.18);
-    border-radius: 16px;
+    border: 1px solid rgba(225, 6, 0, 0.22);
+    border-radius: 18px;
     background:
       radial-gradient(circle at top right, rgba(225, 6, 0, 0.1), rgba(225, 6, 0, 0)),
       linear-gradient(180deg, rgba(255, 250, 250, 0.98), rgba(255, 255, 255, 0.98));
@@ -50,7 +83,6 @@
   }
 
   .matter-magic-status {
-    margin-top: 6px;
     font-size: 12px;
     color: #715a5a;
     line-height: 1.45;
@@ -59,12 +91,11 @@
   .matter-magic-list {
     display: grid;
     gap: 10px;
-    margin-top: 12px;
   }
 
   .matter-magic-item {
     border: 1px solid rgba(225, 6, 0, 0.14);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 11px 12px;
     background: rgba(255, 255, 255, 0.9);
   }
@@ -98,88 +129,205 @@
   }
 
   .matter-magic-brief {
-    margin-top: 12px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .matter-pulse-grid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .matter-pulse-grid .glance-item {
+    background: rgba(255, 252, 252, 0.96);
+  }
+
+  .matter-side-section .entry-scroll,
+  .matter-side-section .timeline-list {
+    max-height: 310px;
+  }
+
+  .matter-activity-item,
+  .matter-side-item {
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 14px;
+    padding: 11px 12px;
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .matter-side-item + .matter-side-item,
+  .matter-activity-item + .matter-activity-item {
+    margin-top: 8px;
+  }
+
+  .matter-timeline-form .form-section,
+  .matter-summary-form .form-section,
+  .matter-archetype-panel .form-section {
+    margin: 0;
+  }
+
+  @media (max-width: 991.98px) {
+    .matter-detail-jumpbar {
+      position: static;
+      top: auto;
+    }
   }
 </style>
-<div class="row g-3">
-  <div class="col-lg-8">
-    <div class="card p-3">
-      <div class="toolbar-row">
-        <div>
-          <h3 class="mb-0">{{ m.matter_no }}</h3>
-          <div class="muted">{{ m.title }}</div>
-          <div class="list-meta mt-1">
-            <span>{{ m.client_name }}</span>
-            <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
-            {% if is_pinned %}<span class="tag-chip">Pinned</span>{% endif %}
-            <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }} risk</span>
-            {% if m.budget_status %}<span class="badge status-badge status-{{ m.budget_status|lower|replace(' ', '-') }}">{{ m.budget_status }}</span>{% endif %}
-            {% if m.legal_category %}<span class="tag-chip">{{ m.legal_category }}</span>{% endif %}
-            {% if archetype %}<span class="tag-chip">{{ archetype.name }}</span>{% endif %}
+
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Matter Command Deck</div>
+        <h1 class="page-hero-title">{{ m.matter_no }}</h1>
+        <div class="page-hero-summary">{{ m.title }} • {{ m.client_name }}</div>
+        <div class="page-hero-meta">
+          <span class="badge status-badge status-{{ m.status|lower|replace(' ', '-') }}">{{ m.status }}</span>
+          {% if is_pinned %}<span class="tag-chip">Pinned</span>{% endif %}
+          <span class="risk-chip risk-{{ m.risk_level|lower }}">{{ m.risk_level }} risk</span>
+          {% if m.budget_status %}<span class="badge status-badge status-{{ m.budget_status|lower|replace(' ', '-') }}">{{ m.budget_status }}</span>{% endif %}
+          {% if m.legal_category %}<span class="tag-chip">{{ m.legal_category }}</span>{% endif %}
+          {% if archetype %}<span class="tag-chip">{{ archetype.name }}</span>{% endif %}
+          {% if m.stage %}<span class="tag-chip">Stage {{ m.stage }}</span>{% endif %}
+        </div>
+        <div class="page-hero-summary">{{ matter_magic.status_line }}</div>
+      </div>
+      <div class="page-hero-actions">
+        <form method="post" action="{{ url_for('matter_pin_toggle', matter_id=m.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="next" value="{{ request.path }}">
+          <button class="btn btn-sm btn-outline-light" type="submit">{{ "Unpin Matter" if is_pinned else "Pin Matter" }}</button>
+        </form>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Back to Matters</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Tasks</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_documents', matter_id=m.id) }}">Documents</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_team', matter_id=m.id) }}">Team</a>
+      </div>
+    </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Overdue Tasks</div>
+        <div class="page-stat-value">{{ overdue_tasks|length }}</div>
+        <div class="page-stat-meta">Need immediate action or reassignment.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Due This Week</div>
+        <div class="page-stat-value">{{ due_soon_tasks|length }}</div>
+        <div class="page-stat-meta">Upcoming obligations and filing pressure.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Documents</div>
+        <div class="page-stat-value">{{ docs|length }}</div>
+        <div class="page-stat-meta">Matter repository and drafts.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Team</div>
+        <div class="page-stat-value">{{ members|length }}</div>
+        <div class="page-stat-meta">Assigned lawyers and support staff.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Opened</div>
+        <div class="page-stat-value">{{ m.opened_at.strftime("%Y-%m-%d") }}</div>
+        <div class="page-stat-meta">Last updated {{ m.last_updated_at.strftime("%Y-%m-%d %H:%M UTC") }}</div>
+      </div>
+    </div>
+    <div class="action-grid matter-command-grid">
+      <a class="action-card is-primary" href="{{ url_for('time_timers', matter_id=m.id, label='Work on ' ~ m.matter_no) }}">
+        <span class="action-card-kicker">Time</span>
+        <span class="action-card-title">Start Timer</span>
+        <span class="action-card-summary">Begin work against this matter immediately without opening another screen.</span>
+      </a>
+      <a class="action-card" href="{{ url_for('time_entries', matter_id=m.id) }}">
+        <span class="action-card-kicker">Billing</span>
+        <span class="action-card-title">Log Time</span>
+        <span class="action-card-summary">Capture fee notes, coding, and a billable narrative in one pass.</span>
+      </a>
+      <a class="action-card" href="{{ url_for('calendar_matter', matter_id=m.id) }}">
+        <span class="action-card-kicker">Deadlines</span>
+        <span class="action-card-title">Schedule Deadline</span>
+        <span class="action-card-summary">Create the next hearing, filing, or internal milestone from the matter itself.</span>
+      </a>
+      <a class="action-card" href="{{ url_for('matter_task_create', matter_id=m.id) }}">
+        <span class="action-card-kicker">Execution</span>
+        <span class="action-card-title">Add Task</span>
+        <span class="action-card-summary">Delegate work quickly with due dates and ownership already tied to the matter.</span>
+      </a>
+      <a class="action-card" href="{{ url_for('matter_dms', matter_id=m.id) }}">
+        <span class="action-card-kicker">Documents</span>
+        <span class="action-card-title">Upload Document</span>
+        <span class="action-card-summary">Drop straight into the document hub with matter metadata and shortcuts ready.</span>
+      </a>
+      <a class="action-card" href="{{ url_for('billing_invoices', matter_id=m.id, period_start=today[:8] ~ '01', period_end=today) }}">
+        <span class="action-card-kicker">Revenue</span>
+        <span class="action-card-title">Generate Invoice</span>
+        <span class="action-card-summary">Move from work completed to billing output without hunting through billing screens.</span>
+      </a>
+    </div>
+  </section>
+
+  <div class="matter-detail-jumpbar" data-matter-detail-jumpbar>
+    <a class="nav-pill is-active" href="#matter-summary-section">Summary</a>
+    <a class="nav-pill" href="#matter-ai-section">AI Assistant</a>
+    <a class="nav-pill" href="#matter-archetype-section">Archetype</a>
+    <a class="nav-pill" href="#matter-magic-section">Matter Magic</a>
+    <a class="nav-pill" href="#matter-timeline-section">Timeline</a>
+    <a class="nav-pill" href="#matter-activity-section">Activity</a>
+    <a class="nav-pill" href="#matter-tasks-section">Tasks</a>
+    <a class="nav-pill" href="#matter-documents-section">Documents</a>
+    <a class="nav-pill" href="#matter-team-section">Team</a>
+  </div>
+
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section id="matter-summary-section" class="panel-card matter-detail-anchor is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Summary</div>
+            <h2 class="panel-title">Executive Matter Summary</h2>
+            <div class="panel-summary">Keep the matter legible for partners, clients, and the next person touching the file.</div>
           </div>
         </div>
-        <div class="list-actions">
-          <form method="post" action="{{ url_for('matter_pin_toggle', matter_id=m.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="next" value="{{ request.path }}">
-            <button class="btn btn-sm btn-outline-light" type="submit">{{ "Unpin Matter" if is_pinned else "Pin Matter" }}</button>
-          </form>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Back to Matters</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Tasks</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_documents', matter_id=m.id) }}">Documents</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_team', matter_id=m.id) }}">Team</a>
+        <div class="matter-note-band">
+          <article class="glance-item">
+            <div class="glance-eyebrow">Objective</div>
+            <div class="glance-title">What outcome are we driving?</div>
+            <div class="glance-meta">{{ m.objective or "No objective has been captured yet." }}</div>
+          </article>
+          <article class="glance-item">
+            <div class="glance-eyebrow">Latest Update</div>
+            <div class="glance-title">What would you tell the client right now?</div>
+            <div class="glance-meta">{{ m.last_update_note or "No stakeholder-ready update has been captured yet." }}</div>
+          </article>
+          <article class="glance-item">
+            <div class="glance-eyebrow">Business Impact</div>
+            <div class="glance-title">Why this matter matters commercially</div>
+            <div class="glance-meta">{{ m.outcome_summary or "No outcome or business impact summary has been captured yet." }}</div>
+          </article>
         </div>
-      </div>
-
-
-      <div class="form-section mt-3">
-        <div class="small fw-semibold text-uppercase muted">Core Actions</div>
-        <div class="d-flex flex-wrap gap-2 mt-2">
-          <a class="btn btn-sm btn-light" href="{{ url_for('time_timers', matter_id=m.id, label='Work on ' ~ m.matter_no) }}">Start Timer</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('time_entries', matter_id=m.id) }}">Log Time</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_matter', matter_id=m.id) }}">Schedule Deadline</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_task_create', matter_id=m.id) }}">Add Task</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_documents', matter_id=m.id) }}">Upload Document</a>
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('billing_invoices', matter_id=m.id, period_start=today[:8] ~ '01', period_end=today) }}">Generate Invoice</a>
-        </div>
-      </div>
-
-      <div class="matter-detail-jumpbar mt-3" data-matter-detail-jumpbar>
-        <a class="nav-pill is-active" href="#matter-summary-section">Summary</a>
-        <a class="nav-pill" href="#matter-ai-section">AI Assistant</a>
-        <a class="nav-pill" href="#matter-archetype-section">Archetype</a>
-        <a class="nav-pill" href="#matter-magic-section">Matter Magic</a>
-        <a class="nav-pill" href="#matter-timeline-section">Timeline</a>
-        <a class="nav-pill" href="#matter-activity-section">Activity</a>
-        <a class="nav-pill" href="#matter-tasks-section">Tasks</a>
-        <a class="nav-pill" href="#matter-documents-section">Documents</a>
-        <a class="nav-pill" href="#matter-team-section">Team</a>
-      </div>
-
-      <section id="matter-summary-section" class="matter-detail-anchor">
-        <form method="post" action="{{ url_for('matter_summary_update', matter_id=m.id) }}" class="mt-2">
+        <form method="post" action="{{ url_for('matter_summary_update', matter_id=m.id) }}" class="matter-summary-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="form-section">
-            <div class="row g-2">
-              <div class="col-md-4">
-                <label class="form-label">Status</label>
+            <div class="panel-kicker mb-2">Health Signals</div>
+            <div class="field-grid columns-3">
+              <div>
+                <label class="form-label" for="matter-summary-status">Status</label>
                 <select class="form-select" id="matter-summary-status" name="status">
                   {% for status in matter_statuses %}
                     <option value="{{ status }}" {% if status == m.status %}selected{% endif %}>{{ status }}</option>
                   {% endfor %}
                 </select>
               </div>
-              <div class="col-md-4">
-                <label class="form-label">Risk Level</label>
+              <div>
+                <label class="form-label" for="matter-summary-risk">Risk Level</label>
                 <select class="form-select" id="matter-summary-risk" name="risk_level">
                   {% for risk in risk_levels %}
                     <option value="{{ risk }}" {% if risk == m.risk_level %}selected{% endif %}>{{ risk }}</option>
                   {% endfor %}
                 </select>
               </div>
-              <div class="col-md-4">
-                <label class="form-label">Budget Status</label>
+              <div>
+                <label class="form-label" for="matter-summary-budget">Budget Status</label>
                 <select class="form-select" id="matter-summary-budget" name="budget_status">
                   {% for budget in budget_statuses %}
                     <option value="{{ budget }}" {% if budget == m.budget_status %}selected{% endif %}>{{ budget }}</option>
@@ -188,24 +336,24 @@
               </div>
             </div>
           </div>
-          <div class="form-section mt-2">
+          <div class="form-section">
             <div class="form-help mb-2">Keep this concise and stakeholder-ready. These notes are used in client and partner summaries.</div>
-            <div class="row g-2">
-              <div class="col-12">
-                <label class="form-label">Matter Objective</label>
-                <textarea class="form-control" id="matter-summary-objective" name="objective" rows="2" placeholder="What outcome are we driving?">{{ m.objective or "" }}</textarea>
+            <div class="field-grid">
+              <div>
+                <label class="form-label" for="matter-summary-objective">Matter Objective</label>
+                <textarea class="form-control" id="matter-summary-objective" name="objective" rows="3" placeholder="What outcome are we driving?">{{ m.objective or "" }}</textarea>
               </div>
-              <div class="col-12">
-                <label class="form-label">Latest Update</label>
-                <textarea class="form-control" id="matter-summary-last-update" name="last_update_note" rows="2" placeholder="Latest stakeholder-ready update">{{ m.last_update_note or "" }}</textarea>
+              <div>
+                <label class="form-label" for="matter-summary-last-update">Latest Update</label>
+                <textarea class="form-control" id="matter-summary-last-update" name="last_update_note" rows="3" placeholder="Latest stakeholder-ready update">{{ m.last_update_note or "" }}</textarea>
               </div>
-              <div class="col-12">
-                <label class="form-label">Outcome / Business Impact</label>
-                <textarea class="form-control" id="matter-summary-outcome" name="outcome_summary" rows="2" placeholder="Value delivered or expected value">{{ m.outcome_summary or "" }}</textarea>
+              <div>
+                <label class="form-label" for="matter-summary-outcome">Outcome / Business Impact</label>
+                <textarea class="form-control" id="matter-summary-outcome" name="outcome_summary" rows="3" placeholder="Value delivered or expected value">{{ m.outcome_summary or "" }}</textarea>
               </div>
             </div>
           </div>
-          <div class="d-grid mt-2">
+          <div class="d-grid">
             <button class="btn btn-light">Save Executive Summary</button>
           </div>
         </form>
@@ -213,30 +361,32 @@
 
       <section
         id="matter-ai-section"
-        class="form-section mt-2 matter-detail-anchor"
+        class="panel-card matter-detail-anchor matter-ai-panel"
         data-matter-ai-widget
         data-summary-endpoint="{{ url_for('matter_ai_summary_draft', matter_id=m.id) }}"
         data-client-update-endpoint="{{ url_for('matter_ai_client_update_draft', matter_id=m.id) }}"
         data-timeout-ms="90000"
       >
-        <div class="toolbar-row">
-          <div>
-            <div class="small fw-semibold text-uppercase muted">AI Assistant</div>
-            <div class="form-help">Draft executive summary text and a client-facing update from current matter activity.</div>
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">AI Assistant</div>
+            <h2 class="panel-title">Draft Matter Communications</h2>
+            <div class="panel-summary">Generate a tighter executive summary and a client-facing update from current matter activity.</div>
           </div>
-          <div class="d-flex gap-2 flex-wrap">
+          <div class="page-hero-actions">
             <button class="btn btn-sm btn-outline-light" type="button" data-ai-matter-summary-generate>Draft Executive Summary</button>
             <button class="btn btn-sm btn-outline-light" type="button" data-ai-matter-client-update-generate>Draft Client Update</button>
           </div>
         </div>
-        <div class="form-help mt-2" data-ai-matter-summary-status></div>
-        <div class="mt-2">
+        <div class="section-note">Use this when you need a clean partner brief or a client update without re-reading the entire file.</div>
+        <div class="form-help" data-ai-matter-summary-status></div>
+        <div>
           <label class="form-label" for="matter-ai-client-update-subject">Client Update Subject</label>
           <input class="form-control" id="matter-ai-client-update-subject" type="text" readonly>
         </div>
-        <div class="mt-2">
+        <div>
           <label class="form-label" for="matter-ai-client-update-body">Client Update Draft</label>
-          <textarea class="form-control" id="matter-ai-client-update-body" rows="5" readonly></textarea>
+          <textarea class="form-control" id="matter-ai-client-update-body" rows="6" readonly></textarea>
           <div class="d-flex gap-2 align-items-center mt-2">
             <button
               class="btn btn-sm btn-outline-light"
@@ -252,44 +402,12 @@
         </div>
       </section>
 
-      <div class="list-meta mt-2">
-        <span>Opened {{ m.opened_at.strftime("%Y-%m-%d") }}</span>
-        <span>Last updated {{ m.last_updated_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>
-        {% if m.closed_at %}<span>Closed {{ m.closed_at.strftime("%Y-%m-%d") }}</span>{% endif %}
-      </div>
-
-      <div class="kpi-strip mt-3">
-        <div class="kpi-pill">
-          <div class="label">Overdue tasks</div>
-          <div class="value">{{ overdue_tasks|length }}</div>
-        </div>
-        <div class="kpi-pill">
-          <div class="label">Due this week</div>
-          <div class="value">{{ due_soon_tasks|length }}</div>
-        </div>
-        <div class="kpi-pill">
-          <div class="label">Total tasks</div>
-          <div class="value">{{ tasks|length }}</div>
-        </div>
-        <div class="kpi-pill">
-          <div class="label">Documents</div>
-          <div class="value">{{ docs|length }}</div>
-        </div>
-      </div>
-
-      <section id="matter-archetype-section" class="form-section mt-3 matter-detail-anchor">
-        <div class="toolbar-row">
-          <div class="row g-2">
-            <div class="small fw-semibold text-uppercase muted">Legal Category and Archetype</div>
-            {% if archetype %}
-              <div class="list-meta mt-1">
-                <span>Category: {{ m.legal_category or archetype.legal_category or "-" }}</span>
-                <span>Archetype: {{ archetype.name }}</span>
-                {% if archetype_compliance %}
-                  <span class="tag-chip">Compliance {{ archetype_compliance.compliance_pct }}%</span>
-                {% endif %}
-              </div>
-            {% endif %}
+      <section id="matter-archetype-section" class="panel-card matter-detail-anchor matter-archetype-panel">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Archetype</div>
+            <h2 class="panel-title">Legal Category and Archetype</h2>
+            <div class="panel-summary">Keep required fields, playbook items, and boilerplate aligned with how this matter should be run.</div>
           </div>
           {% if archetype %}
             <form method="post" action="{{ url_for('matter_archetype_sync_checklist', matter_id=m.id) }}">
@@ -299,52 +417,53 @@
           {% endif %}
         </div>
         {% if archetype %}
-          <div class="kpi-strip mt-2">
-            <div class="kpi-pill">
-              <div class="label">Required Fields</div>
-              <div class="value">{{ archetype_compliance.required_filled }}/{{ archetype_compliance.required_total }}</div>
+          <div class="matter-compact-meta">
+            <span class="tag-chip">Category {{ m.legal_category or archetype.legal_category or "-" }}</span>
+            <span class="tag-chip">Archetype {{ archetype.name }}</span>
+            {% if archetype_compliance %}<span class="tag-chip">Compliance {{ archetype_compliance.compliance_pct }}%</span>{% endif %}
+          </div>
+          <div class="page-stat-grid">
+            <div class="page-stat-card">
+              <div class="page-stat-label">Required Fields</div>
+              <div class="page-stat-value">{{ archetype_compliance.required_filled }}/{{ archetype_compliance.required_total }}</div>
             </div>
-            <div class="kpi-pill">
-              <div class="label">Checklist</div>
-              <div class="value">{{ archetype_compliance.checklist_done }}/{{ archetype_compliance.checklist_total }}</div>
+            <div class="page-stat-card">
+              <div class="page-stat-label">Checklist</div>
+              <div class="page-stat-value">{{ archetype_compliance.checklist_done }}/{{ archetype_compliance.checklist_total }}</div>
             </div>
-            <div class="kpi-pill">
-              <div class="label">Unsynced Items</div>
-              <div class="value">{{ archetype_compliance.checklist_unsynced }}</div>
+            <div class="page-stat-card">
+              <div class="page-stat-label">Unsynced Items</div>
+              <div class="page-stat-value">{{ archetype_compliance.checklist_unsynced }}</div>
             </div>
-            <div class="kpi-pill">
-              <div class="label">Compliance</div>
-              <div class="value">{{ archetype_compliance.compliance_pct }}%</div>
+            <div class="page-stat-card">
+              <div class="page-stat-label">Compliance</div>
+              <div class="page-stat-value">{{ archetype_compliance.compliance_pct }}%</div>
             </div>
           </div>
           {% if archetype_compliance.required_missing_labels %}
-            <div class="form-help mt-2 text-danger">
-              Missing required fields: {{ archetype_compliance.required_missing_labels|join(", ") }}
-            </div>
+            <div class="section-note">Missing required fields: {{ archetype_compliance.required_missing_labels|join(", ") }}</div>
           {% endif %}
           {% if archetype_compliance.checklist_remaining > 0 %}
-            <div class="form-help mt-1 text-danger">
-              Checklist remaining: {{ archetype_compliance.checklist_remaining }} item(s).
-            </div>
+            <div class="section-note">Checklist remaining: {{ archetype_compliance.checklist_remaining }} item(s).</div>
           {% endif %}
           {% if archetype_compliance.checklist_unsynced > 0 %}
-            <div class="form-help mt-1 text-danger">
-              Archetype playbook changed: {{ archetype_compliance.checklist_unsynced }} checklist item(s) are not yet on this matter.
-            </div>
+            <div class="section-note">Archetype playbook changed: {{ archetype_compliance.checklist_unsynced }} checklist item(s) are not yet on this matter.</div>
           {% endif %}
           {% if archetype_fields %}
-            <form method="post" action="{{ url_for('matter_archetype_fields_update', matter_id=m.id) }}" class="mt-2">
+            <form method="post" action="{{ url_for('matter_archetype_fields_update', matter_id=m.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <div class="row g-2">
-                {% for field in archetype_fields %}
-                  <div class="col-md-6">
-                    <label class="form-label">{{ field.label }}</label>
-                    <input class="form-control" name="field_{{ field.key }}" value="{{ archetype_values.get(field.key, '') }}" required>
-                    {% if field.help %}
-                      <div class="form-help mt-1">{{ field.help }}</div>
-                    {% endif %}
-                  </div>
-                {% endfor %}
+              <div class="form-section">
+                <div class="field-grid columns-2">
+                  {% for field in archetype_fields %}
+                    <div>
+                      <label class="form-label">{{ field.label }}</label>
+                      <input class="form-control" name="field_{{ field.key }}" value="{{ archetype_values.get(field.key, '') }}" required>
+                      {% if field.help %}
+                        <div class="form-help mt-1">{{ field.help }}</div>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                </div>
               </div>
               <div class="d-grid mt-2">
                 <button class="btn btn-outline-light" type="submit" data-submitting-text="Saving...">Save Archetype Fields</button>
@@ -352,13 +471,11 @@
             </form>
           {% endif %}
           {% if archetype_document %}
-            <div class="mt-2">
+            <div>
               <label class="form-label">Generated Boilerplate Draft</label>
               <textarea class="form-control" rows="10" readonly>{{ archetype_document }}</textarea>
               {% if archetype_missing_tokens %}
-                <div class="form-help mt-1">
-                  Missing merge fields were left blank: {{ archetype_missing_tokens|join(", ") }}
-                </div>
+                <div class="form-help mt-1">Missing merge fields were left blank: {{ archetype_missing_tokens|join(", ") }}</div>
               {% endif %}
               <form method="post" action="{{ url_for('matter_archetype_document_download', matter_id=m.id) }}" class="mt-2">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -366,252 +483,309 @@
               </form>
             </div>
           {% else %}
-            <div class="muted small mt-2">No boilerplate template text is configured for this archetype yet.</div>
+            <div class="empty-state">No boilerplate template text is configured for this archetype yet.</div>
           {% endif %}
         {% else %}
-          <div class="muted small mt-1">No legal archetype is linked to this matter.</div>
+          <div class="empty-state">No legal archetype is linked to this matter.</div>
+        {% endif %}
+      </section>
+
+      <section id="matter-timeline-section" class="panel-card matter-detail-anchor matter-timeline-panel">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Timeline</div>
+            <h2 class="panel-title">Key Dates and Milestones</h2>
+            <div class="panel-summary">Capture the procedural spine of the matter so the next move is always visible.</div>
+          </div>
+        </div>
+        <form method="post" action="{{ url_for('matter_timeline_add', matter_id=m.id) }}" class="matter-timeline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="form-section">
+            <div class="field-grid columns-3">
+              <div>
+                <label class="form-label">Date</label>
+                <input class="form-control" type="date" name="event_date" value="{{ today }}">
+              </div>
+              <div>
+                <label class="form-label">Type</label>
+                <select class="form-select" name="event_type">
+                  {% for event_type in timeline_event_types %}
+                    <option value="{{ event_type }}">{{ event_type }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="form-label">Milestone</label>
+                <div class="form-check mt-2">
+                  <input class="form-check-input" type="checkbox" id="is_milestone" name="is_milestone" value="1">
+                  <label class="form-check-label muted small" for="is_milestone">Mark as milestone</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="form-section">
+            <div class="field-grid">
+              <div>
+                <label class="form-label">Title</label>
+                <input class="form-control" name="title" placeholder="e.g. Hearing confirmed" required>
+              </div>
+              <div>
+                <label class="form-label">Description</label>
+                <textarea class="form-control" name="description" rows="3" placeholder="What happened, and what comes next?"></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="d-grid">
+            <button class="btn btn-outline-light">Add Timeline Event</button>
+          </div>
+        </form>
+
+        {% if timeline %}
+          <div class="table-tools" data-list-filter data-list-filter-target="matter-timeline-list">
+            <input class="form-control" type="search" data-list-filter-search placeholder="Filter timeline by title, type, date, or notes...">
+            <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
+          </div>
+          <div class="timeline-list" id="matter-timeline-list">
+            {% for e in timeline %}
+              <div
+                class="timeline-item"
+                data-list-item
+                data-search="{{ e.title }} {{ e.event_date }} {{ e.event_type }} {{ e.description or '' }}"
+              >
+                <div class="list-row">
+                  <div>
+                    <div class="list-title">{{ e.title }}</div>
+                    <div class="list-meta mt-1">
+                      <span class="timeline-date">{{ e.event_date }}</span>
+                      <span>{{ e.event_type }}</span>
+                      {% if e.is_milestone %}<span class="tag-chip">Milestone</span>{% endif %}
+                    </div>
+                    {% if e.description %}
+                      <div class="muted small mt-1">{{ e.description }}</div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          <div class="empty-state" data-list-filter-empty hidden>No timeline events match your filter.</div>
+        {% else %}
+          <div class="empty-state">No timeline events yet.</div>
         {% endif %}
       </section>
     </div>
 
-    <div class="card p-3 mt-3 matter-detail-anchor" id="matter-timeline-section">
-      <div class="toolbar-row">
-        <div>
-          <h4 class="mb-0">Timeline</h4>
-          <div class="muted small mt-1">Key dates, filings, hearings, milestones, and next actions.</div>
-        </div>
-      </div>
-
-      <form method="post" action="{{ url_for('matter_timeline_add', matter_id=m.id) }}" class="row g-2 mt-2">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="col-md-4">
-          <label class="form-label">Date</label>
-          <input class="form-control" type="date" name="event_date" value="{{ today }}">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Type</label>
-          <select class="form-select" name="event_type">
-            {% for event_type in timeline_event_types %}
-              <option value="{{ event_type }}">{{ event_type }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Milestone</label>
-          <div class="form-check mt-2">
-            <input class="form-check-input" type="checkbox" id="is_milestone" name="is_milestone" value="1">
-            <label class="form-check-label muted small" for="is_milestone">Mark as milestone</label>
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section id="matter-magic-section" class="panel-card matter-detail-anchor matter-magic-card tone-{{ matter_magic.health_tone }}">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Matter Magic</div>
+              <h2 class="panel-title">Next Best Moves</h2>
+              <div class="panel-summary">{{ matter_magic.headline }}</div>
+            </div>
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
           </div>
-        </div>
-        <div class="col-12">
-          <label class="form-label">Title</label>
-          <input class="form-control" name="title" placeholder="e.g. Hearing confirmed" required>
-        </div>
-        <div class="col-12">
-          <label class="form-label">Description</label>
-          <textarea class="form-control" name="description" rows="2" placeholder="What happened, and what comes next?"></textarea>
-        </div>
-        <div class="col-12 d-grid">
-          <button class="btn btn-outline-light">Add Timeline Event</button>
-        </div>
-      </form>
-
-      {% if timeline %}
-        <div class="table-tools matter-detail-list-tools" data-list-filter data-list-filter-target="matter-timeline-list">
-          <input class="form-control" type="search" data-list-filter-search placeholder="Filter timeline by title, type, date, or notes...">
-          <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
-        </div>
-        <div class="timeline-list mt-2" id="matter-timeline-list">
-          {% for e in timeline %}
-            <div
-              class="timeline-item"
-              data-list-item
-              data-search="{{ e.title }} {{ e.event_date }} {{ e.event_type }} {{ e.description or '' }}"
-            >
-              <div class="list-row">
-                <div>
-                  <div class="list-title">{{ e.title }}</div>
-                  <div class="list-meta mt-1">
-                    <span class="timeline-date">{{ e.event_date }}</span>
-                    <span>{{ e.event_type }}</span>
-                    {% if e.is_milestone %}<span class="tag-chip">Milestone</span>{% endif %}
-                  </div>
-                  {% if e.description %}
-                    <div class="muted small mt-1">{{ e.description }}</div>
-                  {% endif %}
+          <div class="matter-magic-status">{{ matter_magic.status_line }}</div>
+          <div class="matter-magic-list">
+            {% for action in matter_magic.actions %}
+              <article class="matter-magic-item urgency-{{ action.urgency }}">
+                <div class="d-flex justify-content-between gap-2 align-items-start">
+                  <div class="matter-magic-item-title">{{ action.title }}</div>
+                  {% if action.badge %}<span class="badge badge-soft">{{ action.badge }}</span>{% endif %}
                 </div>
-              </div>
+                <div class="matter-magic-item-summary">{{ action.summary }}</div>
+                <div class="table-actions mt-2">
+                  <a class="btn btn-sm btn-light" href="{{ action.href }}">{{ action.button_label }}</a>
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+          <div class="matter-magic-brief">
+            <label class="form-label" for="matter-magic-brief-text">Quick Brief</label>
+            <textarea class="form-control" id="matter-magic-brief-text" rows="9" readonly>{{ matter_magic.brief_text }}</textarea>
+            <div class="d-flex gap-2 align-items-center">
+              <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="matter-magic-brief-text" data-copy-success-text="Copied">Copy Brief</button>
+              <span class="form-help" data-copy-feedback-for="matter-magic-brief-text"></span>
             </div>
-          {% endfor %}
-        </div>
-        <div class="empty-state mt-2" data-list-filter-empty hidden>No timeline events match your filter.</div>
-      {% else %}
-        <div class="empty-state">No timeline events yet.</div>
-      {% endif %}
-    </div>
-  </div>
+          </div>
+        </section>
 
-  <div class="col-lg-4">
-    <div class="card p-3 matter-detail-anchor matter-magic-card tone-{{ matter_magic.health_tone }}" id="matter-magic-section">
-      <div class="toolbar-row">
-        <div>
-          <h4 class="mb-0">Matter Magic</h4>
-          <div class="muted small mt-1">{{ matter_magic.headline }}</div>
-        </div>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
-      </div>
-      <div class="matter-magic-status">{{ matter_magic.status_line }}</div>
-      <div class="matter-magic-list">
-        {% for action in matter_magic.actions %}
-          <article class="matter-magic-item urgency-{{ action.urgency }}">
-            <div class="d-flex justify-content-between gap-2 align-items-start">
-              <div class="matter-magic-item-title">{{ action.title }}</div>
-              {% if action.badge %}<span class="badge badge-soft">{{ action.badge }}</span>{% endif %}
+        <section class="panel-card matter-side-section is-accent">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Matter Pulse</div>
+              <h2 class="panel-title">Live Context</h2>
+              <div class="panel-summary">The facts you usually need before a call, handoff, or quick decision.</div>
             </div>
-            <div class="matter-magic-item-summary">{{ action.summary }}</div>
-            <div class="table-actions mt-2">
-              <a class="btn btn-sm btn-light" href="{{ action.href }}">{{ action.button_label }}</a>
-              <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
-            </div>
-          </article>
-        {% endfor %}
-      </div>
-      <div class="matter-magic-brief">
-        <label class="form-label" for="matter-magic-brief-text">Quick Brief</label>
-        <textarea class="form-control" id="matter-magic-brief-text" rows="9" readonly>{{ matter_magic.brief_text }}</textarea>
-        <div class="d-flex gap-2 align-items-center mt-2">
-          <button class="btn btn-sm btn-outline-light" type="button" data-copy-target="matter-magic-brief-text" data-copy-success-text="Copied">Copy Brief</button>
-          <span class="form-help" data-copy-feedback-for="matter-magic-brief-text"></span>
-        </div>
-      </div>
-    </div>
+          </div>
+          <div class="matter-pulse-grid">
+            <article class="glance-item">
+              <div class="glance-eyebrow">Client</div>
+              <div class="glance-title">{{ m.client_name }}</div>
+              <div class="glance-meta">Opened {{ m.opened_at.strftime("%Y-%m-%d") }}{% if m.closed_at %} • Closed {{ m.closed_at.strftime("%Y-%m-%d") }}{% endif %}</div>
+            </article>
+            <article class="glance-item">
+              <div class="glance-eyebrow">Activity</div>
+              <div class="glance-title">Last updated {{ m.last_updated_at.strftime("%Y-%m-%d %H:%M UTC") }}</div>
+              <div class="glance-meta">{{ activity_items|length }} logged activity items on this matter.</div>
+            </article>
+            <article class="glance-item">
+              <div class="glance-eyebrow">Coverage</div>
+              <div class="glance-title">{{ members|length }} team members</div>
+              <div class="glance-meta">{{ tasks|length }} total tasks • {{ overdue_tasks|length }} overdue • {{ due_soon_tasks|length }} due soon.</div>
+            </article>
+          </div>
+        </section>
 
-    <div class="card p-3 matter-detail-anchor" id="matter-activity-section">
-      <h4 class="mb-1">Matter Activity Feed</h4>
-      <div class="muted small">Human-readable actions for quick stakeholder updates.</div>
-      {% if activity_items %}
-        <div class="table-tools matter-detail-list-tools" data-list-filter data-list-filter-target="matter-activity-list">
-          <input class="form-control" type="search" data-list-filter-search placeholder="Filter activity by action, actor, or details...">
-          <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
-        </div>
-        <div class="entry-scroll mt-2" id="matter-activity-list">
-          {% for activity, actor in activity_items %}
-            <div
-              class="activity-item"
-              data-list-item
-              data-search="{{ activity.action }} {{ actor.full_name if actor else 'System' }} {{ activity.details or '' }} {{ activity.created_at }}"
-            >
-              <div class="d-flex justify-content-between">
-                <div class="fw-semibold">{{ activity.action }}</div>
-                <div class="muted small">{{ activity.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
-              </div>
-              <div class="muted small">{{ actor.full_name if actor else "System" }}{% if activity.details %} • {{ activity.details }}{% endif %}</div>
+        <section id="matter-activity-section" class="panel-card matter-detail-anchor matter-side-section">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Activity</div>
+              <h2 class="panel-title">Matter Activity Feed</h2>
+              <div class="panel-summary">Human-readable actions for quick stakeholder updates.</div>
             </div>
-          {% endfor %}
-        </div>
-        <div class="empty-state mt-2" data-list-filter-empty hidden>No activity entries match your filter.</div>
-      {% else %}
-        <div class="muted small mt-2">No activity yet.</div>
-      {% endif %}
-    </div>
+          </div>
+          {% if activity_items %}
+            <div class="table-tools" data-list-filter data-list-filter-target="matter-activity-list">
+              <input class="form-control" type="search" data-list-filter-search placeholder="Filter activity by action, actor, or details...">
+              <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
+            </div>
+            <div class="entry-scroll" id="matter-activity-list">
+              {% for activity, actor in activity_items %}
+                <div
+                  class="matter-activity-item"
+                  data-list-item
+                  data-search="{{ activity.action }} {{ actor.full_name if actor else 'System' }} {{ activity.details or '' }} {{ activity.created_at }}"
+                >
+                  <div class="d-flex justify-content-between gap-2">
+                    <div class="fw-semibold">{{ activity.action }}</div>
+                    <div class="muted small">{{ activity.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+                  </div>
+                  <div class="muted small mt-1">{{ actor.full_name if actor else "System" }}{% if activity.details %} • {{ activity.details }}{% endif %}</div>
+                </div>
+              {% endfor %}
+            </div>
+            <div class="empty-state" data-list-filter-empty hidden>No activity entries match your filter.</div>
+          {% else %}
+            <div class="empty-state">No activity yet.</div>
+          {% endif %}
+        </section>
 
-    <div class="card p-3 mt-3 matter-detail-anchor" id="matter-tasks-section">
-      <div class="toolbar-row">
-        <h4 class="mb-0">Tasks</h4>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Manage</a>
-      </div>
-      {% if tasks %}
-        <div class="table-tools matter-detail-list-tools" data-list-filter data-list-filter-target="matter-tasks-list">
-          <input class="form-control" type="search" data-list-filter-search placeholder="Filter tasks by title, status, due date, or ID...">
-          <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
-        </div>
-        <div class="mt-2 entry-scroll" id="matter-tasks-list">
-          {% for t in tasks[:8] %}
-            <div
-              class="activity-item"
-              data-list-item
-              data-search="{{ t.title }} {{ t.status }} {{ t.due_date or '' }} {{ t.id }}"
-            >
-              <div class="d-flex justify-content-between">
-                <div class="fw-semibold">{{ t.title }}</div>
-                <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
-              </div>
-              <div class="muted small">{% if t.due_date %}Due {{ t.due_date }}{% else %}No due date{% endif %} • Task #{{ t.id }}</div>
+        <section id="matter-tasks-section" class="panel-card matter-detail-anchor matter-side-section">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Tasks</div>
+              <h2 class="panel-title">Matter Tasks</h2>
+              <div class="panel-summary">Open work, due dates, and execution pressure on the file.</div>
             </div>
-          {% endfor %}
-        </div>
-        <div class="empty-state mt-2" data-list-filter-empty hidden>No tasks match your filter.</div>
-      {% else %}
-        <div class="muted small mt-2">No tasks yet.</div>
-      {% endif %}
-    </div>
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_tasks', matter_id=m.id) }}">Manage</a>
+          </div>
+          {% if tasks %}
+            <div class="table-tools" data-list-filter data-list-filter-target="matter-tasks-list">
+              <input class="form-control" type="search" data-list-filter-search placeholder="Filter tasks by title, status, due date, or ID...">
+              <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
+            </div>
+            <div class="entry-scroll" id="matter-tasks-list">
+              {% for t in tasks[:8] %}
+                <div
+                  class="matter-side-item"
+                  data-list-item
+                  data-search="{{ t.title }} {{ t.status }} {{ t.due_date or '' }} {{ t.id }}"
+                >
+                  <div class="d-flex justify-content-between gap-2">
+                    <div class="fw-semibold">{{ t.title }}</div>
+                    <span class="badge status-badge status-{{ t.status|lower|replace(' ', '-') }}">{{ t.status }}</span>
+                  </div>
+                  <div class="muted small mt-1">{% if t.due_date %}Due {{ t.due_date }}{% else %}No due date{% endif %} • Task #{{ t.id }}</div>
+                </div>
+              {% endfor %}
+            </div>
+            <div class="empty-state" data-list-filter-empty hidden>No tasks match your filter.</div>
+          {% else %}
+            <div class="empty-state">No tasks yet.</div>
+          {% endif %}
+        </section>
 
-    <div class="card p-3 mt-3 matter-detail-anchor" id="matter-documents-section">
-      <div class="toolbar-row">
-        <h4 class="mb-0">Documents</h4>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_documents', matter_id=m.id) }}">Open</a>
-      </div>
-      {% if docs %}
-        <div class="table-tools matter-detail-list-tools" data-list-filter data-list-filter-target="matter-documents-list">
-          <input class="form-control" type="search" data-list-filter-search placeholder="Filter documents by name, category, stage, or version...">
-          <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
-        </div>
-        <div class="mt-2 entry-scroll" id="matter-documents-list">
-          {% for d in docs[:8] %}
-            <div
-              class="activity-item"
-              data-list-item
-              data-search="{{ d.original_filename }} {{ d.category or 'General' }} {{ d.lifecycle_stage }} {{ d.doc_version or '' }} {{ 'Privileged' if d.is_privileged else '' }}"
-            >
-              <div class="d-flex justify-content-between">
-                <div class="fw-semibold">{{ d.original_filename }}</div>
-                <a href="{{ url_for('doc_download', doc_id=d.id) }}">download</a>
-              </div>
-              <div class="muted small">
-                {{ d.category or "General" }} • {{ d.lifecycle_stage }}{% if d.doc_version %} • {{ d.doc_version }}{% endif %}
-                {% if d.is_privileged %} • Privileged{% endif %}
-              </div>
+        <section id="matter-documents-section" class="panel-card matter-detail-anchor matter-side-section">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Documents</div>
+              <h2 class="panel-title">Matter Documents</h2>
+              <div class="panel-summary">Recent file activity and quick access into the document repository.</div>
             </div>
-          {% endfor %}
-        </div>
-        <div class="empty-state mt-2" data-list-filter-empty hidden>No documents match your filter.</div>
-      {% else %}
-        <div class="muted small mt-2">No documents uploaded.</div>
-      {% endif %}
-    </div>
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=m.id) }}">Open</a>
+          </div>
+          {% if docs %}
+            <div class="table-tools" data-list-filter data-list-filter-target="matter-documents-list">
+              <input class="form-control" type="search" data-list-filter-search placeholder="Filter documents by name, category, stage, or version...">
+              <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
+            </div>
+            <div class="entry-scroll" id="matter-documents-list">
+              {% for d in docs[:8] %}
+                <div
+                  class="matter-side-item"
+                  data-list-item
+                  data-search="{{ d.original_filename }} {{ d.category or 'General' }} {{ d.lifecycle_stage }} {{ d.doc_version or '' }} {{ 'Privileged' if d.is_privileged else '' }}"
+                >
+                  <div class="d-flex justify-content-between gap-2">
+                    <div class="fw-semibold">{{ d.original_filename }}</div>
+                    <a href="{{ url_for('doc_download', doc_id=d.id) }}">download</a>
+                  </div>
+                  <div class="muted small mt-1">
+                    {{ d.category or "General" }} • {{ d.lifecycle_stage }}{% if d.doc_version %} • {{ d.doc_version }}{% endif %}
+                    {% if d.is_privileged %} • Privileged{% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+            <div class="empty-state" data-list-filter-empty hidden>No documents match your filter.</div>
+          {% else %}
+            <div class="empty-state">No documents uploaded.</div>
+          {% endif %}
+        </section>
 
-    <div class="card p-3 mt-3 matter-detail-anchor" id="matter-team-section">
-      <div class="toolbar-row">
-        <h4 class="mb-0">Matter Team</h4>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_team', matter_id=m.id) }}">Edit</a>
-      </div>
-      {% if members %}
-        <div class="table-tools matter-detail-list-tools" data-list-filter data-list-filter-target="matter-team-list">
-          <input class="form-control" type="search" data-list-filter-search placeholder="Filter team by name, email, role, or matter responsibility...">
-          <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
-        </div>
-        <div class="mt-2 entry-scroll" id="matter-team-list">
-          {% for u, mm in members %}
-            <div
-              class="activity-item d-flex justify-content-between"
-              data-list-item
-              data-search="{{ u.full_name }} {{ u.email }} {{ mm.role_in_matter }} {{ role_display_name(u.role) }}"
-            >
-              <div>
-                <div class="fw-semibold">{{ u.full_name }}</div>
-                <div class="muted small">{{ u.email }}</div>
-              </div>
-              <div class="text-end">
-                <div class="badge badge-soft">{{ mm.role_in_matter }}</div>
-                <div class="muted small">{{ role_display_name(u.role) }}</div>
-              </div>
+        <section id="matter-team-section" class="panel-card matter-detail-anchor matter-side-section">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Team</div>
+              <h2 class="panel-title">Matter Team</h2>
+              <div class="panel-summary">Who is accountable on the file and what role they are playing.</div>
             </div>
-          {% endfor %}
-        </div>
-        <div class="empty-state mt-2" data-list-filter-empty hidden>No team members match your filter.</div>
-      {% else %}
-        <div class="muted small mt-2">No team members assigned.</div>
-      {% endif %}
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_team', matter_id=m.id) }}">Edit</a>
+          </div>
+          {% if members %}
+            <div class="table-tools" data-list-filter data-list-filter-target="matter-team-list">
+              <input class="form-control" type="search" data-list-filter-search placeholder="Filter team by name, email, role, or matter responsibility...">
+              <div class="table-tools-meta" data-list-filter-count aria-live="polite"></div>
+            </div>
+            <div class="entry-scroll" id="matter-team-list">
+              {% for u, mm in members %}
+                <div
+                  class="matter-side-item"
+                  data-list-item
+                  data-search="{{ u.full_name }} {{ u.email }} {{ mm.role_in_matter }} {{ role_display_name(u.role) }}"
+                >
+                  <div class="d-flex justify-content-between gap-2">
+                    <div>
+                      <div class="fw-semibold">{{ u.full_name }}</div>
+                      <div class="muted small">{{ u.email }}</div>
+                    </div>
+                    <div class="text-end">
+                      <div class="badge badge-soft">{{ mm.role_in_matter }}</div>
+                      <div class="muted small mt-1">{{ role_display_name(u.role) }}</div>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+            <div class="empty-state" data-list-filter-empty hidden>No team members match your filter.</div>
+          {% else %}
+            <div class="empty-state">No team members assigned.</div>
+          {% endif %}
+        </section>
+      </div>
     </div>
   </div>
 </div>

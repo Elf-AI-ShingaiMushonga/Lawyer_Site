@@ -121,6 +121,8 @@ def test_matter_detail_renders_matter_magic_brief(seed_user_matter, app):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
+    assert "Matter Command Deck" in body
+    assert "Executive Matter Summary" in body
     assert "Matter Magic" in body
     assert "Quick Brief" in body
     assert "Clear overdue tasks" in body

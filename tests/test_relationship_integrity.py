@@ -1935,6 +1935,7 @@ def test_matter_dms_renders_quick_starts_and_matter_brief(app_ctx):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
+    assert "Document Operations Hub" in body
     assert "DMS Quick Starts" in body
     assert "Client Advice" in body
     assert "Matter Brief" in body
@@ -3106,6 +3107,7 @@ def test_matter_workspace_renders_war_room_launch_pack(app_ctx):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
+    assert "Workspace Flight Deck" in body
     assert "Matter War Room" in body
     assert "Start Timer" in body
     assert "Draft Document" in body
