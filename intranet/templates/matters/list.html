@@ -24,6 +24,10 @@
     align-self: end;
   }
 
+  .matter-directory-filter-help {
+    margin-top: 6px;
+  }
+
   .matter-directory-chip-groups {
     display: grid;
     gap: 12px;
@@ -204,7 +208,6 @@
       <div class="matter-directory-filter-field">
         <label class="form-label" for="matter-search">Find Matter</label>
         <input class="form-control" id="matter-search" name="q" placeholder="Search matter number, title, or client..." value="{{ q }}">
-        <div class="form-help">Use partial client names, matter numbers, or keywords.</div>
       </div>
       <div class="matter-directory-filter-field">
         <label class="form-label" for="matter-sort">Sort</label>
@@ -221,6 +224,7 @@
         <a class="btn btn-outline-light" href="{{ url_for('matters') }}">Clear</a>
       </div>
     </form>
+    <div class="form-help matter-directory-filter-help">Use partial client names, matter numbers, or keywords.</div>
 
     <div class="matter-directory-chip-groups">
       <div class="matter-directory-chip-row">

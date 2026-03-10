@@ -141,7 +141,7 @@
 
   .priority-pane-stack {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 16px;
     min-height: 0;
     max-height: 100%;
@@ -160,15 +160,6 @@
     display: flex;
     flex-direction: column;
     flex: 0 0 auto;
-  }
-
-  .priority-pane[data-priority-type="client"],
-  .priority-pane[data-priority-type="followup"] {
-    height: 330px;
-  }
-
-  .priority-pane:nth-child(3) {
-    grid-column: 1 / -1;
   }
 
   .priority-inbox-shell[data-priority-filter]:not([data-priority-filter="all"]) .priority-pane {
@@ -277,14 +268,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .priority-pane[data-priority-type="client"] .priority-message-subject,
-  .priority-pane[data-priority-type="followup"] .priority-message-subject {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
   }
 
   .priority-message-meta {
@@ -567,55 +550,36 @@
   }
 
   .dashboard-risk-status-badge {
-    min-width: 9.5ch;
+    min-width: 0;
+    width: auto;
+    padding: 3px 10px;
+    font-size: 10px;
+    line-height: 1;
     justify-content: center;
     text-align: center;
     letter-spacing: 0.02em;
     text-transform: none;
   }
 
-  .dashboard-snapshot-grid {
-    display: grid;
-    gap: 12px;
-  }
-
-  .dashboard-snapshot-item {
-    border: 1px solid rgba(225, 6, 0, 0.14);
-    border-radius: 14px;
-    padding: 13px 14px;
-    background: rgba(255, 255, 255, 0.92);
+  .dashboard-stat-link {
+    display: block;
     color: inherit;
     text-decoration: none;
-    display: block;
+    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
   }
 
-  .dashboard-snapshot-item:hover {
+  .dashboard-stat-link:hover {
     color: inherit;
-    border-color: rgba(225, 6, 0, 0.4);
+    border-color: rgba(225, 6, 0, 0.36);
     background: rgba(255, 246, 246, 0.96);
+    box-shadow: 0 10px 20px rgba(103, 42, 42, 0.1);
+    transform: translateY(-1px);
   }
 
-  .dashboard-snapshot-label {
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: #8a6665;
-  }
-
-  .dashboard-snapshot-value {
-    margin-top: 4px;
-    font-size: 22px;
-    line-height: 1;
-    font-weight: 800;
-    color: #402020;
-  }
-
-  .dashboard-snapshot-meta {
-    margin-top: 6px;
-    font-size: 12px;
-    color: #6d5a5a;
-    line-height: 1.45;
+  .dashboard-stat-link:focus-visible {
+    outline: 0;
+    border-color: rgba(225, 6, 0, 0.74);
+    box-shadow: 0 0 0 3px rgba(225, 6, 0, 0.18);
   }
 
   @media (max-width: 991.98px) {
@@ -696,18 +660,13 @@
     }
 
     .dashboard-risk-list,
-    .dashboard-task-list,
-    .dashboard-snapshot-grid {
+    .dashboard-task-list {
       gap: 14px;
     }
 
     .dashboard-risk-item,
     .dashboard-task-item {
       padding: 15px 16px;
-    }
-
-    .dashboard-snapshot-item {
-      padding: 14px 15px;
     }
 
     .priority-inbox-shell[data-priority-filter]:not([data-priority-filter="all"]) .priority-pane {
@@ -815,36 +774,36 @@
       </div>
     </div>
     <div class="page-stat-grid">
-      <div class="page-stat-card">
+      <a class="page-stat-card dashboard-stat-link" href="{{ url_for('matters') }}">
         <div class="page-stat-label">Accessible Matters</div>
         <div class="page-stat-value">{{ stats_matter_count }}</div>
         <div class="page-stat-meta">Files visible in your current scope.</div>
-      </div>
-      <div class="page-stat-card">
+      </a>
+      <a class="page-stat-card dashboard-stat-link" href="#dashboard-my-tasks">
         <div class="page-stat-label">My Open Tasks</div>
         <div class="page-stat-value">{{ stats_assigned_open_tasks }}</div>
         <div class="page-stat-meta">Active work assigned to you.</div>
-      </div>
-      <div class="page-stat-card">
+      </a>
+      <a class="page-stat-card dashboard-stat-link" href="{{ url_for('calendar_my', filter='overdue') }}">
         <div class="page-stat-label">Overdue Tasks</div>
         <div class="page-stat-value">{{ stats_overdue_tasks }}</div>
         <div class="page-stat-meta">Tasks already past due.</div>
-      </div>
-      <div class="page-stat-card">
+      </a>
+      <a class="page-stat-card dashboard-stat-link" href="{{ url_for('calendar_my', filter='next7') }}">
         <div class="page-stat-label">Due This Week</div>
         <div class="page-stat-value">{{ stats_due_this_week }}</div>
         <div class="page-stat-meta">Upcoming work across your scope.</div>
-      </div>
-      <div class="page-stat-card">
+      </a>
+      <a class="page-stat-card dashboard-stat-link" href="{{ url_for('admin_automation') if is_admin_role else url_for('matters') }}">
         <div class="page-stat-label">Urgent Unassigned</div>
         <div class="page-stat-value">{{ stats_urgent_unassigned }}</div>
         <div class="page-stat-meta">Items needing ownership decisions.</div>
-      </div>
-      <div class="page-stat-card">
+      </a>
+      <a class="page-stat-card dashboard-stat-link" href="#dashboard-priority-inbox">
         <div class="page-stat-label">Priority Inbox</div>
         <div class="page-stat-value">{{ priority_total_actions }}</div>
         <div class="page-stat-meta">Client, intake, and billing pressure.</div>
-      </div>
+      </a>
     </div>
     <div class="action-grid dashboard-briefing-grid">
       {% for card in briefing_cards %}
@@ -1158,38 +1117,6 @@
                 {% endfor %}
               </div>
             </div>
-          </div>
-        </section>
-
-        <section class="panel-card">
-          <div class="panel-header">
-            <div class="panel-header-main">
-              <div class="panel-kicker">Operations Snapshot</div>
-              <h2 class="panel-title">Shortcut view of firm load</h2>
-              <div class="panel-summary">A condensed view of the most important counters, each linked to the place you resolve them.</div>
-            </div>
-          </div>
-          <div class="dashboard-snapshot-grid">
-            <a class="dashboard-snapshot-item" href="{{ url_for('matters') }}">
-              <div class="dashboard-snapshot-label">Accessible Matters</div>
-              <div class="dashboard-snapshot-value">{{ stats_matter_count }}</div>
-              <div class="dashboard-snapshot-meta">Open the matter directory.</div>
-            </a>
-            <a class="dashboard-snapshot-item" href="{{ url_for('calendar_my', filter='overdue') }}">
-              <div class="dashboard-snapshot-label">Overdue Tasks</div>
-              <div class="dashboard-snapshot-value">{{ stats_overdue_tasks }}</div>
-              <div class="dashboard-snapshot-meta">Jump into the overdue calendar view.</div>
-            </a>
-            <a class="dashboard-snapshot-item" href="{{ url_for('calendar_my', filter='next7') }}">
-              <div class="dashboard-snapshot-label">Due This Week</div>
-              <div class="dashboard-snapshot-value">{{ stats_due_this_week }}</div>
-              <div class="dashboard-snapshot-meta">Open the next 7 days calendar.</div>
-            </a>
-            <a class="dashboard-snapshot-item" href="{{ url_for('admin_automation') if is_admin_role else url_for('matters') }}">
-              <div class="dashboard-snapshot-label">Urgent Unassigned</div>
-              <div class="dashboard-snapshot-value">{{ stats_urgent_unassigned }}</div>
-              <div class="dashboard-snapshot-meta">{{ 'Open Automation Studio' if is_admin_role else 'Open matter directory' }}.</div>
-            </a>
           </div>
         </section>
 

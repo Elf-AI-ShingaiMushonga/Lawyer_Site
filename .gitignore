@@ -36,3 +36,4 @@ dist/
 
 # Local presentation notebooks (keep off VM/deploy)
 notebooks/dm_inc_director_pitch.ipynb
+docs/presentations/firm_partner_enablement_presentation.md
