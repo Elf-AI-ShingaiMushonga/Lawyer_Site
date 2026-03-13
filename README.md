@@ -1,8 +1,8 @@
-# DM-Inc Intranet (demo)
+# DM-Inc Intranet
 
 This is a functional intranet website for a law firm:
 - User authentication + roles (admin/lawyer/staff/paralegal)
-- MFA (TOTP + backup codes), session registry, and internal SSO-like auth endpoints
+- MFA (TOTP + backup codes) and session registry
 - Admin user provisioning from the web UI (`/admin/users`)
 - Firm settings and rule administration (`/admin/settings/*`, `/admin/templates/*`, `/admin/rules/*`)
 - Matters with team membership
@@ -27,14 +27,12 @@ This is a functional intranet website for a law firm:
 - Curated client portal (auth, scoped matter views, messages, uploads, invoices, payments)
 - Analytics dashboards (utilization, realization, EHR, workload, profitability, forecast, burnout)
 - Ops controls (backup status/run, restore verification, DR targets)
-- South Africa operations hub with official practitioner portal shortcuts and matter launch context
 - Contacts directory
 - Knowledge base (internal articles)
 - Search across core objects
 - Optional AI semantic indexing/search over DMS content (OpenAI provider with async indexing jobs)
 - AI-assisted Matter Archetype drafting in Admin Settings (`/admin/templates/matters`)
 - AI-assisted Matter Intake parsing/autofill in Intake Wizard (`/matters/intake`)
-- Trust center pages (data policy, security posture, incident/change register)
 - Audit log (admin view)
 
 ## Quick start (local)
@@ -57,13 +55,11 @@ python app.py worker --max-jobs 100
 
 Open: http://127.0.0.1:5000
 
-Demo routing:
-- `/` is the demo hub landing page.
-- `DM-Inc Intranet` routes to `/login`.
-- `UFC Prediction` routes to `/ufc/` as a first-party route module inside this app.
-- UFC dependencies are installed from this root `requirements.txt` (no second virtualenv required).
+Routing:
+- `/` redirects authenticated users to `/dashboard`.
+- `/` redirects unauthenticated users to `/login`.
 
-## Demo data seed (recommended for client walkthroughs)
+## Starter Data Seed
 
 Use the built-in seed command to prepopulate realistic records:
 
@@ -72,29 +68,29 @@ Use the built-in seed command to prepopulate realistic records:
 set -a; source .env; set +a
 flask --app app.py db upgrade -d migrations
 
-# resets existing records and writes demo data
-python app.py seed-demo --reset --password "ClientDemo2026!" --scale 3
+# resets existing records and writes seed data
+python app.py seed-data --reset --password "ClientAccess2026!" --scale 3
 ```
 
 Or run the helper script:
 
 ```bash
-./scripts/seed_demo.sh
+./scripts/seed_data.sh
 ```
 
 Scale notes:
 - `--scale 1`: baseline seed dataset
-- `--scale 3`: default expansive dataset (recommended for client demos)
-- `--scale 4+`: very large demo dataset for stress/demo scenarios
+- `--scale 3`: default expansive dataset
+- `--scale 4+`: very large seeded dataset for stress and QA scenarios
 
-Seeded demo logins:
+Seeded users:
 - `admin@dm-inc.co.za`
 - `partner@dm-inc.co.za`
 - `associate@dm-inc.co.za`
 - `paralegal@dm-inc.co.za`
 - `staff@dm-inc.co.za`
 
-Seeded demo content now includes:
+Seeded content now includes:
 - Matter/case portfolio with stage, risk, parties, notes, and timeline activity
 - Timeline events and activity-feed entries
 - Governance incident/change records
@@ -104,7 +100,6 @@ Seeded demo content now includes:
 - Billing transactions (including settled + pending payments), account statements, and audit data
 - Trust ledger postings, bank-statement imports, reconciliations, and Section 86 investment/accrual records
 - CRM/intake conflict workflows and curated client-portal messages/uploads/invoices
-- Office365 + third-party integration settings and export-ready sample data
 
 Common seed error:
 - `sqlite3.OperationalError: table matter has no column named objective`
@@ -112,7 +107,7 @@ Common seed error:
 - Fix:
   - `set -a; source .env; set +a`
   - `flask --app app.py db upgrade -d migrations`
-  - re-run `python app.py seed-demo --reset --password "ClientDemo2026!" --scale 3`
+  - re-run `python app.py seed-data --reset --password "ClientAccess2026!" --scale 3`
   - if you intentionally use SQLite and want a clean reset: `rm -f intranet.db && flask --app app.py db upgrade -d migrations`
 
 ## GitHub upload checklist
@@ -129,7 +124,7 @@ Common seed error:
 
 ## Project structure
 
-- `app.py`: entrypoint + CLI (`run`, `init-db`, `create-user`, `seed-demo`)
+- `app.py`: entrypoint + CLI (`run`, `init-db`, `create-user`, `seed-data`)
 - `intranet/__init__.py`: Flask app factory and extension wiring
 - `intranet/config.py`: environment parsing and config constants
 - `intranet/models.py`: SQLAlchemy models
@@ -139,7 +134,7 @@ Common seed error:
 - `intranet/security.py`: security headers and error handlers
 - `migrations/`: Alembic migration scripts (managed via Flask-Migrate)
 - `deploy/ubuntu/`: Ubuntu deployment artifacts (cloud-init, systemd service, Nginx config, Gunicorn config)
-- `scripts/seed_demo.sh`: helper wrapper to load demo dataset quickly
+- `scripts/seed_data.sh`: helper wrapper to load the seed dataset quickly
 
 ## User documentation
 
@@ -176,8 +171,6 @@ Optional but recommended:
 - `GUNICORN_WORKERS=3`
 - `GUNICORN_THREADS=2`
 - `GUNICORN_TIMEOUT=60`
-- `UFC_STRICT_INIT=true` (fail fast at startup if UFC module/dependencies fail to load)
-- `GUNICORN_TIMEOUT=900` when using UFC `Update Data` / `Retrain Models` actions in-request
 - `WORKER_LOOP_SLEEP_SECONDS=3`
 - `SCHEDULER_LOOP_SLEEP_SECONDS=30`
 - `AI_ENABLED=false` (set `true` to enable AI integrations)
@@ -185,12 +178,6 @@ Optional but recommended:
 - `OPENAI_API_KEY=<provider key>` or `AI_OPENAI_API_KEY=<provider key>`
 - `AI_OPENAI_TEXT_MODEL=gpt-4o-mini`
 - `AI_SEMANTIC_SEARCH_ENABLED=true` (enable semantic search panel on `/search`)
-
-UFC production notes:
-- Install only once from root `requirements.txt`; do not create/use a separate `UFC_Elf/venv`.
-- Ensure outbound internet egress is allowed for `Update Data` (scraper hits UFCStats).
-- UFC model training is manual via the `/ufc/` `Retrain Models` action.
-- Set `UFC_MODEL_STORE_DIR` to a persistent path (for example `/home/ubuntu/law-model-store`) so trained UFC models survive redeploys.
 
 ## Database migrations
 

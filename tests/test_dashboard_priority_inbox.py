@@ -290,20 +290,20 @@ def test_dashboard_workspace_mode_persists_and_surfaces_command_actions(app_ctx)
         "/dashboard/workspace-mode",
         data={
             "csrf_token": csrf,
-            "mode": "south_africa",
+            "mode": "revenue",
         },
         follow_redirects=False,
     )
     assert post_response.status_code == 302
     row = FirmSetting.query.filter_by(setting_key=f"workspace_pref:user:{user.id}").first()
     assert row is not None
-    assert '"mode": "south_africa"' in (row.setting_value_json or "")
+    assert '"mode": "revenue"' in (row.setting_value_json or "")
 
     response = client.get("/dashboard")
     body = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "Workspace Command Center" in body
-    assert "South Africa Desk" in body
-    assert "South Africa Practice Hub" in body
+    assert "Revenue &amp; Risk" in body
+    assert "Invoices" in body
     assert "Workspace Quick Actions" in body
     assert "Workspace mode and launch actions" in body

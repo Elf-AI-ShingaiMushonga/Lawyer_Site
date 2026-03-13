@@ -10,6 +10,7 @@ import sqlalchemy as sa
 from flask import Response, abort, current_app, flash, redirect, request, url_for
 from flask_login import current_user, login_required
 
+from ..config import is_valid_email
 from ..extensions import db
 from ..helpers import audit, can_access_matter, get_active_matter_id, is_admin, normalize_query, set_active_matter_context
 from ..reports import export_conflict_report_csv
@@ -59,6 +60,61 @@ def _quote_financials(row: LeadQuote) -> dict[str, float]:
         "tax_amount": tax_amount,
         "subtotal": subtotal,
         "grand_total": grand_total,
+    }
+
+
+def _lead_control_snapshot(
+    *,
+    lead: CRMLead,
+    matters: list[Matter],
+    followups: list[CRMFollowUp],
+    quotes: list[LeadQuote],
+    letters: list[EngagementLetter],
+    today: dt.date,
+) -> dict[str, object]:
+    open_followups = [row for row in followups if (row.status or "").strip().lower() == "open"]
+    overdue_followups = [row for row in open_followups if row.due_at.date() < today]
+    next_followup = min(open_followups, key=lambda row: row.due_at) if open_followups else None
+    accepted_quotes = [row for row in quotes if (row.status or "").strip().lower() == "accepted"]
+    signed_letters = [row for row in letters if (row.status or "").strip().lower() == "signed"]
+
+    linked_matter_ids = {
+        int(matter.id)
+        for matter in matters
+        if matter is not None
+    }
+    linked_matters = [matter for matter in matters if matter is not None and int(matter.id) in linked_matter_ids]
+
+    action_items: list[str] = []
+    tone = "steady"
+    if not lead.assigned_to:
+        action_items.append("Assign an owner so follow-ups, proposals, and conversion work have accountability.")
+        tone = "critical"
+    if overdue_followups:
+        action_items.append(f"Clear {len(overdue_followups)} overdue follow-up item(s) before the lead cools off.")
+        tone = "critical"
+    elif next_followup is None:
+        action_items.append("Schedule the next follow-up so there is a dated next move on the lead.")
+        if tone != "critical":
+            tone = "watch"
+    if lead.stage in {"new", "contacted"}:
+        action_items.append("Capture intake context and qualification notes before moving into proposal work.")
+    if lead.stage in {"qualified", "proposal"} and not quotes:
+        action_items.append("Draft the first quote so pricing and scope are visible to the team and client.")
+    if accepted_quotes and not signed_letters:
+        action_items.append("Convert the accepted commercial terms into a signed engagement letter.")
+    if linked_matters:
+        action_items.append("Continue execution inside the linked matter workspace once the lead is retained.")
+
+    headline = action_items[0] if action_items else "The lead has a live path from qualification through engagement."
+    return {
+        "headline": headline,
+        "action_items": action_items,
+        "tone": tone,
+        "open_followups": len(open_followups),
+        "overdue_followups": len(overdue_followups),
+        "next_followup": next_followup,
+        "linked_matters": linked_matters,
     }
 
 
@@ -129,6 +185,13 @@ def register_crm_routes(app):
         lead = db.session.get(CRMLead, lead_id)
         if not lead:
             abort(404)
+        assignable_users = (
+            User.query.filter(User.is_active.is_(True))
+            .order_by(User.full_name.asc(), User.email.asc())
+            .limit(300)
+            .all()
+        )
+        assignable_user_ids = {int(user.id) for user in assignable_users}
 
         def _selected_matter_id(*, fallback_to_active: bool = False) -> int | None:
             selected = request.form.get("matter_id", type=int)
@@ -149,11 +212,40 @@ def register_crm_routes(app):
                 if stage not in LEAD_STAGES:
                     flash("Invalid stage.", "warning")
                     return redirect(url_for("crm_lead_detail", lead_id=lead_id))
+                full_name = normalize_query(request.form.get("full_name", lead.full_name))
+                organization = normalize_query(request.form.get("organization", lead.organization or ""))
+                email = normalize_query(request.form.get("email", lead.email or "")).lower() or None
+                phone = normalize_query(request.form.get("phone", lead.phone or "")) or None
+                source = normalize_query(request.form.get("source", lead.source or "")) or None
+                assigned_to = request.form.get("assigned_to", type=int)
+                notes = (request.form.get("notes") or "").strip() or None
+
+                if not full_name:
+                    flash("Lead name is required.", "warning")
+                    return redirect(url_for("crm_lead_detail", lead_id=lead_id))
+                if email and not is_valid_email(email):
+                    flash("Enter a valid email address.", "warning")
+                    return redirect(url_for("crm_lead_detail", lead_id=lead_id))
+                if assigned_to and assigned_to not in assignable_user_ids:
+                    flash("Select a valid active owner.", "warning")
+                    return redirect(url_for("crm_lead_detail", lead_id=lead_id))
+
+                lead.full_name = full_name
+                lead.organization = organization or None
+                lead.email = email
+                lead.phone = phone
+                lead.source = source
+                lead.assigned_to = assigned_to if assigned_to in assignable_user_ids else None
                 lead.stage = stage
-                lead.notes = (request.form.get("notes") or "").strip() or lead.notes
+                lead.notes = notes
                 lead.updated_at = utc_now()
                 db.session.commit()
-                audit("crm_lead_update", "CRMLead", lead.id, {"stage": stage})
+                audit(
+                    "crm_lead_update",
+                    "CRMLead",
+                    lead.id,
+                    {"stage": stage, "assigned_to": lead.assigned_to, "source": lead.source},
+                )
                 flash("Lead updated.", "info")
 
             elif action == "follow_up":
@@ -398,6 +490,10 @@ def register_crm_routes(app):
             normalized = (row.status or "draft").strip().lower()
             if normalized in quote_status_counts:
                 quote_status_counts[normalized] += 1
+        letters_by_matter_id: dict[int, list[EngagementLetter]] = defaultdict(list)
+        for row in letters:
+            if row.matter_id:
+                letters_by_matter_id[int(row.matter_id)].append(row)
         followup_default_due_at = (dt.datetime.now() + dt.timedelta(days=1)).replace(second=0, microsecond=0)
         selected_matter_id = get_active_matter_id()
         if selected_matter_id and selected_matter_id not in {matter.id for matter in matters}:
@@ -405,6 +501,28 @@ def register_crm_routes(app):
             if selected_matter is not None and can_access_matter(selected_matter.id):
                 matters = [selected_matter] + matters
                 matter_lookup[selected_matter.id] = selected_matter
+        linked_matter_ids = sorted(
+            {
+                int(intake.matter_id)
+                for intake in intakes
+                if intake.matter_id and int(intake.matter_id) in matter_lookup
+            }
+            | {
+                int(letter.matter_id)
+                for letter in letters
+                if letter.matter_id and int(letter.matter_id) in matter_lookup
+            }
+        )
+        linked_matters = [matter_lookup[matter_id] for matter_id in linked_matter_ids if matter_id in matter_lookup]
+        lead_control = _lead_control_snapshot(
+            lead=lead,
+            matters=linked_matters,
+            followups=followups,
+            quotes=quotes,
+            letters=letters,
+            today=dt.date.today(),
+        )
+        assigned_user = next((user for user in assignable_users if int(user.id) == int(lead.assigned_to or 0)), None)
 
         return page(
             "Lead Detail",
@@ -423,9 +541,14 @@ def register_crm_routes(app):
             matters=matters,
             matter_lookup=matter_lookup,
             letters=letters,
+            letters_by_matter_id=letters_by_matter_id,
             stages=LEAD_STAGES,
             followup_default_due_at=followup_default_due_at.strftime("%Y-%m-%dT%H:%M"),
             selected_matter_id=selected_matter_id,
+            assignable_users=assignable_users,
+            assigned_user=assigned_user,
+            lead_control=lead_control,
+            linked_matters=linked_matters,
         )
 
     @app.post("/crm/followups/<int:followup_id>/status")

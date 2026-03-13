@@ -591,6 +591,81 @@ class MatterClosingChecklistItem(db.Model):
     done_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
 
 
+class MatterWorkspaceDocument(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=False, index=True)
+    title = db.Column(db.String(255), nullable=False)
+    body = db.Column(db.Text, nullable=False, default="")
+    status = db.Column(db.String(40), nullable=False, default="draft")
+    template_id = db.Column(db.Integer, db.ForeignKey("document_template.id"), nullable=True, index=True)
+    document_type = db.Column(db.String(80), nullable=True)
+    confidentiality = db.Column(db.String(80), nullable=True)
+    privilege_label = db.Column(db.String(80), nullable=True)
+    retention_category = db.Column(db.String(80), nullable=True)
+    legal_hold = db.Column(db.Boolean, nullable=False, default=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    last_edited_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    published_document_id = db.Column(db.Integer, db.ForeignKey("document_record.id"), nullable=True, index=True)
+    published_version_id = db.Column(db.Integer, db.ForeignKey("document_version.id"), nullable=True, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    last_published_at = db.Column(db.DateTime, nullable=True)
+    __table_args__ = (
+        db.Index("ix_matter_workspace_document_matter_updated", "matter_id", "updated_at"),
+        db.Index("ix_matter_workspace_document_matter_status", "matter_id", "status"),
+    )
+
+
+class MatterWorkspaceDocumentComment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    workspace_document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("matter_workspace_document.id"),
+        nullable=False,
+        index=True,
+    )
+    anchor_label = db.Column(db.String(120), nullable=True)
+    body = db.Column(db.Text, nullable=False)
+    is_resolved = db.Column(db.Boolean, nullable=False, default=False)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolved_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    __table_args__ = (
+        db.Index(
+            "ix_matter_workspace_document_comment_document_created",
+            "workspace_document_id",
+            "created_at",
+        ),
+    )
+
+
+class MatterWorkspaceDocumentPresence(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    workspace_document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("matter_workspace_document.id"),
+        nullable=False,
+        index=True,
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    state = db.Column(db.String(40), nullable=False, default="viewing")
+    cursor_label = db.Column(db.String(120), nullable=True)
+    last_seen_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    __table_args__ = (
+        db.UniqueConstraint(
+            "workspace_document_id",
+            "user_id",
+            name="uq_matter_workspace_document_presence_user",
+        ),
+        db.Index(
+            "ix_matter_workspace_document_presence_document_seen",
+            "workspace_document_id",
+            "last_seen_at",
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Docketing and Calendaring
 # ---------------------------------------------------------------------------

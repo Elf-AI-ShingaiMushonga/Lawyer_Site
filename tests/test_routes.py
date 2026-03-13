@@ -14,9 +14,6 @@ REQUIRED_ROUTES = {
     "/auth/sessions",
     "/auth/sessions/<int:session_id>/revoke",
     "/auth/devices/<int:device_id>/revoke",
-    "/auth/sso/authorize",
-    "/auth/sso/token",
-    "/auth/sso/userinfo",
     "/dashboard/workspace-mode",
     "/admin/settings/firm",
     "/admin/settings/offices",
@@ -41,6 +38,8 @@ REQUIRED_ROUTES = {
     "/matters/<int:matter_id>/ai/client-update",
     "/matters/<int:matter_id>/tasks/new",
     "/matters/<int:matter_id>/workspace",
+    "/matters/<int:matter_id>/documents/workbench",
+    "/matters/<int:matter_id>/documents/workbench/presence",
     "/matters/<int:matter_id>/parties",
     "/matters/<int:matter_id>/notes",
     "/matters/<int:matter_id>/stage",
@@ -139,11 +138,19 @@ REQUIRED_ROUTES = {
     "/analytics/profitability",
     "/analytics/forecast",
     "/analytics/burnout",
-    "/director/personnel",
     "/ops/backup/status",
     "/ops/backup/run",
     "/ops/restore/verify",
     "/ops/dr/targets",
+    "/readyz",
+}
+
+REMOVED_ROUTES = {
+    "/auth/sso/authorize",
+    "/auth/sso/token",
+    "/auth/sso/userinfo",
+    "/admin/settings/sso-apps",
+    "/director/personnel",
     "/integrations/south-africa",
     "/integrations/office365",
     "/integrations/office365/outlook.ics",
@@ -157,7 +164,9 @@ REQUIRED_ROUTES = {
     "/integrations/third-party/import/cost-recovery",
     "/integrations/third-party/import/conveyancing",
     "/mobile/hub",
-    "/readyz",
+    "/trust/policy",
+    "/trust/security",
+    "/trust/incidents",
 }
 
 
@@ -165,3 +174,9 @@ def test_required_routes_registered(app):
     routes = {rule.rule for rule in app.url_map.iter_rules()}
     missing = sorted(REQUIRED_ROUTES - routes)
     assert not missing, f"Missing routes: {missing}"
+
+
+def test_collapsed_routes_not_registered(app):
+    routes = {rule.rule for rule in app.url_map.iter_rules()}
+    unexpected = sorted(REMOVED_ROUTES & routes)
+    assert not unexpected, f"Collapsed routes still registered: {unexpected}"

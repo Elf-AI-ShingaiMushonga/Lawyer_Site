@@ -16,7 +16,7 @@ def test_story_endpoints_return_404(app):
     assert client.get("/story-mode").status_code == 404
 
 
-def test_login_page_has_no_live_demo_button(app):
+def test_login_page_has_no_story_cta(app):
     with app.app_context():
         user = User(email="existing@example.com", full_name="Existing User", role="admin", password_hash="x")
         user.set_password("TestPassword123!")
@@ -26,5 +26,6 @@ def test_login_page_has_no_live_demo_button(app):
     client = app.test_client()
     response = client.get("/login")
     assert response.status_code == 200
-    assert b"Start Live Demo" not in response.data
+    assert b"story-mode" not in response.data
+    assert b"/story" not in response.data
     assert b"Access Dashboard" in response.data

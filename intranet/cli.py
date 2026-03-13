@@ -167,7 +167,7 @@ def _detect_schema_gaps():
 def _schema_not_ready_error(app, missing_tables: list[str], missing_columns: list[str]) -> str:
     current_db = app.config.get("SQLALCHEMY_DATABASE_URI", "(unknown)")
     lines = [
-        "Database schema is not ready for demo seeding.",
+        "Database schema is not ready for data seeding.",
         f"Current database: {current_db}",
     ]
     if missing_tables:
@@ -183,7 +183,7 @@ def _schema_not_ready_error(app, missing_tables: list[str], missing_columns: lis
             "  2) Apply migrations:",
             "     flask --app app.py db upgrade -d migrations",
             "  3) Re-run seed:",
-            "     python app.py seed-demo --reset --password \"ClientDemo2026!\" --scale 3",
+            "     python app.py seed-data --reset --password \"ClientAccess2026!\" --scale 3",
             "",
             "If you intentionally use local SQLite and can reset it safely:",
             "  rm -f intranet.db",
@@ -291,7 +291,7 @@ def _build_minimal_pdf(text_lines: list[str]) -> bytes:
 
     content_rows = ["BT", "/F1 11 Tf", "50 760 Td", "14 TL"]
     if not text_lines:
-        text_lines = ["Demo document"]
+        text_lines = ["Document"]
     content_rows.append(f"({_escape_pdf_text(text_lines[0])}) Tj")
     for line in text_lines[1:]:
         content_rows.append(f"T* ({_escape_pdf_text(line)}) Tj")
@@ -785,7 +785,7 @@ def _build_expanded_seed_payload(
     return payload
 
 
-def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
+def seed_data(app, password: str, reset: bool = False, scale: int = 3):
     if len(password) < 12:
         raise SystemExit("Password must be at least 12 characters")
     if scale < 1:
@@ -794,7 +794,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
         raise SystemExit("Scale must be 8 or less.")
 
     with app.app_context():
-        # Keep local/demo workflows frictionless even before migrations are run.
+        # Keep local development workflows frictionless even before migrations are run.
         db.create_all()
         try:
             # Additive compatibility sync for legacy databases that are a few columns behind.
@@ -808,7 +808,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
         if missing_tables or missing_columns:
             raise SystemExit(_schema_not_ready_error(app, missing_tables, missing_columns))
         if reset:
-            _reset_demo_dataset(app)
+            _reset_seed_dataset(app)
         elif User.query.first():
             raise SystemExit("Database already has users. Re-run with --reset to replace data.")
 
@@ -945,8 +945,8 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
                 now - dt.timedelta(days=3),
             ),
             (
-                "Client Demo Environment",
-                "This environment is preloaded with realistic matters and tasks for presentation purposes.",
+                "Operations Readiness",
+                "Core matters, tasks, and billing records are available for workflow validation and training.",
                 now - dt.timedelta(days=5),
             ),
             (
@@ -1679,7 +1679,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
         doc_file_rows: list[DocumentFile] = []
         for i, spec in enumerate(doc_specs, start=1):
             original_filename = spec["original_filename"]
-            stored_filename = f"demo_{i}_{original_filename}"
+            stored_filename = f"seed_{i}_{original_filename}"
             file_path = upload_dir / stored_filename
             lines = spec["lines"]
             if spec["kind"] == "pdf":
@@ -1729,7 +1729,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
             (staff_id, "10.0.10.61", "Mozilla/5.0 (Android 14; Mobile)", 1, 120, None),
         ]
         for idx, (user_id, ip, user_agent, created_hours_ago, ttl_minutes, revoked_at) in enumerate(session_specs, start=1):
-            token_seed = f"demo-session-{idx}-{user_id}"
+            token_seed = f"seed-session-{idx}-{user_id}"
             db.session.add(
                 UserSession(
                     user_id=user_id,
@@ -2021,24 +2021,6 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
             ("firm_profile", {"name": "DM-Inc Attorneys", "jurisdiction_default": "ZA-GP", "timezone": "Africa/Johannesburg"}),
             ("default_tax", {"code": "VAT", "rate_percent": 15.0}),
             ("deadline_policy", {"default_calendar": "South Africa Court Calendar", "business_day_adjust": True}),
-            (
-                "office365_integration",
-                {
-                    "enabled": True,
-                    "tenant_id": "dm-inc-tenant",
-                    "client_id": "dm-inc-office365-client",
-                    "domain_hint": "dm-inc.co.za",
-                    "sync_notes": "Pilot enabled for Outlook calendar and Excel exports.",
-                },
-            ),
-            (
-                "third_party_integration_defaults",
-                {
-                    "cost_recovery_enabled": True,
-                    "conveyancing_enabled": True,
-                    "last_sync_note": "Demo profile with import/export templates preconfigured.",
-                },
-            ),
         ]
         for key, value in firm_settings:
             db.session.add(
@@ -2629,7 +2611,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
             if spec["original_filename"] in {"acme-hearing-pack.pdf", "silverstream-dd-brief.docx"}:
                 revised_lines = spec["lines"] + ["Revision note: Counsel comments incorporated."]
                 revised_payload = "\n".join(revised_lines).encode("utf-8")
-                revised_filename = f"demo_dms_{container.id}_v2.txt"
+                revised_filename = f"seed_dms_{container.id}_v2.txt"
                 revised_path = upload_dir / revised_filename
                 revised_path.write_bytes(revised_payload)
                 revised_sha = hashlib.sha256(revised_payload).hexdigest()
@@ -2735,24 +2717,24 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
         email_capture_rows = [
             EmailCapture(
                 matter_id=matter_map["2026-LIT-0142"].id,
-                message_id_hash=hashlib.sha256(b"<acme-lit-1@demo.mail>").hexdigest(),
+                message_id_hash=hashlib.sha256(b"<acme-lit-1@sample.mail>").hexdigest(),
                 dedup_key=hashlib.sha256(b"acme-lit-1").hexdigest(),
                 subject="Witness schedule confirmation",
                 sender="gc@acme.co.za",
                 received_at=now - dt.timedelta(hours=19),
-                stored_filename="demo_email_lit_1.eml",
+                stored_filename="seed_email_lit_1.eml",
                 attachment_hash=hashlib.sha256(b"witness-pack-attachment").hexdigest(),
                 captured_by=paralegal_id,
                 captured_at=now - dt.timedelta(hours=18),
             ),
             EmailCapture(
                 matter_id=matter_map["2026-REG-0021"].id,
-                message_id_hash=hashlib.sha256(b"<blue-dune-reg-1@demo.mail>").hexdigest(),
+                message_id_hash=hashlib.sha256(b"<blue-dune-reg-1@sample.mail>").hexdigest(),
                 dedup_key=hashlib.sha256(b"blue-dune-reg-1").hexdigest(),
                 subject="Supplementary annexure request",
                 sender="licensing@nersa.org.za",
                 received_at=now - dt.timedelta(hours=9),
-                stored_filename="demo_email_reg_1.eml",
+                stored_filename="seed_email_reg_1.eml",
                 attachment_hash=hashlib.sha256(b"annexure-checklist").hexdigest(),
                 captured_by=staff_id,
                 captured_at=now - dt.timedelta(hours=8),
@@ -2958,7 +2940,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
                 "status": "approved",
                 "approved_by": partner_id,
                 "approved_at": now - dt.timedelta(days=5),
-                "filename": "demo_receipt_lit_1.txt",
+                "filename": "seed_receipt_lit_1.txt",
                 "receipt_text": "Receipt: Court courier and travel expenses, ZAR 1,800.00",
             },
             {
@@ -2971,7 +2953,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
                 "status": "draft",
                 "approved_by": None,
                 "approved_at": None,
-                "filename": "demo_receipt_corp_1.txt",
+                "filename": "seed_receipt_corp_1.txt",
                 "receipt_text": "Receipt: Corporate registry search fees, ZAR 750.00",
             },
             {
@@ -2984,7 +2966,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
                 "status": "approved",
                 "approved_by": partner_id,
                 "approved_at": now - dt.timedelta(days=2, hours=10),
-                "filename": "demo_receipt_reg_1.txt",
+                "filename": "seed_receipt_reg_1.txt",
                 "receipt_text": "Receipt: Regulatory filing packet and certification, ZAR 520.00",
             },
         ]
@@ -3197,7 +3179,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
 
         ledes_dir = upload_dir / "ledes"
         ledes_dir.mkdir(parents=True, exist_ok=True)
-        ledes_path = ledes_dir / f"demo_invoice_{lit_invoice.id}_1998b.csv"
+        ledes_path = ledes_dir / f"seed_invoice_{lit_invoice.id}_1998b.csv"
         ledes_payload = "INVOICE_DATE|INVOICE_NUMBER|LINE_ITEM_NUMBER|LINE_ITEM_TOTAL\n"
         ledes_payload += f"{lit_invoice.period_end:%Y%m%d}|{lit_invoice.id}|1|{lit_invoice.total:.2f}\n"
         ledes_path.write_text(ledes_payload, encoding="utf-8")
@@ -3459,7 +3441,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
         ]
         db.session.add_all(section86_accrual_rows)
 
-        statement_filename = "demo_trust_statement_main_2026_02.csv"
+        statement_filename = "seed_trust_statement_main_2026_02.csv"
         statement_payload = "\n".join(
             [
                 "posted_on,description,reference,debit,credit,signed_amount,running_balance",
@@ -3485,7 +3467,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
             row_count=6,
             imported_by=admin_id,
             imported_at=now - dt.timedelta(hours=7),
-            notes="Demo statement import aligned to trust ledger and reconciliation.",
+            notes="Seed statement import aligned to trust ledger and reconciliation.",
         )
         db.session.add(statement_import)
         db.session.flush()
@@ -3907,7 +3889,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
         expanded_counts["portal_messages"] = len(portal_messages)
 
         portal_upload_payload = "invoice_ref,description,amount\nLIT-EXP-1,Courier advance,300.00\n"
-        portal_upload_name = "demo_portal_upload_1.csv"
+        portal_upload_name = "seed_portal_upload_1.csv"
         (upload_dir / portal_upload_name).write_text(portal_upload_payload, encoding="utf-8")
         portal_upload_row = PortalUpload(
             matter_id=matter_map["2026-LIT-0142"].id,
@@ -4155,13 +4137,13 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
 
         backup_dir = upload_dir / "backups"
         backup_dir.mkdir(parents=True, exist_ok=True)
-        backup_manifest_path = backup_dir / "demo_backup_manifest.json"
+        backup_manifest_path = backup_dir / "seed_backup_manifest.json"
         backup_manifest_payload = {
-            "backup_run_id": "demo-seed",
-            "db_dump_path": "uploads/backups/demo_seed.dbdump",
-            "uploads_archive_path": "uploads/backups/demo_seed_uploads.tar.gz",
-            "db_dump_sha256": hashlib.sha256(b"demo-db-dump").hexdigest(),
-            "uploads_archive_sha256": hashlib.sha256(b"demo-uploads-archive").hexdigest(),
+            "backup_run_id": "seed-data",
+            "db_dump_path": "uploads/backups/seed_data.dbdump",
+            "uploads_archive_path": "uploads/backups/seed_data_uploads.tar.gz",
+            "db_dump_sha256": hashlib.sha256(b"seed-db-dump").hexdigest(),
+            "uploads_archive_sha256": hashlib.sha256(b"seed-uploads-archive").hexdigest(),
             "encryption": {"enabled": True, "algorithm": "aes-256-gcm"},
         }
         backup_manifest_path.write_text(json.dumps(backup_manifest_payload, indent=2), encoding="utf-8")
@@ -4279,7 +4261,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
             )
 
         audit_seed_entries = [
-            ("demo_seed", "System", None, admin_id, {"seeded": True, "version": 5}),
+            ("seed_data", "System", None, admin_id, {"seeded": True, "version": 5}),
             ("login", "User", admin_id, admin_id, {"channel": "web"}),
             ("matter_summary_update", "Matter", matter_map["2026-LIT-0142"].id, partner_id, {"risk_level": "High"}),
             ("document_upload", "DocumentFile", doc_file_map["acme-hearing-pack.pdf"].id, paralegal_id, {"filename": "acme-hearing-pack.pdf"}),
@@ -4371,7 +4353,7 @@ def seed_demo_data(app, password: str, reset: bool = False, scale: int = 3):
         return summary
 
 
-def _reset_demo_dataset(app):
+def _reset_seed_dataset(app):
     all_models = [
         ARSnapshot,
         Announcement,
@@ -4502,12 +4484,12 @@ def _reset_demo_dataset(app):
             ) from exc
     else:
         if bind is not None and bind.dialect.name == "sqlite":
-            # Clear hold flags so legal-hold delete guards permit demo reset paths.
+            # Clear hold flags so legal-hold delete guards permit seed reset paths.
             db.session.query(LegalHold).update({LegalHold.is_active: False}, synchronize_session=False)
             db.session.query(DocumentRecord).update({DocumentRecord.legal_hold: False}, synchronize_session=False)
             db.session.commit()
 
-            # Demo reset must bypass immutable trigger guards before bulk deletes.
+            # Seed reset must bypass immutable trigger guards before bulk deletes.
             sqlite_triggers = db.session.execute(
                 sa.text("SELECT name FROM sqlite_master WHERE type='trigger'")
             ).scalars().all()
@@ -4631,6 +4613,7 @@ def _reset_demo_dataset(app):
 
     upload_dir = Path(app.config["UPLOAD_DIR"])
     if upload_dir.exists():
-        for path in upload_dir.rglob("demo_*"):
-            if path.is_file():
-                path.unlink()
+        for pattern in ("demo_*", "seed_*"):
+            for path in upload_dir.rglob(pattern):
+                if path.is_file():
+                    path.unlink()

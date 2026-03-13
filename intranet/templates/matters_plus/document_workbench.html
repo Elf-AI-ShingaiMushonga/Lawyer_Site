@@ -1,0 +1,586 @@
+{% extends "base.html" %}
+{% block content %}
+{% set workspace_documents = workspace_documents or [] %}
+{% set comments = comments or [] %}
+{% set presence_snapshot = presence_snapshot or [] %}
+{% set page_stats = page_stats or {} %}
+{% set selected_document = selected_document or None %}
+<style>
+  .document-workbench-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.85fr);
+    gap: 18px;
+  }
+
+  .document-workbench-rail {
+    display: grid;
+    gap: 16px;
+    align-content: start;
+  }
+
+  .document-workbench-editor {
+    min-height: 0;
+  }
+
+  .document-workbench-body {
+    min-height: 540px;
+    font-family: var(--mono);
+    line-height: 1.55;
+  }
+
+  .document-workbench-doc-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .document-workbench-doc-item {
+    display: grid;
+    gap: 6px;
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 14px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.94);
+  }
+
+  .document-workbench-doc-item.is-active {
+    border-color: rgba(225, 6, 0, 0.34);
+    background: rgba(255, 246, 246, 0.98);
+  }
+
+  .document-workbench-presence-list,
+  .document-workbench-comment-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .document-workbench-presence-item,
+  .document-workbench-comment-item {
+    border: 1px solid rgba(225, 6, 0, 0.12);
+    border-radius: 12px;
+    padding: 10px 11px;
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .document-workbench-comment-item.is-resolved {
+    opacity: 0.78;
+  }
+
+  .document-workbench-save-status {
+    min-height: 1.2rem;
+  }
+
+  @media (max-width: 991.98px) {
+    .document-workbench-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Collaborative Drafting</div>
+        <h1 class="page-hero-title">Matter Document Workbench</h1>
+        <div class="page-hero-summary">{{ m.matter_no }} • {{ m.title }} • {{ m.client_name }}</div>
+        <div class="page-hero-meta">
+          <span class="badge status-badge status-{{ (m.status or 'open')|lower|replace(' ', '-') }}">{{ m.status or "Open" }}</span>
+          {% if selected_document %}
+            <span class="tag-chip">{{ selected_document.title }}</span>
+            <span class="tag-chip">{{ selected_document.status }}</span>
+          {% endif %}
+        </div>
+        <div class="page-hero-summary">Draft inside the matter, work asynchronously with collaborators, then publish formal snapshots into DMS only when the text is ready.</div>
+      </div>
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_workspace', matter_id=m.id) }}">Workspace</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=m.id) }}">DMS</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter Summary</a>
+      </div>
+    </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Draft Boards</div>
+        <div class="page-stat-value">{{ page_stats.get('drafts', 0) }}</div>
+        <div class="page-stat-meta">Collaborative matter drafts in this workspace.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Active Collaborators</div>
+        <div class="page-stat-value" data-workspace-presence-count>{{ page_stats.get('active_collaborators', 0) }}</div>
+        <div class="page-stat-meta">People currently reading, editing, or reviewing the selected draft.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Open Comments</div>
+        <div class="page-stat-value">{{ page_stats.get('open_comments', 0) }}</div>
+        <div class="page-stat-meta">Outstanding drafting feedback on the selected document.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Published to DMS</div>
+        <div class="page-stat-value">{{ page_stats.get('published', 0) }}</div>
+        <div class="page-stat-meta">Draft boards already synced into the formal repository.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="document-workbench-grid">
+    <div class="document-workbench-editor">
+      {% if selected_document %}
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Active Draft</div>
+              <h2 class="panel-title">{{ selected_document.title }}</h2>
+              <div class="panel-summary">Autosave keeps the working draft current. Use comments for review notes, then publish a clean snapshot into DMS.</div>
+            </div>
+          </div>
+          <form
+            method="post"
+            action="{{ url_for('matter_document_workbench', matter_id=m.id, document_id=selected_document.id) }}"
+            class="row g-3"
+            data-workspace-editor
+            data-presence-url="{{ url_for('matter_document_workbench_presence', matter_id=m.id) }}"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="save_document">
+            <input type="hidden" name="document_id" value="{{ selected_document.id }}">
+            <div class="col-md-8">
+              <label class="form-label" for="workspace-document-title">Document Title</label>
+              <input class="form-control" id="workspace-document-title" name="title" value="{{ selected_document.title }}" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="workspace-document-status">Stage</label>
+              <select class="form-select" id="workspace-document-status" name="status">
+                {% for option in ['draft', 'review', 'final'] %}
+                  <option value="{{ option }}" {% if selected_document.status == option %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="workspace-document-type">Document Type</label>
+              <select class="form-select" id="workspace-document-type" name="document_type">
+                {% for option in dms_document_types %}
+                  <option value="{{ option }}" {% if option == selected_document.document_type %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="workspace-document-confidentiality">Confidentiality</label>
+              <select class="form-select" id="workspace-document-confidentiality" name="confidentiality">
+                {% for option in dms_confidentialities %}
+                  <option value="{{ option }}" {% if option == selected_document.confidentiality %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="workspace-document-privilege">Privilege Label</label>
+              <select class="form-select" id="workspace-document-privilege" name="privilege_label">
+                <option value="">None</option>
+                {% for option in dms_privilege_labels %}
+                  <option value="{{ option }}" {% if option == selected_document.privilege_label %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="workspace-document-retention">Retention Category</label>
+              <select class="form-select" id="workspace-document-retention" name="retention_category">
+                <option value="">None</option>
+                {% for option in dms_retention_categories %}
+                  <option value="{{ option }}" {% if option == selected_document.retention_category %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" id="workspace-document-legal-hold" name="legal_hold" type="checkbox" value="1" {% if selected_document.legal_hold %}checked{% endif %}>
+                <label class="form-check-label" for="workspace-document-legal-hold">Legal hold applies to this draft when published</label>
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="workspace-document-body">Working Draft</label>
+              <textarea class="form-control document-workbench-body" id="workspace-document-body" name="body">{{ selected_document.body or '' }}</textarea>
+            </div>
+            <div class="col-md-7">
+              <div class="small muted">Last updated {{ selected_document.updated_at }}</div>
+              <div class="form-help document-workbench-save-status" data-workspace-save-status>Autosave is watching for changes.</div>
+            </div>
+            <div class="col-md-5 d-grid">
+              <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Draft Now</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel-card mt-3" id="workspace-comments">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Review Thread</div>
+              <h2 class="panel-title">Comments and decisions</h2>
+              <div class="panel-summary">Keep drafting conversations attached to the working document instead of scattering them across notes and chat.</div>
+            </div>
+          </div>
+          <form method="post" action="{{ url_for('matter_document_workbench', matter_id=m.id, document_id=selected_document.id) }}" class="row g-3 mb-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="add_comment">
+            <input type="hidden" name="document_id" value="{{ selected_document.id }}">
+            <div class="col-md-4">
+              <label class="form-label" for="workspace-comment-anchor">Anchor</label>
+              <input class="form-control" id="workspace-comment-anchor" name="anchor_label" placeholder="Facts / Clause 3 / Closing">
+            </div>
+            <div class="col-md-8">
+              <label class="form-label" for="workspace-comment-body">Comment</label>
+              <input class="form-control" id="workspace-comment-body" name="comment_body" placeholder="Ask for source document, tighten wording, confirm date..." required>
+            </div>
+            <div class="col-12 d-grid">
+              <button class="btn btn-outline-light" type="submit" data-submitting-text="Adding...">Add Comment</button>
+            </div>
+          </form>
+          <div class="document-workbench-comment-list">
+            {% for comment in comments %}
+              <div class="document-workbench-comment-item {{ 'is-resolved' if comment.is_resolved else '' }}">
+                <div class="list-row">
+                  <div>
+                    <div class="list-title">{{ comment.anchor_label or 'General comment' }}</div>
+                    <div class="muted small">{{ comment.body }}</div>
+                    <div class="list-meta mt-2">
+                      <span>Created {{ comment.created_at }}</span>
+                      <span>{{ 'Resolved' if comment.is_resolved else 'Open' }}</span>
+                    </div>
+                  </div>
+                  <form method="post" action="{{ url_for('matter_document_workbench', matter_id=m.id, document_id=selected_document.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="resolve_comment">
+                    <input type="hidden" name="document_id" value="{{ selected_document.id }}">
+                    <input type="hidden" name="comment_id" value="{{ comment.id }}">
+                    <input type="hidden" name="resolved" value="{{ 0 if comment.is_resolved else 1 }}">
+                    <button class="btn btn-sm btn-outline-light" type="submit">{{ 'Reopen' if comment.is_resolved else 'Resolve' }}</button>
+                  </form>
+                </div>
+              </div>
+            {% else %}
+              <div class="empty-state">No comments yet. Use this thread for drafting review, not private matter notes.</div>
+            {% endfor %}
+          </div>
+        </section>
+      {% else %}
+        <section class="panel-card">
+          <div class="empty-state">
+            <div class="fw-semibold">No collaborative drafts yet.</div>
+            <div class="muted">Create the first draft from the rail to start building matter documents directly inside the workspace.</div>
+          </div>
+        </section>
+      {% endif %}
+    </div>
+
+    <aside class="document-workbench-rail">
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">New Draft</div>
+            <h2 class="panel-title">Start inside the matter</h2>
+            <div class="panel-summary">Create a blank draft or seed it from a document template, with DMS metadata ready from the start.</div>
+          </div>
+        </div>
+        <form method="post" class="row g-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="create_document">
+          <div class="col-12">
+            <label class="form-label" for="workspace-new-title">Document Title</label>
+            <input class="form-control" id="workspace-new-title" name="title" placeholder="Witness prep outline" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="workspace-new-template">Template</label>
+            <select class="form-select" id="workspace-new-template" name="template_id">
+              <option value="">Blank matter draft</option>
+              {% for template in doc_templates %}
+                <option value="{{ template.id }}">{{ template.name }} ({{ template.template_type }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="workspace-new-status">Stage</label>
+            <select class="form-select" id="workspace-new-status" name="status">
+              {% for option in ['draft', 'review', 'final'] %}
+                <option value="{{ option }}">{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="workspace-new-type">Document Type</label>
+            <select class="form-select" id="workspace-new-type" name="document_type">
+              {% for option in dms_document_types %}
+                <option value="{{ option }}" {% if option == default_document_type %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="workspace-new-confidentiality">Confidentiality</label>
+            <select class="form-select" id="workspace-new-confidentiality" name="confidentiality">
+              {% for option in dms_confidentialities %}
+                <option value="{{ option }}" {% if option == default_confidentiality %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="workspace-new-privilege">Privilege</label>
+            <select class="form-select" id="workspace-new-privilege" name="privilege_label">
+              <option value="">None</option>
+              {% for option in dms_privilege_labels %}
+                <option value="{{ option }}">{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="workspace-new-retention">Retention Category</label>
+            <select class="form-select" id="workspace-new-retention" name="retention_category">
+              <option value="">None</option>
+              {% for option in dms_retention_categories %}
+                <option value="{{ option }}">{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" id="workspace-new-legal-hold" name="legal_hold" type="checkbox" value="1">
+              <label class="form-check-label" for="workspace-new-legal-hold">Mark as legal hold on publish</label>
+            </div>
+          </div>
+          <div class="col-12 d-grid">
+            <button class="btn btn-light" type="submit" data-submitting-text="Creating...">Create Draft Board</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Draft List</div>
+            <h2 class="panel-title">Current matter documents</h2>
+            <div class="panel-summary">Use the workbench as the live operating layer, not just the formal repository.</div>
+          </div>
+        </div>
+        <div class="document-workbench-doc-list">
+          {% for doc in workspace_documents %}
+            <a class="document-workbench-doc-item text-decoration-none {{ 'is-active' if selected_document and doc.id == selected_document.id else '' }}" href="{{ url_for('matter_document_workbench', matter_id=m.id, document_id=doc.id) }}">
+              <div class="list-title">{{ doc.title }}</div>
+              <div class="list-meta">
+                <span class="badge badge-soft status-badge">{{ doc.status }}</span>
+                {% if doc.last_published_at %}<span>Published {{ doc.last_published_at.strftime("%Y-%m-%d %H:%M") }}</span>{% endif %}
+              </div>
+              <div class="muted small">Updated {{ doc.updated_at.strftime("%Y-%m-%d %H:%M") if doc.updated_at else '-' }}</div>
+            </a>
+          {% else %}
+            <div class="empty-state">No drafts created yet.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Presence</div>
+            <h2 class="panel-title">Active collaborators</h2>
+            <div class="panel-summary">Presence is lightweight by design: it shows who is in the draft without forcing document locks.</div>
+          </div>
+        </div>
+        <div class="document-workbench-presence-list" data-workspace-presence-list>
+          {% for row in presence_snapshot %}
+            <div class="document-workbench-presence-item">
+              <div class="list-row">
+                <div>
+                  <div class="list-title">{{ row.display_name }}{% if row.is_current_user %} (You){% endif %}</div>
+                  <div class="muted small">{{ row.state }}{% if row.cursor_label %} • {{ row.cursor_label }}{% endif %}</div>
+                </div>
+              </div>
+            </div>
+          {% else %}
+            <div class="empty-state">No active collaborators on this draft right now.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      {% if selected_document %}
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Publish</div>
+              <h2 class="panel-title">Sync into DMS</h2>
+              <div class="panel-summary">Publishing turns the live draft into a formal DMS version while preserving the editable workbench copy.</div>
+            </div>
+          </div>
+          {% if published_record %}
+            <div class="alert alert-light border mb-3">
+              <div class="fw-semibold">Already linked to DMS</div>
+              <div class="small muted">{{ published_record.title }}</div>
+            </div>
+          {% endif %}
+          <form method="post" action="{{ url_for('matter_document_workbench', matter_id=m.id, document_id=selected_document.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="publish_document">
+            <input type="hidden" name="document_id" value="{{ selected_document.id }}">
+            <div class="d-grid gap-2">
+              <button class="btn btn-outline-light" type="submit" data-submitting-text="Publishing...">Publish Snapshot to DMS</button>
+              {% if published_record %}
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('document_versions', document_id=published_record.id) }}">Open DMS Version Chain</a>
+              {% endif %}
+            </div>
+          </form>
+        </section>
+      {% endif %}
+    </aside>
+  </div>
+</div>
+
+{% if selected_document %}
+  <script>
+    (() => {
+      const form = document.querySelector("[data-workspace-editor]");
+      if (!form) return;
+
+      const csrfInput = form.querySelector('input[name="csrf_token"]');
+      const documentIdInput = form.querySelector('input[name="document_id"]');
+      const titleInput = document.getElementById("workspace-document-title");
+      const statusInput = document.getElementById("workspace-document-status");
+      const bodyInput = document.getElementById("workspace-document-body");
+      const typeInput = document.getElementById("workspace-document-type");
+      const confidentialityInput = document.getElementById("workspace-document-confidentiality");
+      const privilegeInput = document.getElementById("workspace-document-privilege");
+      const retentionInput = document.getElementById("workspace-document-retention");
+      const legalHoldInput = document.getElementById("workspace-document-legal-hold");
+      const statusNode = document.querySelector("[data-workspace-save-status]");
+      const presenceNode = document.querySelector("[data-workspace-presence-list]");
+      const presenceCountNode = document.querySelector("[data-workspace-presence-count]");
+      const presenceUrl = form.getAttribute("data-presence-url");
+
+      if (!csrfInput || !documentIdInput || !titleInput || !statusInput || !bodyInput || !presenceUrl) {
+        return;
+      }
+
+      let dirty = false;
+      let saveTimer = null;
+      let saveInFlight = false;
+
+      const escapeHtml = (value) => String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+      const setStatus = (message, tone = "text-muted") => {
+        if (!statusNode) return;
+        statusNode.className = `form-help document-workbench-save-status ${tone}`.trim();
+        statusNode.textContent = message;
+      };
+
+      const renderPresence = (items) => {
+        if (!presenceNode) return;
+        const rows = Array.isArray(items) ? items : [];
+        if (presenceCountNode) {
+          presenceCountNode.textContent = String(rows.length);
+        }
+        if (!rows.length) {
+          presenceNode.innerHTML = '<div class="empty-state">No active collaborators on this draft right now.</div>';
+          return;
+        }
+        presenceNode.innerHTML = rows.map((row) => {
+          const suffix = row.is_current_user ? " (You)" : "";
+          const detail = row.cursor_label ? `${row.state} • ${row.cursor_label}` : row.state;
+          return `
+            <div class="document-workbench-presence-item">
+              <div class="list-title">${escapeHtml(row.display_name)}${suffix}</div>
+              <div class="muted small">${escapeHtml(detail)}</div>
+            </div>
+          `;
+        }).join("");
+      };
+
+      const sendPresence = async (state) => {
+        try {
+          const response = await fetch(presenceUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              "X-CSRF-Token": csrfInput.value,
+            },
+            body: JSON.stringify({
+              document_id: documentIdInput.value,
+              state,
+            }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (response.ok && payload.ok) {
+            renderPresence(payload.presence || []);
+          }
+        } catch (_error) {
+          // Presence failures should not interrupt drafting.
+        }
+      };
+
+      const autosave = async () => {
+        if (!dirty || saveInFlight) return;
+        saveInFlight = true;
+        setStatus("Autosaving draft...", "text-muted");
+        try {
+          const response = await fetch(form.action, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              "X-CSRF-Token": csrfInput.value,
+            },
+            body: JSON.stringify({
+              action: "save_document",
+              document_id: documentIdInput.value,
+              title: titleInput.value,
+              status: statusInput.value,
+              body: bodyInput.value,
+              document_type: typeInput ? typeInput.value : "",
+              confidentiality: confidentialityInput ? confidentialityInput.value : "",
+              privilege_label: privilegeInput ? privilegeInput.value : "",
+              retention_category: retentionInput ? retentionInput.value : "",
+              legal_hold: Boolean(legalHoldInput && legalHoldInput.checked),
+              autosave: true,
+            }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok || payload.ok !== true) {
+            setStatus(payload.error || "Autosave failed. Use Save Draft Now.", "text-warning");
+            return;
+          }
+          dirty = false;
+          renderPresence(payload.presence || []);
+          setStatus(`Autosaved at ${new Date().toLocaleTimeString()}.`, "text-muted");
+        } catch (_error) {
+          setStatus("Autosave failed. Use Save Draft Now.", "text-warning");
+        } finally {
+          saveInFlight = false;
+          if (dirty) {
+            window.setTimeout(autosave, 900);
+          }
+        }
+      };
+
+      const queueAutosave = () => {
+        dirty = true;
+        setStatus("Unsaved changes detected.", "text-warning");
+        if (saveTimer) {
+          window.clearTimeout(saveTimer);
+        }
+        saveTimer = window.setTimeout(autosave, 1400);
+        sendPresence("editing");
+      };
+
+      [titleInput, statusInput, bodyInput, typeInput, confidentialityInput, privilegeInput, retentionInput, legalHoldInput]
+        .filter(Boolean)
+        .forEach((element) => {
+          element.addEventListener("input", queueAutosave);
+          element.addEventListener("change", queueAutosave);
+        });
+
+      bodyInput.addEventListener("focus", () => sendPresence("editing"));
+      window.setInterval(() => sendPresence(dirty ? "editing" : "viewing"), 30000);
+      sendPresence("viewing");
+    })();
+  </script>
+{% endif %}
+{% endblock %}

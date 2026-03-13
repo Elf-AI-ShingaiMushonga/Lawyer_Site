@@ -78,6 +78,12 @@ TIMELINE_EVENT_TYPES = {"Milestone", "Filing", "Hearing", "Client Update", "Inte
 DOC_CATEGORIES = {"Pleading", "Evidence", "Contract", "Advisory", "Correspondence", "Court Filing", "General"}
 DOC_LIFECYCLE_STAGES = {"Draft", "For Review", "Final", "Executed"}
 CUSTOM_ARCHETYPE_SENTINEL = "custom"
+TASK_QUEUE_OPTIONS = (
+    ("all", "All matters"),
+    ("unassigned", "Unassigned work"),
+    ("urgent-unassigned", "Urgent unassigned"),
+)
+TASK_QUEUE_VALUES = {value for value, _ in TASK_QUEUE_OPTIONS}
 
 
 def _display_missing_field_labels(labels: list[str]) -> list[str]:
@@ -102,6 +108,24 @@ def _safe_next_path(next_path: str | None, fallback: str) -> str:
     if not parsed.path.startswith("/"):
         return fallback
     return next_path
+
+
+def _matter_has_unassigned_tasks(*, urgent_only: bool, today: dt.date) -> sa.sql.elements.Exists:
+    has_any_assignee = db.session.query(TaskAssignee.id).filter(TaskAssignee.task_id == Task.id).exists()
+    filters: list[object] = [
+        Task.matter_id == Matter.id,
+        Task.status != "Done",
+        Task.assigned_to.is_(None),
+        ~has_any_assignee,
+    ]
+    if urgent_only:
+        filters.extend(
+            [
+                Task.due_date.isnot(None),
+                Task.due_date <= (today + dt.timedelta(days=3)),
+            ]
+        )
+    return db.session.query(Task.id).filter(*filters).exists()
 
 
 def _record_recent_matter_view(user_id: int, matter_id: int) -> None:
@@ -268,11 +292,15 @@ def register_matter_routes(app):
     @app.get("/matters")
     @login_required
     def matters():
+        today = dt.date.today()
         q = normalize_query(request.args.get("q", ""))
         sort = normalize_query(request.args.get("sort", "opened_desc")).lower() or "opened_desc"
+        task_queue = normalize_query(request.args.get("task_queue", "all")).lower() or "all"
         page_number = request.args.get("page", default=1, type=int) or 1
         if page_number < 1:
             page_number = 1
+        if task_queue not in TASK_QUEUE_VALUES:
+            task_queue = "all"
         risk_rank = sa.case(
             (Matter.risk_level == "Critical", 4),
             (Matter.risk_level == "High", 3),
@@ -321,6 +349,10 @@ def register_matter_routes(app):
                 base = base.filter(Matter.id == -1)
             else:
                 base = base.filter(Matter.id.in_(ids))
+        if task_queue == "unassigned":
+            base = base.filter(_matter_has_unassigned_tasks(urgent_only=False, today=today))
+        elif task_queue == "urgent-unassigned":
+            base = base.filter(_matter_has_unassigned_tasks(urgent_only=True, today=today))
         if q:
             like = f"%{q}%"
             base = base.filter((Matter.matter_no.ilike(like)) | (Matter.title.ilike(like)) | (Matter.client_name.ilike(like)))
@@ -350,6 +382,9 @@ def register_matter_routes(app):
             ms=ms,
             q=q,
             sort=sort,
+            task_queue=task_queue,
+            task_queue_options=TASK_QUEUE_OPTIONS,
+            task_queue_label=dict(TASK_QUEUE_OPTIONS).get(task_queue, "All matters"),
             sort_options=sort_options,
             pagination=pagination,
             status_counts=status_counts,

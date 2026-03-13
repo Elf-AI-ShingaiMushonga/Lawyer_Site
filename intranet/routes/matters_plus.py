@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import datetime as dt
 from ..timeutils import utc_now
+import hashlib
 import json
+import os
+import re
 import uuid
 from collections import defaultdict
 
@@ -26,8 +29,10 @@ from ..models import (
     ContractTemplate,
     Deadline,
     DocumentFile,
+    DocumentOCRText,
     DocumentRecord,
     DocumentTemplate,
+    DocumentVersion,
     Entity,
     Matter,
     MatterClosingChecklistItem,
@@ -38,6 +43,9 @@ from ..models import (
     MatterStageHistory,
     MatterTimelineEvent,
     MatterTemplate,
+    MatterWorkspaceDocument,
+    MatterWorkspaceDocumentComment,
+    MatterWorkspaceDocumentPresence,
     Task,
     TaskAssignee,
     User,
@@ -65,15 +73,21 @@ from ..services.contracts import (
     validate_contract_field_values,
 )
 from ..services.intake_ai import suggest_matter_intake
+from ..services.dms_option_lists import DEFAULT_DMS_OPTION_LISTS, load_dms_option_lists
 from ..services.matter_magic import attach_matter_magic_links, build_matter_launch_pack, build_matter_magic_snapshot
 from ..services.matter_option_lists import legal_category_options, practice_area_options
-from ..services.storage_paths import harden_private_file, resolve_upload_path
+from ..services.storage_paths import build_matter_storage_name, harden_private_file, resolve_upload_path
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..services.notification_engine import NotificationEngine
+from ..policies.residency import residency_allowed
 from ..roles import role_is_admin
 from ..templates import page
 
 CUSTOM_ARCHETYPE_SENTINEL = "custom"
+WORKSPACE_DOCUMENT_STATUSES = {"draft", "review", "final"}
+WORKSPACE_PRESENCE_STATES = {"viewing", "editing", "reviewing"}
+WORKSPACE_STALE_MINUTES = 15
+WORKSPACE_TEMPLATE_TOKEN_PATTERN = re.compile(r"\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}")
 
 
 def _display_missing_field_labels(labels: list[str]) -> list[str]:
@@ -87,6 +101,294 @@ def _display_missing_field_labels(labels: list[str]) -> list[str]:
         if text:
             normalized.append(text)
     return normalized
+
+
+def _safe_remove_file(path: str) -> None:
+    try:
+        if path and os.path.isfile(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
+def _match_option(raw: str | None, options: list[str]) -> str:
+    value = str(raw or "").strip()
+    if not value:
+        return ""
+    lookup = {
+        str(option).strip().casefold(): str(option).strip()
+        for option in options
+        if str(option).strip()
+    }
+    return lookup.get(value.casefold(), "")
+
+
+def _coerce_option_value(
+    raw: str | None,
+    options: list[str],
+    *,
+    field_label: str,
+    default_value: str | None = None,
+    allow_blank: bool = False,
+) -> str | None:
+    candidate = str(raw or "").strip()
+    if not candidate and default_value:
+        candidate = str(default_value).strip()
+    if not candidate:
+        if allow_blank:
+            return None
+        raise ValueError(f"{field_label} is required.")
+    matched = _match_option(candidate, options)
+    if not matched:
+        raise ValueError(f"Invalid {field_label.lower()}. Select a configured value.")
+    return matched
+
+
+def _safe_load_dms_option_lists() -> dict[str, list[str]]:
+    try:
+        payload = load_dms_option_lists()
+    except Exception:  # pragma: no cover - defensive fallback for schema drift
+        db.session.rollback()
+        current_app.logger.exception("Failed to load DMS option lists for collaborative drafting.")
+        payload = {}
+    normalized: dict[str, list[str]] = {}
+    for key, defaults in DEFAULT_DMS_OPTION_LISTS.items():
+        values = payload.get(key) if isinstance(payload, dict) else None
+        options = [str(item).strip() for item in (values or []) if str(item).strip()]
+        normalized[key] = options if options else list(defaults)
+    return normalized
+
+
+def _normalize_workspace_status(raw: str | None) -> str:
+    value = str(raw or "").strip().lower() or "draft"
+    return value if value in WORKSPACE_DOCUMENT_STATUSES else "draft"
+
+
+def _normalize_workspace_presence_state(raw: str | None) -> str:
+    value = str(raw or "").strip().lower() or "viewing"
+    return value if value in WORKSPACE_PRESENCE_STATES else "viewing"
+
+
+def _workspace_template_context(matter: Matter) -> dict[str, str]:
+    now = utc_now()
+    return {
+        "matter_id": str(matter.id),
+        "matter_no": matter.matter_no or "",
+        "matter_title": matter.title or "",
+        "title": matter.title or "",
+        "client_name": matter.client_name or "",
+        "status": matter.status or "",
+        "stage": matter.stage or "",
+        "jurisdiction": matter.jurisdiction or "",
+        "practice_area": matter.practice_area or "",
+        "case_type": matter.case_type or "",
+        "today": now.date().isoformat(),
+        "now": now.replace(microsecond=0).isoformat(),
+        "generated_by_name": current_user.full_name or "",
+        "generated_by_email": current_user.email or "",
+    }
+
+
+def _render_workspace_template(body: str, context: dict[str, str]) -> tuple[str, list[str]]:
+    missing: list[str] = []
+
+    def replace_token(match: re.Match[str]) -> str:
+        key = (match.group(1) or "").strip().lower()
+        if not key:
+            return ""
+        if key in context:
+            return str(context[key])
+        missing.append(key)
+        return ""
+
+    rendered = WORKSPACE_TEMPLATE_TOKEN_PATTERN.sub(replace_token, body or "")
+    return rendered, sorted(set(missing))
+
+
+def _default_workspace_body(matter: Matter) -> str:
+    return (
+        f"{matter.matter_no} - {matter.title}\n"
+        f"Client: {matter.client_name}\n\n"
+        "Objective\n"
+        "- \n\n"
+        "Facts\n"
+        "- \n\n"
+        "Strategy\n"
+        "- \n\n"
+        "Open Questions\n"
+        "- \n\n"
+        "Next Steps\n"
+        "- \n"
+    )
+
+
+def _upsert_workspace_presence(
+    *,
+    workspace_document_id: int,
+    user_id: int,
+    state: str,
+    cursor_label: str | None = None,
+) -> MatterWorkspaceDocumentPresence:
+    row = MatterWorkspaceDocumentPresence.query.filter_by(
+        workspace_document_id=workspace_document_id,
+        user_id=user_id,
+    ).first()
+    if row is None:
+        row = MatterWorkspaceDocumentPresence(
+            workspace_document_id=workspace_document_id,
+            user_id=user_id,
+        )
+        db.session.add(row)
+    row.state = _normalize_workspace_presence_state(state)
+    row.cursor_label = (cursor_label or "").strip()[:120] or None
+    row.last_seen_at = utc_now()
+    return row
+
+
+def _active_workspace_presence_snapshot(
+    workspace_document_id: int,
+) -> list[dict[str, object]]:
+    cutoff = utc_now() - dt.timedelta(minutes=WORKSPACE_STALE_MINUTES)
+    rows = (
+        MatterWorkspaceDocumentPresence.query.filter(
+            MatterWorkspaceDocumentPresence.workspace_document_id == workspace_document_id,
+            MatterWorkspaceDocumentPresence.last_seen_at >= cutoff,
+        )
+        .order_by(MatterWorkspaceDocumentPresence.last_seen_at.desc())
+        .all()
+    )
+    if not rows:
+        return []
+    user_ids = sorted({int(row.user_id) for row in rows})
+    user_lookup = {
+        int(user.id): user
+        for user in User.query.filter(User.id.in_(user_ids)).all()
+    }
+    snapshot: list[dict[str, object]] = []
+    for row in rows:
+        user = user_lookup.get(int(row.user_id))
+        snapshot.append(
+            {
+                "user_id": int(row.user_id),
+                "display_name": user.full_name if user is not None else f"User {row.user_id}",
+                "state": row.state or "viewing",
+                "cursor_label": row.cursor_label or "",
+                "last_seen_at": row.last_seen_at.isoformat() if row.last_seen_at else "",
+                "is_current_user": int(row.user_id) == int(getattr(current_user, "id", 0) or 0),
+            }
+        )
+    return snapshot
+
+
+def _latest_document_version(document_id: int) -> DocumentVersion | None:
+    return (
+        DocumentVersion.query.filter_by(document_id=document_id)
+        .order_by(DocumentVersion.version_no.desc(), DocumentVersion.uploaded_at.desc())
+        .first()
+    )
+
+
+def _chain_hash(prev_hash: str | None, file_sha256: str) -> str:
+    seed = f"{prev_hash or 'GENESIS'}:{file_sha256}"
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+
+def _publish_workspace_document_snapshot(
+    *,
+    matter: Matter,
+    workspace_document: MatterWorkspaceDocument,
+) -> tuple[DocumentRecord, DocumentVersion, str]:
+    allowed_primary_storage, residency_message = residency_allowed("primary_storage")
+    if not allowed_primary_storage:
+        raise ValueError(residency_message or "Data residency policy blocked this publish target.")
+
+    os.makedirs(current_app.config["UPLOAD_DIR"], exist_ok=True)
+    base_name = secure_filename(workspace_document.title) or f"workspace_document_{workspace_document.id}"
+    safe_name = f"{base_name[:80]}.txt"
+    stored = build_matter_storage_name("workspace", matter.id, safe_name)
+    stored, path = resolve_upload_path(current_app.config["UPLOAD_DIR"], stored, create_parent=True)
+
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(workspace_document.body or "")
+        harden_private_file(path)
+        sha = sha256_file(path)
+
+        container = (
+            db.session.get(DocumentRecord, workspace_document.published_document_id)
+            if workspace_document.published_document_id
+            else None
+        )
+        if container is None or int(container.matter_id) != int(matter.id):
+            container = DocumentRecord(
+                matter_id=matter.id,
+                title=workspace_document.title,
+                document_type=workspace_document.document_type,
+                confidentiality=workspace_document.confidentiality,
+                privilege_label=workspace_document.privilege_label,
+                retention_category=workspace_document.retention_category,
+                legal_hold=bool(workspace_document.legal_hold),
+                created_by=current_user.id,
+            )
+            db.session.add(container)
+            db.session.flush()
+        else:
+            container.title = workspace_document.title
+            container.document_type = workspace_document.document_type
+            container.confidentiality = workspace_document.confidentiality
+            container.privilege_label = workspace_document.privilege_label
+            container.retention_category = workspace_document.retention_category
+            container.legal_hold = bool(workspace_document.legal_hold)
+
+        db.session.query(DocumentRecord).filter_by(id=container.id).with_for_update().first()
+        last = _latest_document_version(container.id)
+        next_no = (last.version_no if last else 0) + 1
+        prev_hash = last.hash_chain_current if last else None
+
+        legacy_file = DocumentFile(
+            matter_id=matter.id,
+            original_filename=safe_name,
+            stored_filename=stored,
+            sha256=sha,
+            content_type="text/plain",
+            category=container.document_type,
+            doc_version=str(next_no),
+            lifecycle_stage=("For Review" if workspace_document.status == "review" else workspace_document.status.title()),
+            owner_name=current_user.full_name,
+            is_privileged=bool(container.privilege_label),
+            uploaded_by=current_user.id,
+        )
+        db.session.add(legacy_file)
+        db.session.flush()
+
+        version = DocumentVersion(
+            document_id=container.id,
+            document_file_id=legacy_file.id,
+            version_no=next_no,
+            original_filename=safe_name,
+            stored_filename=stored,
+            sha256=sha,
+            hash_chain_prev=prev_hash,
+            hash_chain_current=_chain_hash(prev_hash, sha),
+            state="reviewed" if workspace_document.status == "review" else workspace_document.status,
+            notes=f"Published from collaborative workspace document '{workspace_document.title}'.",
+            uploaded_by=current_user.id,
+        )
+        db.session.add(version)
+        db.session.flush()
+        db.session.add(
+            DocumentOCRText(
+                document_version_id=version.id,
+                extracted_text=(workspace_document.body or "").replace("\x00", "") or "No collaborative text captured.",
+            )
+        )
+        workspace_document.published_document_id = container.id
+        workspace_document.published_version_id = version.id
+        workspace_document.last_published_at = utc_now()
+        return container, version, path
+    except Exception:
+        _safe_remove_file(path)
+        raise
 
 
 def register_matters_plus_routes(app):
@@ -408,6 +710,7 @@ def register_matters_plus_routes(app):
             "deadlines": Deadline.query.filter_by(matter_id=matter_id).count(),
             "documents": DocumentRecord.query.filter_by(matter_id=matter_id).count(),
             "notes": MatterNote.query.filter_by(matter_id=matter_id).count(),
+            "workspace_documents": MatterWorkspaceDocument.query.filter_by(matter_id=matter_id).count(),
         }
 
         stage_history = (
@@ -453,6 +756,12 @@ def register_matters_plus_routes(app):
         ) or {}
         matter_magic["actions"] = attach_matter_magic_links(list(matter_magic.get("actions", [])), m.id)
         matter_launch_pack = build_matter_launch_pack(m, snapshot=matter_magic, today=dt.date.today()) or {}
+        recent_workspace_documents = (
+            MatterWorkspaceDocument.query.filter_by(matter_id=matter_id)
+            .order_by(MatterWorkspaceDocument.updated_at.desc(), MatterWorkspaceDocument.id.desc())
+            .limit(6)
+            .all()
+        )
 
         return page(
             f"Matter Workspace {m.matter_no}",
@@ -465,7 +774,386 @@ def register_matters_plus_routes(app):
             archetype_compliance=archetype_compliance,
             matter_magic=matter_magic,
             matter_launch_pack=matter_launch_pack,
+            recent_workspace_documents=recent_workspace_documents,
         )
+
+    @app.route("/matters/<int:matter_id>/documents/workbench", methods=["GET", "POST"])
+    @login_required
+    def matter_document_workbench(matter_id: int):
+        if not can_access_matter(matter_id):
+            abort(403)
+        m = db.session.get(Matter, matter_id)
+        if not m:
+            abort(404)
+
+        option_lists = _safe_load_dms_option_lists()
+        document_type_options = list(option_lists.get("document_types") or [])
+        confidentiality_options = list(option_lists.get("confidentialities") or [])
+        privilege_label_options = list(option_lists.get("privilege_labels") or [])
+        retention_category_options = list(option_lists.get("retention_categories") or [])
+        default_document_type = document_type_options[0] if document_type_options else "General"
+        default_confidentiality = confidentiality_options[0] if confidentiality_options else "Internal"
+        json_payload = request.get_json(silent=True) if request.is_json else {}
+        wants_json = request.is_json or "application/json" in str(request.headers.get("Accept") or "").lower()
+
+        def _value(name: str, default=None, *, as_int: bool = False):
+            raw = (
+                json_payload.get(name, default)
+                if isinstance(json_payload, dict) and name in json_payload
+                else request.form.get(name, default)
+            )
+            if as_int:
+                try:
+                    return int(raw)
+                except (TypeError, ValueError):
+                    return None
+            return raw
+
+        def _redirect(document_id: int | None = None, anchor: str | None = None):
+            target = url_for("matter_document_workbench", matter_id=m.id, document_id=document_id) if document_id else url_for(
+                "matter_document_workbench",
+                matter_id=m.id,
+            )
+            if anchor:
+                target = f"{target}#{anchor.lstrip('#')}"
+            return redirect(target)
+
+        if request.method == "POST":
+            action = str(_value("action", "save_document") or "").strip().lower()
+            if action == "create_document":
+                title = normalize_query(_value("title", ""))
+                if not title:
+                    if wants_json:
+                        return jsonify({"ok": False, "error": "Document title is required."}), 400
+                    flash("Document title is required.", "warning")
+                    return _redirect()
+                template_id = _value("template_id", as_int=True)
+                template = db.session.get(DocumentTemplate, template_id) if template_id else None
+                try:
+                    document_type = _coerce_option_value(
+                        _value("document_type"),
+                        document_type_options,
+                        field_label="Document type",
+                        default_value=default_document_type,
+                    )
+                    confidentiality = _coerce_option_value(
+                        _value("confidentiality"),
+                        confidentiality_options,
+                        field_label="Confidentiality",
+                        default_value=default_confidentiality,
+                    )
+                    privilege_label = _coerce_option_value(
+                        _value("privilege_label"),
+                        privilege_label_options,
+                        field_label="Privilege label",
+                        allow_blank=True,
+                    )
+                    retention_category = _coerce_option_value(
+                        _value("retention_category"),
+                        retention_category_options,
+                        field_label="Retention category",
+                        allow_blank=True,
+                    )
+                except ValueError as exc:
+                    if wants_json:
+                        return jsonify({"ok": False, "error": str(exc)}), 400
+                    flash(str(exc), "warning")
+                    return _redirect()
+
+                context = _workspace_template_context(m)
+                body = _default_workspace_body(m)
+                missing_tokens: list[str] = []
+                if template is not None:
+                    body, missing_tokens = _render_workspace_template(template.body, context)
+                    if not body.strip():
+                        body = _default_workspace_body(m)
+                row = MatterWorkspaceDocument(
+                    matter_id=m.id,
+                    title=title,
+                    body=body,
+                    status=_normalize_workspace_status(_value("status", "draft")),
+                    template_id=template.id if template is not None else None,
+                    document_type=document_type,
+                    confidentiality=confidentiality,
+                    privilege_label=privilege_label,
+                    retention_category=retention_category,
+                    legal_hold=str(_value("legal_hold", "")).lower() in {"1", "true", "yes", "on"},
+                    created_by=current_user.id,
+                    last_edited_by=current_user.id,
+                    updated_at=utc_now(),
+                )
+                db.session.add(row)
+                db.session.commit()
+                audit(
+                    "matter_workspace_document_create",
+                    "MatterWorkspaceDocument",
+                    row.id,
+                    {"matter_id": m.id, "template_id": row.template_id, "document_type": row.document_type},
+                )
+                matter_activity(m.id, "Collaborative draft created", row.title)
+                if wants_json:
+                    return jsonify(
+                        {
+                            "ok": True,
+                            "document_id": row.id,
+                            "redirect": url_for("matter_document_workbench", matter_id=m.id, document_id=row.id),
+                            "missing_tokens": missing_tokens,
+                        }
+                    )
+                if missing_tokens:
+                    flash("Draft created, but some merge fields were blank: " + ", ".join(missing_tokens[:6]), "warning")
+                else:
+                    flash("Collaborative draft created.", "info")
+                return _redirect(row.id)
+
+            workspace_document_id = _value("document_id", as_int=True)
+            workspace_document = db.session.get(MatterWorkspaceDocument, workspace_document_id) if workspace_document_id else None
+            if workspace_document is None or int(workspace_document.matter_id) != int(m.id):
+                if wants_json:
+                    return jsonify({"ok": False, "error": "Document not found."}), 404
+                abort(404)
+
+            if action == "save_document":
+                title = normalize_query(_value("title", workspace_document.title))
+                body = str(_value("body", workspace_document.body) or "")
+                autosave = str(_value("autosave", "")).lower() in {"1", "true", "yes", "on"}
+                if not title:
+                    if wants_json:
+                        return jsonify({"ok": False, "error": "Document title is required."}), 400
+                    flash("Document title is required.", "warning")
+                    return _redirect(workspace_document.id)
+                try:
+                    workspace_document.document_type = _coerce_option_value(
+                        _value("document_type", workspace_document.document_type),
+                        document_type_options,
+                        field_label="Document type",
+                        default_value=default_document_type,
+                    )
+                    workspace_document.confidentiality = _coerce_option_value(
+                        _value("confidentiality", workspace_document.confidentiality),
+                        confidentiality_options,
+                        field_label="Confidentiality",
+                        default_value=default_confidentiality,
+                    )
+                    workspace_document.privilege_label = _coerce_option_value(
+                        _value("privilege_label", workspace_document.privilege_label),
+                        privilege_label_options,
+                        field_label="Privilege label",
+                        allow_blank=True,
+                    )
+                    workspace_document.retention_category = _coerce_option_value(
+                        _value("retention_category", workspace_document.retention_category),
+                        retention_category_options,
+                        field_label="Retention category",
+                        allow_blank=True,
+                    )
+                except ValueError as exc:
+                    if wants_json:
+                        return jsonify({"ok": False, "error": str(exc)}), 400
+                    flash(str(exc), "warning")
+                    return _redirect(workspace_document.id)
+
+                workspace_document.title = title
+                workspace_document.body = body
+                workspace_document.status = _normalize_workspace_status(_value("status", workspace_document.status))
+                workspace_document.legal_hold = str(_value("legal_hold", "")).lower() in {"1", "true", "yes", "on"}
+                workspace_document.last_edited_by = current_user.id
+                workspace_document.updated_at = utc_now()
+                _upsert_workspace_presence(
+                    workspace_document_id=workspace_document.id,
+                    user_id=current_user.id,
+                    state="editing",
+                    cursor_label=str(_value("cursor_label", "") or ""),
+                )
+                db.session.commit()
+                if not autosave:
+                    audit(
+                        "matter_workspace_document_save",
+                        "MatterWorkspaceDocument",
+                        workspace_document.id,
+                        {"matter_id": m.id, "status": workspace_document.status},
+                    )
+                    matter_activity(m.id, "Collaborative draft updated", workspace_document.title)
+                if wants_json:
+                    return jsonify(
+                        {
+                            "ok": True,
+                            "updated_at": workspace_document.updated_at.isoformat(),
+                            "presence": _active_workspace_presence_snapshot(workspace_document.id),
+                        }
+                    )
+                flash("Collaborative draft saved.", "info")
+                return _redirect(workspace_document.id)
+
+            if action == "add_comment":
+                body = str(_value("comment_body", "") or "").strip()
+                if not body:
+                    flash("Comment text is required.", "warning")
+                    return _redirect(workspace_document.id, "workspace-comments")
+                db.session.add(
+                    MatterWorkspaceDocumentComment(
+                        workspace_document_id=workspace_document.id,
+                        anchor_label=str(_value("anchor_label", "") or "").strip()[:120] or None,
+                        body=body,
+                        created_by=current_user.id,
+                    )
+                )
+                _upsert_workspace_presence(
+                    workspace_document_id=workspace_document.id,
+                    user_id=current_user.id,
+                    state="reviewing",
+                )
+                db.session.commit()
+                audit(
+                    "matter_workspace_document_comment_create",
+                    "MatterWorkspaceDocument",
+                    workspace_document.id,
+                    {"matter_id": m.id},
+                )
+                matter_activity(m.id, "Collaborative draft comment added", workspace_document.title)
+                flash("Comment added.", "info")
+                return _redirect(workspace_document.id, "workspace-comments")
+
+            if action == "resolve_comment":
+                comment_id = _value("comment_id", as_int=True)
+                comment = db.session.get(MatterWorkspaceDocumentComment, comment_id) if comment_id else None
+                if comment is None or int(comment.workspace_document_id) != int(workspace_document.id):
+                    abort(404)
+                should_resolve = str(_value("resolved", "1")).lower() not in {"0", "false", "no", "off"}
+                comment.is_resolved = should_resolve
+                comment.resolved_at = utc_now() if should_resolve else None
+                comment.resolved_by = current_user.id if should_resolve else None
+                db.session.commit()
+                flash("Comment resolved." if should_resolve else "Comment reopened.", "info")
+                return _redirect(workspace_document.id, "workspace-comments")
+
+            if action == "publish_document":
+                if not (workspace_document.body or "").strip():
+                    flash("Add draft content before publishing to DMS.", "warning")
+                    return _redirect(workspace_document.id)
+                published_path = ""
+                try:
+                    container, version, published_path = _publish_workspace_document_snapshot(
+                        matter=m,
+                        workspace_document=workspace_document,
+                    )
+                    db.session.commit()
+                except ValueError as exc:
+                    db.session.rollback()
+                    flash(str(exc), "warning")
+                    return _redirect(workspace_document.id)
+                except Exception:
+                    db.session.rollback()
+                    _safe_remove_file(published_path)
+                    current_app.logger.exception(
+                        "Failed to publish collaborative draft workspace_document_id=%s matter_id=%s",
+                        workspace_document.id,
+                        m.id,
+                    )
+                    flash("DMS publish failed. Please retry.", "warning")
+                    return _redirect(workspace_document.id)
+                NotificationEngine.enqueue("document_generated", current_user.id, f"document_version:{version.id}")
+                audit(
+                    "matter_workspace_document_publish",
+                    "MatterWorkspaceDocument",
+                    workspace_document.id,
+                    {"matter_id": m.id, "document_record_id": container.id, "document_version_id": version.id},
+                )
+                matter_activity(m.id, "Collaborative draft published", workspace_document.title)
+                flash("Snapshot published to DMS.", "info")
+                return _redirect(workspace_document.id)
+
+            if wants_json:
+                return jsonify({"ok": False, "error": "Unsupported workbench action."}), 400
+            flash("Unsupported workbench action.", "warning")
+            return _redirect(workspace_document.id)
+
+        requested_document_id = request.args.get("document_id", type=int)
+        workspace_documents = (
+            MatterWorkspaceDocument.query.filter_by(matter_id=m.id)
+            .order_by(MatterWorkspaceDocument.updated_at.desc(), MatterWorkspaceDocument.id.desc())
+            .all()
+        )
+        selected_document = None
+        if requested_document_id:
+            selected_document = next(
+                (row for row in workspace_documents if int(row.id) == int(requested_document_id)),
+                None,
+            )
+        if selected_document is None and workspace_documents:
+            selected_document = workspace_documents[0]
+
+        comments: list[MatterWorkspaceDocumentComment] = []
+        presence_snapshot: list[dict[str, object]] = []
+        published_record = None
+        if selected_document is not None:
+            comments = (
+                MatterWorkspaceDocumentComment.query.filter_by(workspace_document_id=selected_document.id)
+                .order_by(
+                    MatterWorkspaceDocumentComment.is_resolved.asc(),
+                    MatterWorkspaceDocumentComment.created_at.desc(),
+                )
+                .all()
+            )
+            presence_snapshot = _active_workspace_presence_snapshot(selected_document.id)
+            published_record = (
+                db.session.get(DocumentRecord, selected_document.published_document_id)
+                if selected_document.published_document_id
+                else None
+            )
+
+        page_stats = {
+            "drafts": len(workspace_documents),
+            "active_collaborators": len(presence_snapshot),
+            "open_comments": sum(1 for row in comments if not row.is_resolved),
+            "published": sum(1 for row in workspace_documents if row.published_document_id),
+        }
+
+        return page(
+            f"Document Workbench {m.matter_no}",
+            "matters_plus/document_workbench.html",
+            m=m,
+            workspace_documents=workspace_documents,
+            selected_document=selected_document,
+            comments=comments,
+            presence_snapshot=presence_snapshot,
+            page_stats=page_stats,
+            published_record=published_record,
+            dms_document_types=document_type_options,
+            dms_confidentialities=confidentiality_options,
+            dms_privilege_labels=privilege_label_options,
+            dms_retention_categories=retention_category_options,
+            default_document_type=default_document_type,
+            default_confidentiality=default_confidentiality,
+            doc_templates=DocumentTemplate.query.order_by(DocumentTemplate.name.asc()).limit(300).all(),
+        )
+
+    @app.post("/matters/<int:matter_id>/documents/workbench/presence")
+    @login_required
+    def matter_document_workbench_presence(matter_id: int):
+        if not can_access_matter(matter_id):
+            abort(403)
+        m = db.session.get(Matter, matter_id)
+        if not m:
+            abort(404)
+        payload = request.get_json(silent=True) or {}
+        workspace_document_id = request.form.get("document_id", type=int)
+        if not workspace_document_id:
+            try:
+                workspace_document_id = int(payload.get("document_id"))
+            except (TypeError, ValueError):
+                workspace_document_id = None
+        workspace_document = db.session.get(MatterWorkspaceDocument, workspace_document_id) if workspace_document_id else None
+        if workspace_document is None or int(workspace_document.matter_id) != int(m.id):
+            return jsonify({"ok": False, "error": "Document not found."}), 404
+        _upsert_workspace_presence(
+            workspace_document_id=workspace_document.id,
+            user_id=current_user.id,
+            state=str(payload.get("state") or request.form.get("state") or "viewing"),
+            cursor_label=str(payload.get("cursor_label") or request.form.get("cursor_label") or ""),
+        )
+        db.session.commit()
+        return jsonify({"ok": True, "presence": _active_workspace_presence_snapshot(workspace_document.id)})
 
     @app.post("/matters/<int:matter_id>/archetype/sync-checklist")
     @login_required

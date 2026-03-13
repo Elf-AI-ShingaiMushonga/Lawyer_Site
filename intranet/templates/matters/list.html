@@ -9,7 +9,7 @@
 
   .matter-directory-filter-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.92fr) auto auto;
+    grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.92fr) minmax(220px, 0.92fr) auto auto;
     gap: 12px;
     align-items: start;
   }
@@ -159,6 +159,7 @@
           <span class="tag-chip">{{ pagination.total }} total matter(s)</span>
           <span class="tag-chip">{{ ms|length }} visible on this page</span>
           {% if q %}<span class="tag-chip">Filtered for "{{ q }}"</span>{% endif %}
+          {% if task_queue and task_queue != 'all' %}<span class="tag-chip">{{ task_queue_label }}</span>{% endif %}
         </div>
       </div>
       <div class="page-hero-actions">
@@ -217,6 +218,14 @@
           {% endfor %}
         </select>
       </div>
+      <div class="matter-directory-filter-field">
+        <label class="form-label" for="matter-task-queue">Work Queue</label>
+        <select class="form-select" id="matter-task-queue" name="task_queue" aria-label="Filter matter directory by task queue">
+          {% for value, label in task_queue_options %}
+            <option value="{{ value }}" {% if task_queue == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
       <div class="d-grid matter-directory-filter-action">
         <button class="btn btn-outline-light" type="submit">Apply</button>
       </div>
@@ -224,7 +233,10 @@
         <a class="btn btn-outline-light" href="{{ url_for('matters') }}">Clear</a>
       </div>
     </form>
-    <div class="form-help matter-directory-filter-help">Use partial client names, matter numbers, or keywords.</div>
+    <div class="form-help matter-directory-filter-help">
+      Use partial client names, matter numbers, or keywords.
+      {% if task_queue == 'urgent-unassigned' %} Only matters with urgent unassigned tasks are shown.{% elif task_queue == 'unassigned' %} Only matters with unassigned open tasks are shown.{% endif %}
+    </div>
 
     <div class="matter-directory-chip-groups">
       <div class="matter-directory-chip-row">
@@ -321,14 +333,14 @@
           <ul class="pagination pagination-sm mb-0 flex-wrap">
             <li class="page-item {{ 'disabled' if not pagination.has_prev }}">
               {% if pagination.has_prev %}
-                <a class="page-link" href="{{ url_for('matters', q=q, sort=sort, page=pagination.prev_num) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('matters', q=q, sort=sort, task_queue=task_queue, page=pagination.prev_num) }}">Previous</a>
               {% else %}
                 <span class="page-link">Previous</span>
               {% endif %}
             </li>
 
             {% if start_page > 1 %}
-              <li class="page-item"><a class="page-link" href="{{ url_for('matters', q=q, sort=sort, page=1) }}">1</a></li>
+              <li class="page-item"><a class="page-link" href="{{ url_for('matters', q=q, sort=sort, task_queue=task_queue, page=1) }}">1</a></li>
               {% if start_page > 2 %}
                 <li class="page-item disabled"><span class="page-link">…</span></li>
               {% endif %}
@@ -339,7 +351,7 @@
                 {% if page_no == pagination.page %}
                   <span class="page-link">{{ page_no }}</span>
                 {% else %}
-                  <a class="page-link" href="{{ url_for('matters', q=q, sort=sort, page=page_no) }}">{{ page_no }}</a>
+                  <a class="page-link" href="{{ url_for('matters', q=q, sort=sort, task_queue=task_queue, page=page_no) }}">{{ page_no }}</a>
                 {% endif %}
               </li>
             {% endfor %}
@@ -348,12 +360,12 @@
               {% if end_page < pagination.pages - 1 %}
                 <li class="page-item disabled"><span class="page-link">…</span></li>
               {% endif %}
-              <li class="page-item"><a class="page-link" href="{{ url_for('matters', q=q, sort=sort, page=pagination.pages) }}">{{ pagination.pages }}</a></li>
+              <li class="page-item"><a class="page-link" href="{{ url_for('matters', q=q, sort=sort, task_queue=task_queue, page=pagination.pages) }}">{{ pagination.pages }}</a></li>
             {% endif %}
 
             <li class="page-item {{ 'disabled' if not pagination.has_next }}">
               {% if pagination.has_next %}
-                <a class="page-link" href="{{ url_for('matters', q=q, sort=sort, page=pagination.next_num) }}">Next</a>
+                <a class="page-link" href="{{ url_for('matters', q=q, sort=sort, task_queue=task_queue, page=pagination.next_num) }}">Next</a>
               {% else %}
                 <span class="page-link">Next</span>
               {% endif %}

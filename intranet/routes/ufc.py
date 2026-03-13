@@ -27,14 +27,14 @@ def register_ufc_routes(app):
     except Exception as exc:  # noqa: BLE001
         app.config["UFC_DEMO_ERROR"] = str(exc)
         if app.config.get("UFC_STRICT_INIT", False):
-            raise RuntimeError(f"UFC demo failed to initialize: {exc}") from exc
-        app.logger.warning("Failed to register UFC demo routes: %s", exc)
+            raise RuntimeError(f"UFC module failed to initialize: {exc}") from exc
+        app.logger.warning("Failed to register UFC routes: %s", exc)
 
     @app.get("/ufc/")
     def ufc_unavailable():
         message = current_app.config.get("UFC_DEMO_ERROR") or "Unknown startup error."
         return Response(
-            f"UFC prediction demo is unavailable right now.\n{message}",
+            f"UFC prediction is unavailable right now.\n{message}",
             status=503,
             content_type="text/plain; charset=utf-8",
         )

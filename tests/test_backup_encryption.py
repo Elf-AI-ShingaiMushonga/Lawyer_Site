@@ -44,8 +44,8 @@ def test_verify_backup_integrity_supports_encrypted_sqlite_artifacts(tmp_path, m
     db_plain = tmp_path / "backup.db"
     con = sqlite3.connect(str(db_plain))
     try:
-        con.execute("CREATE TABLE demo(id INTEGER PRIMARY KEY, name TEXT)")
-        con.execute("INSERT INTO demo(name) VALUES ('record')")
+        con.execute("CREATE TABLE backup_records(id INTEGER PRIMARY KEY, name TEXT)")
+        con.execute("INSERT INTO backup_records(name) VALUES ('record')")
         con.commit()
     finally:
         con.close()

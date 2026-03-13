@@ -208,7 +208,6 @@
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter Summary</a>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_dms', matter_id=m.id) }}">DMS</a>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('calendar_matter', matter_id=m.id) }}">Calendar</a>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('integrations_south_africa', matter_id=m.id) }}">ZA Desk</a>
       </div>
     </div>
     <div class="page-stat-grid">
@@ -231,6 +230,11 @@
         <div class="page-stat-label">Documents</div>
         <div class="page-stat-value">{{ stats.documents }}</div>
         <div class="page-stat-meta">Repository items and working drafts.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Draft Boards</div>
+        <div class="page-stat-value">{{ stats.workspace_documents }}</div>
+        <div class="page-stat-meta">Collaborative matter drafts in progress.</div>
       </div>
       <div class="page-stat-card">
         <div class="page-stat-label">Notes</div>
@@ -266,6 +270,11 @@
         <span class="action-card-title">DMS</span>
         <span class="action-card-summary">Open the document hub with matter metadata and shortcuts already loaded.</span>
       </a>
+      <a class="action-card" href="{{ url_for('matter_document_workbench', matter_id=m.id) }}">
+        <span class="action-card-kicker">Cowork</span>
+        <span class="action-card-title">Draft Workbench</span>
+        <span class="action-card-summary">Draft, review, comment, and publish collaborative matter documents without leaving the file.</span>
+      </a>
       <a class="action-card" href="{{ url_for('matter_detail', matter_id=m.id) }}">
         <span class="action-card-kicker">Control</span>
         <span class="action-card-title">Summary</span>
@@ -273,6 +282,41 @@
       </a>
     </div>
   </section>
+
+  {% if recent_workspace_documents %}
+    <section class="panel-card mb-3">
+      <div class="panel-header">
+        <div class="panel-header-main">
+          <div class="panel-kicker">Collaborative Drafting</div>
+          <h2 class="panel-title">Recent workbench documents</h2>
+          <div class="panel-summary">Keep active drafting threads inside the matter and publish snapshots into DMS only when they are ready.</div>
+        </div>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_document_workbench', matter_id=m.id) }}">Open Workbench</a>
+      </div>
+      <div class="list-stack">
+        {% for doc in recent_workspace_documents %}
+          <div class="list-item">
+            <div class="list-row">
+              <div>
+                <div class="list-title">{{ doc.title }}</div>
+                <div class="list-meta">
+                  <span class="badge badge-soft status-badge">{{ doc.status }}</span>
+                  <span>Updated {{ doc.updated_at }}</span>
+                  {% if doc.last_published_at %}<span>Published {{ doc.last_published_at }}</span>{% endif %}
+                </div>
+              </div>
+              <div class="list-actions">
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_document_workbench', matter_id=m.id, document_id=doc.id) }}">Open</a>
+                {% if doc.published_document_id %}
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('document_versions', document_id=doc.published_document_id) }}">DMS</a>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
 
   <div class="workbench-grid">
     <div class="workbench-main">
@@ -333,7 +377,6 @@
               <h2 class="panel-title">Launch the next action</h2>
               <div class="panel-summary">{{ matter_launch_subheadline }}</div>
             </div>
-            <a class="btn btn-sm btn-outline-light" href="{{ url_for('integrations_south_africa', matter_id=m.id) }}">ZA Desk</a>
           </div>
           <div class="workspace-magic-status">{{ matter_launch_status_line }}</div>
           <div class="war-room-grid">

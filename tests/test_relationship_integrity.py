@@ -204,7 +204,7 @@ def test_matter_note_voice_upload_creates_document_file(app_ctx, tmp_path):
         data={
             "csrf_token": "test-csrf",
             "body": "",
-            "voice_note": (io.BytesIO(b"demo-voice-bytes"), "matter_note.webm"),
+            "voice_note": (io.BytesIO(b"voice-note-bytes"), "matter_note.webm"),
         },
         content_type="multipart/form-data",
         follow_redirects=False,
@@ -2861,201 +2861,24 @@ def test_sqlite_legal_hold_guard_blocks_matter_delete(seed_user_matter):
     db.session.rollback()
 
 
-def test_office365_outlook_feed_contains_deadlines(app_ctx):
+def test_collapsed_demo_suite_surfaces_return_404(app_ctx):
     app = app_ctx
-    user = _seed_user("office365-feed@example.com")
-    matter = _seed_matter(user, "2026-O365-0001", "Office365 Feed Matter", "Office Client")
-    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
-    db.session.add(
-        Deadline(
-            matter_id=matter.id,
-            title="Exchange witness statements",
-            due_at=dt.date.today() + dt.timedelta(days=3),
-            status="open",
-            is_critical=True,
-            created_by=user.id,
-        )
-    )
-    db.session.commit()
-
+    user = _seed_user("surface-reduction@example.com", role="admin", mfa_enabled=True)
     client = app.test_client()
     _set_user_session(client, user.id)
-    response = client.get("/integrations/office365/outlook.ics")
-    body = response.get_data(as_text=True)
 
-    assert response.status_code == 200
-    assert "text/calendar" in (response.content_type or "")
-    assert "BEGIN:VEVENT" in body
-    assert "Exchange witness statements" in body
-    assert "2026-O365-0001" in body
-
-
-def test_office365_admin_settings_persist(app_ctx):
-    app = app_ctx
-    admin = _seed_user("office365-admin@example.com", role="admin", mfa_enabled=True)
-    client = app.test_client()
-    _set_user_session(client, admin.id)
-
-    response = client.post(
+    for path in (
         "/integrations/office365",
-        data={
-            "csrf_token": "test-csrf",
-            "enabled": "1",
-            "tenant_id": "tenant-123",
-            "client_id": "client-456",
-            "domain_hint": "tenant.onmicrosoft.com",
-            "sync_notes": "Nightly sync enabled",
-        },
-        follow_redirects=False,
-    )
-    assert response.status_code == 302
-    setting = FirmSetting.query.filter_by(setting_key="office365_integration").first()
-    assert setting is not None
-    payload = json.loads(setting.setting_value_json or "{}")
-    assert payload.get("enabled") is True
-    assert payload.get("tenant_id") == "tenant-123"
-    assert payload.get("client_id") == "client-456"
-
-
-def test_south_africa_ops_hub_prioritizes_relevant_portals(app_ctx):
-    app = app_ctx
-    user = _seed_user("sa-hub@example.com")
-    matter = _seed_matter(user, "2026-SA-HUB-0001", "Transfer of Unit 18", "Property Client")
-    matter.practice_area = "Conveyancing"
-    matter.case_type = "Property Transfer"
-    matter.jurisdiction = "ZA-GP"
-    matter.stage = "Lodgement"
-    matter.court_name = "Johannesburg Deeds Registry"
-    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
-    db.session.add(
-        Deadline(
-            matter_id=matter.id,
-            title="Transfer duty submission",
-            due_at=dt.date.today() + dt.timedelta(days=5),
-            status="open",
-            is_critical=True,
-            created_by=user.id,
-        )
-    )
-    db.session.add(
-        Task(
-            matter_id=matter.id,
-            title="Verify FICA pack",
-            status="Todo",
-            due_date=dt.date.today() + dt.timedelta(days=2),
-            assigned_to=user.id,
-            created_by=user.id,
-            priority="High",
-        )
-    )
-    db.session.commit()
-
-    client = app.test_client()
-    _set_user_session(client, user.id)
-    response = client.get(f"/integrations/south-africa?matter_id={matter.id}")
-    body = response.get_data(as_text=True)
-
-    assert response.status_code == 200
-    assert "South Africa Operations Hub" in body
-    assert "Matter No: 2026-SA-HUB-0001" in body
-    assert "CIPC eServices" in body
-    assert "SARS eFiling" in body
-    assert "Financial Intelligence Centre" in body
-    assert "Matter Workspace" in body
-    assert "Transfer duty submission" in body
-    assert "Verify FICA pack" in body
-
-
-def test_mobile_hub_captures_fee_and_assigns_task(app_ctx):
-    app = app_ctx
-    user = _seed_user("mobile-hub-owner@example.com")
-    teammate = _seed_user("mobile-hub-peer@example.com")
-    matter = _seed_matter(user, "2026-MOBILE-0001", "Mobile Hub Matter", "Mobile Client")
-    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
-    db.session.add(MatterMember(matter_id=matter.id, user_id=teammate.id, role_in_matter="Team"))
-    db.session.commit()
-
-    client = app.test_client()
-    _set_user_session(client, user.id)
-    fee_response = client.post(
+        "/integrations/office365/outlook.ics",
+        "/integrations/south-africa",
+        "/integrations/third-party",
         "/mobile/hub",
-        data={
-            "csrf_token": "test-csrf",
-            "action": "capture_fee",
-            "matter_id": matter.id,
-            "start_at": "2026-05-01T09:00",
-            "end_at": "2026-05-01T10:30",
-            "narrative": "Mobile fee capture note",
-            "task_code": "L120",
-            "activity_code": "A101",
-            "is_billable": "1",
-        },
-        follow_redirects=False,
-    )
-    assert fee_response.status_code == 302
-    assert f"/mobile/hub?matter_id={matter.id}" in fee_response.headers["Location"]
-    assert TimeEntry.query.filter_by(matter_id=matter.id, user_id=user.id).count() == 1
-
-    task_response = client.post(
-        "/mobile/hub",
-        data={
-            "csrf_token": "test-csrf",
-            "action": "assign_task",
-            "matter_id": matter.id,
-            "title": "Mobile-assigned task",
-            "due_date": "2026-05-03",
-            "priority": "High",
-            "assignee_user_ids": [str(user.id), str(teammate.id)],
-            "description": "Created from mobile hub",
-        },
-        follow_redirects=False,
-    )
-    assert task_response.status_code == 302
-    assert f"/mobile/hub?matter_id={matter.id}" in task_response.headers["Location"]
-    task = Task.query.filter_by(matter_id=matter.id, title="Mobile-assigned task").first()
-    assert task is not None
-    assignee_count = TaskAssignee.query.filter_by(task_id=task.id).count()
-    assert assignee_count == 2
-
-
-def test_mobile_hub_renders_fast_launcher_and_presets(app_ctx):
-    app = app_ctx
-    user = _seed_user("mobile-launcher@example.com")
-    matter = _seed_matter(user, "2026-MOBILE-FAST-1", "Fast Launcher Matter", "Launcher Client")
-    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
-    db.session.flush()
-    db.session.add(MatterPin(user_id=user.id, matter_id=matter.id))
-    db.session.add(MatterRecentView(user_id=user.id, matter_id=matter.id))
-    db.session.commit()
-
-    client = app.test_client()
-    _set_user_session(client, user.id)
-    response = client.get(f"/mobile/hub?matter_id={matter.id}")
-    body = response.get_data(as_text=True)
-
-    assert response.status_code == 200
-    assert "Fast Matter Launcher" in body
-    assert "Touch-First Capture Desk" in body
-    assert f'data-mobile-matter-select="{matter.id}"' in body
-    assert "15 min" in body
-    assert "Call client" in body
-
-
-def test_mobile_hub_renders_empty_state_without_matters(app_ctx):
-    app = app_ctx
-    user = _seed_user("mobile-empty@example.com")
-    db.session.commit()
-
-    client = app.test_client()
-    _set_user_session(client, user.id)
-    response = client.get("/mobile/hub")
-    body = response.get_data(as_text=True)
-
-    assert response.status_code == 200
-    assert "Touch-First Capture Desk" in body
-    assert "No accessible matters" in body
-    assert "No matters are currently available on this device profile." in body
-    assert "No pinned or recently viewed matters are available yet." in body
+        "/trust/policy",
+        "/trust/security",
+        "/trust/incidents",
+        "/director/personnel",
+    ):
+        assert client.get(path).status_code == 404
 
 
 def test_search_results_render_operational_actions(app_ctx):
@@ -3271,27 +3094,6 @@ def test_matter_detail_handles_missing_snapshot_payloads(monkeypatch, app_ctx):
     assert "Compliance metrics are temporarily unavailable for this matter." in body
 
 
-def test_south_africa_hub_renders_workflow_packets(app_ctx):
-    app = app_ctx
-    user = _seed_user("sa-packets@example.com")
-    matter = _seed_matter(user, "2026-SA-PACKETS-1", "Transfer Matter", "Transfer Client")
-    matter.practice_area = "Conveyancing"
-    matter.case_type = "Property Transfer"
-    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
-    db.session.commit()
-
-    client = app.test_client()
-    _set_user_session(client, user.id)
-    response = client.get(f"/integrations/south-africa?matter_id={matter.id}")
-    body = response.get_data(as_text=True)
-
-    assert response.status_code == 200
-    assert "Workflow Packets" in body
-    assert "Conveyancing Packet" in body
-    assert "Open FICA Task" in body
-    assert "Draft Duty Pack" in body
-
-
 def test_sa_workflow_shortcuts_prefill_task_calendar_and_dms_forms(app_ctx):
     app = app_ctx
     user = _seed_user("sa-prefill@example.com")
@@ -3342,68 +3144,6 @@ def test_sa_workflow_shortcuts_prefill_task_calendar_and_dms_forms(app_ctx):
     assert 'value="Client Advice - 2026-SA-PREFILL-1"' in dms_body
     assert 'option value="Opinion" selected' in dms_body
     assert 'option value="Confidential" selected' in dms_body
-
-
-def test_third_party_cost_recovery_import_export_roundtrip(app_ctx):
-    app = app_ctx
-    user = _seed_user("cost-recovery@example.com")
-    matter = _seed_matter(user, "2026-COST-0001", "Cost Recovery Matter", "Recovery Client")
-    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
-    db.session.commit()
-
-    csv_payload = (
-        "matter_no,start_at,end_at,narrative,task_code,activity_code,is_billable\n"
-        "2026-COST-0001,2026-06-10T09:00:00,2026-06-10T10:00:00,Imported row,L130,A102,1\n"
-    )
-
-    client = app.test_client()
-    _set_user_session(client, user.id)
-    import_response = client.post(
-        "/integrations/third-party/import/cost-recovery",
-        data={
-            "csrf_token": "test-csrf",
-            "action": "import_cost_recovery",
-            "file": (io.BytesIO(csv_payload.encode("utf-8")), "cost_recovery.csv"),
-        },
-        content_type="multipart/form-data",
-        follow_redirects=False,
-    )
-    assert import_response.status_code == 302
-    assert TimeEntry.query.filter_by(matter_id=matter.id, user_id=user.id).count() == 1
-
-    export_response = client.get("/integrations/third-party/export/cost-recovery.csv?end=2026-12-31")
-    export_body = export_response.get_data(as_text=True)
-    assert export_response.status_code == 200
-    assert "text/csv" in (export_response.content_type or "")
-    assert "2026-COST-0001" in export_body
-    assert "Imported row" in export_body
-
-
-def test_third_party_conveyancing_import_creates_matter(app_ctx):
-    app = app_ctx
-    admin = _seed_user("conveyancing-admin@example.com", role="admin", mfa_enabled=True)
-    client = app.test_client()
-    _set_user_session(client, admin.id)
-
-    csv_payload = (
-        "matter_no,title,client_name,status,practice_area,case_type,stage,jurisdiction\n"
-        "2026-CONV-0001,Transfer of Erf 221,Property Client,Open,Conveyancing,Property Transfer,Pre-registration,ZA-GP\n"
-    )
-    response = client.post(
-        "/integrations/third-party/import/conveyancing",
-        data={
-            "csrf_token": "test-csrf",
-            "action": "import_conveyancing",
-            "file": (io.BytesIO(csv_payload.encode("utf-8")), "conveyancing.csv"),
-        },
-        content_type="multipart/form-data",
-        follow_redirects=False,
-    )
-    assert response.status_code == 302
-    matter = Matter.query.filter_by(matter_no="2026-CONV-0001").first()
-    assert matter is not None
-    assert matter.practice_area == "Conveyancing"
-    assert matter.case_type == "Property Transfer"
 
 
 def test_admin_can_seed_south_africa_practice_area_defaults(app_ctx):

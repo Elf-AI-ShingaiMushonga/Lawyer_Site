@@ -25,10 +25,6 @@ WORKSPACE_MODES: dict[str, dict[str, str]] = {
         "label": "Revenue & Risk",
         "summary": "Run billing, trust, collections, and time capture controls.",
     },
-    "south_africa": {
-        "label": "South Africa Desk",
-        "summary": "Run local practitioner workflows, filings, and matter launchpads.",
-    },
 }
 
 
@@ -51,7 +47,7 @@ def default_workspace_mode_for_role(role: str | None) -> str:
 
 def allowed_workspace_modes(role: str | None) -> list[str]:
     canonical = canonical_role(role)
-    modes = ["practice", "south_africa"]
+    modes = ["practice"]
     if role_is_director(canonical) or canonical == "operations_staff":
         modes.insert(1, "team")
     if role_can_access_finance(canonical):
@@ -61,7 +57,7 @@ def allowed_workspace_modes(role: str | None) -> list[str]:
         for mode in ("team", "revenue"):
             if mode not in modes:
                 modes.append(mode)
-    return [mode for mode in ("practice", "team", "revenue", "south_africa") if mode in modes]
+    return [mode for mode in ("practice", "team", "revenue") if mode in modes]
 
 
 def workspace_mode_options(role: str | None) -> list[dict[str, str]]:
@@ -162,8 +158,6 @@ def build_workspace_quick_actions(
             actions.append(_action("Open Matter", "Create a new engagement or instruction.", url_for("matter_create"), badge="New"))
 
     elif workspace_mode == "team":
-        if role_is_director(canonical):
-            actions.append(_action("Personnel", "Manage your attorneys and review workload.", url_for("director_personnel"), badge="Team", emphasis="strong"))
         actions.append(_action("Matter Directory", "Triage active matters and staffing gaps.", url_for("matters"), badge="Matters"))
         actions.append(_action("Team Calendar", "Review shared deadlines and docket pressure.", url_for("calendar_team"), badge="Docket"))
         if role_is_lawyer(canonical):
@@ -181,36 +175,6 @@ def build_workspace_quick_actions(
             actions.append(_action("Expenses", "Review disbursements and receipts.", url_for("expenses"), badge="Ops"))
         if primary_matter is not None:
             actions.append(_action("Matter Billing", "Open billing for the current matter.", url_for("billing_invoices", matter_id=primary_matter.id), badge=primary_matter.matter_no))
-
-    elif workspace_mode == "south_africa":
-        actions.append(
-            _action(
-                "South Africa Practice Hub",
-                "Open official practitioner systems and local launchpads.",
-                url_for("integrations_south_africa", matter_id=primary_matter.id) if primary_matter else url_for("integrations_south_africa"),
-                badge="ZA",
-                emphasis="strong",
-            )
-        )
-        if primary_matter is not None:
-            actions.append(_action("ZA Matter Launchpad", "Open South Africa actions against the current matter.", url_for("integrations_south_africa", matter_id=primary_matter.id), badge=primary_matter.matter_no))
-            actions.append(_action("ZA Filing Calendar", "Prepare the next filing or hearing date.", url_for("calendar_matter", matter_id=primary_matter.id), badge="Calendar"))
-            actions.append(
-                _action(
-                    "ZA Draft Pack",
-                    "Open DMS with a privileged advice draft ready to finish.",
-                    url_for(
-                        "matter_dms",
-                        matter_id=primary_matter.id,
-                        prefill_title=f"Client Advice - {primary_matter.matter_no}",
-                        prefill_document_type="Opinion",
-                        prefill_confidentiality="Confidential",
-                        prefill_privilege_label="Attorney-Client",
-                    ),
-                    badge="DMS",
-                )
-            )
-        actions.append(_action("Mobile Hub", "Capture work quickly from phone or tablet.", url_for("mobile_hub", matter_id=primary_matter.id) if primary_matter else url_for("mobile_hub"), badge="Mobile"))
 
     seen: set[tuple[str, str]] = set()
     deduped: list[dict[str, str]] = []

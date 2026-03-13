@@ -1,4 +1,4 @@
-"""Demo story and governance extensions.
+"""Story and governance extensions.
 
 Revision ID: c2b1f2a8d4e5
 Revises: 9f3a1d4e9c1b

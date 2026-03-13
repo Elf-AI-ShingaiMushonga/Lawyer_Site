@@ -815,12 +815,6 @@ def build_matter_launch_pack(
             ),
             badge="DMS",
         ),
-        _launch_action(
-            "South Africa Desk",
-            "Jump into local practitioner workflows against the current matter.",
-            url_for("integrations_south_africa", matter_id=matter.id),
-            badge="ZA",
-        ),
     ]
 
     briefing_lines = [
@@ -921,7 +915,7 @@ def build_today_briefing(
             _launch_action(
                 "Cover urgent unassigned work",
                 f"{int(stats.get('urgent_unassigned', 0) or 0)} urgent task(s) still lack ownership.",
-                url_for("matters"),
+                url_for("matters", task_queue="urgent-unassigned"),
                 badge="Risk",
             )
         )

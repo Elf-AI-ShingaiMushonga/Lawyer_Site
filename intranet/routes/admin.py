@@ -152,8 +152,8 @@ def _build_admin_console_context() -> dict[str, object]:
                 "tone": "critical",
                 "title": "Open governance incidents",
                 "summary": f"{open_incidents} incident/change record(s) are still open.",
-                "href": url_for("trust_incidents"),
-                "button_label": "Open Incidents",
+                "href": url_for("admin_audit"),
+                "button_label": "Review Audit Trail",
                 "badge": f"{open_incidents} open",
             }
         )
@@ -201,7 +201,7 @@ def _build_admin_console_context() -> dict[str, object]:
         {"title": "User Provisioning", "summary": "Create users, fix role drift, and close MFA gaps.", "href": url_for("admin_users"), "badge": "Identity"},
         {"title": "Automation Studio", "summary": "Tune templates, archetypes, and workflow builders.", "href": url_for("admin_automation"), "badge": "Automation"},
         {"title": "Audit Trail", "summary": "Review sensitive changes and governance activity.", "href": url_for("admin_audit"), "badge": "Audit"},
-        {"title": "Trust & Incidents", "summary": "Watch incidents, trust approvals, and control posture.", "href": url_for("trust_incidents"), "badge": "Risk"},
+        {"title": "Trust Accounting", "summary": "Review trust activity, approvals, and reconciliation posture.", "href": url_for("trust_ledger"), "badge": "Risk"},
         {"title": "Firm Settings", "summary": "Set global metadata lists, digest settings, and defaults.", "href": url_for("admin_settings_firm"), "badge": "Config"},
         {"title": "Portal Users", "summary": "Manage client-facing users and portal access posture.", "href": url_for("admin_portal_users"), "badge": "Portal"},
     ]
@@ -209,21 +209,21 @@ def _build_admin_console_context() -> dict[str, object]:
     launchpads = [
         {
             "title": "Identity & Access",
-            "summary": "Internal users, portal identities, and federated access.",
+            "summary": "Internal users, portal identities, and account access posture.",
             "actions": [
                 {"label": "Internal Users", "href": url_for("admin_users")},
                 {"label": "Portal Users", "href": url_for("admin_portal_users")},
-                {"label": "SSO Apps", "href": url_for("admin_sso_apps")},
+                {"label": "Session Audit", "href": url_for("admin_audit")},
             ],
         },
         {
             "title": "Governance & Risk",
-            "summary": "Auditability, incidents, legal holds, and trust controls.",
+            "summary": "Auditability, legal holds, trust controls, and operational readiness.",
             "actions": [
                 {"label": "Audit Log", "href": url_for("admin_audit")},
-                {"label": "Incident Register", "href": url_for("trust_incidents")},
                 {"label": "Legal Holds", "href": url_for("admin_rules_legal_holds")},
                 {"label": "Trust Rules", "href": url_for("admin_rules_trust")},
+                {"label": "Trust Ledger", "href": url_for("trust_ledger")},
             ],
         },
         {

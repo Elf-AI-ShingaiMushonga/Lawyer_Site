@@ -768,9 +768,6 @@
         {% endif %}
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_create') }}">Open New Matter</a>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('search') }}">Global Search</a>
-        {% if is_director_role %}
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('director_personnel') }}">Manage Team</a>
-        {% endif %}
       </div>
     </div>
     <div class="page-stat-grid">
@@ -794,7 +791,7 @@
         <div class="page-stat-value">{{ stats_due_this_week }}</div>
         <div class="page-stat-meta">Upcoming work across your scope.</div>
       </a>
-      <a class="page-stat-card dashboard-stat-link" href="{{ url_for('admin_automation') if is_admin_role else url_for('matters') }}">
+      <a class="page-stat-card dashboard-stat-link" href="{{ url_for('matters', task_queue='urgent-unassigned') }}">
         <div class="page-stat-label">Urgent Unassigned</div>
         <div class="page-stat-value">{{ stats_urgent_unassigned }}</div>
         <div class="page-stat-meta">Items needing ownership decisions.</div>

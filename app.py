@@ -1,5 +1,5 @@
 """
-DM-Inc Intranet (demo)
+DM-Inc Intranet
 
 Entrypoint module. App code is organized under the `intranet/` package.
 """
@@ -9,11 +9,12 @@ from __future__ import annotations
 import argparse
 import os
 import socket
+import sys
 import time
 from pathlib import Path
 
 from intranet import create_app
-from intranet.cli import create_user, init_db, recover_all_users_mfa, recover_user_mfa, run_server, seed_demo_data
+from intranet.cli import create_user, init_db, recover_all_users_mfa, recover_user_mfa, run_server, seed_data
 from intranet.config import env_int
 from intranet.roles import ROLE_LABELS
 from intranet.jobs.scheduler import DEFAULT_PERIODIC_JOBS, schedule_due_jobs
@@ -66,8 +67,8 @@ def main() -> None:
     cu.add_argument("--role", default="junior_attorney", choices=sorted(ROLE_LABELS.keys()))
     cu.add_argument("--name", default="(Unnamed)")
 
-    seed_cmd = sub.add_parser("seed-demo")
-    seed_cmd.add_argument("--password", default="ClientDemo2026!", help="Password applied to all demo users")
+    seed_cmd = sub.add_parser("seed-data")
+    seed_cmd.add_argument("--password", default="ClientAccess2026!", help="Password applied to all seeded users")
     seed_cmd.add_argument("--reset", action="store_true", help="Delete existing data before seeding")
     seed_cmd.add_argument(
         "--scale",
@@ -111,7 +112,7 @@ def main() -> None:
         help="Sleep between scheduling cycles in loop mode",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(sys.argv[1:])
 
     if args.cmd == "init-db":
         init_db(app)
@@ -119,9 +120,9 @@ def main() -> None:
     elif args.cmd == "create-user":
         uid = create_user(app, args.email, args.password, args.role, args.name)
         print(f"Created user id={uid}")
-    elif args.cmd == "seed-demo":
-        summary = seed_demo_data(app, password=args.password, reset=args.reset, scale=args.scale)
-        print("Demo data seeded:")
+    elif args.cmd == "seed-data":
+        summary = seed_data(app, password=args.password, reset=args.reset, scale=args.scale)
+        print("Seed data created:")
         primary_keys = [
             "users",
             "announcements",

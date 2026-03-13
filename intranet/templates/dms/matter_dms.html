@@ -175,6 +175,7 @@
       </div>
       <div class="page-hero-actions">
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=m.id) }}">Matter</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_document_workbench', matter_id=m.id) }}">Draft Workbench</a>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('dms_saved_searches') }}">Saved Searches</a>
         <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_email_capture', matter_id=m.id) }}">Email Capture</a>
       </div>
@@ -216,6 +217,11 @@
         <span class="action-card-kicker">Automation</span>
         <span class="action-card-title">Generate from Template</span>
         <span class="action-card-summary">Produce a first draft from precedent templates with merge fields already mapped.</span>
+      </a>
+      <a class="action-card" href="{{ url_for('matter_document_workbench', matter_id=m.id) }}">
+        <span class="action-card-kicker">Cowork</span>
+        <span class="action-card-title">Draft Workbench</span>
+        <span class="action-card-summary">Move collaborative drafting into the matter workbench, then publish clean snapshots back into DMS.</span>
       </a>
       <a class="action-card" href="#repository-panel">
         <span class="action-card-kicker">Search</span>
