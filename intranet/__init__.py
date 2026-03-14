@@ -43,7 +43,7 @@ from .schema_sync import sync_schema_compatibility
 from .security import register_security_handlers
 from .services.workspace_hub import build_workspace_quick_actions, load_user_workspace_mode, workspace_mode_meta
 
-HEALTH_ENDPOINTS = {"healthz", "readyz", "ufc_unavailable_healthz"}
+HEALTH_ENDPOINTS = {"healthz", "readyz"}
 
 
 @login_manager.user_loader
@@ -189,7 +189,6 @@ def create_app() -> Flask:
         TIMER_SINGLE_CAP_MINUTES=timer_single_cap_minutes,
         TIMER_IDLE_PROMPT_SECONDS=timer_idle_prompt_seconds,
         TIMER_IDLE_GRACE_SECONDS=timer_idle_grace_seconds,
-        UFC_STRICT_INIT=env_bool("UFC_STRICT_INIT", False),
         AI_ENABLED=ai_enabled,
         AI_PROVIDER=ai_provider,
         AI_SEMANTIC_SEARCH_ENABLED=ai_semantic_search_enabled,

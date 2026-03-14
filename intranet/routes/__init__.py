@@ -13,16 +13,15 @@ from .matters import register_matter_routes
 from .matters_plus import register_matters_plus_routes
 from .ops import register_ops_routes
 from .ops_plus import register_ops_plus_routes
+from .ops_service import register_ops_service_routes
 from .portal import register_portal_routes
 from .timekeeping import register_timekeeping_routes
 from .trust_accounting import register_trust_accounting_routes
-from .ufc import register_ufc_routes
 from .workflow import register_workflow_routes
 
 
 def register_routes(app):
     register_ops_routes(app)
-    register_ufc_routes(app)
     register_auth_routes(app)
     register_auth_plus_routes(app)
     register_matter_routes(app)
@@ -41,3 +40,4 @@ def register_routes(app):
     register_admin_routes(app)
     register_admin_settings_routes(app)
     register_ops_plus_routes(app)
+    register_ops_service_routes(app)

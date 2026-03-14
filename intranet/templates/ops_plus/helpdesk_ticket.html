@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block content %}
+{% set reporter = users_by_id.get(ticket.reporter_user_id) %}
+{% set assignee = users_by_id.get(ticket.assigned_to) %}
+
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <div class="glance-eyebrow">Helpdesk Ticket</div>
+      <h3 class="mb-1">{{ ticket.ticket_no }}</h3>
+      <p class="page-intro mb-0">{{ ticket.subject }}</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge badge-soft status-badge">{{ ticket.status | replace('_', ' ') | title }}</span>
+      <span class="badge badge-soft status-badge">{{ ticket.priority | title }}</span>
+      <a class="btn btn-outline-light" href="{{ url_for('ops_helpdesk') }}">Back to Queue</a>
+    </div>
+  </div>
+  <div class="row g-3 mt-2">
+    <div class="col-md-3">
+      <div class="muted small">Reporter</div>
+      <div>{{ reporter.full_name if reporter else 'Unknown reporter' }}</div>
+      <div class="muted small">{{ reporter.email if reporter else '' }}</div>
+    </div>
+    <div class="col-md-3">
+      <div class="muted small">Assigned To</div>
+      <div>{{ assignee.full_name if assignee else 'Unassigned' }}</div>
+      <div class="muted small">{{ assignee.email if assignee else '' }}</div>
+    </div>
+    <div class="col-md-3">
+      <div class="muted small">Linked Asset</div>
+      {% if linked_asset %}
+        <div>{{ linked_asset.asset_tag }}</div>
+        <div class="muted small">{{ linked_asset.name }}</div>
+      {% else %}
+        <div class="muted">No linked asset</div>
+      {% endif %}
+    </div>
+    <div class="col-md-3">
+      <div class="muted small">Timestamps</div>
+      <div>Opened {{ ticket.created_at }}</div>
+      <div class="muted small">Updated {{ ticket.updated_at }}</div>
+      {% if ticket.first_response_at %}
+        <div class="muted small">First response {{ ticket.first_response_at }}</div>
+      {% endif %}
+      {% if ticket.resolved_at %}
+        <div class="muted small">Resolved {{ ticket.resolved_at }}</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="mt-3">
+    <div class="muted small mb-1">Description</div>
+    <div>{{ ticket.description }}</div>
+  </div>
+  {% if ticket.resolution_summary %}
+    <div class="mt-3">
+      <div class="muted small mb-1">Resolution Summary</div>
+      <div>{{ ticket.resolution_summary }}</div>
+    </div>
+  {% endif %}
+</div>
+
+{% if is_helpdesk_agent %}
+  <div class="card p-3 mb-3">
+    <h4 class="mb-2">Queue Controls</h4>
+    <form method="post" class="row g-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="update">
+      <div class="col-md-3">
+        <label class="form-label" for="ticket-status">Status</label>
+        <select class="form-select" id="ticket-status" name="status">
+          {% for value in helpdesk_statuses %}
+            <option value="{{ value }}" {{ 'selected' if ticket.status == value else '' }}>{{ value | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="ticket-priority">Priority</label>
+        <select class="form-select" id="ticket-priority" name="priority">
+          {% for value in helpdesk_priorities %}
+            <option value="{{ value }}" {{ 'selected' if ticket.priority == value else '' }}>{{ value | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="ticket-category">Category</label>
+        <select class="form-select" id="ticket-category" name="category">
+          {% for value in helpdesk_categories %}
+            <option value="{{ value }}" {{ 'selected' if ticket.category == value else '' }}>{{ value | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="ticket-assignee">Assigned To</label>
+        <select class="form-select" id="ticket-assignee" name="assigned_to">
+          <option value="">Unassigned</option>
+          {% for user in assignee_choices %}
+            <option value="{{ user.id }}" {{ 'selected' if ticket.assigned_to == user.id else '' }}>{{ user.full_name }} · {{ user.email }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="ticket-asset">Linked Asset</label>
+        <select class="form-select" id="ticket-asset" name="asset_id">
+          <option value="">No linked asset</option>
+          {% for asset in asset_choices %}
+            <option value="{{ asset.id }}" {{ 'selected' if ticket.asset_id == asset.id else '' }}>{{ asset.asset_tag }} · {{ asset.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-8">
+        <label class="form-label" for="ticket-resolution">Resolution Summary</label>
+        <input class="form-control" id="ticket-resolution" name="resolution_summary" value="{{ ticket.resolution_summary if ticket.resolution_summary else '' }}" placeholder="Capture fix, workaround, or closure note">
+      </div>
+      <div class="col-12 d-grid d-md-flex justify-content-md-end">
+        <button class="btn btn-light" type="submit" data-submitting-text="Saving...">Save Ticket</button>
+      </div>
+    </form>
+  </div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card p-3 h-100">
+      <div class="toolbar-row">
+        <div>
+          <h4 class="mb-1">Conversation</h4>
+          <div class="muted small">Ticket updates and coordination notes.</div>
+        </div>
+        <span class="badge badge-soft status-badge">{{ comments | length }} comment(s)</span>
+      </div>
+      <div class="mt-3 d-grid gap-3">
+        {% for comment in comments %}
+          {% set author = users_by_id.get(comment.author_user_id) %}
+          <article class="border rounded p-3">
+            <div class="d-flex justify-content-between gap-3 flex-wrap">
+              <div>
+                <strong>{{ author.full_name if author else 'Unknown user' }}</strong>
+                <div class="muted small">{{ author.email if author else '' }}</div>
+              </div>
+              <div class="muted small">{{ comment.created_at }}</div>
+            </div>
+            <div class="mt-2">{{ comment.body }}</div>
+          </article>
+        {% else %}
+          <div class="muted">No comments yet. Add context so the queue history stays auditable.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card p-3 h-100">
+      <h4 class="mb-2">Add Comment</h4>
+      <form method="post" class="d-grid gap-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="comment">
+        <div>
+          <label class="form-label" for="ticket-comment">Comment</label>
+          <textarea class="form-control" id="ticket-comment" name="body" rows="8" placeholder="Add troubleshooting notes, user follow-up, or handoff context." required></textarea>
+        </div>
+        <div class="d-grid d-md-flex justify-content-md-end">
+          <button class="btn btn-light" type="submit" data-submitting-text="Posting...">Post Comment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

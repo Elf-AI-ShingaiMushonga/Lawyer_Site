@@ -257,6 +257,60 @@ class GovernanceIncident(db.Model):
     updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
 
 
+class ITAsset(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    asset_tag = db.Column(db.String(80), nullable=False, unique=True, index=True)
+    name = db.Column(db.String(180), nullable=False)
+    asset_type = db.Column(db.String(60), nullable=False, default="laptop")
+    status = db.Column(db.String(40), nullable=False, default="in_stock")
+    serial_number = db.Column(db.String(120), nullable=True)
+    vendor = db.Column(db.String(180), nullable=True)
+    location = db.Column(db.String(180), nullable=True)
+    assigned_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
+    purchase_date = db.Column(db.Date, nullable=True)
+    warranty_expires_on = db.Column(db.Date, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    __table_args__ = (
+        db.Index("ix_it_asset_status_updated", "status", "updated_at"),
+    )
+
+
+class HelpdeskTicket(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ticket_no = db.Column(db.String(40), nullable=False, unique=True, index=True)
+    subject = db.Column(db.String(180), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    category = db.Column(db.String(60), nullable=False, default="general")
+    priority = db.Column(db.String(20), nullable=False, default="medium")
+    status = db.Column(db.String(40), nullable=False, default="new")
+    reporter_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    assigned_to = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey("it_asset.id"), nullable=True, index=True)
+    first_response_at = db.Column(db.DateTime, nullable=True)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolution_summary = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    __table_args__ = (
+        db.Index("ix_helpdesk_ticket_status_updated", "status", "updated_at"),
+        db.Index("ix_helpdesk_ticket_reporter_status", "reporter_user_id", "status"),
+    )
+
+
+class HelpdeskTicketComment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ticket_id = db.Column(db.Integer, db.ForeignKey("helpdesk_ticket.id"), nullable=False, index=True)
+    author_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    __table_args__ = (
+        db.Index("ix_helpdesk_ticket_comment_ticket_created", "ticket_id", "created_at"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Identity, Sessions, and SSO-like Federation
 # ---------------------------------------------------------------------------

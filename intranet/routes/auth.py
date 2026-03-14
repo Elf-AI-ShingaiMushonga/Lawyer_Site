@@ -18,7 +18,6 @@ from ..helpers import (
     resolve_active_matter,
     revoke_current_session,
 )
-from ..mfa import check_backup_code, verify_totp
 from ..models import (
     Announcement,
     Deadline,
@@ -32,7 +31,6 @@ from ..models import (
     TimeEntry,
     TimeTimer,
     User,
-    UserMFABackupCode,
 )
 from ..policies import visible_matter_ids
 from ..services.matter_magic import build_dashboard_focus_board, build_today_briefing
@@ -43,7 +41,6 @@ from ..services.workspace_hub import (
     workspace_mode_meta,
     workspace_mode_options,
 )
-from ..roles import role_requires_mfa
 from ..services.priority_inbox import build_priority_inbox
 from ..templates import page
 
@@ -59,7 +56,7 @@ def register_auth_routes(app):
             return redirect(url_for("dashboard"))
         if session.get("portal_user_id"):
             return redirect(url_for("portal_matters"))
-        return redirect(url_for("login"))
+        return page("Choose an Experience", "landing.html")
 
     @app.route("/register", methods=["GET", "POST"])
     @limiter.limit(lambda: app.config.get("AUTH_REGISTER_RATE_LIMIT", "5/hour"), methods=["POST"])
@@ -115,8 +112,6 @@ def register_auth_routes(app):
         if request.method == "POST":
             email = (request.form.get("email") or "").strip().lower()
             password = request.form.get("password") or ""
-            mfa_code = (request.form.get("mfa_code") or "").strip()
-            backup_code = (request.form.get("backup_code") or "").strip().upper()
             if not is_valid_email(email):
                 flash("Invalid credentials.", "warning")
                 return redirect(url_for("login"))
@@ -136,59 +131,9 @@ def register_auth_routes(app):
                 flash("Invalid credentials.", "warning")
                 return redirect(url_for("login"))
 
-            if role_requires_mfa(user.role) and not user.mfa_enabled:
-                login_user(user)
-                session.permanent = True
-                user.last_login_at = utc_now()
-                user.failed_login_attempts = 0
-                user.locked_until = None
-                db.session.commit()
-                register_user_session(user.id)
-                register_trusted_device(user.id)
-                audit("login_mfa_enrollment_required", "User", user.id)
-                flash("MFA enrollment is required before using the system.", "warning")
-                return redirect(url_for("auth_mfa_setup"))
-
-            if user.mfa_enabled:
-                has_totp_secret = bool((user.mfa_secret or "").strip())
-                has_backup_codes = (
-                    db.session.query(UserMFABackupCode.id)
-                    .filter(
-                        UserMFABackupCode.user_id == user.id,
-                        UserMFABackupCode.used_at.is_(None),
-                    )
-                    .first()
-                    is not None
-                )
-                if not has_totp_secret and not has_backup_codes:
-                    audit("login_mfa_misconfigured", "User", user.id)
-                    flash(
-                        "MFA is enabled but not configured for this account. "
-                        "Ask an administrator to run: python app.py recover-mfa --email <your-email>",
-                        "warning",
-                    )
-                    return redirect(url_for("login"))
-
-                verified = False
-                if mfa_code and has_totp_secret and verify_totp(user.mfa_secret, mfa_code):
-                    verified = True
-                elif backup_code:
-                    backups = UserMFABackupCode.query.filter_by(user_id=user.id, used_at=None).all()
-                    for row in backups:
-                        if check_backup_code(row.code_hash, backup_code):
-                            row.used_at = now
-                            verified = True
-                            break
-                if not verified:
-                    flash("MFA code required or invalid.", "warning")
-                    return redirect(url_for("login"))
-
             login_user(user)
             session.permanent = True
-            if user.mfa_enabled:
-                session["mfa_verified_at"] = utc_now().isoformat()
-            else:
-                session.pop("mfa_verified_at", None)
+            session.pop("mfa_verified_at", None)
             user.last_login_at = utc_now()
             user.failed_login_attempts = 0
             user.locked_until = None

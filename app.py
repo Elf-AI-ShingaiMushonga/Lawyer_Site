@@ -169,14 +169,11 @@ def main() -> None:
                     backup_codes = result.get("backup_codes") or []
                     if backup_codes:
                         print("    backup_codes=" + ", ".join(str(code) for code in backup_codes))
-            if args.disable:
-                print("  Next login will require MFA enrollment for roles that enforce MFA.")
         else:
             result = recover_user_mfa(app, args.email, disable=args.disable)
             print(f"MFA recovery complete for user_id={result['user_id']} ({result['email']}).")
             if args.disable:
                 print("  mfa_enabled=False")
-                print("  Next login will require MFA enrollment for roles that enforce MFA.")
             else:
                 print("  mfa_enabled=True")
                 print(f"  secret={result['mfa_secret']}")

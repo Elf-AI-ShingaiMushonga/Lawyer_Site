@@ -14,6 +14,8 @@ from ..models import (
     DeadlineRule,
     DocumentTemplate,
     GovernanceIncident,
+    HelpdeskTicket,
+    ITAsset,
     LegalHold,
     MatterTemplate,
     Office,
@@ -33,8 +35,6 @@ def _build_admin_console_context() -> dict[str, object]:
     total_users = User.query.count()
     active_users = User.query.filter(User.is_active.is_(True)).count()
     inactive_users = max(0, total_users - active_users)
-    mfa_enabled_users = User.query.filter(User.is_active.is_(True), User.mfa_enabled.is_(True)).count()
-    mfa_gap = max(0, active_users - mfa_enabled_users)
     portal_users = PortalUser.query.count()
     active_portal_users = PortalUser.query.filter(PortalUser.is_active.is_(True)).count()
 
@@ -121,20 +121,15 @@ def _build_admin_console_context() -> dict[str, object]:
     open_incidents = GovernanceIncident.query.filter(GovernanceIncident.status == "Open").count()
     active_legal_holds = LegalHold.query.filter(LegalHold.is_active.is_(True)).count()
     pending_trust_approvals = TrustApprovalRequest.query.filter(TrustApprovalRequest.status == "pending").count()
+    open_helpdesk_tickets = HelpdeskTicket.query.filter(HelpdeskTicket.status.in_(["new", "triaged", "in_progress", "waiting_user"])).count()
+    critical_helpdesk_tickets = HelpdeskTicket.query.filter(
+        HelpdeskTicket.priority == "critical",
+        HelpdeskTicket.status.in_(["new", "triaged", "in_progress", "waiting_user"]),
+    ).count()
+    tracked_assets = ITAsset.query.count()
     announcement_count = Announcement.query.count()
 
     watchlist: list[dict[str, str]] = []
-    if mfa_gap:
-        watchlist.append(
-            {
-                "tone": "critical",
-                "title": "Internal MFA gap",
-                "summary": f"{mfa_gap} active internal user(s) do not have MFA enabled.",
-                "href": url_for("admin_users"),
-                "button_label": "Review Users",
-                "badge": f"{mfa_gap} user(s)",
-            }
-        )
     if inactive_users:
         watchlist.append(
             {
@@ -179,6 +174,17 @@ def _build_admin_console_context() -> dict[str, object]:
                 "badge": f"{active_legal_holds} hold(s)",
             }
         )
+    if critical_helpdesk_tickets:
+        watchlist.append(
+            {
+                "tone": "critical",
+                "title": "Critical IT tickets",
+                "summary": f"{critical_helpdesk_tickets} critical helpdesk ticket(s) are still open.",
+                "href": url_for("ops_helpdesk"),
+                "button_label": "Open Helpdesk",
+                "badge": f"{critical_helpdesk_tickets} critical",
+            }
+        )
     missing_setup = [item for item in setup_checks if not bool(item["configured"])]
     if missing_setup:
         top_gap = missing_setup[0]
@@ -198,10 +204,12 @@ def _build_admin_console_context() -> dict[str, object]:
     actors_by_id = {row.id: row for row in User.query.filter(User.id.in_(actor_ids)).all()} if actor_ids else {}
 
     quick_actions = [
-        {"title": "User Provisioning", "summary": "Create users, fix role drift, and close MFA gaps.", "href": url_for("admin_users"), "badge": "Identity"},
+        {"title": "User Provisioning", "summary": "Create users, fix role drift, and review access posture.", "href": url_for("admin_users"), "badge": "Identity"},
         {"title": "Automation Studio", "summary": "Tune templates, archetypes, and workflow builders.", "href": url_for("admin_automation"), "badge": "Automation"},
         {"title": "Audit Trail", "summary": "Review sensitive changes and governance activity.", "href": url_for("admin_audit"), "badge": "Audit"},
         {"title": "Trust Accounting", "summary": "Review trust activity, approvals, and reconciliation posture.", "href": url_for("trust_ledger"), "badge": "Risk"},
+        {"title": "IT Helpdesk", "summary": "Triage support load, assignment, and open service issues.", "href": url_for("ops_helpdesk"), "badge": "IT"},
+        {"title": "Asset Registry", "summary": "Track firm hardware, warranty, and ownership.", "href": url_for("ops_assets"), "badge": "Assets"},
         {"title": "Firm Settings", "summary": "Set global metadata lists, digest settings, and defaults.", "href": url_for("admin_settings_firm"), "badge": "Config"},
         {"title": "Portal Users", "summary": "Manage client-facing users and portal access posture.", "href": url_for("admin_portal_users"), "badge": "Portal"},
     ]
@@ -246,19 +254,30 @@ def _build_admin_console_context() -> dict[str, object]:
                 {"label": "Task Templates", "href": url_for("admin_templates_tasks")},
             ],
         },
+        {
+            "title": "IT Operations",
+            "summary": "Internal support queue, asset ownership, and operational continuity controls.",
+            "actions": [
+                {"label": "Helpdesk", "href": url_for("ops_helpdesk")},
+                {"label": "Assets", "href": url_for("ops_assets")},
+                {"label": "Backups", "href": url_for("ops_backup_status")},
+                {"label": "Restore Checks", "href": url_for("ops_restore_verify")},
+            ],
+        },
     ]
 
     return {
         "summary": {
             "total_users": total_users,
             "active_users": active_users,
-            "mfa_enabled_users": mfa_enabled_users,
-            "mfa_coverage_pct": round((mfa_enabled_users / active_users) * 100, 1) if active_users else 0.0,
+            "active_user_pct": round((active_users / total_users) * 100, 1) if total_users else 0.0,
             "portal_users": portal_users,
             "active_portal_users": active_portal_users,
             "open_incidents": open_incidents,
             "pending_trust_approvals": pending_trust_approvals,
             "active_legal_holds": active_legal_holds,
+            "open_helpdesk_tickets": open_helpdesk_tickets,
+            "tracked_assets": tracked_assets,
             "announcement_count": announcement_count,
             "configured_checks": sum(1 for item in setup_checks if bool(item["configured"])),
             "setup_check_total": len(setup_checks),

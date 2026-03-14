@@ -117,9 +117,9 @@
         <div class="page-stat-meta">{{ summary.get('active_users', 0) }} active internal accounts.</div>
       </div>
       <div class="page-stat-card">
-        <div class="page-stat-label">MFA Coverage</div>
-        <div class="page-stat-value">{{ summary.get('mfa_coverage_pct', 0) }}%</div>
-        <div class="page-stat-meta">{{ summary.get('mfa_enabled_users', 0) }} active users enrolled.</div>
+        <div class="page-stat-label">Active Ratio</div>
+        <div class="page-stat-value">{{ summary.get('active_user_pct', 0) }}%</div>
+        <div class="page-stat-meta">Share of internal accounts currently active.</div>
       </div>
       <div class="page-stat-card">
         <div class="page-stat-label">Portal Users</div>
@@ -289,9 +289,9 @@
               <div class="glance-meta">Inactive accounts should reflect deliberate offboarding or dormant provisioning only.</div>
             </div>
             <div class="glance-item">
-              <div class="glance-eyebrow">MFA</div>
-              <div class="glance-title">{{ summary.get('mfa_coverage_pct', 0) }}% coverage</div>
-              <div class="glance-meta">The remaining gap is the fastest route to access-risk reduction.</div>
+              <div class="glance-eyebrow">Account Activity</div>
+              <div class="glance-title">{{ summary.get('active_user_pct', 0) }}% currently active</div>
+              <div class="glance-meta">Inactive accounts should align with controlled offboarding or intentionally dormant access.</div>
             </div>
             <div class="glance-item">
               <div class="glance-eyebrow">Portal Surface</div>

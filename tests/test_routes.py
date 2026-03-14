@@ -2,12 +2,6 @@ from __future__ import annotations
 
 
 REQUIRED_ROUTES = {
-    "/ufc/",
-    "/ufc/api/predict",
-    "/ufc/api/jobs",
-    "/ufc/api/jobs/active",
-    "/ufc/api/jobs/<job_id>",
-    "/ufc/healthz",
     "/auth/mfa/setup",
     "/auth/mfa/verify",
     "/auth/mfa/backup-codes",
@@ -142,10 +136,19 @@ REQUIRED_ROUTES = {
     "/ops/backup/run",
     "/ops/restore/verify",
     "/ops/dr/targets",
+    "/ops/assets",
+    "/ops/helpdesk",
+    "/ops/helpdesk/<int:ticket_id>",
     "/readyz",
 }
 
 REMOVED_ROUTES = {
+    "/ufc/",
+    "/ufc/api/predict",
+    "/ufc/api/jobs",
+    "/ufc/api/jobs/active",
+    "/ufc/api/jobs/<job_id>",
+    "/ufc/healthz",
     "/auth/sso/authorize",
     "/auth/sso/token",
     "/auth/sso/userinfo",

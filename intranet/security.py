@@ -7,19 +7,9 @@ from .extensions import db
 from sqlalchemy.exc import OperationalError
 
 from .helpers import audit, revoke_current_session, validate_user_session
-from .roles import role_requires_mfa
 from .templates import page
 
-MFA_ENROLLMENT_ALLOWLIST = {
-    "auth_mfa_setup",
-    "auth_mfa_backup_codes",
-    "auth_mfa_verify",
-    "auth_sessions",
-    "auth_session_revoke",
-    "logout",
-    "static",
-}
-SECURITY_BYPASS_ENDPOINTS = {"logout", "static", "healthz", "readyz", "ufc_unavailable_healthz"}
+SECURITY_BYPASS_ENDPOINTS = {"logout", "static", "healthz", "readyz"}
 
 
 def register_security_handlers(app):
@@ -63,22 +53,6 @@ def register_security_handlers(app):
         logout_user()
         flash("Your account is inactive. Contact an administrator.", "warning")
         return redirect(url_for("login"))
-
-    @app.before_request
-    def enforce_mfa_enrollment():
-        endpoint = request.endpoint or ""
-        if endpoint in SECURITY_BYPASS_ENDPOINTS:
-            return None
-        if not current_user.is_authenticated:
-            return None
-        if not role_requires_mfa(getattr(current_user, "role", "")):
-            return None
-        if bool(getattr(current_user, "mfa_enabled", False)):
-            return None
-        if endpoint in MFA_ENROLLMENT_ALLOWLIST:
-            return None
-        flash("MFA enrollment is required before accessing other modules.", "warning")
-        return redirect(url_for("auth_mfa_setup"))
 
     @app.before_request
     def enforce_active_session():

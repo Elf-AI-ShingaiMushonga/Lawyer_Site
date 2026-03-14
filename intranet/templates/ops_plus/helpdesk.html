@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="toolbar-row">
+    <div>
+      <h3 class="mb-1">Internal Helpdesk</h3>
+      <p class="page-intro mb-0">Raise IT issues, track queue status, and coordinate responses against linked firm assets.</p>
+    </div>
+    {% if is_helpdesk_agent %}
+      <div class="badge badge-soft status-badge">Ops Queue Control</div>
+    {% endif %}
+  </div>
+  <div class="kpi-strip mt-3">
+    <div class="kpi-pill">
+      <div class="label">Visible Tickets</div>
+      <div class="value">{{ helpdesk_summary.visible_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Open</div>
+      <div class="value">{{ helpdesk_summary.open_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">{{ "Unassigned" if is_helpdesk_agent else "Reported By Me" }}</div>
+      <div class="value">{{ helpdesk_summary.unassigned_count if is_helpdesk_agent else helpdesk_summary.my_reported_count }}</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="label">Critical</div>
+      <div class="value">{{ helpdesk_summary.critical_count }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h4 class="mb-2">Submit Ticket</h4>
+  <form method="post" class="row g-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-5">
+      <label class="form-label" for="helpdesk-subject">Subject</label>
+      <input class="form-control" id="helpdesk-subject" name="subject" placeholder="Laptop docking station not detected" required>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="helpdesk-category">Category</label>
+      <select class="form-select" id="helpdesk-category" name="category">
+        {% for value in helpdesk_categories %}
+          <option value="{{ value }}">{{ value | replace('_', ' ') | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="helpdesk-priority">Priority</label>
+      <select class="form-select" id="helpdesk-priority" name="priority">
+        {% for value in helpdesk_priorities %}
+          <option value="{{ value }}" {{ 'selected' if value == 'medium' else '' }}>{{ value | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="helpdesk-asset">Linked Asset</label>
+      <select class="form-select" id="helpdesk-asset" name="asset_id">
+        <option value="">No linked asset</option>
+        {% for asset in asset_choices %}
+          <option value="{{ asset.id }}">{{ asset.asset_tag }} · {{ asset.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="helpdesk-description">Description</label>
+      <textarea class="form-control" id="helpdesk-description" name="description" rows="3" placeholder="What happened, when it started, and what you already tried." required></textarea>
+    </div>
+    {% if is_helpdesk_agent %}
+      <div class="col-md-3">
+        <label class="form-label" for="helpdesk-status">Initial Status</label>
+        <select class="form-select" id="helpdesk-status" name="status">
+          {% for value in helpdesk_statuses %}
+            <option value="{{ value }}" {{ 'selected' if value == 'new' else '' }}>{{ value | replace('_', ' ') | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="helpdesk-assignee">Assign To</label>
+        <select class="form-select" id="helpdesk-assignee" name="assigned_to">
+          <option value="">Unassigned</option>
+          {% for user in assignee_choices %}
+            <option value="{{ user.id }}">{{ user.full_name }} · {{ user.email }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label" for="helpdesk-resolution">Resolution Summary</label>
+        <input class="form-control" id="helpdesk-resolution" name="resolution_summary" placeholder="Optional triage or closure note">
+      </div>
+    {% endif %}
+    <div class="col-12 d-grid d-md-flex justify-content-md-end">
+      <button class="btn btn-light" type="submit" data-submitting-text="Submitting...">Submit Ticket</button>
+    </div>
+  </form>
+</div>
+
+<div class="card p-3">
+  <div class="toolbar-row">
+    <div>
+      <h4 class="mb-1">{{ "Queue" if is_helpdesk_agent else "My Tickets" }}</h4>
+      <div class="muted small">Open a ticket to add comments, adjust ownership, or capture the final resolution.</div>
+    </div>
+  </div>
+  <div class="table-tools mt-3" data-table-tools data-table-target="ops-helpdesk-table">
+    <input class="form-control" type="search" data-table-search placeholder="Filter by ticket, user, asset, status, or priority...">
+    <div class="table-count" data-table-count aria-live="polite"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table" id="ops-helpdesk-table">
+      <thead>
+        <tr>
+          <th data-sort-index="0">Ticket</th>
+          <th data-sort-index="1">Status</th>
+          <th data-sort-index="2">Priority</th>
+          <th data-sort-index="3">Reporter</th>
+          <th data-sort-index="4">Assignee</th>
+          <th data-sort-index="5">Asset</th>
+          <th data-sort-index="6" data-sort-type="date">Updated</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ticket in tickets %}
+          {% set reporter = users_by_id.get(ticket.reporter_user_id) %}
+          {% set assignee = users_by_id.get(ticket.assigned_to) %}
+          {% set asset = assets_by_id.get(ticket.asset_id) %}
+          <tr data-table-row data-search="{{ ticket.ticket_no }} {{ ticket.subject }} {{ ticket.status }} {{ ticket.priority }} {{ reporter.full_name if reporter else '' }} {{ reporter.email if reporter else '' }} {{ assignee.full_name if assignee else '' }} {{ assignee.email if assignee else '' }} {{ asset.asset_tag if asset else '' }} {{ asset.name if asset else '' }}">
+            <td>
+              <div><strong>{{ ticket.ticket_no }}</strong></div>
+              <div class="muted small">{{ ticket.subject }}</div>
+            </td>
+            <td><span class="badge badge-soft status-badge">{{ ticket.status | replace('_', ' ') | title }}</span></td>
+            <td><span class="badge badge-soft status-badge">{{ ticket.priority | title }}</span></td>
+            <td>{{ reporter.full_name if reporter else 'Unknown reporter' }}</td>
+            <td>{{ assignee.full_name if assignee else 'Unassigned' }}</td>
+            <td>
+              {% if asset %}
+                <div>{{ asset.asset_tag }}</div>
+                <div class="muted small">{{ asset.name }}</div>
+              {% else %}
+                <span class="muted">-</span>
+              {% endif %}
+            </td>
+            <td>{{ ticket.updated_at }}</td>
+            <td><a class="btn btn-sm btn-outline-light" href="{{ url_for('ops_helpdesk_ticket', ticket_id=ticket.id) }}">Open</a></td>
+          </tr>
+        {% endfor %}
+        <tr data-table-empty-row class="table-empty-row" {% if tickets|length > 0 %}hidden{% endif %}>
+          <td colspan="8" class="muted">No helpdesk tickets are currently visible in your queue.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -2,7 +2,7 @@
 
 This is a functional intranet website for a law firm:
 - User authentication + roles (admin/lawyer/staff/paralegal)
-- MFA (TOTP + backup codes) and session registry
+- Session registry and optional MFA tooling
 - Admin user provisioning from the web UI (`/admin/users`)
 - Firm settings and rule administration (`/admin/settings/*`, `/admin/templates/*`, `/admin/rules/*`)
 - Matters with team membership
@@ -27,6 +27,8 @@ This is a functional intranet website for a law firm:
 - Curated client portal (auth, scoped matter views, messages, uploads, invoices, payments)
 - Analytics dashboards (utilization, realization, EHR, workload, profitability, forecast, burnout)
 - Ops controls (backup status/run, restore verification, DR targets)
+- IT asset inventory with assignment, warranty, and lifecycle tracking
+- Internal helpdesk/service desk ticketing with queue triage and ticket comments
 - Contacts directory
 - Knowledge base (internal articles)
 - Search across core objects
@@ -57,7 +59,7 @@ Open: http://127.0.0.1:5000
 
 Routing:
 - `/` redirects authenticated users to `/dashboard`.
-- `/` redirects unauthenticated users to `/login`.
+- `/` shows a single-option experience landing page for unauthenticated users.
 
 ## Starter Data Seed
 

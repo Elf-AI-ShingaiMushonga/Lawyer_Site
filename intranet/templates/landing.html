@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .experience-shell {
+    display: grid;
+    gap: 18px;
+    max-width: 1040px;
+    margin: 0 auto;
+  }
+
+  .experience-hero {
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 22px;
+    padding: 24px;
+    background:
+      radial-gradient(720px 260px at 0% -18%, rgba(225, 6, 0, 0.14), rgba(225, 6, 0, 0)),
+      linear-gradient(180deg, rgba(255, 252, 252, 0.97), rgba(255, 247, 247, 0.92));
+    box-shadow: 0 16px 36px rgba(111, 36, 36, 0.08);
+  }
+
+  .experience-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+  }
+
+  .experience-card {
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 20px;
+    padding: 22px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 12px 28px rgba(111, 36, 36, 0.08);
+    display: grid;
+    gap: 14px;
+  }
+
+  .experience-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+</style>
+
+<section class="experience-shell">
+  <div class="experience-hero">
+    <div class="code-like">DM-INC EXPERIENCE SELECTOR</div>
+    <h1 class="mt-2 mb-2">Choose an experience</h1>
+    <p class="page-intro mb-0">
+      The UFC branch has been retired. Only the firm operating system remains available from this landing page.
+    </p>
+  </div>
+
+  <div class="experience-grid">
+    <article class="experience-card">
+      <div>
+        <div class="glance-eyebrow">Primary</div>
+        <h2 class="mb-2">DM-Inc Lawyer Site</h2>
+        <div class="muted">Matter operations, time capture, billing, DMS, trust, reporting, IT ops, and internal workflows.</div>
+      </div>
+      <div class="experience-meta">
+        <span class="badge badge-soft status-badge">Single Experience</span>
+        <span class="badge badge-soft status-badge">UFC Removed</span>
+      </div>
+      <div class="d-grid d-md-flex">
+        <a class="btn btn-light" href="{{ url_for('login') }}">Open Lawyer Site</a>
+      </div>
+    </article>
+  </div>
+</section>
+{% endblock %}

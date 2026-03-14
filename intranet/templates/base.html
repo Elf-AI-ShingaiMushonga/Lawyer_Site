@@ -3331,7 +3331,7 @@
   {% set crm_endpoints = ["crm_leads", "crm_lead_detail"] %}
   {% set knowledge_endpoints = ["contacts", "kb", "kb_view", "search"] %}
   {% set analytics_endpoints = ["analytics_home", "analytics_utilization", "analytics_realization", "analytics_ehr", "analytics_workload", "analytics_profitability", "analytics_forecast", "analytics_burnout"] %}
-  {% set ops_endpoints = ["ops_backup_status", "ops_restore_verify", "ops_dr_targets"] %}
+  {% set ops_endpoints = ["ops_backup_status", "ops_restore_verify", "ops_dr_targets", "ops_assets", "ops_helpdesk", "ops_helpdesk_ticket"] %}
   {% set trust_account_endpoints = ["trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
   {% set billing_ops_endpoints = ["billing_rates", "billing_ar_aging", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses"] %}
   {% set portal_session_active = session.get('portal_user_id') %}
@@ -3385,7 +3385,7 @@
     {% set section_href = url_for('analytics_home') %}
   {% elif endpoint in admin_endpoints or endpoint in ops_endpoints %}
     {% set section_label = "Governance and Operations" %}
-    {% set section_meta = "Auditability, backups, operational controls, and platform readiness" %}
+    {% set section_meta = "Auditability, helpdesk delivery, asset controls, backups, and platform readiness" %}
     {% set section_href = url_for('admin') if current_user.is_authenticated and is_admin_role else url_for('dashboard') %}
   {% elif endpoint in knowledge_endpoints %}
     {% set section_label = "Knowledge and Search" %}
@@ -3468,13 +3468,17 @@
                 </div>
                 <div class="nav-menu-section">
                   <span class="nav-menu-label">Insights & Platform</span>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in ['ops_helpdesk', 'ops_helpdesk_ticket'] else '' }}" href="{{ url_for('ops_helpdesk') }}">Helpdesk</a>
+                  {% if is_support_role or is_admin_role %}
+                    <a class="nav-menu-item {{ 'is-active' if endpoint == 'ops_assets' else '' }}" href="{{ url_for('ops_assets') }}">Asset Registry</a>
+                  {% endif %}
                   {% if is_lawyer_role %}
                     <a class="nav-menu-item {{ 'is-active' if endpoint in analytics_endpoints else '' }}" href="{{ url_for('analytics_home') }}">Analytics</a>
                   {% endif %}
                   {% if is_admin_role %}
                     <a class="nav-menu-item {{ 'is-active' if endpoint in automation_endpoints else '' }}" href="{{ url_for('admin_automation') }}">Automation Studio</a>
                     <a class="nav-menu-item {{ 'is-active' if endpoint in admin_endpoints else '' }}" href="{{ url_for('admin') }}">Admin Console</a>
-                    <a class="nav-menu-item {{ 'is-active' if endpoint in ops_endpoints else '' }}" href="{{ url_for('ops_backup_status') }}">Operations</a>
+                    <a class="nav-menu-item {{ 'is-active' if endpoint in ['ops_backup_status', 'ops_restore_verify', 'ops_dr_targets'] else '' }}" href="{{ url_for('ops_backup_status') }}">Ops Controls</a>
                     <a class="nav-menu-item {{ 'is-active' if endpoint == 'admin_portal_users' else '' }}" href="{{ url_for('admin_portal_users') }}">Portal User Admin</a>
                   {% endif %}
                 </div>
@@ -3508,7 +3512,9 @@
               {% endif %}
               {% if is_support_role or is_admin_role %}
                 <option value="CRM and Intake">
+                <option value="IT Asset Registry">
               {% endif %}
+              <option value="Helpdesk">
               {% if is_admin_role %}
                 <option value="Automation Studio">
               {% endif %}
@@ -3767,6 +3773,22 @@
             </span>
             <span class="code-like">Go</span>
           </a>
+          <a class="command-item" href="{{ url_for('ops_helpdesk') }}" data-command-item data-keywords="helpdesk service desk ticketing it support incidents access device issue">
+            <span>
+              <span class="command-item-title">Helpdesk</span>
+              <span class="command-item-meta">Internal IT ticket intake and queue tracking</span>
+            </span>
+            <span class="code-like">Go</span>
+          </a>
+          {% if is_support_role or is_admin_role %}
+            <a class="command-item" href="{{ url_for('ops_assets') }}" data-command-item data-keywords="it assets inventory registry hardware device assignment warranty">
+              <span>
+                <span class="command-item-title">Asset Registry</span>
+                <span class="command-item-meta">Track firm hardware, assignment, and warranty posture</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+          {% endif %}
           {% if is_admin_role %}
             <div class="command-section">Admin</div>
             <a class="command-item" href="{{ url_for('admin_automation') }}" data-command-item data-keywords="automation templates archetype contract document task builder">
@@ -3783,10 +3805,10 @@
               </span>
               <span class="code-like">Go</span>
             </a>
-            <a class="command-item" href="{{ url_for('ops_backup_status') }}" data-command-item data-keywords="ops backups restore dr">
+            <a class="command-item" href="{{ url_for('ops_backup_status') }}" data-command-item data-keywords="ops backups restore dr operational controls">
               <span>
-                <span class="command-item-title">Operations</span>
-                <span class="command-item-meta">Backups, restore checks, DR targets</span>
+                <span class="command-item-title">Ops Controls</span>
+                <span class="command-item-meta">Backups, restore checks, and DR targets</span>
               </span>
               <span class="code-like">Go</span>
             </a>
@@ -3835,7 +3857,7 @@
   </main>
 
   <div class="footer-note">
-    Operational controls include MFA, session protection, backup policy, retention rules, and monitoring.
+    Operational controls include session protection, backup policy, retention rules, and monitoring.
   </div>
 </div>
 {% if current_user.is_authenticated %}

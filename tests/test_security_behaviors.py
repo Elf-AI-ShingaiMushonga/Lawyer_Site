@@ -82,7 +82,7 @@ def test_visible_matter_ids_excludes_ethical_wall(app_ctx):
     assert ids == [allowed_matter.id]
 
 
-def test_mfa_required_role_redirects_to_setup(app_ctx):
+def test_internal_login_no_longer_requires_mfa_enrollment(app_ctx):
     app = app_ctx
     user = User(email="staff@example.com", full_name="Staff User", role="staff", password_hash="x", is_active=True)
     user.set_password("StrongPassword123!")
@@ -102,7 +102,7 @@ def test_mfa_required_role_redirects_to_setup(app_ctx):
     )
 
     assert resp.status_code == 302
-    assert "/auth/mfa/setup" in (resp.headers.get("Location") or "")
+    assert "/dashboard" in (resp.headers.get("Location") or "")
 
 
 def test_suspicious_scan_creates_alert_for_repeated_denied_access(seed_user_matter):
@@ -209,7 +209,7 @@ def test_portal_login_rate_limit_enforced(monkeypatch, tmp_path):
     assert third.status_code == 429
 
 
-def test_login_shows_specific_message_when_mfa_configuration_is_missing(app_ctx):
+def test_internal_login_ignores_missing_mfa_configuration(app_ctx):
     app = app_ctx
     user = User(
         email="mfa-missing@example.com",
@@ -236,13 +236,8 @@ def test_login_shows_specific_message_when_mfa_configuration_is_missing(app_ctx)
         follow_redirects=False,
     )
     assert response.status_code == 302
-    assert "/login" in (response.headers.get("Location") or "")
-
-    with client.session_transaction() as sess:
-        flashes = sess.get("_flashes") or []
-    messages = [message for _category, message in flashes]
-    assert any("recover-mfa" in message for message in messages)
-    assert AuditLog.query.filter_by(action="login_mfa_misconfigured", entity_type="User", entity_id=user.id).count() == 1
+    assert "/dashboard" in (response.headers.get("Location") or "")
+    assert AuditLog.query.filter_by(action="login_mfa_misconfigured", entity_type="User", entity_id=user.id).count() == 0
 
 
 def test_portal_login_warns_when_mfa_enabled_but_secret_is_missing(app_ctx):

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 
-def test_root_redirects_to_login_when_not_authenticated(app):
+def test_root_renders_single_experience_landing_page_when_not_authenticated(app):
     client = app.test_client()
     response = client.get("/")
 
-    assert response.status_code == 302
-    assert response.headers.get("Location", "").endswith("/login")
+    assert response.status_code == 200
+    assert b"Choose an experience" in response.data
+    assert b"DM-Inc Lawyer Site" in response.data
+    assert b"Open Lawyer Site" in response.data
+    assert b"UFC Removed" in response.data
