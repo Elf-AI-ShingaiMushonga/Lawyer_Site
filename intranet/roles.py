@@ -83,7 +83,7 @@ def role_is_case(value: str | None) -> bool:
 
 
 def role_is_support(value: str | None) -> bool:
-    return _in_group(value, "paralegal") or _in_group(value, "staff")
+    return canonical_role(value) == "operations_staff"
 
 
 def role_requires_mfa(value: str | None) -> bool:

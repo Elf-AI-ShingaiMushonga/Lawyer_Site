@@ -9,7 +9,7 @@ from flask import abort, flash, redirect, request, url_for
 from flask_login import current_user, login_required
 
 from ..extensions import db
-from ..helpers import audit, can_access_matter
+from ..helpers import audit, can_access_matter, enforce_case_team_role
 from ..models import Deadline, Matter, MatterTimelineEvent
 from ..policies import visible_matter_ids
 from ..roles import role_is_admin
@@ -356,6 +356,7 @@ def register_calendar_routes(app):
             abort(404)
 
         if request.method == "POST":
+            enforce_case_team_role()
             action = (request.form.get("action") or "create_deadline").strip().lower()
             if action == "create_deadline":
                 title = (request.form.get("title") or "").strip()
@@ -463,6 +464,7 @@ def register_calendar_routes(app):
             abort(404)
         if not can_access_matter(row.matter_id):
             abort(403)
+        enforce_case_team_role()
 
         new_due_raw = (request.form.get("due_at") or "").strip()
         reason = (request.form.get("reason") or "").strip()
@@ -493,6 +495,7 @@ def register_calendar_routes(app):
             abort(404)
         if not can_access_matter(row.matter_id):
             abort(403)
+        enforce_case_team_role()
 
         row.acknowledged_by = current_user.id
         row.acknowledged_at = utc_now()

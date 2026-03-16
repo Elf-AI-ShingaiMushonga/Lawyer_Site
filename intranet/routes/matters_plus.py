@@ -20,6 +20,9 @@ from ..helpers import (
     allowed_audio,
     audit,
     can_access_matter,
+    enforce_case_team_role,
+    filter_accessible_document_files,
+    filter_accessible_matter_notes,
     has_active_legal_hold,
     matter_activity,
     normalize_query,
@@ -79,6 +82,7 @@ from ..services.matter_option_lists import legal_category_options, practice_area
 from ..services.storage_paths import build_matter_storage_name, harden_private_file, resolve_upload_path
 from ..services.workflow_automation import auto_pause_running_timers_for_matter
 from ..services.notification_engine import NotificationEngine
+from ..policies import enforce_permission, has_permission
 from ..policies.residency import residency_allowed
 from ..roles import role_is_admin
 from ..templates import page
@@ -705,12 +709,18 @@ def register_matters_plus_routes(app):
         if not m:
             abort(404)
 
+        can_view_dms = has_permission("dms", "read")
+        accessible_note_count = len(
+            filter_accessible_matter_notes(
+                MatterNote.query.filter_by(matter_id=matter_id).all()
+            )
+        )
         stats = {
             "open_tasks": Task.query.filter(Task.matter_id == matter_id, Task.status != "Done").count(),
             "deadlines": Deadline.query.filter_by(matter_id=matter_id).count(),
-            "documents": DocumentRecord.query.filter_by(matter_id=matter_id).count(),
-            "notes": MatterNote.query.filter_by(matter_id=matter_id).count(),
-            "workspace_documents": MatterWorkspaceDocument.query.filter_by(matter_id=matter_id).count(),
+            "documents": DocumentRecord.query.filter_by(matter_id=matter_id).count() if can_view_dms else 0,
+            "notes": accessible_note_count,
+            "workspace_documents": MatterWorkspaceDocument.query.filter_by(matter_id=matter_id).count() if can_view_dms else 0,
         }
 
         stage_history = (
@@ -728,12 +738,14 @@ def register_matters_plus_routes(app):
             .limit(40)
             .all()
         )
-        recent_docs = (
-            DocumentFile.query.filter_by(matter_id=matter_id)
-            .order_by(DocumentFile.uploaded_at.desc(), DocumentFile.id.desc())
-            .limit(12)
-            .all()
-        )
+        recent_docs = []
+        if can_view_dms:
+            recent_docs = filter_accessible_document_files(
+                DocumentFile.query.filter_by(matter_id=matter_id)
+                .order_by(DocumentFile.uploaded_at.desc(), DocumentFile.id.desc())
+                .limit(12)
+                .all()
+            )
         upcoming_timeline = (
             MatterTimelineEvent.query.filter(
                 MatterTimelineEvent.matter_id == matter_id,
@@ -756,12 +768,14 @@ def register_matters_plus_routes(app):
         ) or {}
         matter_magic["actions"] = attach_matter_magic_links(list(matter_magic.get("actions", [])), m.id)
         matter_launch_pack = build_matter_launch_pack(m, snapshot=matter_magic, today=dt.date.today()) or {}
-        recent_workspace_documents = (
-            MatterWorkspaceDocument.query.filter_by(matter_id=matter_id)
-            .order_by(MatterWorkspaceDocument.updated_at.desc(), MatterWorkspaceDocument.id.desc())
-            .limit(6)
-            .all()
-        )
+        recent_workspace_documents = []
+        if can_view_dms:
+            recent_workspace_documents = (
+                MatterWorkspaceDocument.query.filter_by(matter_id=matter_id)
+                .order_by(MatterWorkspaceDocument.updated_at.desc(), MatterWorkspaceDocument.id.desc())
+                .limit(6)
+                .all()
+            )
 
         return page(
             f"Matter Workspace {m.matter_no}",
@@ -780,6 +794,7 @@ def register_matters_plus_routes(app):
     @app.route("/matters/<int:matter_id>/documents/workbench", methods=["GET", "POST"])
     @login_required
     def matter_document_workbench(matter_id: int):
+        enforce_permission("dms", "read")
         if not can_access_matter(matter_id):
             abort(403)
         m = db.session.get(Matter, matter_id)
@@ -819,6 +834,7 @@ def register_matters_plus_routes(app):
             return redirect(target)
 
         if request.method == "POST":
+            enforce_permission("dms", "write")
             action = str(_value("action", "save_document") or "").strip().lower()
             if action == "create_document":
                 title = normalize_query(_value("title", ""))
@@ -1131,6 +1147,7 @@ def register_matters_plus_routes(app):
     @app.post("/matters/<int:matter_id>/documents/workbench/presence")
     @login_required
     def matter_document_workbench_presence(matter_id: int):
+        enforce_permission("dms", "read")
         if not can_access_matter(matter_id):
             abort(403)
         m = db.session.get(Matter, matter_id)
@@ -1158,6 +1175,7 @@ def register_matters_plus_routes(app):
     @app.post("/matters/<int:matter_id>/archetype/sync-checklist")
     @login_required
     def matter_archetype_sync_checklist(matter_id: int):
+        enforce_permission("matter_team", "manage")
         if not can_access_matter(matter_id):
             abort(403)
         m = db.session.get(Matter, matter_id)
@@ -1193,6 +1211,7 @@ def register_matters_plus_routes(app):
             abort(404)
 
         if request.method == "POST":
+            enforce_case_team_role()
             entity_name = normalize_query(request.form.get("entity_name", ""))
             party_role = normalize_query(request.form.get("party_role", "Client")) or "Client"
             if not entity_name:
@@ -1243,6 +1262,7 @@ def register_matters_plus_routes(app):
             abort(404)
 
         if request.method == "POST":
+            enforce_case_team_role()
             body = (request.form.get("body") or "").strip()
             voice_file = request.files.get("voice_note")
             has_voice_note = bool(voice_file and (voice_file.filename or "").strip())
@@ -1313,25 +1333,7 @@ def register_matters_plus_routes(app):
             return redirect(url_for("matter_notes", matter_id=matter_id))
 
         notes = MatterNote.query.filter_by(matter_id=matter_id).order_by(MatterNote.created_at.desc()).limit(200).all()
-        if not role_is_admin(getattr(current_user, "role", None)) and notes:
-            note_ids = [note.id for note in notes]
-            acl_rows = (
-                MatterNoteACL.query.filter(
-                    MatterNoteACL.note_id.in_(note_ids),
-                    MatterNoteACL.can_read.is_(True),
-                )
-                .all()
-            )
-            acl_by_note: dict[int, set[int]] = {}
-            for row in acl_rows:
-                acl_by_note.setdefault(row.note_id, set()).add(row.user_id)
-            notes = [
-                note
-                for note in notes
-                if not acl_by_note.get(note.id)
-                or note.created_by == current_user.id
-                or current_user.id in acl_by_note.get(note.id, set())
-            ]
+        notes = filter_accessible_matter_notes(notes)
 
         voice_notes_by_note_id: dict[int, list[DocumentFile]] = defaultdict(list)
         note_ids = [note.id for note in notes]
@@ -1373,6 +1375,7 @@ def register_matters_plus_routes(app):
     @app.post("/matters/<int:matter_id>/stage")
     @login_required
     def matter_stage_update(matter_id: int):
+        enforce_permission("matter_team", "manage")
         if not can_access_matter(matter_id):
             abort(403)
         m = db.session.get(Matter, matter_id)
@@ -1407,6 +1410,7 @@ def register_matters_plus_routes(app):
     @app.post("/matters/<int:matter_id>/close")
     @login_required
     def matter_close(matter_id: int):
+        enforce_permission("matter_team", "manage")
         if not can_access_matter(matter_id):
             abort(403)
         m = db.session.get(Matter, matter_id)

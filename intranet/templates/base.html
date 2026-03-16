@@ -3392,9 +3392,10 @@
     {% set section_meta = "Cross-matter retrieval and structured know-how" %}
     {% set section_href = url_for('search') %}
   {% endif %}
+  {% set crm_top_level = not can_access_finance and (is_support_role or is_admin_role) %}
   {% set more_active = endpoint in more_endpoints
-    and not (is_lawyer_role and endpoint in billing_endpoints)
-    and not ((is_support_role or is_admin_role) and endpoint in crm_endpoints) %}
+    and not (can_access_finance and endpoint in finance_endpoints)
+    and not (crm_top_level and endpoint in crm_endpoints) %}
   <nav class="navbar px-3 py-2 mb-2" data-collapsible-nav>
     <div class="nav-head" data-collapsible-nav-body>
       <div class="nav-brand">
@@ -3423,9 +3424,9 @@
           {% if is_admin_role %}
             <a class="nav-pill {{ 'is-active' if endpoint in automation_endpoints else '' }}" href="{{ url_for('admin_automation') }}">Automation</a>
           {% endif %}
-          {% if is_lawyer_role %}
-            <a class="nav-pill {{ 'is-active' if endpoint in billing_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
-          {% elif is_support_role or is_admin_role %}
+          {% if can_access_finance %}
+            <a class="nav-pill {{ 'is-active' if endpoint in finance_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
+          {% elif crm_top_level %}
             <a class="nav-pill {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM</a>
           {% elif is_case_role %}
             <a class="nav-pill {{ 'is-active' if endpoint in time_endpoints else '' }}" href="{{ url_for('time_timers') }}">Time</a>
@@ -3448,7 +3449,7 @@
                 <div class="nav-menu-section">
                   <span class="nav-menu-label">Finance</span>
                   <a class="nav-menu-item {{ 'is-active' if endpoint == 'expenses' else '' }}" href="{{ url_for('expenses') }}">Expenses</a>
-                  {% if is_lawyer_role %}
+                  {% if can_access_finance %}
                     <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_rates' else '' }}" href="{{ url_for('billing_rates') }}">Rate Cards</a>
                     <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_ar_aging' else '' }}" href="{{ url_for('billing_ar_aging') }}">AR Aging</a>
                     <a class="nav-menu-item {{ 'is-active' if endpoint == 'billing_transactions' else '' }}" href="{{ url_for('billing_transactions') }}">Transactions</a>
@@ -3506,7 +3507,7 @@
                 <option value="Start Timer">
                 <option value="Log Time Entry">
               {% endif %}
-              {% if is_lawyer_role %}
+              {% if can_access_finance %}
                 <option value="Billing Invoices">
                 <option value="Trust Ledger">
               {% endif %}
@@ -3571,7 +3572,7 @@
             <a class="context-rail-chip" href="{{ url_for('time_timers', matter_id=active_matter.id) }}">Timer</a>
             <a class="context-rail-chip" href="{{ url_for('time_entries', matter_id=active_matter.id) }}">Time Entry</a>
           {% endif %}
-          {% if is_lawyer_role %}
+          {% if can_access_finance %}
             <a class="context-rail-chip" href="{{ url_for('billing_invoices', matter_id=active_matter.id) }}">Billing</a>
           {% endif %}
           <a class="context-rail-chip context-rail-chip-emphasis" href="{{ url_for('matters') }}">Switch Matter</a>
@@ -3720,7 +3721,7 @@
               </span>
               <span class="code-like">Go</span>
             </a>
-            {% if is_lawyer_role %}
+            {% if can_access_finance %}
               <a class="command-item" href="{{ billing_action_href }}" data-command-item data-keywords="matter billing invoices collections">
                 <span>
                   <span class="command-item-title">Matter Billing</span>
@@ -3732,7 +3733,7 @@
           {% endif %}
 
           <div class="command-section">Finance and Risk</div>
-          {% if is_lawyer_role %}
+          {% if can_access_finance %}
             <a class="command-item" href="{{ url_for('billing_invoices') }}" data-command-item data-keywords="billing invoices finance collections">
               <span>
                 <span class="command-item-title">Invoices</span>
@@ -3748,7 +3749,7 @@
               <span class="code-like">Go</span>
             </a>
           {% endif %}
-          {% if is_support_role or is_admin_role or is_lawyer_role %}
+          {% if is_case_role or is_support_role or is_admin_role %}
             <a class="command-item" href="{{ url_for('crm_leads') }}" data-command-item data-keywords="crm leads intake conflict">
               <span>
                 <span class="command-item-title">CRM and Intake</span>
@@ -3865,9 +3866,9 @@
     <a class="mobile-dock-link {{ 'is-active' if endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">Home</a>
     <a class="mobile-dock-link {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">Matters</a>
     <a class="mobile-dock-link {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my') }}">Calendar</a>
-    {% if is_lawyer_role %}
-      <a class="mobile-dock-link {{ 'is-active' if endpoint in billing_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
-    {% elif is_support_role or is_admin_role %}
+    {% if can_access_finance %}
+      <a class="mobile-dock-link {{ 'is-active' if endpoint in finance_endpoints else '' }}" href="{{ url_for('billing_invoices') }}">Billing</a>
+    {% elif crm_top_level %}
       <a class="mobile-dock-link {{ 'is-active' if endpoint in crm_endpoints else '' }}" href="{{ url_for('crm_leads') }}">CRM</a>
     {% else %}
       <a class="mobile-dock-link {{ 'is-active' if endpoint in time_endpoints else '' }}" href="{{ url_for('time_timers') }}">Time</a>

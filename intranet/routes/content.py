@@ -9,9 +9,9 @@ from flask_login import current_user, login_required
 
 from ..config import is_valid_email
 from ..extensions import db
-from ..helpers import audit, is_admin, normalize_query
+from ..helpers import audit, filter_accessible_document_files, filter_accessible_matter_notes, is_admin, normalize_query
 from ..models import Contact, DocumentFile, JobQueue, KnowledgeBase, Matter, MatterMember, MatterNote, MatterTimelineEvent, Task
-from ..policies import visible_matter_ids
+from ..policies import has_permission, visible_matter_ids
 from ..roles import role_is_admin
 from ..services.matter_magic import build_matter_launch_pack, build_matter_magic_snapshot
 from ..services.semantic_search import SemanticSearchService
@@ -191,12 +191,17 @@ def register_content_routes(app):
                 | (Matter.outcome_summary.ilike(like))
             ).limit(25).all()
             tasks = task_base.filter(Task.title.ilike(like) | Task.description.ilike(like)).limit(25).all()
-            docs = doc_base.filter(
-                (DocumentFile.original_filename.ilike(like))
-                | (DocumentFile.category.ilike(like))
-                | (DocumentFile.owner_name.ilike(like))
-                | (DocumentFile.doc_version.ilike(like))
-            ).limit(25).all()
+            if has_permission("dms", "read"):
+                docs = filter_accessible_document_files(
+                    doc_base.filter(
+                        (DocumentFile.original_filename.ilike(like))
+                        | (DocumentFile.category.ilike(like))
+                        | (DocumentFile.owner_name.ilike(like))
+                        | (DocumentFile.doc_version.ilike(like))
+                    )
+                    .limit(100)
+                    .all()
+                )[:25]
             articles = KnowledgeBase.query.filter(KnowledgeBase.title.ilike(like) | KnowledgeBase.body.ilike(like)).limit(25).all()
             contacts = Contact.query.filter(Contact.name.ilike(like) | Contact.organization.ilike(like) | Contact.email.ilike(like)).limit(25).all()
             matter_by_id = {m.id: m for m in matters}
@@ -240,7 +245,11 @@ def register_content_routes(app):
                     docs=launch_docs,
                     timeline=launch_timeline,
                     team_size=MatterMember.query.filter_by(matter_id=matter_id).count(),
-                    notes_count=MatterNote.query.filter_by(matter_id=matter_id).count(),
+                    notes_count=len(
+                        filter_accessible_matter_notes(
+                            MatterNote.query.filter_by(matter_id=matter_id).all()
+                        )
+                    ),
                     limit_actions=4,
                 ) or {}
                 launch_pack = build_matter_launch_pack(primary_matter, snapshot=snapshot, today=dt.date.today()) or {}

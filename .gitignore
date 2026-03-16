@@ -5,6 +5,15 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.ipynb_checkpoints/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.log
+*.out
+*.err
+*.pid
 
 # Virtual environments
 .venv/
@@ -19,10 +28,11 @@ elf.pem
 
 # Local runtime files
 uploads/
+instance/
 *.db
 *.sqlite
 *.sqlite3
-UFC_Elf/data/job_status/*.json
+UFC_Elf/
 
 # macOS / editor
 .DS_Store
@@ -34,8 +44,7 @@ build/
 dist/
 *.egg-info/
 
-# Local presentation notebooks (keep off VM/deploy)
-notebooks/dm_inc_director_pitch.ipynb
-docs/presentations/firm_partner_enablement_presentation.md
-docs/presentations/dm_inc_sales_pitch.html
-docs/proposals/dm_inc_legal_erp_commercial_proposal.html
+# Local documents and presentation artifacts not required for app runtime
+notebooks/
+docs/presentations/
+docs/proposals/*.html

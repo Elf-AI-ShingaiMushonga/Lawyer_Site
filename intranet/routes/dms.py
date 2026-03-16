@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.utils import secure_filename
 
 from ..extensions import db
-from ..helpers import allowed_doc, audit, can_access_matter, is_admin, sha256_file
+from ..helpers import allowed_doc, audit, can_access_matter, filter_accessible_matter_notes, is_admin, sha256_file
 from ..models import (
     BatesRange,
     ConflictSemanticHit,
@@ -245,13 +245,9 @@ def register_dms_routes(app):
     @login_required
     def matter_dms(matter_id: int):
         action = (request.form.get("action") or "upload_document").strip().lower() if request.method == "POST" else ""
-        is_upload_action = request.method == "POST" and action == "upload_document"
-        # Uploading a document is intentionally available to any authenticated user,
-        # regardless of matter access or role-level DMS grants.
-        if not is_upload_action:
-            enforce_permission("dms", "read")
+        enforce_permission("dms", "read")
         has_matter_access = can_access_matter(matter_id)
-        if not has_matter_access and not is_upload_action:
+        if not has_matter_access:
             abort(403)
         can_view_dms = has_matter_access and has_permission("dms", "read")
 
@@ -440,6 +436,7 @@ def register_dms_routes(app):
                 flash("Unsupported DMS action.", "warning")
                 return _post_redirect()
 
+            enforce_permission("dms", "write")
             title = (request.form.get("title") or "").strip()
             if not title:
                 flash("Document title required.", "warning")
@@ -736,7 +733,11 @@ def register_dms_routes(app):
             docs=matter_magic_docs,
             timeline=upcoming_timeline,
             team_size=MatterMember.query.filter_by(matter_id=matter_id).count(),
-            notes_count=MatterNote.query.filter_by(matter_id=matter_id).count(),
+            notes_count=len(
+                filter_accessible_matter_notes(
+                    MatterNote.query.filter_by(matter_id=matter_id).all()
+                )
+            ),
         ) or {}
         matter_magic["actions"] = attach_matter_magic_links(list(matter_magic.get("actions", [])), m.id)
         dms_quick_starts = build_dms_quick_starts(
@@ -779,16 +780,12 @@ def register_dms_routes(app):
     @app.route("/documents/<int:document_id>/versions", methods=["GET", "POST"])
     @login_required
     def document_versions(document_id: int):
-        # Uploading a new version is intentionally available to any authenticated
-        # user, regardless of matter access or role-level DMS grants.
-        is_upload_version = request.method == "POST"
-        if not is_upload_version:
-            enforce_permission("dms", "read")
+        enforce_permission("dms", "read")
         doc = db.session.get(DocumentRecord, document_id)
         if not doc:
             abort(404)
         has_matter_access = can_access_matter(doc.matter_id)
-        if not has_matter_access and not is_upload_version:
+        if not has_matter_access:
             abort(403)
         can_view_versions = has_matter_access and has_permission("dms", "read")
 
@@ -798,6 +795,7 @@ def register_dms_routes(app):
             return redirect(url_for("dashboard"))
 
         if request.method == "POST":
+            enforce_permission("dms", "write")
             actor_user_id = getattr(current_user, "id", None)
             lock = (
                 DocumentLock.query.filter_by(document_id=document_id, released_at=None)

@@ -7,7 +7,24 @@ import io
 from flask import g
 
 from intranet.extensions import db
-from intranet.models import CRMLead, DocumentOCRText, DocumentRecord, DocumentVersion, Matter, MatterMember, PortalUser, TimeEntry, User
+from intranet.models import (
+    CRMLead,
+    Deadline,
+    DocumentFile,
+    DocumentOCRText,
+    DocumentRecord,
+    DocumentVersion,
+    Invoice,
+    Matter,
+    MatterMember,
+    MatterParty,
+    MatterTimelineEvent,
+    MatterWorkspaceDocument,
+    PortalUser,
+    Task,
+    TimeEntry,
+    User,
+)
 
 
 def _set_user_session(client, user_id: int, csrf_token: str = "test-csrf") -> None:
@@ -213,17 +230,17 @@ def test_staff_cannot_generate_invoices(app_ctx):
     assert response.status_code == 403
 
 
-def test_staff_can_upload_dms_documents(app_ctx):
+def test_candidate_attorney_can_upload_dms_documents(app_ctx):
     app = app_ctx
     lawyer = _seed_user("dms-lawyer@example.com", role="lawyer")
-    staff = _seed_user("dms-staff@example.com", role="staff")
+    candidate = _seed_user("dms-candidate@example.com", role="candidate_attorney")
     matter = _seed_matter(lawyer, "2026-PERM-DMS-0001")
     db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
-    db.session.add(MatterMember(matter_id=matter.id, user_id=staff.id, role_in_matter="Team"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=candidate.id, role_in_matter="Team"))
     db.session.commit()
 
     client = app.test_client()
-    _set_user_session(client, staff.id)
+    _set_user_session(client, candidate.id)
     response = client.post(
         f"/matters/{matter.id}/dms",
         data={
@@ -248,7 +265,7 @@ def test_staff_can_upload_dms_documents(app_ctx):
     assert download_response.data == b"allowed"
 
 
-def test_any_matter_member_can_upload_dms_documents_even_without_dms_grants(app_ctx):
+def test_matter_member_without_dms_grants_cannot_upload_dms_documents(app_ctx):
     app = app_ctx
     lawyer = _seed_user("dms-owner-any-role@example.com", role="lawyer")
     analyst = _seed_user("dms-analyst-any-role@example.com", role="analyst")
@@ -271,12 +288,12 @@ def test_any_matter_member_can_upload_dms_documents_even_without_dms_grants(app_
         },
         content_type="multipart/form-data",
     )
-    assert response.status_code == 302
+    assert response.status_code == 403
     doc = DocumentRecord.query.filter_by(matter_id=matter.id, title="Any Role Upload").first()
-    assert doc is not None
+    assert doc is None
 
 
-def test_upload_dms_document_allows_non_matter_member(app_ctx):
+def test_non_matter_member_cannot_upload_dms_documents(app_ctx):
     app = app_ctx
     owner = _seed_user("dms-owner-open-upload@example.com", role="senior_attorney")
     outsider = _seed_user("dms-outsider-open-upload@example.com", role="operations_staff")
@@ -298,12 +315,12 @@ def test_upload_dms_document_allows_non_matter_member(app_ctx):
         },
         content_type="multipart/form-data",
     )
-    assert response.status_code == 302
+    assert response.status_code == 403
     doc = DocumentRecord.query.filter_by(matter_id=matter.id, title="Open Upload").first()
-    assert doc is not None
+    assert doc is None
 
 
-def test_upload_dms_document_non_member_redirects_without_forbidden(app_ctx):
+def test_non_matter_member_receives_forbidden_on_dms_upload(app_ctx):
     app = app_ctx
     owner = _seed_user("dms-owner-open-upload-redirect@example.com", role="senior_attorney")
     outsider = _seed_user("dms-outsider-open-upload-redirect@example.com", role="operations_staff")
@@ -325,14 +342,12 @@ def test_upload_dms_document_non_member_redirects_without_forbidden(app_ctx):
         },
         content_type="multipart/form-data",
     )
-    assert response.status_code == 302
-    follow = client.get(response.headers.get("Location") or "", follow_redirects=True)
-    assert follow.status_code == 200
+    assert response.status_code == 403
     doc = DocumentRecord.query.filter_by(matter_id=matter.id, title="Open Upload Redirect").first()
-    assert doc is not None
+    assert doc is None
 
 
-def test_upload_dms_document_any_role_member_redirects_without_forbidden(app_ctx):
+def test_unprivileged_matter_member_receives_forbidden_on_dms_upload(app_ctx):
     app = app_ctx
     owner = _seed_user("dms-owner-any-role-redirect@example.com", role="lawyer")
     analyst = _seed_user("dms-analyst-any-role-redirect@example.com", role="analyst")
@@ -355,11 +370,126 @@ def test_upload_dms_document_any_role_member_redirects_without_forbidden(app_ctx
         },
         content_type="multipart/form-data",
     )
-    assert response.status_code == 302
-    follow = client.get(response.headers.get("Location") or "", follow_redirects=True)
-    assert follow.status_code == 200
+    assert response.status_code == 403
     doc = DocumentRecord.query.filter_by(matter_id=matter.id, title="Any Role Redirect").first()
-    assert doc is not None
+    assert doc is None
+
+
+def test_staff_cannot_upload_new_dms_versions_without_write_permission(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("dms-version-owner@example.com", role="lawyer")
+    staff = _seed_user("dms-version-staff@example.com", role="staff")
+    matter = _seed_matter(lawyer, "2026-PERM-DMS-VERS-0001")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=staff.id, role_in_matter="Team"))
+    db.session.commit()
+
+    owner_client = app.test_client()
+    _set_user_session(owner_client, lawyer.id)
+    create_response = owner_client.post(
+        f"/matters/{matter.id}/dms",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "upload_document",
+            "title": "Version Guard",
+            "document_type": "General",
+            "confidentiality": "Internal",
+            "file": (io.BytesIO(b"version-1"), "version-1.txt"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert create_response.status_code == 302
+    document = DocumentRecord.query.filter_by(matter_id=matter.id, title="Version Guard").first()
+    assert document is not None
+
+    staff_client = app.test_client()
+    _set_user_session(staff_client, staff.id)
+    blocked = staff_client.post(
+        f"/documents/{document.id}/versions",
+        data={
+            "csrf_token": "test-csrf",
+            "state": "draft",
+            "file": (io.BytesIO(b"version-2"), "version-2.txt"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert blocked.status_code == 403
+    version_count = DocumentVersion.query.filter_by(document_id=document.id).count()
+    assert version_count == 1
+
+
+def test_staff_cannot_upload_legacy_matter_documents_without_write_permission(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("legacy-doc-owner@example.com", role="lawyer")
+    staff = _seed_user("legacy-doc-staff@example.com", role="staff")
+    matter = _seed_matter(lawyer, "2026-PERM-DMS-LEGACY-0001")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=staff.id, role_in_matter="Team"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, staff.id)
+    response = client.post(
+        f"/matters/{matter.id}/documents",
+        data={
+            "csrf_token": "test-csrf",
+            "category": "General",
+            "lifecycle_stage": "Draft",
+            "file": (io.BytesIO(b"legacy-bypass"), "legacy-bypass.txt"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 403
+    assert DocumentFile.query.filter_by(matter_id=matter.id, uploaded_by=staff.id).first() is None
+
+
+def test_staff_cannot_create_or_publish_workbench_documents_without_write_permission(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("workbench-owner@example.com", role="lawyer")
+    staff = _seed_user("workbench-staff@example.com", role="staff")
+    matter = _seed_matter(lawyer, "2026-PERM-DMS-WORKBENCH-0001")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=staff.id, role_in_matter="Team"))
+    db.session.commit()
+
+    staff_client = app.test_client()
+    _set_user_session(staff_client, staff.id)
+    create_response = staff_client.post(
+        f"/matters/{matter.id}/documents/workbench",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "create_document",
+            "title": "Staff Workbench Draft",
+        },
+    )
+    assert create_response.status_code == 403
+    assert MatterWorkspaceDocument.query.filter_by(matter_id=matter.id, created_by=staff.id).first() is None
+
+    owner_client = app.test_client()
+    _set_user_session(owner_client, lawyer.id)
+    owner_create = owner_client.post(
+        f"/matters/{matter.id}/documents/workbench",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "create_document",
+            "title": "Owner Workbench Draft",
+        },
+    )
+    assert owner_create.status_code == 302
+    draft = MatterWorkspaceDocument.query.filter_by(matter_id=matter.id, title="Owner Workbench Draft").first()
+    assert draft is not None
+
+    _set_user_session(staff_client, staff.id)
+    publish_response = staff_client.post(
+        f"/matters/{matter.id}/documents/workbench",
+        data={
+            "csrf_token": "test-csrf",
+            "action": "publish_document",
+            "document_id": draft.id,
+        },
+    )
+    assert publish_response.status_code == 403
+    assert DocumentRecord.query.filter_by(matter_id=matter.id, created_by=staff.id).first() is None
 
 
 def test_dms_upload_sanitizes_nul_bytes_in_ocr_text(app_ctx):
@@ -490,3 +620,153 @@ def test_partner_role_alias_inherits_lawyer_permissions(app_ctx):
     )
     assert response.status_code == 302
     assert CRMLead.query.filter_by(full_name="Partner Allowed Lead").first() is not None
+
+
+def test_staff_cannot_close_matter_via_summary_update(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("matter-close-owner@example.com", role="lawyer")
+    staff = _seed_user("matter-close-staff@example.com", role="staff")
+    matter = _seed_matter(lawyer, "2026-PERM-MATTER-CLOSE-0001")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=staff.id, role_in_matter="Team"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, staff.id)
+    response = client.post(
+        f"/matters/{matter.id}/summary",
+        data={
+            "csrf_token": "test-csrf",
+            "objective": "",
+            "risk_level": "Medium",
+            "budget_status": "On Track",
+            "status": "Closed",
+            "last_update_note": "",
+            "outcome_summary": "Closed by staff",
+        },
+    )
+    assert response.status_code == 403
+    db.session.refresh(matter)
+    assert matter.status == "Open"
+    assert matter.closed_at is None
+
+
+def test_operations_staff_cannot_mutate_casework_routes(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("casework-owner@example.com", role="lawyer")
+    staff = _seed_user("casework-ops@example.com", role="operations_staff")
+    matter = _seed_matter(lawyer, "2026-PERM-CASEWORK-0001")
+    deadline = Deadline(
+        matter_id=matter.id,
+        title="Serve papers",
+        due_at=dt.date.today(),
+        is_critical=False,
+        status="open",
+        created_by=lawyer.id,
+    )
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=staff.id, role_in_matter="Team"))
+    db.session.add(deadline)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, staff.id)
+
+    task_response = client.post(
+        f"/matters/{matter.id}/tasks/new",
+        data={"csrf_token": "test-csrf", "title": "Ops-created task"},
+    )
+    assert task_response.status_code == 403
+    assert Task.query.filter_by(matter_id=matter.id, title="Ops-created task").first() is None
+
+    timeline_response = client.post(
+        f"/matters/{matter.id}/timeline",
+        data={
+            "csrf_token": "test-csrf",
+            "title": "Ops hearing",
+            "event_type": "Hearing",
+            "event_date": dt.date.today().isoformat(),
+        },
+    )
+    assert timeline_response.status_code == 403
+    assert MatterTimelineEvent.query.filter_by(matter_id=matter.id, title="Ops hearing").first() is None
+
+    party_response = client.post(
+        f"/matters/{matter.id}/parties",
+        data={"csrf_token": "test-csrf", "entity_name": "Ops Witness", "party_role": "Witness"},
+    )
+    assert party_response.status_code == 403
+    assert MatterParty.query.filter_by(matter_id=matter.id).count() == 0
+
+    ack_response = client.post(
+        f"/deadlines/{deadline.id}/ack",
+        data={"csrf_token": "test-csrf"},
+    )
+    assert ack_response.status_code == 403
+    db.session.refresh(deadline)
+    assert deadline.status == "open"
+    assert deadline.acknowledged_by is None
+
+
+def test_candidate_attorney_retains_casework_collaboration_access(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("candidate-owner@example.com", role="lawyer")
+    candidate = _seed_user("candidate-casework@example.com", role="candidate_attorney")
+    matter = _seed_matter(lawyer, "2026-PERM-CASEWORK-0002")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=candidate.id, role_in_matter="Team"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, candidate.id)
+
+    task_response = client.post(
+        f"/matters/{matter.id}/tasks/new",
+        data={"csrf_token": "test-csrf", "title": "Candidate task"},
+    )
+    assert task_response.status_code == 302
+    assert Task.query.filter_by(matter_id=matter.id, title="Candidate task").first() is not None
+
+    timeline_response = client.post(
+        f"/matters/{matter.id}/timeline",
+        data={
+            "csrf_token": "test-csrf",
+            "title": "Candidate milestone",
+            "event_type": "Milestone",
+            "event_date": dt.date.today().isoformat(),
+        },
+    )
+    assert timeline_response.status_code == 302
+    assert MatterTimelineEvent.query.filter_by(matter_id=matter.id, title="Candidate milestone").first() is not None
+
+
+def test_candidate_attorney_cannot_access_billing_surfaces_without_billing_permission(app_ctx):
+    app = app_ctx
+    lawyer = _seed_user("billing-owner@example.com", role="lawyer")
+    candidate = _seed_user("billing-candidate@example.com", role="candidate_attorney")
+    matter = _seed_matter(lawyer, "2026-PERM-BILLING-READ-0001")
+    invoice = Invoice(
+        matter_id=matter.id,
+        client_name=matter.client_name,
+        period_start=dt.date.today().replace(day=1),
+        period_end=dt.date.today(),
+        status="approved",
+        subtotal=1000.0,
+        tax_total=150.0,
+        total=1150.0,
+        created_by=lawyer.id,
+    )
+    db.session.add(MatterMember(matter_id=matter.id, user_id=lawyer.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=candidate.id, role_in_matter="Team"))
+    db.session.add(invoice)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, candidate.id)
+
+    assert client.get("/billing/rates").status_code == 403
+    assert client.get("/billing/invoices").status_code == 403
+    assert client.get(f"/billing/invoices/{invoice.id}").status_code == 403
+    assert client.get(f"/billing/invoices/{invoice.id}/pdf").status_code == 403
+    assert client.get(f"/billing/invoices/{invoice.id}/tax-invoice").status_code == 403
+    assert client.get(f"/billing/accounts/{matter.id}/statement").status_code == 403

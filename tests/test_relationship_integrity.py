@@ -10,6 +10,9 @@ import os
 import time
 
 import pytest
+from flask import g
+from sqlalchemy import func, select
+from sqlalchemy.dialects import postgresql
 
 from intranet.extensions import db
 from intranet.jobs.worker import _handle_retention_archive_sweep
@@ -80,6 +83,7 @@ from intranet.models import (
     UserSession,
     User,
 )
+from intranet.routes.billing import _payment_status_group_expr
 from intranet.services.billing_engine import BillingEngine
 from intranet.services.sa_practice import DEFAULT_SA_PRACTICE_AREAS
 from intranet.services.trust_engine import TrustEngine
@@ -90,12 +94,16 @@ def _set_user_session(client, user_id: int, csrf_token: str = "test-csrf") -> No
         sess["_user_id"] = str(user_id)
         sess["_fresh"] = True
         sess["_csrf_token"] = csrf_token
+    if hasattr(g, "_login_user"):
+        delattr(g, "_login_user")
 
 
 def _set_portal_session(client, portal_user_id: int, csrf_token: str = "test-csrf") -> None:
     with client.session_transaction() as sess:
         sess["portal_user_id"] = portal_user_id
         sess["_csrf_token"] = csrf_token
+    if hasattr(g, "_login_user"):
+        delattr(g, "_login_user")
 
 
 def _csrf_token_for_path(client, path: str) -> str:
@@ -186,6 +194,42 @@ def test_matter_note_acl_filters_note_visibility(app_ctx):
     assert response.status_code == 200
     assert "Visible note" in body
     assert "Hidden note" not in body
+
+
+def test_restricted_note_voice_attachment_is_not_searchable_or_downloadable(app_ctx, tmp_path):
+    app = app_ctx
+    owner = _seed_user("note-voice-owner@example.com")
+    viewer = _seed_user("note-voice-viewer@example.com")
+    matter = _seed_matter(owner, "2026-NOTE-VOICE-0001", "Voice ACL Matter", "Client A")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=owner.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=matter.id, user_id=viewer.id, role_in_matter="Team"))
+    db.session.commit()
+
+    app.config["UPLOAD_DIR"] = str(tmp_path)
+    owner_client = app.test_client()
+    _set_user_session(owner_client, owner.id)
+    create_response = owner_client.post(
+        f"/matters/{matter.id}/notes",
+        data={
+            "csrf_token": "test-csrf",
+            "body": "Hidden voice note",
+            "acl_emails": owner.email,
+            "voice_note": (io.BytesIO(b"voice-note"), "private-voice-note.mp3"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert create_response.status_code == 302
+    voice_doc = DocumentFile.query.filter_by(matter_id=matter.id, category="Voice Note").first()
+    assert voice_doc is not None
+
+    viewer_client = app.test_client()
+    _set_user_session(viewer_client, viewer.id)
+    search_response = viewer_client.get("/search?q=voice")
+    assert search_response.status_code == 200
+    assert "private-voice-note.mp3" not in search_response.get_data(as_text=True)
+
+    download_response = viewer_client.get(f"/documents/{voice_doc.id}/download")
+    assert download_response.status_code == 403
 
 
 def test_matter_note_voice_upload_creates_document_file(app_ctx, tmp_path):
@@ -1417,6 +1461,17 @@ def test_per_transaction_billing_filters_and_pending_queue(app_ctx):
     assert {row["reference"] for row in rows} == {"PAY-PENDING-001"}
 
 
+def test_payment_status_group_query_reuses_single_postgres_bind():
+    status_expr = _payment_status_group_expr()
+    statement = select(status_expr, func.count(PaymentAllocation.id)).group_by(status_expr)
+    compiled = statement.compile(dialect=postgresql.dialect())
+    sql = str(compiled)
+
+    assert "GROUP BY coalesce(payment_allocation.status, %(param_1)s)" in sql
+    assert "%(param_2)s" not in sql
+    assert compiled.params == {"param_1": "settled"}
+
+
 def test_billing_audit_log_scopes_records_to_visible_matters(app_ctx):
     app = app_ctx
     viewer = _seed_user("billing-audit-viewer@example.com", role="lawyer", mfa_enabled=True)
@@ -1547,6 +1602,152 @@ def test_expense_receipt_pdf_route_returns_pdf(app_ctx):
     assert response.status_code == 200
     assert response.mimetype == "application/pdf"
     assert response.data.startswith(b"%PDF-1.4")
+
+
+def test_expense_receipt_download_returns_uploaded_file(app_ctx, tmp_path):
+    app = app_ctx
+    app.config["UPLOAD_DIR"] = str(tmp_path)
+    os.makedirs(app.config["UPLOAD_DIR"], exist_ok=True)
+
+    user = _seed_user("expense-receipt-download@example.com")
+    matter = _seed_matter(user, "2026-EXP-DL-1", "Expense Download Matter", "Expense Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.flush()
+
+    stored_filename = "expense_1_receipt.txt"
+    receipt_path = os.path.join(app.config["UPLOAD_DIR"], stored_filename)
+    with open(receipt_path, "wb") as handle:
+        handle.write(b"expense receipt body")
+
+    expense = ExpenseEntry(
+        matter_id=matter.id,
+        user_id=user.id,
+        amount=150.0,
+        currency="ZAR",
+        category="Travel",
+        description="Filing run",
+        incurred_on=dt.date(2026, 2, 3),
+        status="submitted",
+        receipt_filename=stored_filename,
+        receipt_sha256=hashlib.sha256(b"expense receipt body").hexdigest(),
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/expenses/{expense.id}/receipt")
+
+    assert response.status_code == 200
+    assert response.data == b"expense receipt body"
+    assert "attachment" in (response.headers.get("Content-Disposition") or "").lower()
+
+
+def test_matter_documents_upload_and_download_roundtrip(app_ctx, tmp_path):
+    app = app_ctx
+    app.config["UPLOAD_DIR"] = str(tmp_path)
+    os.makedirs(app.config["UPLOAD_DIR"], exist_ok=True)
+
+    user = _seed_user("matter-doc-roundtrip@example.com")
+    matter = _seed_matter(user, "2026-MDOC-RT-1", "Matter Doc Roundtrip", "Roundtrip Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    upload_response = client.post(
+        f"/matters/{matter.id}/documents",
+        data={
+            "csrf_token": "test-csrf",
+            "category": "General",
+            "lifecycle_stage": "Draft",
+            "owner_name": "Lead Attorney",
+            "file": (io.BytesIO(b"matter doc body"), "matter-doc.txt"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+
+    assert upload_response.status_code == 302
+    doc = DocumentFile.query.filter_by(matter_id=matter.id, original_filename="matter-doc.txt").first()
+    assert doc is not None
+
+    download_response = client.get(f"/documents/{doc.id}/download")
+    assert download_response.status_code == 200
+    assert download_response.data == b"matter doc body"
+    assert "attachment" in (download_response.headers.get("Content-Disposition") or "").lower()
+
+    preview_response = client.get(f"/documents/{doc.id}/download?inline=1")
+    assert preview_response.status_code == 200
+    assert preview_response.data == b"matter doc body"
+
+
+def test_production_export_returns_document_version_manifest(app_ctx):
+    app = app_ctx
+    user = _seed_user("production-export@example.com")
+    matter = _seed_matter(user, "2026-PROD-EXP-1", "Production Export Matter", "Production Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.flush()
+
+    document = DocumentRecord(
+        matter_id=matter.id,
+        title="Production Bundle",
+        document_type="General",
+        confidentiality="Internal",
+        created_by=user.id,
+    )
+    db.session.add(document)
+    db.session.flush()
+
+    version = DocumentVersion(
+        document_id=document.id,
+        version_no=1,
+        original_filename="production-bundle.txt",
+        stored_filename="dms/production-bundle.txt",
+        sha256=hashlib.sha256(b"production-bundle").hexdigest(),
+        state="final",
+        uploaded_by=user.id,
+    )
+    db.session.add(version)
+    db.session.flush()
+
+    production = ProductionSet(
+        matter_id=matter.id,
+        name="First Production",
+        confidentiality_designation="Confidential",
+        watermark_text="Produced for review",
+        created_by=user.id,
+    )
+    db.session.add(production)
+    db.session.flush()
+
+    item = ProductionItem(
+        production_set_id=production.id,
+        document_version_id=version.id,
+        bates_number="DM000001",
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/productions/{production.id}/export")
+
+    assert response.status_code == 200
+    assert response.mimetype == "application/json"
+    payload = json.loads(response.get_data(as_text=True))
+    assert payload["production_set"]["id"] == production.id
+    assert payload["production_set"]["name"] == "First Production"
+    assert payload["items"] == [
+        {
+            "production_item_id": item.id,
+            "bates_number": "DM000001",
+            "document_version_id": version.id,
+            "filename": "production-bundle.txt",
+            "sha256": version.sha256,
+            "state": "final",
+        }
+    ]
 
 
 def test_data_residency_policy_blocks_export_when_region_mismatch(app_ctx):

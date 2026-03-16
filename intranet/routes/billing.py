@@ -8,7 +8,7 @@ import json
 
 from flask import Response, abort, flash, redirect, request, send_file, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, literal, or_
 
 from ..extensions import db
 from ..helpers import audit, can_access_matter, get_active_matter_id, is_admin, set_active_matter_context
@@ -128,6 +128,12 @@ def _is_settled_payment_row(payment: PaymentAllocation) -> bool:
     return status == "settled"
 
 
+def _payment_status_group_expr():
+    # Reuse one expression object for SELECT and GROUP BY so PostgreSQL does not
+    # see two distinct coalesce() expressions with different bind params.
+    return func.coalesce(PaymentAllocation.status, literal("settled")).label("status")
+
+
 def _settled_paid_total_for_invoice(invoice_id: int) -> float:
     total = (
         db.session.query(func.coalesce(func.sum(PaymentAllocation.amount), 0.0))
@@ -193,6 +199,7 @@ def register_billing_routes(app):
     @app.route("/billing/rates", methods=["GET", "POST"])
     @login_required
     def billing_rates():
+        enforce_permission("billing", "report")
         if request.method == "POST":
             if not role_is_admin(getattr(current_user, "role", None)):
                 abort(403)
@@ -341,6 +348,7 @@ def register_billing_routes(app):
                 NotificationEngine.enqueue("invoice_created", current_user.id, f"invoice:{result.invoice_id}")
                 flash(f"Invoice {result.invoice_id} generated.", "info")
             return redirect(url_for("billing_invoices"))
+        enforce_permission("billing", "report")
 
         page_number = request.args.get("page", default=1, type=int) or 1
         if page_number < 1:
@@ -402,6 +410,7 @@ def register_billing_routes(app):
     @app.get("/billing/invoices/<int:invoice_id>")
     @login_required
     def billing_invoice_detail(invoice_id: int):
+        enforce_permission("billing", "report")
         inv = db.session.get(Invoice, invoice_id)
         if not inv:
             abort(404)
@@ -601,6 +610,7 @@ def register_billing_routes(app):
     @app.get("/billing/invoices/<int:invoice_id>/pdf")
     @login_required
     def billing_invoice_pdf(invoice_id: int):
+        enforce_permission("billing", "report")
         inv = db.session.get(Invoice, invoice_id)
         if not inv:
             abort(404)
@@ -620,6 +630,7 @@ def register_billing_routes(app):
     @app.get("/billing/invoices/<int:invoice_id>/tax-invoice")
     @login_required
     def billing_tax_invoice_pdf(invoice_id: int):
+        enforce_permission("billing", "report")
         inv = db.session.get(Invoice, invoice_id)
         if not inv:
             abort(404)
@@ -637,6 +648,7 @@ def register_billing_routes(app):
     @app.get("/billing/invoices/<int:invoice_id>/ledes")
     @login_required
     def billing_invoice_ledes(invoice_id: int):
+        enforce_permission("billing", "report")
         inv = db.session.get(Invoice, invoice_id)
         if not inv:
             abort(404)
@@ -829,6 +841,7 @@ def register_billing_routes(app):
     @app.get("/billing/accounts/<int:matter_id>/statement")
     @login_required
     def billing_account_statement(matter_id: int):
+        enforce_permission("billing", "report")
         matter = db.session.get(Matter, matter_id)
         if matter is None:
             abort(404)
@@ -1362,10 +1375,11 @@ def register_billing_routes(app):
 
         payment_status_counts = {"pending": 0, "settled": 0, "failed": 0}
         if invoice_ids:
+            status_expr = _payment_status_group_expr()
             payment_status_rows = (
-                db.session.query(func.coalesce(PaymentAllocation.status, "settled").label("status"), func.count(PaymentAllocation.id))
+                db.session.query(status_expr, func.count(PaymentAllocation.id))
                 .filter(PaymentAllocation.invoice_id.in_(invoice_ids))
-                .group_by(func.coalesce(PaymentAllocation.status, "settled"))
+                .group_by(status_expr)
                 .all()
             )
             for status, count in payment_status_rows:

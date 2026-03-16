@@ -141,6 +141,7 @@ Common seed error:
 ## User documentation
 
 - Lawyer user guide: `docs/lawyer_user_guide.ipynb`
+- Lawyer onboarding presentation: `docs/lawyer_site_presentation.html`
 
 ## Required production env vars
 

@@ -7,19 +7,24 @@ import json
 import re
 import secrets
 
-from flask import g, request, session
+from flask import abort, g, request, session
 from flask_login import current_user
 
 from .config import ALLOWED_AUDIO_EXT, ALLOWED_DOC_EXT
 from .extensions import db
 from .models import AuditLog, MatterActivity, MatterMember, TrustedDevice, UserSession
-from .roles import role_is_admin
+from .roles import role_is_admin, role_is_case
 
 ACTIVE_MATTER_SESSION_KEY = "active_matter_id"
 
 
 def is_admin() -> bool:
     return role_is_admin(getattr(current_user, "role", None))
+
+
+def enforce_case_team_role() -> None:
+    if not role_is_case(getattr(current_user, "role", None)):
+        abort(403)
 
 
 def _coerce_positive_int(value) -> int | None:
@@ -96,6 +101,84 @@ def can_access_matter(matter_id: int) -> bool:
         if is_admin():
             return True
         return False
+
+
+def filter_accessible_matter_notes(notes):
+    rows = [row for row in (notes or []) if row is not None]
+    if not rows:
+        return []
+    if is_admin():
+        return rows
+
+    from .models import MatterNoteACL
+
+    note_ids = [int(row.id) for row in rows if getattr(row, "id", None)]
+    acl_by_note: dict[int, set[int]] = {}
+    if note_ids:
+        acl_rows = (
+            MatterNoteACL.query.filter(
+                MatterNoteACL.note_id.in_(note_ids),
+                MatterNoteACL.can_read.is_(True),
+            )
+            .all()
+        )
+        for row in acl_rows:
+            acl_by_note.setdefault(int(row.note_id), set()).add(int(row.user_id))
+
+    accessible = []
+    current_user_id = int(current_user.id) if current_user.is_authenticated else None
+    for note in rows:
+        note_id = int(note.id)
+        allowed_users = acl_by_note.get(note_id, set())
+        if not allowed_users or int(note.created_by or 0) == current_user_id or current_user_id in allowed_users:
+            accessible.append(note)
+    return accessible
+
+
+def filter_accessible_document_files(document_files):
+    rows = [row for row in (document_files or []) if row is not None]
+    if not rows:
+        return []
+
+    from .models import MatterNote
+
+    note_ids: set[int] = set()
+    for row in rows:
+        if not can_access_matter(int(row.matter_id or 0)):
+            continue
+        owner_token = (row.owner_name or "").strip().lower()
+        if not owner_token.startswith("note:"):
+            continue
+        try:
+            note_ids.add(int(owner_token.split(":", 1)[1]))
+        except ValueError:
+            continue
+
+    note_access: dict[int, bool] = {}
+    if note_ids:
+        notes_by_id = {int(row.id): row for row in MatterNote.query.filter(MatterNote.id.in_(note_ids)).all()}
+        visible_note_ids = {int(row.id) for row in filter_accessible_matter_notes(notes_by_id.values())}
+        note_access = {note_id: note_id in visible_note_ids for note_id in note_ids}
+
+    accessible = []
+    for row in rows:
+        if not can_access_matter(int(row.matter_id or 0)):
+            continue
+        owner_token = (row.owner_name or "").strip().lower()
+        if not owner_token.startswith("note:"):
+            accessible.append(row)
+            continue
+        try:
+            note_id = int(owner_token.split(":", 1)[1])
+        except ValueError:
+            continue
+        if note_access.get(note_id, False):
+            accessible.append(row)
+    return accessible
+
+
+def can_access_document_file(document_file) -> bool:
+    return bool(filter_accessible_document_files([document_file]))
 
 
 def has_active_legal_hold(matter_id: int | None) -> bool:

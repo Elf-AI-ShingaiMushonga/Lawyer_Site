@@ -7,7 +7,7 @@ from flask import abort, flash, redirect, request, url_for
 from flask_login import current_user, login_required
 
 from ..extensions import db
-from ..helpers import audit, can_access_matter, matter_activity, normalize_query
+from ..helpers import audit, can_access_matter, enforce_case_team_role, matter_activity, normalize_query
 from ..models import Task, TaskApproval, TaskAssignee, TaskChecklistItem, TaskDependency, TaskTemplate, TaskTemplateItem
 from ..templates import page
 
@@ -54,6 +54,7 @@ def register_workflow_routes(app):
     @app.route("/tasks/templates", methods=["GET", "POST"])
     @login_required
     def task_templates():
+        enforce_case_team_role()
         if request.method == "POST":
             name = normalize_query(request.form.get("name", ""))
             if not name:
@@ -104,6 +105,7 @@ def register_workflow_routes(app):
             abort(404)
         if not can_access_matter(t.matter_id):
             abort(403)
+        enforce_case_team_role()
 
         if request.method == "POST":
             depends_on_id = request.form.get("depends_on_task_id", type=int)
@@ -143,6 +145,7 @@ def register_workflow_routes(app):
             abort(404)
         if not can_access_matter(t.matter_id):
             abort(403)
+        enforce_case_team_role()
 
         if request.method == "POST":
             action = (request.form.get("action") or "add").strip()
@@ -175,6 +178,7 @@ def register_workflow_routes(app):
             abort(404)
         if not can_access_matter(t.matter_id):
             abort(403)
+        enforce_case_team_role()
 
         state = (request.form.get("state") or "pending").strip().lower()
         notes = (request.form.get("notes") or "").strip()
@@ -234,6 +238,7 @@ def register_workflow_routes(app):
             abort(404)
         if not can_access_matter(t.matter_id):
             abort(403)
+        enforce_case_team_role()
 
         rule = (t.recurrence_rule or "weekly").lower()
         if t.due_date is None:

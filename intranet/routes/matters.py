@@ -19,6 +19,10 @@ from ..helpers import (
     allowed_doc,
     audit,
     can_access_matter,
+    can_access_document_file,
+    enforce_case_team_role,
+    filter_accessible_document_files,
+    filter_accessible_matter_notes,
     is_admin,
     matter_activity,
     normalize_query,
@@ -42,7 +46,7 @@ from ..models import (
     TaskTemplateItem,
     User,
 )
-from ..policies import enforce_data_residency, enforce_permission, visible_matter_ids
+from ..policies import enforce_data_residency, enforce_permission, has_permission, visible_matter_ids
 from ..roles import role_is_director, role_query_values_for_legal_team
 from ..services.archetypes import (
     build_document_context,
@@ -742,6 +746,7 @@ def register_matter_routes(app):
     @app.post("/matters/<int:matter_id>/summary")
     @login_required
     def matter_summary_update(matter_id: int):
+        enforce_permission("matter_team", "manage")
         if not can_access_matter(matter_id):
             abort(403)
         m = db.session.get(Matter, matter_id)
@@ -868,7 +873,8 @@ def register_matter_routes(app):
             .limit(30)
             .all()
         )
-        notes = (
+        docs = filter_accessible_document_files(docs)
+        notes = filter_accessible_matter_notes(
             MatterNote.query.filter_by(matter_id=matter_id)
             .order_by(MatterNote.updated_at.desc(), MatterNote.id.desc())
             .limit(20)
@@ -952,7 +958,8 @@ def register_matter_routes(app):
             .limit(30)
             .all()
         )
-        notes = (
+        docs = filter_accessible_document_files(docs)
+        notes = filter_accessible_matter_notes(
             MatterNote.query.filter_by(matter_id=matter_id)
             .order_by(MatterNote.updated_at.desc(), MatterNote.id.desc())
             .limit(20)
@@ -1004,6 +1011,7 @@ def register_matter_routes(app):
     def matter_timeline_add(matter_id: int):
         if not can_access_matter(matter_id):
             abort(403)
+        enforce_case_team_role()
         m = db.session.get(Matter, matter_id)
         if not m:
             abort(404)
@@ -1054,6 +1062,7 @@ def register_matter_routes(app):
     def matter_archetype_document_download(matter_id: int):
         if not can_access_matter(matter_id):
             abort(403)
+        enforce_case_team_role()
 
         m = db.session.get(Matter, matter_id)
         if not m:
@@ -1088,6 +1097,7 @@ def register_matter_routes(app):
     def matter_archetype_fields_update(matter_id: int):
         if not can_access_matter(matter_id):
             abort(403)
+        enforce_case_team_role()
         m = db.session.get(Matter, matter_id)
         if not m:
             abort(404)
@@ -1138,7 +1148,12 @@ def register_matter_routes(app):
             .all()
         )
         tasks = Task.query.filter_by(matter_id=matter_id).order_by(Task.status.asc(), Task.due_date.asc().nullslast()).limit(50).all()
-        docs = DocumentFile.query.filter_by(matter_id=matter_id).order_by(DocumentFile.uploaded_at.desc()).limit(30).all()
+        can_view_dms = has_permission("dms", "read")
+        docs = []
+        if can_view_dms:
+            docs = filter_accessible_document_files(
+                DocumentFile.query.filter_by(matter_id=matter_id).order_by(DocumentFile.uploaded_at.desc()).limit(30).all()
+            )
         timeline = (
             MatterTimelineEvent.query.filter_by(matter_id=matter_id)
             .order_by(MatterTimelineEvent.event_date.desc(), MatterTimelineEvent.created_at.desc())
@@ -1162,7 +1177,11 @@ def register_matter_routes(app):
         archetype_values = parse_matter_archetype_values(m.archetype_data_json)
         archetype_document, archetype_missing_tokens = _generate_archetype_document(m, archetype)
         archetype_compliance = build_archetype_compliance_snapshot(m, archetype)
-        notes_count = MatterNote.query.filter_by(matter_id=matter_id).count()
+        notes_count = len(
+            filter_accessible_matter_notes(
+                MatterNote.query.filter_by(matter_id=matter_id).all()
+            )
+        )
         matter_magic = build_matter_magic_snapshot(
             m,
             today=today,
@@ -1527,6 +1546,7 @@ def register_matter_routes(app):
             abort(404)
 
         if request.method == "POST":
+            enforce_case_team_role()
             return _create_task_from_request(m)
 
         users, task_templates, template_primary_items = _task_form_context()
@@ -1557,6 +1577,7 @@ def register_matter_routes(app):
             abort(404)
         if not can_access_matter(t.matter_id):
             abort(403)
+        enforce_case_team_role()
         previous_status = t.status
         status = normalize_query(request.form.get("status", "Todo")) or "Todo"
         if status not in {"Todo", "Doing", "Done"}:
@@ -1591,6 +1612,7 @@ def register_matter_routes(app):
     @app.route("/matters/<int:matter_id>/documents", methods=["GET", "POST"])
     @login_required
     def matter_documents(matter_id: int):
+        enforce_permission("dms", "read")
         if not can_access_matter(matter_id):
             abort(403)
         m = db.session.get(Matter, matter_id)
@@ -1598,6 +1620,7 @@ def register_matter_routes(app):
             abort(404)
 
         if request.method == "POST":
+            enforce_permission("dms", "write")
             if "file" not in request.files:
                 flash("No file uploaded.", "warning")
                 return redirect(url_for("matter_documents", matter_id=matter_id))
@@ -1675,7 +1698,9 @@ def register_matter_routes(app):
             flash("Uploaded.", "info")
             return redirect(url_for("matter_documents", matter_id=matter_id))
 
-        docs = DocumentFile.query.filter_by(matter_id=matter_id).order_by(DocumentFile.uploaded_at.desc()).limit(200).all()
+        docs = filter_accessible_document_files(
+            DocumentFile.query.filter_by(matter_id=matter_id).order_by(DocumentFile.uploaded_at.desc()).limit(200).all()
+        )
 
         return page(
             "Documents",
@@ -1694,7 +1719,7 @@ def register_matter_routes(app):
         d = db.session.get(DocumentFile, doc_id)
         if not d:
             abort(404)
-        if not can_access_matter(d.matter_id):
+        if not can_access_document_file(d):
             abort(403)
         enforce_data_residency("exports")
         try:

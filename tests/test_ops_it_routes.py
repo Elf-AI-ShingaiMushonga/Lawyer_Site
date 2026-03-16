@@ -36,6 +36,7 @@ def test_ops_assets_requires_support_or_admin(app_ctx):
     admin = _seed_user("ops-admin@example.com", "Ops Admin", "admin")
     support = _seed_user("ops-support@example.com", "Ops Support", "operations_staff")
     lawyer = _seed_user("ops-lawyer@example.com", "Ops Lawyer", "senior_attorney")
+    candidate = _seed_user("ops-candidate@example.com", "Ops Candidate", "candidate_attorney")
     db.session.commit()
 
     client = app_ctx.test_client()
@@ -43,6 +44,10 @@ def test_ops_assets_requires_support_or_admin(app_ctx):
     _set_internal_session(client, lawyer.id)
     forbidden = client.get("/ops/assets")
     assert forbidden.status_code == 403
+
+    _set_internal_session(client, candidate.id)
+    candidate_forbidden = client.get("/ops/assets")
+    assert candidate_forbidden.status_code == 403
 
     _set_internal_session(client, support.id)
     support_view = client.get("/ops/assets")
