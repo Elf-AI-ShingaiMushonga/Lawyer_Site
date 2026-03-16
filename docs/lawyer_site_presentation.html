@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DM-Inc Lawyer Site Presentation</title>
+  <style>
+    :root {
+      --paper: #f7f1eb;
+      --paper-strong: #fffaf5;
+      --ink: #231718;
+      --muted: #6d5957;
+      --line: rgba(120, 69, 58, 0.18);
+      --accent: #b12d1f;
+      --accent-deep: #7b1f16;
+      --accent-soft: rgba(177, 45, 31, 0.09);
+      --gold: #b88744;
+      --pine: #244539;
+      --shadow: 0 22px 54px rgba(54, 29, 25, 0.12);
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+      --sans: "Avenir Next", "Segoe UI", sans-serif;
+      --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      --content-width: 1320px;
+      --slide-gap: 26px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: var(--sans);
+      background:
+        radial-gradient(circle at top left, rgba(177, 45, 31, 0.12), transparent 22%),
+        radial-gradient(circle at top right, rgba(184, 135, 68, 0.17), transparent 24%),
+        linear-gradient(180deg, #e7ddd4, #efe6de 16%, #f6f0ea 48%, #ece0d7 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(123, 31, 22, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(123, 31, 22, 0.04) 1px, transparent 1px);
+      background-size: 72px 72px;
+      mask-image: radial-gradient(circle at center, black 26%, transparent 76%);
+      z-index: 0;
+    }
+
+    a {
+      color: var(--accent-deep);
+    }
+
+    .deck {
+      position: relative;
+      z-index: 1;
+      max-width: var(--content-width);
+      margin: 0 auto;
+      padding: 28px 18px 54px;
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 18px;
+      display: grid;
+      gap: 18px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background:
+        linear-gradient(180deg, rgba(255, 250, 245, 0.98), rgba(247, 239, 232, 0.95)),
+        var(--paper);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+    }
+
+    .eyebrow {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: #8a655f;
+    }
+
+    .sidebar h1 {
+      margin: 8px 0 0;
+      font-family: var(--serif);
+      font-size: 38px;
+      line-height: 0.98;
+      letter-spacing: -0.05em;
+    }
+
+    .sidebar p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .note-band {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid rgba(177, 45, 31, 0.18);
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(255, 245, 242, 0.98), rgba(255, 251, 249, 0.88));
+    }
+
+    .note-band strong {
+      font-size: 13px;
+    }
+
+    .nav-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .nav-list a {
+      display: block;
+      padding: 11px 13px;
+      border: 1px solid rgba(177, 45, 31, 0.12);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.78);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 700;
+      color: #4f3330;
+      transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+    }
+
+    .nav-list a:hover {
+      transform: translateX(4px);
+      border-color: rgba(177, 45, 31, 0.34);
+      background: rgba(255, 245, 242, 0.96);
+    }
+
+    .sidebar-footer {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .slides {
+      display: grid;
+      gap: var(--slide-gap);
+    }
+
+    .slide {
+      position: relative;
+      overflow: hidden;
+      padding: 26px;
+      border: 1px solid var(--line);
+      border-radius: 34px;
+      background:
+        radial-gradient(circle at top right, rgba(177, 45, 31, 0.08), transparent 24%),
+        linear-gradient(180deg, rgba(255, 252, 248, 0.98), rgba(248, 243, 237, 0.95)),
+        var(--paper-strong);
+      box-shadow: var(--shadow);
+      min-height: 88vh;
+      display: grid;
+      align-content: start;
+      gap: 22px;
+    }
+
+    .slide::after {
+      content: "";
+      position: absolute;
+      inset: auto -90px -110px auto;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(184, 135, 68, 0.22), transparent 68%);
+      pointer-events: none;
+    }
+
+    .slide-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .slide-index {
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(177, 45, 31, 0.1);
+      color: var(--accent-deep);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .slide-title {
+      margin: 6px 0 0;
+      font-family: var(--serif);
+      font-size: clamp(34px, 4vw, 56px);
+      line-height: 0.96;
+      letter-spacing: -0.06em;
+      max-width: 10.8em;
+    }
+
+    .slide-subtitle {
+      margin: 10px 0 0;
+      max-width: 62ch;
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .route-row,
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .route-chip,
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(120, 69, 58, 0.18);
+      background: rgba(255, 255, 255, 0.78);
+      font-size: 12px;
+      font-weight: 700;
+      color: #5a413e;
+    }
+
+    .route-chip code,
+    .metric-card code {
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .hero-grid,
+    .two-col,
+    .three-col,
+    .workflow-grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero-grid {
+      grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.9fr);
+    }
+
+    .two-col {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .three-col {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .workflow-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .panel,
+    .hero-panel,
+    .metric-card,
+    .journey-card,
+    .timeline-item,
+    .module-card,
+    .callout {
+      position: relative;
+      padding: 18px;
+      border: 1px solid rgba(120, 69, 58, 0.18);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: 0 10px 24px rgba(48, 27, 23, 0.06);
+    }
+
+    .hero-panel {
+      padding: 22px;
+      background:
+        radial-gradient(circle at top left, rgba(177, 45, 31, 0.1), transparent 26%),
+        linear-gradient(180deg, rgba(255, 250, 248, 1), rgba(255, 244, 240, 0.92));
+    }
+
+    .hero-panel h2,
+    .panel h3,
+    .module-card h3,
+    .journey-card h3,
+    .callout h3 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.12;
+      letter-spacing: -0.03em;
+    }
+
+    .hero-panel h2 {
+      font-family: var(--serif);
+      font-size: 30px;
+    }
+
+    .lead {
+      margin: 10px 0 0;
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--muted);
+    }
+
+    .metric-card {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      min-height: 160px;
+    }
+
+    .metric-kicker,
+    .panel-kicker {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #8b6660;
+    }
+
+    .metric-value {
+      font-family: var(--serif);
+      font-size: 44px;
+      line-height: 1;
+      letter-spacing: -0.06em;
+    }
+
+    .metric-copy,
+    .panel p,
+    .module-card p,
+    .journey-card p,
+    .callout p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .steps,
+    .plain-list,
+    .check-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .steps li,
+    .plain-list li,
+    .check-list li {
+      position: relative;
+      padding-left: 18px;
+      color: #4e3a38;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .steps li::before,
+    .plain-list li::before,
+    .check-list li::before {
+      content: "";
+      position: absolute;
+      top: 9px;
+      left: 0;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .workflow-grid .journey-card {
+      display: grid;
+      gap: 12px;
+      min-height: 220px;
+    }
+
+    .journey-number {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(160deg, var(--accent), var(--accent-deep));
+      color: #fff7f4;
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 700;
+      box-shadow: 0 10px 24px rgba(177, 45, 31, 0.22);
+    }
+
+    .screen {
+      display: grid;
+      gap: 14px;
+      padding: 16px;
+      border-radius: 26px;
+      border: 1px solid rgba(36, 69, 57, 0.15);
+      background: linear-gradient(180deg, #162223, #213236 38%, #efe8df 38%, #f8f4ee);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .screen-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      color: rgba(255, 245, 240, 0.92);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .screen-dots {
+      display: inline-flex;
+      gap: 6px;
+    }
+
+    .screen-dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .screen-body {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 20px;
+      background: rgba(255, 250, 246, 0.98);
+      color: var(--ink);
+    }
+
+    .screen-bar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .screen-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .screen-kpis {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .mini-kpi {
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(177, 45, 31, 0.06);
+      border: 1px solid rgba(177, 45, 31, 0.12);
+    }
+
+    .mini-kpi strong {
+      display: block;
+      font-family: var(--serif);
+      font-size: 26px;
+      line-height: 1;
+      letter-spacing: -0.05em;
+    }
+
+    .mini-kpi span {
+      display: block;
+      margin-top: 5px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .inbox,
+    .matter-list,
+    .ticket-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .inbox-item,
+    .matter-row,
+    .ticket-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(120, 69, 58, 0.14);
+      background: #fffdfa;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .tag.red {
+      background: rgba(177, 45, 31, 0.12);
+      color: var(--accent-deep);
+    }
+
+    .tag.gold {
+      background: rgba(184, 135, 68, 0.18);
+      color: #6d4d19;
+    }
+
+    .tag.green {
+      background: rgba(36, 69, 57, 0.12);
+      color: var(--pine);
+    }
+
+    .split-highlight {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 12px;
+    }
+
+    .timeline-item {
+      display: grid;
+      gap: 8px;
+    }
+
+    .timeline-time {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: #8b6660;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .module-card {
+      display: grid;
+      gap: 10px;
+      min-height: 220px;
+    }
+
+    .module-card strong {
+      font-size: 14px;
+    }
+
+    .callout {
+      border-color: rgba(36, 69, 57, 0.18);
+      background: linear-gradient(180deg, rgba(246, 252, 249, 0.98), rgba(255, 255, 255, 0.92));
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 20px;
+      border: 1px solid rgba(120, 69, 58, 0.14);
+      background: rgba(255, 255, 255, 0.82);
+    }
+
+    .table th,
+    .table td {
+      padding: 13px 14px;
+      border-bottom: 1px solid rgba(120, 69, 58, 0.12);
+      vertical-align: top;
+      text-align: left;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .table th {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #7a625f;
+      background: rgba(177, 45, 31, 0.05);
+    }
+
+    .table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .footer-card {
+      padding: 20px;
+      border-radius: 26px;
+      border: 1px solid rgba(120, 69, 58, 0.18);
+      background: linear-gradient(180deg, rgba(255, 249, 245, 0.98), rgba(247, 240, 232, 0.95));
+    }
+
+    @media (max-width: 1180px) {
+      .deck {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: relative;
+        top: 0;
+      }
+
+      .slide {
+        min-height: auto;
+      }
+
+      .hero-grid,
+      .split-highlight,
+      .two-col,
+      .three-col,
+      .workflow-grid,
+      .module-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .deck {
+        padding: 14px 12px 30px;
+      }
+
+      .slide,
+      .sidebar {
+        padding: 18px;
+        border-radius: 24px;
+      }
+
+      .screen-kpis {
+        grid-template-columns: 1fr;
+      }
+
+      .slide-title {
+        font-size: 34px;
+      }
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      body::before,
+      .sidebar {
+        display: none;
+      }
+
+      .deck {
+        display: block;
+        max-width: none;
+        padding: 0;
+      }
+
+      .slide {
+        min-height: auto;
+        page-break-after: always;
+        box-shadow: none;
+        border-radius: 0;
+        border: 0;
+        padding: 0;
+        background: #ffffff;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <aside class="sidebar">
+      <div>
+        <p class="eyebrow">Training Deck</p>
+        <h1>How Lawyers Use the DM-Inc Site</h1>
+      </div>
+      <p>This presentation is aligned to the current website state on March 14, 2026: one landing-page option, normal lawyer-site sign-in, and the current matter, time, portal, and helpdesk workflows.</p>
+      <div class="note-band">
+        <strong>Current platform notes</strong>
+        <p>The UFC experience has been removed. The landing page now points only to the lawyer site. Internal MFA is temporarily disabled for the lawyer site, so internal users sign in with email and password only.</p>
+      </div>
+      <ul class="nav-list">
+        <li><a href="#slide-1">1. What changed</a></li>
+        <li><a href="#slide-2">2. Sign-in and orientation</a></li>
+        <li><a href="#slide-3">3. Dashboard and priority inbox</a></li>
+        <li><a href="#slide-4">4. Matter directory and workspace</a></li>
+        <li><a href="#slide-5">5. Daily matter execution</a></li>
+        <li><a href="#slide-6">6. Time capture and billing readiness</a></li>
+        <li><a href="#slide-7">7. Portal, knowledge, and support</a></li>
+        <li><a href="#slide-8">8. Lawyer operating rhythm</a></li>
+      </ul>
+      <div class="sidebar-footer">
+        Recommended use: open this file in a browser and present in full-screen mode, or print to PDF for onboarding packs.
+      </div>
+    </aside>
+
+    <main class="slides">
+      <section class="slide" id="slide-1">
+        <header class="slide-header">
+          <div>
+            <div class="slide-index">Slide 01</div>
+            <h2 class="slide-title">One front door, one lawyer site, one operating rhythm.</h2>
+            <p class="slide-subtitle">The site is now simpler: lawyers arrive at a single landing page, open the lawyer experience, and move straight into the firm workspace. No UFC branch remains on the site.</p>
+          </div>
+          <div class="pill-row">
+            <span class="pill">Updated March 14, 2026</span>
+            <span class="pill">Lawyer-facing edition</span>
+          </div>
+        </header>
+
+        <div class="route-row">
+          <span class="route-chip"><code>/</code> Choose an Experience</span>
+          <span class="route-chip"><code>/login</code> Lawyer sign-in</span>
+          <span class="route-chip"><code>/dashboard</code> Daily command center</span>
+        </div>
+
+        <div class="hero-grid">
+          <div class="hero-panel">
+            <p class="eyebrow">What Lawyers Should Expect</p>
+            <h2>Open the intranet, choose the lawyer site, and continue with your firm credentials.</h2>
+            <p class="lead">The landing page is still there, but it now offers only one action. After you click <strong>Open Lawyer Site</strong>, you sign in using your firm email address and password. Internal MFA prompts have been removed for now, so the lawyer flow is materially faster than before.</p>
+            <div class="pill-row">
+              <span class="pill">UFC removed</span>
+              <span class="pill">Lawyer site only</span>
+              <span class="pill">Email + password sign-in</span>
+            </div>
+          </div>
+
+          <div class="screen">
+            <div class="screen-top">
+              <div class="screen-dots"><span></span><span></span><span></span></div>
+              <div>DM-Inc experience selector</div>
+            </div>
+            <div class="screen-body">
+              <div class="screen-bar">
+                <div class="screen-title">Choose an experience</div>
+                <span class="tag red">Single experience</span>
+              </div>
+              <div class="journey-card">
+                <h3>DM-Inc Lawyer Site</h3>
+                <p>Matter operations, deadlines, DMS, time capture, billing, client portal coordination, and internal support workflows.</p>
+              </div>
+              <div class="callout">
+                <h3>Training message</h3>
+                <p>If anyone expects a second site option, that is legacy behavior. The current landing page keeps the choice screen but routes only to the legal operating system.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="three-col">
+          <article class="metric-card">
+            <p class="metric-kicker">Access</p>
+            <div class="metric-value">1</div>
+            <p class="metric-copy">There is now one internal experience choice on the landing page, not two.</p>
+          </article>
+          <article class="metric-card">
+            <p class="metric-kicker">Authentication</p>
+            <div class="metric-value">Fast</div>
+            <p class="metric-copy">Internal lawyers sign in with firm email and password. The site no longer asks them to complete lawyer-site MFA enrollment or code entry.</p>
+          </article>
+          <article class="metric-card">
+            <p class="metric-kicker">User outcome</p>
+            <div class="metric-value">Simple</div>
+            <p class="metric-copy">Less friction at entry means more time spent where the work actually happens: dashboard, matters, time, and client follow-up.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-2">
+        <header class="slide-header">
+          <div>
+            <div class="slide-index">Slide 02</div>
+            <h2 class="slide-title">Sign in, orient yourself, and learn the navigation pattern.</h2>
+            <p class="slide-subtitle">The top navigation is the lawyer’s control rail. The first five minutes of adoption should focus on how to enter the site, where the primary modules live, and how to move without losing context.</p>
+          </div>
+        </header>
+
+        <div class="two-col">
+          <article class="panel">
+            <p class="panel-kicker">Sign-In Flow</p>
+            <h3>What to tell every lawyer</h3>
+            <ol class="steps">
+              <li>Open the site root and click <strong>Open Lawyer Site</strong>.</li>
+              <li>Enter your firm email and your normal password.</li>
+              <li>After sign-in, you land on the internal dashboard.</li>
+              <li>If you were sent a direct link, the site will still bring you back to the requested page after login.</li>
+            </ol>
+          </article>
+
+          <article class="panel">
+            <p class="panel-kicker">Navigation Pattern</p>
+            <h3>What lives in the top shell</h3>
+            <ul class="plain-list">
+              <li><strong>Dashboard</strong> for the day’s workload and priority inbox.</li>
+              <li><strong>Matters</strong> for searching, filtering, and opening client work.</li>
+              <li><strong>Calendar</strong> for due dates and docketing visibility.</li>
+              <li><strong>Billing</strong> for invoice and financial visibility.</li>
+              <li><strong>Jump / command menu</strong> for fast switching to modules like helpdesk, knowledge base, portal, or analytics.</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="split-highlight">
+          <div class="screen">
+            <div class="screen-top">
+              <div class="screen-dots"><span></span><span></span><span></span></div>
+              <div>Login page</div>
+            </div>
+            <div class="screen-body">
+              <div class="screen-bar">
+                <div class="screen-title">Sign In</div>
+                <span class="tag gold">Current state</span>
+              </div>
+              <div class="panel">
+                <strong>What the page now says</strong>
+                <p>Use your firm credentials to continue. Internal MFA is temporarily disabled for the lawyer site while access controls are simplified.</p>
+              </div>
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Field</th>
+                    <th>Meaning</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Email</td>
+                    <td>Your firm account address.</td>
+                  </tr>
+                  <tr>
+                    <td>Password</td>
+                    <td>Your normal internal password.</td>
+                  </tr>
+                  <tr>
+                    <td>Button</td>
+                    <td>Access Dashboard</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="timeline">
+            <article class="timeline-item">
+              <div class="timeline-time">Orientation tip</div>
+              <strong>Everything important is reachable in two moves.</strong>
+              <p>From the dashboard, lawyers can either enter a matter or jump directly into time capture, calendar, helpdesk, portal, or billing work.</p>
+            </article>
+            <article class="timeline-item">
+              <div class="timeline-time">Role awareness</div>
+              <strong>Not every user sees every control.</strong>
+              <p>The site is role-based. Lawyers will see the workspaces they need; operations and finance users see additional controls, including asset management and some finance surfaces.</p>
+            </article>
+            <article class="timeline-item">
+              <div class="timeline-time">Keep this simple</div>
+              <strong>Teach the top rail and the search/jump behavior first.</strong>
+              <p>Once that mental model is stable, adoption of the deeper workflows becomes much easier.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-3">
+        <header class="slide-header">
+          <div>
+            <div class="slide-index">Slide 03</div>
+            <h2 class="slide-title">The dashboard is the lawyer’s daily launch point.</h2>
+            <p class="slide-subtitle">The dashboard is not just a welcome page. It is the queue manager, urgency filter, and shortcut board for the legal day.</p>
+          </div>
+          <div class="route-row">
+            <span class="route-chip"><code>/dashboard</code> Priority inbox</span>
+          </div>
+        </header>
+
+        <div class="split-highlight">
+          <div class="screen">
+            <div class="screen-top">
+              <div class="screen-dots"><span></span><span></span><span></span></div>
+              <div>Dashboard</div>
+            </div>
+            <div class="screen-body">
+              <div class="screen-bar">
+                <div class="screen-title">Priority Inbox + My Tasks</div>
+                <span class="tag red">Live work</span>
+              </div>
+              <div class="screen-kpis">
+                <div class="mini-kpi">
+                  <strong>8</strong>
+                  <span>Accessible Matters</span>
+                </div>
+                <div class="mini-kpi">
+                  <strong>3</strong>
+                  <span>Priority Inbox lanes</span>
+                </div>
+                <div class="mini-kpi">
+                  <strong>7d</strong>
+                  <span>Upcoming horizon</span>
+                </div>
+              </div>
+              <div class="inbox">
+                <div class="inbox-item">
+                  <div>
+                    <strong>Client follow-up waiting on response</strong>
+                    <p>Use this when the client or counterparty needs action today.</p>
+                  </div>
+                  <span class="tag red">Urgent</span>
+                </div>
+                <div class="inbox-item">
+                  <div>
+                    <strong>Deadline or task due soon</strong>
+                    <p>Prioritize matters with near-term dates.</p>
+                  </div>
+                  <span class="tag gold">Due soon</span>
+                </div>
+                <div class="inbox-item">
+                  <div>
+                    <strong>Billing leakage and review gaps</strong>
+                    <p>Use this to close time capture before invoicing suffers.</p>
+                  </div>
+                  <span class="tag green">Recoverable</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="two-col">
+            <article class="panel">
+              <p class="panel-kicker">Primary use</p>
+              <h3>Start every day here</h3>
+              <ul class="check-list">
+                <li>Review the priority inbox before opening email.</li>
+                <li>Check <strong>My Tasks</strong> for personal work already allocated.</li>
+                <li>Use the recent or pinned matter shortcuts to jump directly into live files.</li>
+                <li>Open the matter only after you know why it is urgent.</li>
+              </ul>
+            </article>
+
+            <article class="panel">
+              <p class="panel-kicker">What this prevents</p>
+              <h3>Common lawyer failure modes</h3>
+              <ul class="check-list">
+                <li>Missing near-term deadlines because work was buried inside one matter.</li>
+                <li>Leaving time uncaptured until the end of the week.</li>
+                <li>Forgetting follow-ups that are not on a personal calendar.</li>
+                <li>Opening the wrong matter because search started without triage.</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+
+        <div class="workflow-grid">
+          <article class="journey-card">
+            <div class="journey-number">01</div>
+            <h3>Scan</h3>
+            <p>Look for client urgency, date urgency, and billing urgency in that order.</p>
+          </article>
+          <article class="journey-card">
+            <div class="journey-number">02</div>
+            <h3>Select</h3>
+            <p>Choose the one matter or task that actually changes the day’s risk profile.</p>
+          </article>
+          <article class="journey-card">
+            <div class="journey-number">03</div>
+            <h3>Open</h3>
+            <p>Enter the matter directory or a pinned matter from the dashboard shortcut.</p>
+          </article>
+          <article class="journey-card">
+            <div class="journey-number">04</div>
+            <h3>Record</h3>
+            <p>After work is done, return to time capture and close the billing loop.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-4">
+        <header class="slide-header">
+          <div>
+            <div class="slide-index">Slide 04</div>
+            <h2 class="slide-title">Find the right matter quickly, then work from the matter context.</h2>
+            <p class="slide-subtitle">The matter directory is the front door to client work. Lawyers should not rely on memory alone; they should search, filter, open the right file, and stay inside matter context for the rest of the workflow.</p>
+          </div>
+          <div class="route-row">
+            <span class="route-chip"><code>/matters</code> Matter Directory</span>
+          </div>
+        </header>
+
+        <div class="split-highlight">
+          <div class="screen">
+            <div class="screen-top">
+              <div class="screen-dots"><span></span><span></span><span></span></div>
+              <div>Matter Directory</div>
+            </div>
+            <div class="screen-body">
+              <div class="screen-bar">
+                <div class="screen-title">Search, filter, and open</div>
+                <span class="tag gold">Matter management</span>
+              </div>
+              <div class="screen-kpis">
+                <div class="mini-kpi">
+                  <strong>Open</strong>
+                  <span>Live files</span>
+                </div>
+                <div class="mini-kpi">
+                  <strong>Hold</strong>
+                  <span>Paused matters</span>
+                </div>
+                <div class="mini-kpi">
+                  <strong>Closed</strong>
+                  <span>Completed files</span>
+                </div>
+              </div>
+              <div class="matter-list">
+                <div class="matter-row">
+                  <div>
+                    <strong>2026-LIT-0142 | Urgent interdict application</strong>
+                    <p>Client, title, and current status stay visible in one row.</p>
+                  </div>
+                  <span class="tag red">Open</span>
+                </div>
+                <div class="matter-row">
+                  <div>
+                    <strong>2026-EMP-0098 | Labour dispute response</strong>
+                    <p>Use filters to narrow by title, client, status, or task queue.</p>
+                  </div>
+                  <span class="tag gold">On hold</span>
+                </div>
+                <div class="matter-row">
+                  <div>
+                    <strong>2025-CORP-0301 | Board resolution close-out</strong>
+                    <p>Closed matters remain searchable for reference and audit.</p>
+                  </div>
+                  <span class="tag green">Closed</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <p class="panel-kicker">What to train</p>
+            <h3>Matter search discipline</h3>
+            <ul class="plain-list">
+              <li>Search by <strong>matter number</strong> when available.</li>
+              <li>Use client name or matter title when a number is not known.</li>
+              <li>Use directory filters instead of opening multiple tabs and guessing.</li>
+              <li>Once inside the matter, keep work anchored there so notes, documents, tasks, and deadlines stay tied to the right client record.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="module-grid">
+          <article class="module-card">
+            <p class="panel-kicker">Inside the matter</p>
+            <h3>Documents and DMS</h3>
+            <p>Upload, review, and work with matter documents inside the matter context so the record stays complete and searchable.</p>
+            <strong>Training line:</strong>
+            <p>If the document belongs to a matter, put it in that matter rather than keeping it in local folders or email only.</p>
+          </article>
+          <article class="module-card">
+            <p class="panel-kicker">Inside the matter</p>
+            <h3>Tasks and responsibility</h3>
+            <p>Use tasks to allocate work, track completion, and make due dates explicit instead of informal.</p>
+            <strong>Training line:</strong>
+            <p>If work must happen later or by someone else, it should become a task.</p>
+          </article>
+          <article class="module-card">
+            <p class="panel-kicker">Inside the matter</p>
+            <h3>Notes and activity trail</h3>
+            <p>Capture substance, decisions, and follow-ups inside the record so another lawyer can reconstruct the file quickly.</p>
+            <strong>Training line:</strong>
+            <p>If it changes legal judgment, instruction, or risk, it belongs in the matter trail.</p>
+          </article>
+          <article class="module-card">
+            <p class="panel-kicker">Inside the matter</p>
+            <h3>Calendar and deadlines</h3>
+            <p>Use the calendar surfaces for date-sensitive work so the system, not memory, carries the deadline burden.</p>
+            <strong>Training line:</strong>
+            <p>If a date matters, capture it where the team can see it.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-5">
+        <header class="slide-header">
+          <div>
+            <div class="slide-index">Slide 05</div>
+            <h2 class="slide-title">Lawyer work is more than matter review: it is execution, follow-up, and client movement.</h2>
+            <p class="slide-subtitle">Once the right matter is open, the lawyer should use the site to move the file forward, not merely read it. The core disciplines are deadlines, follow-up, document flow, and client communication.</p>
+          </div>
+        </header>
+
+        <div class="two-col">
+          <article class="panel">
+            <p class="panel-kicker">Matter execution</p>
+            <h3>Use the workspace to move the file</h3>
+            <ul class="plain-list">
+              <li>Review what is due, what is blocked, and who owns the next action.</li>
+              <li>Update or create tasks when responsibilities change.</li>
+              <li>Attach or version the documents that support the next legal step.</li>
+              <li>Record client instructions, hearing preparation, research outcomes, and negotiation points directly into the matter record.</li>
+            </ul>
+          </article>
+
+          <article class="panel">
+            <p class="panel-kicker">Client movement</p>
+            <h3>Use portal and knowledge surfaces deliberately</h3>
+            <ul class="plain-list">
+              <li>Use the client portal when the client should see uploads, invoices, or message threads in a structured channel.</li>
+              <li>Use the knowledge base when you need internal precedent, policy, or process guidance.</li>
+              <li>Use the command menu to jump rather than backtracking through the full navigation.</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="workflow-grid">
+          <article class="journey-card">
+            <div class="journey-number">A</div>
+            <h3>Review the file</h3>
+            <p>Confirm status, deadlines, latest activity, and the client’s latest instruction.</p>
+          </article>
+          <article class="journey-card">
+            <div class="journey-number">B</div>
+            <h3>Advance the work</h3>
+            <p>Draft, upload, assign, or respond. The goal is file movement, not passive reading.</p>
+          </article>
+          <article class="journey-card">
+            <div class="journey-number">C</div>
+            <h3>Set the next trigger</h3>
+            <p>Create the next task, deadline, or client follow-up so the matter does not stall.</p>
+          </article>
+          <article class="journey-card">
+            <div class="journey-number">D</div>
+            <h3>Capture the trail</h3>
+            <p>Leave enough evidence in the matter record that another lawyer can understand what changed.</p>
+          </article>
+        </div>
+
+        <div class="callout">
+          <h3>The simplest training rule</h3>
+          <p>If a lawyer leaves a matter without recording the outcome, the work may still be legally correct but operationally invisible. The site exists to prevent invisible work.</p>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-6">
+        <header class="slide-header">
+          <div>
+            <div class="slide-index">Slide 06</div>
+            <h2 class="slide-title">Time capture is part of the legal workflow, not an afterthought.</h2>
+            <p class="slide-subtitle">Lawyers should understand the time desk as a quality-control screen between work done and revenue realized. If time is captured late or poorly, billing and audit quality degrade immediately.</p>
+          </div>
+          <div class="route-row">
+            <span class="route-chip"><code>/time/entries</code> Time Entries</span>
+            <span class="route-chip"><code>/time/timers</code> Timer management</span>
+            <span class="route-chip"><code>/billing/invoices</code> Billing visibility</span>
+          </div>
+        </header>
+
+        <div class="split-highlight">
+          <div class="screen">
+            <div class="screen-top">
+              <div class="screen-dots"><span></span><span></span><span></span></div>
+              <div>Time capture desk</div>
+            </div>
+            <div class="screen-body">
+              <div class="screen-bar">
+                <div class="screen-title">Time Entries</div>
+                <span class="tag red">Billing readiness</span>
+              </div>
+              <div class="screen-kpis">
+                <div class="mini-kpi">
+                  <strong>Now</strong>
+                  <span>Capture as you finish</span>
+                </div>
+                <div class="mini-kpi">
+                  <strong>Task</strong>
+                  <span>Link to matter work</span>
+                </div>
+                <div class="mini-kpi">
+                  <strong>Review</strong>
+                  <span>Clear validation issues</span>
+                </div>
+              </div>
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Field</th>
+                    <th>Why it matters</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Matter</td>
+                    <td>Ties the work to the right file and later invoice.</td>
+                  </tr>
+                  <tr>
+                    <td>Start and end</td>
+                    <td>Supports accurate duration and audit history.</td>
+                  </tr>
+                  <tr>
+                    <td>Task/activity codes</td>
+                    <td>Keeps billing structured and compatible with review requirements.</td>
+                  </tr>
+                  <tr>
+                    <td>Narrative</td>
+                    <td>Explains the legal work clearly enough for client and billing review.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="two-col">
+            <article class="panel">
+              <p class="panel-kicker">Training emphasis</p>
+              <h3>When to capture time</h3>
+              <ul class="plain-list">
+                <li>Immediately after finishing a meaningful block of work.</li>
+                <li>At the moment you switch matters.</li>
+                <li>Before the end of the day, not at the end of the week.</li>
+              </ul>
+            </article>
+
+            <article class="panel">
+              <p class="panel-kicker">Quality emphasis</p>
+              <h3>What good entries sound like</h3>
+              <ul class="plain-list">
+                <li>Specific and professional.</li>
+                <li>Connected to the legal purpose of the work.</li>
+                <li>Free from vague language such as "miscellaneous admin."</li>
+              </ul>
+            </article>
+
+            <article class="panel">
+              <p class="panel-kicker">Tools available</p>
+              <h3>Timers and AI assist</h3>
+              <p>The site includes timer management and a narrative drafting assist on the time desk. These help lawyers capture work closer to real time and clean up narrative quality.</p>
+            </article>
+
+            <article class="panel">
+              <p class="panel-kicker">Downstream impact</p>
+              <h3>Why lawyers should care</h3>
+              <p>Clear time entries support invoice generation, approvals, client confidence, and auditability. Bad time hurts both revenue and trust.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-7">
+        <header class="slide-header">
+          <div>
+            <div class="slide-index">Slide 07</div>
+            <h2 class="slide-title">Use the surrounding modules when the matter requires client exchange, internal knowledge, or IT support.</h2>
+            <p class="slide-subtitle">The lawyer site is broader than matter management. Lawyers should know when to step into portal, knowledge, billing visibility, or helpdesk rather than trying to solve those needs through email alone.</p>
+          </div>
+        </header>
+
+        <div class="module-grid">
+          <article class="module-card">
+            <p class="panel-kicker">Client-facing</p>
+            <h3>Client Portal</h3>
+            <p>Use the portal for structured client communication, document exchange, uploads, and invoice visibility where the client should interact with the firm digitally.</p>
+            <strong>Route awareness:</strong>
+            <p><code>/portal/login</code> is the portal entry point, but lawyers usually launch portal work from the internal site.</p>
+          </article>
+
+          <article class="module-card">
+            <p class="panel-kicker">Internal knowledge</p>
+            <h3>Knowledge Base</h3>
+            <p>Use the knowledge base to find internal articles, standard guidance, or firm process references instead of asking the same questions repeatedly.</p>
+            <strong>Practical use:</strong>
+            <p>New lawyers can use this for process memory while senior lawyers use it for consistency.</p>
+          </article>
+
+          <article class="module-card">
+            <p class="panel-kicker">Financial awareness</p>
+            <h3>Billing and trust visibility</h3>
+            <p>Lawyers may not own every financial action, but they should understand the billing and trust state of their matters because it affects client conversations and urgency.</p>
+            <strong>Practical use:</strong>
+            <p>Check invoice progress and financial status before a client billing discussion.</p>
+          </article>
+
+          <article class="module-card">
+            <p class="panel-kicker">Internal support</p>
+            <h3>Helpdesk and linked assets</h3>
+            <p>Lawyers can submit internal IT tickets through the helpdesk. If the issue relates to a specific laptop, dock, monitor, or device, they can link the ticket to the asset so operations can triage faster.</p>
+            <strong>Route awareness:</strong>
+            <p><code>/ops/helpdesk</code> is for lawyers; the asset registry itself is primarily for support and admin roles.</p>
+          </article>
+        </div>
+
+        <div class="split-highlight">
+          <div class="screen">
+            <div class="screen-top">
+              <div class="screen-dots"><span></span><span></span><span></span></div>
+              <div>Internal helpdesk</div>
+            </div>
+            <div class="screen-body">
+              <div class="screen-bar">
+                <div class="screen-title">Submit Ticket</div>
+                <span class="tag gold">Support path</span>
+              </div>
+              <div class="ticket-list">
+                <div class="ticket-row">
+                  <div>
+                    <strong>Subject</strong>
+                    <p>State the problem in one line.</p>
+                  </div>
+                </div>
+                <div class="ticket-row">
+                  <div>
+                    <strong>Category + priority</strong>
+                    <p>Help operations triage the issue correctly.</p>
+                  </div>
+                </div>
+                <div class="ticket-row">
+                  <div>
+                    <strong>Linked asset</strong>
+                    <p>Attach the affected device if it appears in the list.</p>
+                  </div>
+                </div>
+                <div class="ticket-row">
+                  <div>
+                    <strong>Description</strong>
+                    <p>Explain what failed, when it started, and what was already tried.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="callout">
+            <h3>What to tell lawyers about support</h3>
+            <p>Do not bury IT problems in email. Open a helpdesk ticket. That gives the support team queue visibility, status tracking, and the ability to attach the issue to the affected firm asset.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-8">
+        <header class="slide-header">
+          <div>
+            <div class="slide-index">Slide 08</div>
+            <h2 class="slide-title">The best training outcome is a repeatable daily rhythm.</h2>
+            <p class="slide-subtitle">Adoption succeeds when lawyers can explain their own rhythm inside the platform. This last slide is the simplest behavior model to reinforce in rollout sessions.</p>
+          </div>
+        </header>
+
+        <div class="timeline">
+          <article class="timeline-item">
+            <div class="timeline-time">08:00</div>
+            <strong>Start on the dashboard.</strong>
+            <p>Review the priority inbox, check personal tasks, and choose the work that changes risk or client outcome first.</p>
+          </article>
+          <article class="timeline-item">
+            <div class="timeline-time">08:10</div>
+            <strong>Open the matter and move it forward.</strong>
+            <p>Use the matter directory to enter the right file. Update documents, tasks, notes, dates, and follow-ups in context.</p>
+          </article>
+          <article class="timeline-item">
+            <div class="timeline-time">During the day</div>
+            <strong>Capture time as the work happens.</strong>
+            <p>Use timers or manual entries. Keep narratives clean enough that billing and client review will make sense later.</p>
+          </article>
+          <article class="timeline-item">
+            <div class="timeline-time">Before close of day</div>
+            <strong>Clear loose ends.</strong>
+            <p>Set the next task or deadline, check portal or billing implications, and open a helpdesk ticket if an IT problem blocked the work.</p>
+          </article>
+        </div>
+
+        <div class="two-col">
+          <article class="footer-card">
+            <p class="panel-kicker">Three rules for adoption</p>
+            <ul class="plain-list">
+              <li>If the work matters, it belongs in the matter record.</li>
+              <li>If the time was spent, it belongs in the time desk.</li>
+              <li>If the platform or device failed, it belongs in helpdesk.</li>
+            </ul>
+          </article>
+
+          <article class="footer-card">
+            <p class="panel-kicker">Presenter close</p>
+            <p>The goal is not for lawyers to memorize every screen. The goal is for them to trust the system as the place where legal work, operational follow-through, and billing readiness stay connected.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
