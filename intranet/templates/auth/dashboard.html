@@ -874,10 +874,14 @@
                       <div class="priority-message-main">
                         <div class="priority-message-top">
                           <span class="priority-message-dot dot-client" aria-hidden="true"></span>
-                          <a class="priority-message-subject" href="{{ url_for('portal_messages', matter_id=row.matter_id, thread_id=row.thread_id) }}#portal-message-body">#{{ row.thread_id }} • {{ row.subject }}</a>
+                          <a class="priority-message-subject" href="{{ url_for('portal_message_center', matter_id=row.matter_id, thread_id=row.thread_id) }}#portal-internal-reply-body">#{{ row.thread_id }} • {{ row.subject }}</a>
                         </div>
-                        <div class="priority-message-meta">{{ row.matter_no }} - {{ row.matter_title }}</div>
-                        <div class="priority-message-snippet">Awaiting client response beyond configured SLA.</div>
+                        <div class="priority-message-meta">{{ row.matter_no }} - {{ row.matter_title }} • {{ row.last_message_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
+                        <div class="priority-message-snippet">{{ row.last_message_excerpt or "Awaiting client response beyond configured SLA." }}</div>
+                        <div class="table-actions priority-message-actions">
+                          <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_message_center', matter_id=row.matter_id, thread_id=row.thread_id) }}#portal-internal-reply-body">Reply</a>
+                          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=row.matter_id) }}">Open Matter</a>
+                        </div>
                       </div>
                       <div class="priority-message-side">
                         <span class="badge status-badge status-critical">{{ row.wait_hours }}h</span>

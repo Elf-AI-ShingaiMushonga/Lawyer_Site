@@ -3326,7 +3326,7 @@
   {% set dms_endpoints = ["dms_home", "matter_dms", "document_versions", "document_lock", "document_unlock", "document_state", "productions", "production_export", "bates_ranges", "email_capture", "email_capture_attachment"] %}
   {% set time_endpoints = ["time_timers", "time_entries", "time_review", "time_prompts"] %}
   {% set finance_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "billing_tax_invoice_pdf", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses", "trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
-  {% set portal_endpoints = ["portal_login", "portal_matters", "portal_matter_detail", "portal_messages", "portal_uploads", "portal_invoices", "portal_payments", "admin_portal_users", "portal_links"] %}
+  {% set portal_endpoints = ["portal_login", "portal_matters", "portal_matter_detail", "portal_messages", "portal_message_center", "portal_uploads", "portal_invoices", "portal_payments", "admin_portal_users", "portal_links"] %}
   {% set billing_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "billing_tax_invoice_pdf", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses"] %}
   {% set crm_endpoints = ["crm_leads", "crm_lead_detail"] %}
   {% set knowledge_endpoints = ["contacts", "kb", "kb_view", "search"] %}
@@ -3378,7 +3378,7 @@
   {% elif endpoint in portal_endpoints %}
     {% set section_label = "Client Portal" %}
     {% set section_meta = "Client-facing matter visibility, messaging, uploads, and invoices" %}
-    {% set section_href = url_for('portal_login') %}
+    {% set section_href = url_for('portal_message_center') if current_user.is_authenticated else url_for('portal_login') %}
   {% elif endpoint in analytics_endpoints %}
     {% set section_label = "Analytics and Forecasting" %}
     {% set section_meta = "Utilization, realization, profitability, and burnout signals" %}
@@ -3459,7 +3459,7 @@
                 </div>
                 <div class="nav-menu-section">
                   <span class="nav-menu-label">Client & Intake</span>
-                  <a class="nav-menu-item {{ 'is-active' if endpoint in portal_endpoints and endpoint == 'portal_messages' else '' }}" href="{{ url_for('portal_messages') }}">Portal Messages</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in portal_endpoints and endpoint in ['portal_message_center', 'portal_messages'] else '' }}" href="{{ url_for('portal_message_center') }}">Portal Messages</a>
                   <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_uploads' else '' }}" href="{{ url_for('portal_uploads') }}">Portal Uploads</a>
                   <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_invoices' else '' }}" href="{{ url_for('portal_invoices') }}">Portal Invoices</a>
                   <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_links' else '' }}" href="{{ url_for('portal_links') }}">Secure Links</a>
@@ -3767,7 +3767,7 @@
               <span class="code-like">Go</span>
             </a>
           {% endif %}
-          <a class="command-item" href="{{ url_for('portal_login') }}" data-command-item data-keywords="portal client messages uploads invoices">
+          <a class="command-item" href="{{ url_for('portal_message_center') }}" data-command-item data-keywords="portal client messages uploads invoices">
             <span>
               <span class="command-item-title">Client Portal</span>
               <span class="command-item-meta">Client-facing matter access and exchange</span>

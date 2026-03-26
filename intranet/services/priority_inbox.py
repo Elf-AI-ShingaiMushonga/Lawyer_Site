@@ -31,6 +31,13 @@ DEFAULT_PRIORITY_INBOX_CONFIG = {
 }
 
 
+def _message_excerpt(body: str | None, *, limit: int = 140) -> str:
+    text = " ".join((body or "").split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)].rstrip() + "..."
+
+
 def _coerce_int(value, *, default: int, minimum: int, maximum: int) -> int:
     try:
         parsed = int(value)
@@ -209,6 +216,7 @@ def build_priority_inbox(
                 "matter_title": matter.title,
                 "subject": thread.subject,
                 "last_message_at": message.created_at,
+                "last_message_excerpt": _message_excerpt(message.body),
                 "wait_hours": round(wait_hours, 1),
             }
         )

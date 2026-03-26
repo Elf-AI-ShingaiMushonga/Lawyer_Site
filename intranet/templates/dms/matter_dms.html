@@ -103,12 +103,14 @@
   }
 
   .dms-quick-start {
+    display: block;
     text-align: left;
     border: 1px solid rgba(225, 6, 0, 0.16);
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.92);
     padding: 11px 12px;
     color: inherit;
+    text-decoration: none;
   }
 
   .dms-quick-start:hover {
@@ -378,22 +380,16 @@
           <div class="dms-magic-status">{{ matter_magic_status_line }}</div>
           <div class="dms-quick-start-grid mt-2">
             {% for preset in dms_quick_starts %}
-              <button
+              <a
                 class="dms-quick-start"
-                type="button"
-                data-dms-quick-start
-                data-title="{{ preset.title }}"
-                data-document-type="{{ preset.document_type }}"
-                data-confidentiality="{{ preset.confidentiality }}"
-                data-privilege-label="{{ preset.privilege_label }}"
-                data-retention-category="{{ preset.retention_category }}"
+                href="{{ url_for('matter_dms', matter_id=m.id, prefill_title=preset.title, prefill_document_type=preset.document_type, prefill_confidentiality=preset.confidentiality, prefill_privilege_label=preset.privilege_label, prefill_retention_category=preset.retention_category) }}#new-dms-document"
               >
                 <div class="d-flex justify-content-between gap-2 align-items-start">
                   <div class="dms-quick-start-label">{{ preset.label }}</div>
                   {% if preset.document_type %}<span class="badge badge-soft">{{ preset.document_type }}</span>{% endif %}
                 </div>
                 <div class="dms-quick-start-summary">{{ preset.summary }}</div>
-              </button>
+              </a>
             {% else %}
               <div class="empty-state">No quick-start presets are available for this matter yet. You can still upload manually below.</div>
             {% endfor %}
@@ -568,26 +564,4 @@
     </div>
   </div>
 </div>
-<script>
-  (() => {
-    const buttons = document.querySelectorAll('[data-dms-quick-start]');
-    if (!buttons.length) return;
-    const titleInput = document.getElementById('dms-title');
-    const typeSelect = document.getElementById('dms-type');
-    const confidentialitySelect = document.getElementById('dms-confidentiality');
-    const privilegeSelect = document.getElementById('dms-privilege');
-    const retentionSelect = document.getElementById('dms-retention');
-    const fileInput = document.getElementById('dms-file');
-    for (const button of buttons) {
-      button.addEventListener('click', () => {
-        if (titleInput) titleInput.value = button.dataset.title || '';
-        if (typeSelect && button.dataset.documentType) typeSelect.value = button.dataset.documentType;
-        if (confidentialitySelect && button.dataset.confidentiality) confidentialitySelect.value = button.dataset.confidentiality;
-        if (privilegeSelect) privilegeSelect.value = button.dataset.privilegeLabel || '';
-        if (retentionSelect) retentionSelect.value = button.dataset.retentionCategory || '';
-        if (fileInput) fileInput.focus();
-      });
-    }
-  })();
-</script>
 {% endblock %}

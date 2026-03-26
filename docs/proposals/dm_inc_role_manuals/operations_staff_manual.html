@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DM-Inc Legal ERP Operations Staff Manual</title>
+  <link rel="stylesheet" href="dm_inc_role_manuals.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand-chip" href="index.html">
+        <img src="dm_inc_client_logo.svg" alt="Elf logo">
+      </a>
+      <div>
+        <p class="eyebrow">Role Manual</p>
+        <h1>Operations Staff Manual</h1>
+      </div>
+      <p>This guide is for operations staff who support the platform operationally through internal IT service workflows, queue handling, and asset control rather than substantive legal casework.</p>
+      <div class="sidebar-note">
+        <strong>Role posture</strong>
+        <p>Operations staff is a support-role family with dedicated access to the helpdesk and asset registry. The role also has read-only or limited visibility in some business areas but should not be trained as a casework-authority role.</p>
+      </div>
+      <div class="manual-links">
+        <a href="index.html">Role Manual Overview</a>
+        <a href="director_manual.html">Director Manual</a>
+        <a href="senior_attorney_manual.html">Senior Attorney Manual</a>
+        <a href="junior_attorney_manual.html">Junior Attorney Manual</a>
+        <a href="candidate_attorney_manual.html">Candidate Attorney Manual</a>
+        <a class="is-active" href="operations_staff_manual.html">Operations Staff Manual</a>
+        <a href="finance_cost_admin_manual.html">Finance / Cost Admin Manual</a>
+        <a href="client_portal_user_manual.html">Client Portal User Manual</a>
+      </div>
+      <div class="section-links">
+        <a href="#overview">Role Overview</a>
+        <a href="#helpdesk">Helpdesk Workflow</a>
+        <a href="#assets">Asset Workflow</a>
+        <a href="#boundaries">Boundaries</a>
+        <a href="#checklist">Checklist</a>
+      </div>
+      <div class="sidebar-footer">
+        Suggested default workspace mode: <strong>Team Command</strong>.<br>
+        MFA is expected because this role sits close to operational control surfaces.
+      </div>
+    </aside>
+
+    <main class="content">
+      <section class="slide" id="overview">
+        <div class="slide-header">
+          <div>
+            <div class="slide-tag">Operations Staff Role</div>
+            <h2 class="slide-title">Use the ERP to run internal service operations cleanly and visibly.</h2>
+            <p class="slide-subtitle">Operations staff should treat the platform as an internal service system: tickets are logged, assignments are visible, assets are tracked, and service history can be reviewed without hunting through side channels.</p>
+          </div>
+        </div>
+
+        <div class="pill-row">
+          <span class="pill">Support role</span>
+          <span class="pill">Helpdesk authority</span>
+          <span class="pill">Asset registry access</span>
+          <span class="pill">MFA role</span>
+        </div>
+
+        <div class="stats">
+          <article class="card">
+            <div class="kicker">Primary screens</div>
+            <div class="metric">2</div>
+            <p>Internal Helpdesk and IT Asset Registry are the main operating surfaces for this role.</p>
+          </article>
+          <article class="card alt">
+            <div class="kicker">Business context</div>
+            <div class="metric">Limited</div>
+            <p>The role can see selected supporting business context where access exists, but it should not be taught as a substantive matter-edit role.</p>
+          </article>
+          <article class="card">
+            <div class="kicker">Queue behavior</div>
+            <div class="metric">Active</div>
+            <p>Operations staff can triage, assign, update, and close helpdesk work rather than only submitting tickets.</p>
+          </article>
+          <article class="card alt">
+            <div class="kicker">Control posture</div>
+            <div class="metric">Operational</div>
+            <p>Service quality, assignment discipline, ticket hygiene, and asset accuracy matter more than broad feature coverage.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="slide" id="helpdesk">
+        <div class="slide-header">
+          <div>
+            <div class="slide-tag">Helpdesk Workflow</div>
+            <h2 class="slide-title">Run the helpdesk as a visible queue, not a collection of informal requests.</h2>
+            <p class="slide-subtitle">The helpdesk module is designed for internal service management. Good use means requests arrive with enough detail, are assigned visibly, carry status honestly, and keep resolution notes in the record.</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <article class="card">
+            <h3>Core helpdesk loop</h3>
+            <ol class="workflow-list">
+              <li>
+                <span class="workflow-number">1</span>
+                <div class="workflow-body"><strong>Capture the issue properly.</strong><br>Subject, category, priority, description, and linked asset should be completed as cleanly as possible.</div>
+              </li>
+              <li>
+                <span class="workflow-number">2</span>
+                <div class="workflow-body"><strong>Triage and assign visibly.</strong><br>Status and ownership should reflect reality so the queue can be managed operationally.</div>
+              </li>
+              <li>
+                <span class="workflow-number">3</span>
+                <div class="workflow-body"><strong>Keep ticket history inside the record.</strong><br>Use comments, updates, and resolution summaries rather than private chat as the real service history.</div>
+              </li>
+              <li>
+                <span class="workflow-number">4</span>
+                <div class="workflow-body"><strong>Close only with a usable resolution note.</strong><br>Tickets should help future support decisions, not merely disappear.</div>
+              </li>
+            </ol>
+          </article>
+          <article class="card alt">
+            <h3>What operations staff should monitor</h3>
+            <ul class="checklist">
+              <li><strong>Open vs resolved load</strong> so the queue stays believable.</li>
+              <li><strong>Critical or high-priority tickets</strong> that affect user productivity or client delivery.</li>
+              <li><strong>Unassigned tickets</strong> that indicate queue neglect or ownership ambiguity.</li>
+              <li><strong>Repeated incidents against the same asset</strong> that suggest replacement or root-cause action.</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Helpdesk screen</th>
+                <th>Use</th>
+                <th>Expected operations behaviour</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Helpdesk queue</td>
+                <td>View visible tickets, open counts, critical items, and assignment posture.</td>
+                <td>Use this as the control board for triage and service delivery.</td>
+              </tr>
+              <tr class="subtle-row">
+                <td>Ticket detail</td>
+                <td>Comments, assignment updates, resolution summary, and status changes.</td>
+                <td>Keep the resolution trail complete enough for later review.</td>
+              </tr>
+              <tr>
+                <td>Linked asset context</td>
+                <td>Connect service issues to the actual tracked device or equipment record.</td>
+                <td>Use asset linkage whenever the problem is device-specific.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="slide" id="assets">
+        <div class="slide-header">
+          <div>
+            <div class="slide-tag">Asset Workflow</div>
+            <h2 class="slide-title">The asset registry should explain what exists, who holds it, and what is going wrong with it.</h2>
+            <p class="slide-subtitle">The asset module is not just a list of devices. It is the operational memory for assignment, status, warranty, and ticket linkage.</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <article class="card">
+            <h3>What belongs in the asset record</h3>
+            <ul class="plain-list">
+              <li><strong>Asset tag and asset name</strong> kept unique and searchable.</li>
+              <li><strong>Type and status</strong> such as laptop, phone, repair, assigned, retired.</li>
+              <li><strong>Assigned user</strong> where the asset is in service.</li>
+              <li><strong>Vendor, serial, location, purchase date, and warranty</strong> where available.</li>
+              <li><strong>Notes and open-ticket context</strong> where they materially improve support quality.</li>
+            </ul>
+          </article>
+          <article class="card alt">
+            <h3>Useful operating habits</h3>
+            <ul class="plain-list">
+              <li><strong>Update records immediately after assignment or status change.</strong></li>
+              <li><strong>Use consistent asset tags.</strong></li>
+              <li><strong>Review repair and warranty posture regularly.</strong></li>
+              <li><strong>Link tickets to assets whenever practical.</strong></li>
+              <li><strong>Use the register to support procurement and replacement decisions.</strong></li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="note">Operations staff do not need wide legal-system authority to add real value. Clean IT records, clear ticket history, and good service assignment materially improve the reliability of the entire platform.</div>
+      </section>
+
+      <section class="slide" id="boundaries">
+        <div class="slide-header">
+          <div>
+            <div class="slide-tag">Boundaries</div>
+            <h2 class="slide-title">This role supports legal operations; it does not become legal operations.</h2>
+            <p class="slide-subtitle">The role model is explicit that operations staff should not be trained as substantive casework editors. Clarity here protects both delivery and governance.</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <article class="card">
+            <h3>What this role is not for</h3>
+            <ul class="plain-list">
+              <li><strong>No substantive casework ownership.</strong></li>
+              <li><strong>No primary billing or trust control role.</strong></li>
+              <li><strong>No analytics leadership role.</strong></li>
+              <li><strong>No direct admin-template or firm-rule ownership.</strong></li>
+            </ul>
+          </article>
+          <article class="card alt">
+            <h3>When to escalate</h3>
+            <ul class="plain-list">
+              <li><strong>Security or access issues</strong> that require admin-family action.</li>
+              <li><strong>Repeated operational incidents</strong> that suggest policy, procurement, or architecture problems.</li>
+              <li><strong>Business-process issues</strong> that are being reported through IT symptoms.</li>
+              <li><strong>Any request that crosses into legal judgment or finance control.</strong></li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="note warning">Operations staff do have privileged operational access, especially around internal IT workflows. That is precisely why MFA discipline, audit hygiene, and clear ticket ownership matter for this role.</div>
+      </section>
+
+      <section class="slide" id="checklist">
+        <div class="slide-header">
+          <div>
+            <div class="slide-tag">Checklist</div>
+            <h2 class="slide-title">Operations staff are ready when support work becomes measurable and controlled.</h2>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <article class="card">
+            <h3>Ready-for-use checklist</h3>
+            <ul class="checklist">
+              <li><strong>Can triage, assign, update, and close tickets properly.</strong></li>
+              <li><strong>Can maintain the asset registry without duplicate or ambiguous records.</strong></li>
+              <li><strong>Can link assets and tickets where it improves support quality.</strong></li>
+              <li><strong>Can distinguish platform support from business-owner decisions.</strong></li>
+              <li><strong>Can keep operational changes inside the system record.</strong></li>
+            </ul>
+          </article>
+          <article class="card alt">
+            <h3>Service quality signs</h3>
+            <ul class="checklist">
+              <li><strong>Unassigned tickets do not linger.</strong></li>
+              <li><strong>Resolution notes are strong enough for future reuse.</strong></li>
+              <li><strong>Repair and warranty signals are visible before users escalate urgently.</strong></li>
+              <li><strong>Internal users know where to submit issues rather than using side channels.</strong></li>
+              <li><strong>Operational data is clean enough for leadership review.</strong></li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="manual-footer">Prepared March 26, 2026. Use this guide with the handover pack and admin guide so support operations stay aligned with governance and production ownership.</div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

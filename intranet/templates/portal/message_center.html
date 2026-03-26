@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block content %}
+{% set selected_matter = matter_map.get(prefill_matter_id) if matter_map else None %}
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Client Collaboration</div>
+        <h1 class="page-hero-title">Client Message Center</h1>
+        <div class="page-hero-summary">
+          Review portal conversations, respond from the internal side, and keep message threads tied to the right matter.
+          {% if selected_matter %}
+            Current matter context: {{ selected_matter.matter_no }} - {{ selected_matter.title }}.
+          {% endif %}
+        </div>
+        <div class="page-hero-meta">
+          <span class="tag-chip">{{ matters|length }} accessible matter(s)</span>
+          <span class="tag-chip">{{ thread_cards|length }} thread(s)</span>
+          <span class="tag-chip">{{ waiting_on_internal_count }} waiting on internal reply</span>
+        </div>
+      </div>
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-light" href="{{ url_for('dashboard') }}#dashboard-priority-inbox">Back to Priority Inbox</a>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('matters') }}">Matter Directory</a>
+        {% if selected_matter %}
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=selected_matter.id) }}">Open Matter</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Open Threads</div>
+        <div class="page-stat-value">{{ thread_cards|length }}</div>
+        <div class="page-stat-meta">Matter-linked portal conversations visible to this internal user.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Awaiting Reply</div>
+        <div class="page-stat-value">{{ waiting_on_internal_count }}</div>
+        <div class="page-stat-meta">Threads where the latest message came from the client side.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Transcript Messages</div>
+        <div class="page-stat-value">{{ conversation_messages|length }}</div>
+        <div class="page-stat-meta">Messages loaded for the currently selected thread.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Thread Transcript</div>
+            <h2 class="panel-title">
+              {% if selected_thread %}
+                {{ selected_thread.subject }}
+              {% else %}
+                Select a thread
+              {% endif %}
+            </h2>
+            <div class="panel-summary">
+              {% if selected_thread and selected_thread_matter %}
+                {{ selected_thread_matter.matter_no }} - {{ selected_thread_matter.title }}
+              {% else %}
+                Choose a thread from the directory or start a new one below.
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% if selected_thread %}
+          <div class="glance-list">
+            {% for message in conversation_messages %}
+              <article class="glance-item">
+                <div class="list-row">
+                  <div>
+                    <div class="glance-title">{{ message.author_label }}</div>
+                    <div class="glance-meta">{{ message.origin_label }} • {{ message.created_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
+                  </div>
+                  <span class="badge status-badge {{ 'status-critical' if message.is_from_portal else 'status-on-hold' }}">{{ message.origin_label }}</span>
+                </div>
+                <div class="section-note mt-3">{{ message.body }}</div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">No portal threads are currently visible for your matter scope.</div>
+        {% endif %}
+      </section>
+
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Reply</div>
+            <h2 class="panel-title">Send an internal-side portal message</h2>
+            <div class="panel-summary">Reply in an existing thread to preserve context, or start a new client thread when the topic is materially different.</div>
+          </div>
+        </div>
+        {% if matters %}
+          <form method="post" class="field-grid">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="field-grid columns-3">
+              <div>
+                <label class="form-label" for="portal-internal-matter">Matter</label>
+                <select class="form-select" id="portal-internal-matter" name="matter_id" data-thread-matter-target required>
+                  {% for matter in matters %}
+                    <option value="{{ matter.id }}" {% if prefill_matter_id and matter.id == prefill_matter_id %}selected{% endif %}>{{ matter.matter_no }} - {{ matter.title }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="portal-internal-subject">Subject</label>
+                <input class="form-control" id="portal-internal-subject" name="subject" placeholder="Subject for a new thread">
+              </div>
+              <div>
+                <label class="form-label" for="portal-internal-thread">Existing Thread</label>
+                <select class="form-select" id="portal-internal-thread" name="thread_id" data-thread-matter-source>
+                  <option value="">Start a new thread</option>
+                  {% for thread in thread_cards %}
+                    <option
+                      value="{{ thread.id }}"
+                      data-matter-id="{{ thread.matter_id }}"
+                      {% if prefill_thread_id and thread.id == prefill_thread_id %}selected{% endif %}
+                    >
+                      #{{ thread.id }} · {{ thread.matter_no }} - {{ thread.matter_title }} · {{ thread.subject }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <div class="form-help" data-thread-matter-hint>Selecting a thread locks the matter so the reply stays in the right client conversation.</div>
+              </div>
+            </div>
+            <div>
+              <label class="form-label" for="portal-internal-reply-body">Message</label>
+              <textarea class="form-control" id="portal-internal-reply-body" name="body" rows="5" placeholder="Type the reply the client should receive." required></textarea>
+            </div>
+            <div class="section-note">Use one thread per topic. If the client is already waiting in an existing thread, reply there instead of opening a parallel discussion.</div>
+            <div class="d-grid d-md-flex justify-content-md-end">
+              <button class="btn btn-light" type="submit">Send Portal Reply</button>
+            </div>
+          </form>
+        {% else %}
+          <div class="empty-state">You do not currently have matter access for any portal-enabled client threads.</div>
+        {% endif %}
+      </section>
+    </div>
+
+    <div class="workbench-rail">
+      <div class="sticky-stack">
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Thread Directory</div>
+              <h2 class="panel-title">Portal threads in scope</h2>
+              <div class="panel-summary">Open any thread to read the transcript and reply with matter context already selected.</div>
+            </div>
+          </div>
+          {% if thread_cards %}
+            <div class="glance-list">
+              {% for thread in thread_cards[:12] %}
+                <div class="glance-item">
+                  <div class="list-row">
+                    <div>
+                      <div class="glance-title">#{{ thread.id }} • {{ thread.subject }}</div>
+                      <div class="glance-meta">{{ thread.matter_no }} - {{ thread.matter_title }}</div>
+                    </div>
+                    <span class="badge status-badge {{ 'status-critical' if thread.waiting_on_internal_response else 'status-on-hold' }}">{{ "Client waiting" if thread.waiting_on_internal_response else "Answered" }}</span>
+                  </div>
+                  <div class="section-note mt-3">{{ thread.latest_author_label }} • {{ thread.latest_message_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
+                  {% if thread.latest_message_excerpt %}
+                    <div class="section-note mt-2">{{ thread.latest_message_excerpt }}</div>
+                  {% endif %}
+                  <div class="table-actions mt-3">
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_message_center', matter_id=thread.matter_id, thread_id=thread.id) }}">Open Thread</a>
+                    <a class="btn btn-sm btn-outline-light" href="{{ url_for('matter_detail', matter_id=thread.matter_id) }}">Open Matter</a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="empty-state">No portal message threads are currently visible.</div>
+          {% endif %}
+        </section>
+
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-header-main">
+              <div class="panel-kicker">Good Practice</div>
+              <h2 class="panel-title">Reply handling guidance</h2>
+            </div>
+          </div>
+          <div class="glance-list">
+            <div class="glance-item">
+              <div class="glance-title">Reply in-thread first</div>
+              <div class="glance-meta">This keeps chronology intact for the client and for later legal review.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-title">Use the matter link when context matters</div>
+              <div class="glance-meta">If you need timeline, documents, or task context before responding, open the matter directly from the thread card.</div>
+            </div>
+            <div class="glance-item">
+              <div class="glance-title">Start a new thread only for a new topic</div>
+              <div class="glance-meta">Separate subjects only when the discussion changes materially, otherwise client history fragments too quickly.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

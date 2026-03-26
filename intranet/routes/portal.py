@@ -14,7 +14,7 @@ from sqlalchemy import func, or_
 from werkzeug.utils import secure_filename
 
 from ..extensions import db, limiter
-from ..helpers import allowed_doc, audit, sha256_file
+from ..helpers import allowed_doc, audit, get_active_matter_id, set_active_matter_context, sha256_file
 from ..mfa import build_otpauth_uri, generate_totp_secret, verify_totp
 from ..models import (
     DocumentFile,
@@ -31,8 +31,9 @@ from ..models import (
     PortalPaymentReceipt,
     PortalUpload,
     PortalUser,
+    User,
 )
-from ..policies import enforce_data_residency
+from ..policies import enforce_data_residency, visible_matter_ids
 from ..roles import role_is_admin
 from ..services.notification_engine import NotificationEngine
 from ..services.storage_paths import harden_private_file, resolve_upload_path
@@ -68,6 +69,28 @@ def _hash_token(raw: str) -> str:
 def _visibility_rank(level: str | None) -> int:
     normalized = (level or "summary_only").strip().lower()
     return VISIBILITY_LEVEL_RANK.get(normalized, VISIBILITY_LEVEL_RANK["summary_only"])
+
+
+def _portal_message_excerpt(body: str | None, *, limit: int = 180) -> str:
+    text = " ".join((body or "").split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)].rstrip() + "..."
+
+
+def _portal_message_author_label(
+    message: PortalMessage,
+    *,
+    user_map: dict[int, User],
+    portal_user_map: dict[int, PortalUser],
+) -> str:
+    if message.from_user_id:
+        user = user_map.get(int(message.from_user_id))
+        return (user.full_name or "").strip() or "Internal user"
+    if message.from_portal_user_id:
+        portal_user = portal_user_map.get(int(message.from_portal_user_id))
+        return (portal_user.full_name or "").strip() or "Client contact"
+    return "Unknown sender"
 
 
 def portal_login_required(view):
@@ -249,6 +272,197 @@ def register_portal_routes(app):
             threads=threads,
             uploads=uploads,
             invoices=invoices,
+        )
+
+    @app.route("/portal/messages/workbench", methods=["GET", "POST"])
+    @login_required
+    def portal_message_center():
+        matter_scope = [int(item) for item in visible_matter_ids() if int(item) > 0]
+        matters = Matter.query.filter(Matter.id.in_(matter_scope)).order_by(Matter.opened_at.desc()).all() if matter_scope else []
+        matter_map = {matter.id: matter for matter in matters}
+        threads = (
+            PortalMessageThread.query.filter(PortalMessageThread.matter_id.in_(matter_scope))
+            .order_by(PortalMessageThread.created_at.desc())
+            .limit(200)
+            .all()
+            if matter_scope
+            else []
+        )
+        threads_by_id = {thread.id: thread for thread in threads}
+
+        if request.method == "POST":
+            thread_id = request.form.get("thread_id", type=int)
+            matter_id = request.form.get("matter_id", type=int)
+            body = (request.form.get("body") or "").strip()
+
+            if not body:
+                flash("Message body required.", "warning")
+                return redirect(
+                    url_for(
+                        "portal_message_center",
+                        matter_id=matter_id or None,
+                        thread_id=thread_id or None,
+                    )
+                )
+
+            thread = db.session.get(PortalMessageThread, thread_id) if thread_id else None
+            if thread_id and thread is None:
+                flash("Selected thread was not found.", "warning")
+                return redirect(url_for("portal_message_center"))
+            if thread is not None:
+                if int(thread.matter_id) not in matter_map:
+                    abort(403)
+                if matter_id and int(matter_id) != int(thread.matter_id):
+                    flash("Selected thread belongs to a different matter.", "warning")
+                    return redirect(
+                        url_for(
+                            "portal_message_center",
+                            matter_id=thread.matter_id,
+                            thread_id=thread.id,
+                        )
+                    )
+                matter_id = int(thread.matter_id)
+
+            if not thread_id:
+                if not matter_id or matter_id not in matter_map:
+                    abort(403)
+                thread = PortalMessageThread(
+                    matter_id=matter_id,
+                    subject=(request.form.get("subject") or "General update").strip() or "General update",
+                    created_by_user_id=current_user.id,
+                    created_by_portal_user_id=None,
+                )
+                db.session.add(thread)
+                db.session.flush()
+                thread_id = thread.id
+
+            message = PortalMessage(
+                thread_id=thread_id,
+                body=body,
+                from_user_id=current_user.id,
+                from_portal_user_id=None,
+            )
+            db.session.add(message)
+            db.session.commit()
+            set_active_matter_context(matter_id)
+            NotificationEngine.enqueue("portal_message_created", None, f"portal_message:{message.id}")
+            audit("portal_message_create", "PortalMessage", message.id)
+            flash("Portal message sent.", "info")
+            return redirect(url_for("portal_message_center", matter_id=matter_id, thread_id=thread_id))
+
+        prefill_thread_id = request.args.get("thread_id", type=int)
+        if prefill_thread_id and prefill_thread_id not in threads_by_id:
+            abort(403)
+
+        prefill_matter_id = request.args.get("matter_id", type=int)
+        active_matter_id = get_active_matter_id()
+        if prefill_matter_id and prefill_matter_id not in matter_map:
+            abort(403)
+        if not prefill_matter_id and active_matter_id and active_matter_id in matter_map:
+            prefill_matter_id = active_matter_id
+
+        selected_thread = threads_by_id.get(prefill_thread_id) if prefill_thread_id else None
+        if selected_thread is not None:
+            prefill_matter_id = int(selected_thread.matter_id)
+        if not prefill_matter_id and matters:
+            prefill_matter_id = matters[0].id
+        if prefill_matter_id:
+            set_active_matter_context(prefill_matter_id)
+
+        if selected_thread is None and prefill_matter_id:
+            selected_thread = next((thread for thread in threads if int(thread.matter_id) == int(prefill_matter_id)), None)
+        if selected_thread is None and threads:
+            selected_thread = threads[0]
+            prefill_matter_id = int(selected_thread.matter_id)
+            set_active_matter_context(prefill_matter_id)
+
+        thread_ids = [thread.id for thread in threads]
+        recent_messages = (
+            PortalMessage.query.filter(PortalMessage.thread_id.in_(thread_ids))
+            .order_by(PortalMessage.created_at.desc())
+            .limit(800)
+            .all()
+            if thread_ids
+            else []
+        )
+        selected_thread_messages = (
+            PortalMessage.query.filter_by(thread_id=selected_thread.id).order_by(PortalMessage.created_at.asc()).all()
+            if selected_thread is not None
+            else []
+        )
+
+        user_ids = {int(message.from_user_id) for message in recent_messages if message.from_user_id}
+        user_ids.update(int(message.from_user_id) for message in selected_thread_messages if message.from_user_id)
+        portal_user_ids = {int(message.from_portal_user_id) for message in recent_messages if message.from_portal_user_id}
+        portal_user_ids.update(int(message.from_portal_user_id) for message in selected_thread_messages if message.from_portal_user_id)
+        user_map = {row.id: row for row in User.query.filter(User.id.in_(sorted(user_ids))).all()} if user_ids else {}
+        portal_user_map = (
+            {row.id: row for row in PortalUser.query.filter(PortalUser.id.in_(sorted(portal_user_ids))).all()}
+            if portal_user_ids
+            else {}
+        )
+
+        latest_message_by_thread: dict[int, PortalMessage] = {}
+        for message in recent_messages:
+            latest_message_by_thread.setdefault(int(message.thread_id), message)
+
+        thread_cards = []
+        for thread in threads:
+            matter = matter_map.get(int(thread.matter_id))
+            latest_message = latest_message_by_thread.get(int(thread.id))
+            latest_message_at = latest_message.created_at if latest_message is not None else thread.created_at
+            thread_cards.append(
+                {
+                    "id": thread.id,
+                    "matter_id": thread.matter_id,
+                    "subject": thread.subject,
+                    "matter_no": matter.matter_no if matter else f"Matter #{thread.matter_id}",
+                    "matter_title": matter.title if matter else "Unavailable matter",
+                    "latest_message_at": latest_message_at,
+                    "latest_message_excerpt": _portal_message_excerpt(latest_message.body if latest_message is not None else ""),
+                    "latest_author_label": (
+                        _portal_message_author_label(
+                            latest_message,
+                            user_map=user_map,
+                            portal_user_map=portal_user_map,
+                        )
+                        if latest_message is not None
+                        else "No messages yet"
+                    ),
+                    "waiting_on_internal_response": bool(latest_message and latest_message.from_portal_user_id),
+                }
+            )
+        thread_cards.sort(key=lambda row: row["latest_message_at"] or dt.datetime.min, reverse=True)
+
+        conversation_messages = [
+            {
+                "id": message.id,
+                "body": message.body,
+                "created_at": message.created_at,
+                "author_label": _portal_message_author_label(
+                    message,
+                    user_map=user_map,
+                    portal_user_map=portal_user_map,
+                ),
+                "origin_label": "Client" if message.from_portal_user_id else "Internal",
+                "is_from_portal": bool(message.from_portal_user_id),
+            }
+            for message in selected_thread_messages
+        ]
+        waiting_on_internal_count = sum(1 for row in thread_cards if row["waiting_on_internal_response"])
+        selected_thread_matter = matter_map.get(selected_thread.matter_id) if selected_thread is not None else None
+        return page(
+            "Client Message Center",
+            "portal/message_center.html",
+            matters=matters,
+            matter_map=matter_map,
+            thread_cards=thread_cards,
+            prefill_matter_id=prefill_matter_id,
+            prefill_thread_id=selected_thread.id if selected_thread is not None else None,
+            selected_thread=selected_thread,
+            selected_thread_matter=selected_thread_matter,
+            conversation_messages=conversation_messages,
+            waiting_on_internal_count=waiting_on_internal_count,
         )
 
     @app.route("/portal/messages", methods=["GET", "POST"])

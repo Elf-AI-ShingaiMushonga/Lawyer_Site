@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Elf atom logo</title>
+  <desc id="desc">A navy and blue atom-style logo with orbital paths and a central network cluster.</desc>
+  <defs>
+    <linearGradient id="orbitStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#03122f"/>
+      <stop offset="45%" stop-color="#16356f"/>
+      <stop offset="75%" stop-color="#1f7de4"/>
+      <stop offset="100%" stop-color="#4edcff"/>
+    </linearGradient>
+    <linearGradient id="coreFill" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#08204f"/>
+      <stop offset="100%" stop-color="#1d65d8"/>
+    </linearGradient>
+    <radialGradient id="nodeGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7ff3ff"/>
+      <stop offset="45%" stop-color="#2fc8ff"/>
+      <stop offset="100%" stop-color="#0c63d6"/>
+    </radialGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g fill="none" stroke="url(#orbitStroke)" stroke-linecap="round">
+    <ellipse cx="256" cy="256" rx="194" ry="108" stroke-width="8"/>
+    <ellipse cx="256" cy="256" rx="194" ry="108" stroke-width="8" transform="rotate(60 256 256)"/>
+    <ellipse cx="256" cy="256" rx="194" ry="108" stroke-width="8" transform="rotate(-60 256 256)"/>
+    <ellipse cx="256" cy="256" rx="108" ry="194" stroke-width="7" opacity=".92"/>
+  </g>
+
+  <g filter="url(#softGlow)">
+    <circle cx="256" cy="256" r="72" fill="#10244d" stroke="#d7e6ff" stroke-opacity=".35" stroke-width="2"/>
+    <circle cx="256" cy="256" r="22" fill="url(#coreFill)"/>
+
+    <g stroke="#39baff" stroke-width="3" stroke-linecap="round" opacity=".92">
+      <line x1="256" y1="256" x2="256" y2="194"/>
+      <line x1="256" y1="256" x2="256" y2="318"/>
+      <line x1="256" y1="256" x2="202" y2="230"/>
+      <line x1="256" y1="256" x2="311" y2="229"/>
+      <line x1="256" y1="256" x2="200" y2="286"/>
+      <line x1="256" y1="256" x2="311" y2="287"/>
+      <line x1="256" y1="194" x2="224" y2="208"/>
+      <line x1="256" y1="194" x2="289" y2="208"/>
+      <line x1="224" y1="208" x2="202" y2="230"/>
+      <line x1="289" y1="208" x2="311" y2="229"/>
+      <line x1="202" y1="230" x2="200" y2="286"/>
+      <line x1="311" y1="229" x2="311" y2="287"/>
+      <line x1="200" y1="286" x2="224" y2="318"/>
+      <line x1="311" y1="287" x2="288" y2="318"/>
+      <line x1="224" y1="318" x2="256" y2="318"/>
+      <line x1="256" y1="318" x2="288" y2="318"/>
+      <line x1="224" y1="208" x2="224" y2="318"/>
+      <line x1="289" y1="208" x2="288" y2="318"/>
+      <line x1="224" y1="208" x2="289" y2="208"/>
+      <line x1="224" y1="318" x2="288" y2="318"/>
+    </g>
+
+    <g fill="url(#nodeGlow)">
+      <circle cx="256" cy="194" r="10"/>
+      <circle cx="224" cy="208" r="9"/>
+      <circle cx="289" cy="208" r="9"/>
+      <circle cx="202" cy="230" r="9"/>
+      <circle cx="311" cy="229" r="9"/>
+      <circle cx="200" cy="286" r="9"/>
+      <circle cx="311" cy="287" r="9"/>
+      <circle cx="224" cy="318" r="9"/>
+      <circle cx="256" cy="318" r="10"/>
+      <circle cx="288" cy="318" r="9"/>
+      <circle cx="256" cy="256" r="14"/>
+    </g>
+  </g>
+
+  <g fill="url(#nodeGlow)" filter="url(#softGlow)">
+    <circle cx="130" cy="186" r="8"/>
+    <circle cx="66" cy="230" r="8"/>
+    <circle cx="95" cy="354" r="8"/>
+    <circle cx="438" cy="187" r="8"/>
+    <circle cx="465" cy="276" r="8"/>
+    <circle cx="366" cy="431" r="8"/>
+    <circle cx="208" cy="451" r="8"/>
+    <circle cx="317" cy="116" r="8"/>
+  </g>
+</svg>

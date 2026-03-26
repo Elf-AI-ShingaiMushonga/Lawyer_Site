@@ -7,7 +7,7 @@ import time
 
 from intranet.extensions import db
 from intranet.mfa import _totp, generate_totp_secret
-from intranet.models import CRMFollowUp, CRMLead, FirmSetting, Matter, Task, User
+from intranet.models import CRMFollowUp, CRMLead, FirmSetting, Matter, PortalMessage, PortalMessageThread, PortalUser, Task, User
 
 
 def _csrf_token_for(client, path: str = "/login") -> str:
@@ -49,6 +49,46 @@ def _login(client, email: str, password: str, secret: str) -> str:
     assert response.status_code == 302
     assert "/dashboard" in (response.headers.get("Location") or "")
     return csrf
+
+
+def _seed_portal_thread_waiting_on_reply(user: User) -> tuple[Matter, PortalMessageThread, PortalUser, PortalMessage]:
+    matter = Matter(
+        matter_no="2026-PORTAL-0001",
+        title="Portal Response Matter",
+        client_name="Portal Client",
+        status="Open",
+        created_by=user.id,
+        opened_at=utc_now() - dt.timedelta(days=2),
+        last_updated_at=utc_now() - dt.timedelta(hours=6),
+    )
+    portal_user = PortalUser(
+        email=f"portal-contact-{user.id}@example.com",
+        full_name="Clement Client",
+        password_hash="x",
+        is_active=True,
+    )
+    portal_user.set_password("ClientPassword123!")
+    db.session.add_all([matter, portal_user])
+    db.session.flush()
+
+    thread = PortalMessageThread(
+        matter_id=matter.id,
+        subject="Status update request",
+        created_by_user_id=user.id,
+        created_at=utc_now() - dt.timedelta(hours=8),
+    )
+    db.session.add(thread)
+    db.session.flush()
+
+    message = PortalMessage(
+        thread_id=thread.id,
+        body="Please confirm the next filing deadline and whether counsel has reverted.",
+        from_portal_user_id=portal_user.id,
+        created_at=utc_now() - dt.timedelta(hours=6),
+    )
+    db.session.add(message)
+    db.session.commit()
+    return matter, thread, portal_user, message
 
 
 def test_dashboard_renders_priority_inbox(app_ctx):
@@ -146,6 +186,52 @@ def test_dashboard_uses_configured_priority_inbox_sla_values(app_ctx):
     assert b"Client response SLA: 6h" in response.data
     assert b"Follow-up horizon: 30h" in response.data
     assert b"Billing capture SLA: 72h" in response.data
+
+
+def test_dashboard_client_response_links_to_internal_message_center(app_ctx):
+    user, password, secret = _seed_admin_with_mfa(email="priority-portal-admin@example.com")
+    matter, thread, _portal_user, _message = _seed_portal_thread_waiting_on_reply(user)
+
+    client = app_ctx.test_client()
+    _login(client, user.email, password, secret)
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert f"/portal/messages/workbench?matter_id={matter.id}&amp;thread_id={thread.id}" in body
+    assert "Reply" in body
+    assert "Please confirm the next filing deadline" in body
+
+
+def test_internal_portal_message_center_allows_replying_to_client_thread(app_ctx):
+    user, password, secret = _seed_admin_with_mfa(email="portal-workbench-admin@example.com")
+    matter, thread, _portal_user, inbound = _seed_portal_thread_waiting_on_reply(user)
+
+    client = app_ctx.test_client()
+    csrf = _login(client, user.email, password, secret)
+
+    response = client.get(f"/portal/messages/workbench?matter_id={matter.id}&thread_id={thread.id}")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Client Message Center" in body
+    assert inbound.body in body
+
+    post_response = client.post(
+        "/portal/messages/workbench",
+        data={
+            "csrf_token": csrf,
+            "matter_id": matter.id,
+            "thread_id": thread.id,
+            "body": "We have diarised the filing deadline and will revert with a fuller update today.",
+        },
+        follow_redirects=False,
+    )
+    assert post_response.status_code == 302
+    assert f"/portal/messages/workbench?matter_id={matter.id}&thread_id={thread.id}" in (post_response.headers.get("Location") or "")
+
+    replies = PortalMessage.query.filter_by(thread_id=thread.id, from_user_id=user.id).order_by(PortalMessage.id.desc()).all()
+    assert replies
+    assert replies[0].body == "We have diarised the filing deadline and will revert with a fuller update today."
 
 
 def test_crm_followup_status_route_updates_status_and_blocks_external_next(app_ctx):

@@ -2140,6 +2140,38 @@ def test_matter_dms_renders_quick_starts_and_matter_brief(app_ctx):
     assert "DMS Quick Starts" in body
     assert "Client Advice" in body
     assert "Matter Brief" in body
+    assert f'/matters/{matter.id}/dms?prefill_title=' in body
+    assert "#new-dms-document" in body
+
+
+def test_matter_dms_prefill_query_populates_upload_form(app_ctx):
+    app = app_ctx
+    user = _seed_user("dms-prefill-query@example.com")
+    matter = _seed_matter(user, "2026-DMS-PREFILL-1", "Prefill Matter", "Prefill Client")
+    db.session.add(MatterMember(matter_id=matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(
+        f"/matters/{matter.id}/dms",
+        query_string={
+            "prefill_title": "Prefilled Advice Memo",
+            "prefill_document_type": "General",
+            "prefill_confidentiality": "Confidential",
+            "prefill_privilege_label": "Attorney-Client",
+            "prefill_retention_category": "Matter Lifecycle",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'value="Prefilled Advice Memo"' in body
+    assert '<option value="General" selected' in body
+    assert '<option value="Confidential" selected' in body
+    assert '<option value="Attorney-Client" selected' in body
+    assert '<option value="Matter Lifecycle" selected' in body
+    assert "This document form was prefilled from a workflow shortcut." in body
 
 
 def test_matter_dms_handles_missing_snapshot_payloads(monkeypatch, app_ctx):

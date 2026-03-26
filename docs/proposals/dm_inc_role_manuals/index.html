@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DM-Inc Legal ERP Role Manual Pack</title>
+  <link rel="stylesheet" href="dm_inc_role_manuals.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand-chip" href="index.html">
+        <img src="dm_inc_client_logo.svg" alt="Elf logo">
+      </a>
+      <div>
+        <p class="eyebrow">Manual Pack</p>
+        <h1>DM-Inc Legal ERP Role Manuals</h1>
+      </div>
+      <p>This pack is the client-facing operating guide for the current DM-Inc Legal ERP build. It is structured by role so each audience sees the screens, workflows, boundaries, and controls that apply to them.</p>
+      <div class="sidebar-note">
+        <strong>How to use this pack</strong>
+        <p>Start with this overview, then open the manual for the role you are training or presenting. Each role deck is written as a presentation-ready HTML walkthrough rather than a technical specification.</p>
+      </div>
+      <div class="manual-links">
+        <a class="is-active" href="index.html">Role Manual Overview</a>
+        <a href="director_manual.html">Director Manual</a>
+        <a href="senior_attorney_manual.html">Senior Attorney Manual</a>
+        <a href="junior_attorney_manual.html">Junior Attorney Manual</a>
+        <a href="candidate_attorney_manual.html">Candidate Attorney Manual</a>
+        <a href="operations_staff_manual.html">Operations Staff Manual</a>
+        <a href="finance_cost_admin_manual.html">Finance / Cost Admin Manual</a>
+        <a href="client_portal_user_manual.html">Client Portal User Manual</a>
+      </div>
+      <div class="section-links">
+        <a href="#overview">Overview</a>
+        <a href="#roles">Role Directory</a>
+        <a href="#platform">Shared Platform Map</a>
+        <a href="#governance">Governance Rules</a>
+        <a href="#training-order">Training Order</a>
+      </div>
+      <div class="sidebar-footer">
+        Prepared March 26, 2026.<br>
+        Aligned to the current role model, dashboard modes, route access patterns, and client portal design in the DM-Inc ERP codebase.
+      </div>
+    </aside>
+
+    <main class="content">
+      <section class="slide" id="overview">
+        <div class="slide-header">
+          <div>
+            <div class="slide-tag">Pack Overview</div>
+            <h2 class="slide-title">A role-based operating manual set for the full DM-Inc platform.</h2>
+            <p class="slide-subtitle">The manuals in this folder are designed for training, onboarding, executive review, and go-live support. They map each role to the screens it uses most, the workflows it owns, the controls it must respect, and the escalations it should trigger when work falls outside its remit.</p>
+          </div>
+        </div>
+
+        <div class="pill-row">
+          <span class="pill">6 internal roles</span>
+          <span class="pill">1 client portal guide</span>
+          <span class="pill">Presentation-ready HTML</span>
+          <span class="pill">Current codebase aligned</span>
+        </div>
+
+        <div class="stats">
+          <article class="card">
+            <div class="kicker">Internal roles</div>
+            <div class="metric">6</div>
+            <p>Director, senior attorney, junior attorney, candidate attorney, operations staff, and finance / cost admin.</p>
+          </article>
+          <article class="card alt">
+            <div class="kicker">Portal access model</div>
+            <div class="metric">3</div>
+            <p>Summary-only, shared-docs, and full-curated client portal visibility levels sit alongside the internal role model.</p>
+          </article>
+          <article class="card">
+            <div class="kicker">Workspace modes</div>
+            <div class="metric">3</div>
+            <p>The dashboard currently supports Practice, Team Command, and Revenue &amp; Risk launch modes depending on role.</p>
+          </article>
+          <article class="card alt">
+            <div class="kicker">Core rule</div>
+            <div class="metric">Scope First</div>
+            <p>Matter access still depends on matter membership and ethical-wall rules even when a role has broad functional permissions.</p>
+          </article>
+        </div>
+
+        <div class="grid-2">
+          <article class="card">
+            <h3>What these manuals are for</h3>
+            <ul class="checklist">
+              <li><strong>Training:</strong> give each user group a practical explanation of how they should run the platform.</li>
+              <li><strong>Demonstrations:</strong> help DM-Inc present the system in a credible, role-specific way.</li>
+              <li><strong>Onboarding:</strong> shorten the time between account creation and productive day-one use.</li>
+              <li><strong>Governance:</strong> make role boundaries explicit before go-live authority becomes messy.</li>
+            </ul>
+          </article>
+          <article class="card alt">
+            <h3>How to read them</h3>
+            <ul class="checklist">
+              <li><strong>Start at the top:</strong> each manual opens with the role’s remit and access posture.</li>
+              <li><strong>Follow the workflow sections:</strong> these are arranged around the daily operating rhythm for the role.</li>
+              <li><strong>Use the guardrails:</strong> every manual includes limits, approval points, and high-risk actions.</li>
+              <li><strong>Use the checklists:</strong> the closing slide of each deck is designed for live training and cutover preparation.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="slide" id="roles">
+        <div class="slide-header">
+          <div>
+            <div class="slide-tag">Role Directory</div>
+            <h2 class="slide-title">Every manual in the pack and the operating lens it covers.</h2>
+            <p class="slide-subtitle">These summaries are intentionally short. The linked manuals go into much greater detail on navigation, workflows, controls, and what success looks like for the role.</p>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <article class="card">
+            <div class="label">Director</div>
+            <div class="value">Leadership and control</div>
+            <p>Firm-wide oversight across matters, analytics, admin, billing, trust, portal governance, and director team management.</p>
+            <div class="module-cloud">
+              <span class="module-pill">Default mode: Team</span>
+              <span class="module-pill">Analytics</span>
+              <span class="module-pill">Admin</span>
+              <span class="module-pill">Personnel</span>
+            </div>
+          </article>
+          <article class="card alt">
+            <div class="label">Senior Attorney</div>
+            <div class="value">Lead matter execution</div>
+            <p>Owns legal delivery, supervises work, manages deadlines and matter quality, and can work across billing and client communication surfaces.</p>
+            <div class="module-cloud">
+              <span class="module-pill">Default mode: Practice</span>
+              <span class="module-pill">Matters</span>
+              <span class="module-pill">DMS</span>
+              <span class="module-pill">Billing touchpoints</span>
+            </div>
+          </article>
+          <article class="card">
+            <div class="label">Junior Attorney</div>
+            <div class="value">Run the file forward</div>
+            <p>Executes active matter work, drafting, tasks, time capture, client replies, and intake support inside the matter operating loop.</p>
+            <div class="module-cloud">
+              <span class="module-pill">Default mode: Practice</span>
+              <span class="module-pill">Workspace</span>
+              <span class="module-pill">Tasks</span>
+              <span class="module-pill">Time</span>
+            </div>
+          </article>
+          <article class="card alt">
+            <div class="label">Candidate Attorney</div>
+            <div class="value">Structured legal support</div>
+            <p>Collaborates on matters, documents, notes, tasks, and research workflows, but does not carry the same finance and analytics authority.</p>
+            <div class="module-cloud">
+              <span class="module-pill">Default mode: Practice</span>
+              <span class="module-pill">Case support</span>
+              <span class="module-pill">DMS write</span>
+              <span class="module-pill">CRM assist</span>
+            </div>
+          </article>
+          <article class="card">
+            <div class="label">Operations Staff</div>
+            <div class="value">Internal service operations</div>
+            <p>Runs the IT helpdesk and asset registry, sees limited read-only business context where needed, and supports internal operating continuity.</p>
+            <div class="module-cloud">
+              <span class="module-pill">Default mode: Team</span>
+              <span class="module-pill">Helpdesk</span>
+              <span class="module-pill">Assets</span>
+              <span class="module-pill">MFA required</span>
+            </div>
+          </article>
+          <article class="card alt">
+            <div class="label">Finance / Cost Admin</div>
+            <div class="value">Revenue, trust, and admin power</div>
+            <p>Runs billing, collections, trust accounting, expenses, reports, and also holds administrative authority in the current implementation.</p>
+            <div class="module-cloud">
+              <span class="module-pill">Default mode: Revenue</span>
+              <span class="module-pill">Billing</span>
+              <span class="module-pill">Trust</span>
+              <span class="module-pill">Admin authority</span>
+            </div>
+          </article>
+        </div>
+
+        <article class="card alt">
+          <h3>Separate but related: the client portal user</h3>
+          <p>The pack also includes a client portal manual. That guide is written for external or shared users who log into the portal to review matters, upload files, exchange messages, view invoices, record payments, and use time-limited secure links.</p>
+        </article>
+      </section>
+
+      <section class="slide" id="platform">
+        <div class="slide-header">
+          <div>
+            <div class="slide-tag">Shared Platform Map</div>
+            <h2 class="slide-title">The screens and modules that appear across the manuals.</h2>
+            <p class="slide-subtitle">The platform is not a collection of disconnected pages. It is one operating environment that links dashboard signals, matter execution, documents, time, billing, portal collaboration, analytics, and admin control.</p>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Screen or module</th>
+                <th>What it does</th>
+                <th>Primary audiences</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Dashboard and Priority Inbox</td>
+                <td>Daily command center with workload pressure, client response items, billing leakage, legal desk signals, and quick-launch actions.</td>
+                <td>All internal roles, with emphasis on legal leadership and operations cadence.</td>
+              </tr>
+              <tr class="subtle-row">
+                <td>Matter Directory, Matter Summary, Matter Workspace</td>
+                <td>The matter operating layer covering matter health, activity, tasks, documents, team, next best moves, and archetype controls.</td>
+                <td>Directors, attorneys, candidate attorneys, and in limited cases support users with matter scope.</td>
+              </tr>
+              <tr>
+                <td>Calendar, tasks, notes, and document workbench</td>
+                <td>Deadline execution, assignment flow, collaboration notes, drafting, comments, and publication into DMS.</td>
+                <td>Legal delivery roles.</td>
+              </tr>
+              <tr class="subtle-row">
+                <td>Matter DMS and search</td>
+                <td>Repository operations, upload, versioning, saved searches, email capture, and cross-platform search.</td>
+                <td>Legal roles, candidate attorneys, support readers, and admin roles.</td>
+              </tr>
+              <tr>
+                <td>Timekeeping, billing, expenses, and trust</td>
+                <td>Time capture, time review, invoices, payments, AR, expenses, trust postings, reconciliations, and reporting.</td>
+                <td>Lawyers and finance / cost admin, with supporting views for related roles.</td>
+              </tr>
+              <tr class="subtle-row">
+                <td>CRM and client collaboration</td>
+                <td>Lead intake, conflict checks, quotes, engagement signing, internal portal message center, portal uploads, and portal administration.</td>
+                <td>Lawyers, candidate attorneys, directors, finance admin, and external portal users where applicable.</td>
+              </tr>
+              <tr>
+                <td>Analytics, helpdesk, assets, admin, and automation</td>
+                <td>Leadership metrics, internal IT service workflows, asset control, platform governance, templates, rules, and auditability.</td>
+                <td>Directors, operations staff, and finance / cost admin.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid-2">
+          <article class="card">
+            <h3>Common navigation conventions</h3>
+            <ul class="checklist">
+              <li><strong>Dashboard first:</strong> most users should begin with the dashboard and use workspace mode to launch into work.</li>
+              <li><strong>Matter centricity:</strong> once a matter is opened, related tasks, notes, DMS, calendar, and billing flows are easier to access in context.</li>
+              <li><strong>Search as a cross-cutting tool:</strong> the Search Command Center is often the fastest route when the user knows the record but not the module.</li>
+              <li><strong>Portal collaboration is split:</strong> internal users work in the client message center and portal admin surfaces, while external users stay in the client portal.</li>
+            </ul>
+          </article>
+          <article class="card alt">
+            <h3>Cross-cutting themes in the manuals</h3>
+            <ul class="checklist">
+              <li><strong>Role remit:</strong> what the role is expected to own operationally.</li>
+              <li><strong>System access:</strong> what the application currently exposes to that role family.</li>
+              <li><strong>Guardrails:</strong> which actions are high-impact and should stay tightly controlled.</li>
+              <li><strong>Practical rhythm:</strong> what the role should do daily, weekly, and at key control points such as billing or cutover.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="slide" id="governance">
+        <div class="slide-header">
+          <div>
+            <div class="slide-tag">Governance Rules</div>
+            <h2 class="slide-title">The operating constraints that matter across every manual.</h2>
+            <p class="slide-subtitle">These constraints are central to how the role manuals should be interpreted. They are more important than broad labels such as “full access” or “read only”, because they explain the real operating boundaries in the application.</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <article class="card">
+            <h3>Rules that apply to internal users</h3>
+            <ul class="plain-list">
+              <li><strong>Matter membership still governs visibility.</strong> Being a lawyer or administrator does not erase the need for matter-team inclusion, except where admin scope explicitly expands visibility.</li>
+              <li><strong>Ethical walls still override convenience.</strong> A user can be blocked from a matter even if they otherwise sit in a role family with access to that module.</li>
+              <li><strong>Workspace mode is not a permission system.</strong> It changes dashboard quick actions and launch emphasis; it does not by itself re-authorize the user.</li>
+              <li><strong>MFA matters most for privileged roles.</strong> Admin-family and operations staff roles are expected to operate with stronger access hygiene.</li>
+            </ul>
+          </article>
+          <article class="card alt">
+            <h3>Rules that matter in client collaboration</h3>
+            <ul class="plain-list">
+              <li><strong>Portal access is separately granted per matter.</strong> A portal user can have different visibility levels on different matters.</li>
+              <li><strong>Portal messaging needs thread discipline.</strong> Internal and external users should stay inside existing threads when the topic is unchanged.</li>
+              <li><strong>Uploads and secure links are controlled surfaces.</strong> They are not general-purpose file dumps and should stay matter-linked and auditable.</li>
+              <li><strong>The finance / cost admin role is powerful.</strong> It should be treated as a trusted control role, not just a clerical billing role.</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="note warning">Current implementation note: senior and junior attorney roles share the same broad route-level legal, DMS, CRM, and billing permissions in the application. DM-Inc should still enforce internal working policy to decide which attorneys are expected to use approval-heavy or governance-heavy actions in day-to-day practice.</div>
+      </section>
+
+      <section class="slide" id="training-order">
+        <div class="slide-header">
+          <div>
+            <div class="slide-tag">Recommended Rollout</div>
+            <h2 class="slide-title">A practical training sequence for using the manuals during onboarding and go-live.</h2>
+            <p class="slide-subtitle">The order below is built to stabilize control roles first, then legal execution roles, then support and external collaboration. That sequence usually reduces noise during the first live operating week.</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <article class="card">
+            <h3>Recommended sequence</h3>
+            <ol class="workflow-list">
+              <li>
+                <span class="workflow-number">1</span>
+                <div class="workflow-body"><strong>Director and finance / cost admin first.</strong><br>They shape governance, user setup, revenue controls, portal administration, and escalation posture.</div>
+              </li>
+              <li>
+                <span class="workflow-number">2</span>
+                <div class="workflow-body"><strong>Senior and junior attorneys second.</strong><br>These users drive the main legal operating loop and should stabilize matter execution early.</div>
+              </li>
+              <li>
+                <span class="workflow-number">3</span>
+                <div class="workflow-body"><strong>Candidate attorneys third.</strong><br>They need strong procedural guidance once the supervising patterns are already clear.</div>
+              </li>
+              <li>
+                <span class="workflow-number">4</span>
+                <div class="workflow-body"><strong>Operations staff fourth.</strong><br>Support workflows should be trained against a realistic live platform footprint rather than an abstract one.</div>
+              </li>
+              <li>
+                <span class="workflow-number">5</span>
+                <div class="workflow-body"><strong>Client portal users last.</strong><br>External collaboration training is easiest once internal portal handling and matter governance are settled.</div>
+              </li>
+            </ol>
+          </article>
+
+          <article class="card alt">
+            <h3>What “comprehensive” should mean in practice</h3>
+            <ul class="checklist">
+              <li><strong>Do not train by module only.</strong> Train by real task flow such as “open a matter, draft, log time, send a client reply”.</li>
+              <li><strong>Use the manuals during live demos.</strong> Each deck is structured so you can present from it and then pivot into the actual application.</li>
+              <li><strong>Keep a decision log.</strong> When the role manual and DM-Inc internal practice differ, document the chosen operating rule rather than relying on memory.</li>
+              <li><strong>Refresh after UAT or scope changes.</strong> These manuals are comprehensive for the current build, not a permanent substitute for release notes.</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="manual-footer">
+          Role manuals in this folder: `director_manual.html`, `senior_attorney_manual.html`, `junior_attorney_manual.html`, `candidate_attorney_manual.html`, `operations_staff_manual.html`, `finance_cost_admin_manual.html`, and `client_portal_user_manual.html`.
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
