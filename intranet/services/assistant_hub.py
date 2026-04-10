@@ -37,6 +37,7 @@ from ..models import (
 from ..policies import visible_matter_ids
 from ..roles import role_is_case
 from ..timeutils import utc_now
+from .assistant_agent import plan_assistant_request
 from .assist_ai import suggest_matter_client_update, suggest_matter_executive_summary
 from .semantic_search import SemanticSearchService
 
@@ -127,6 +128,17 @@ _TASK_STATUS_INTENT_RE = re.compile(
 
 _TIMELINE_EVENT_TYPES = {"Milestone", "Filing", "Hearing", "Client Update", "Internal Review", "Delivery"}
 _TASK_STATUSES = {"Todo", "Doing", "Done"}
+_PLANNER_TOOL_TO_INTENT = {
+    "matter_briefing": "matter_briefing",
+    "draft_summary": "draft_summary",
+    "draft_client_update": "draft_client_update",
+    "search_workspace": "search",
+    "prepare_task": "create_task",
+    "prepare_task_status_update": "update_task_status",
+    "prepare_note": "add_note",
+    "prepare_timeline_event": "create_timeline_event",
+    "prepare_time_entry": "create_time_entry",
+}
 
 _EXAMPLES = [
     "What are the next deadlines on this matter?",
@@ -707,6 +719,26 @@ def _extract_due_date(prompt: str) -> dt.date | None:
     return None
 
 
+def _parse_iso_date_arg(value: Any) -> dt.date | None:
+    token = normalize_query(str(value or "")).strip()
+    if not token:
+        return None
+    try:
+        return dt.date.fromisoformat(token)
+    except ValueError:
+        return None
+
+
+def _parse_iso_datetime_arg(value: Any) -> dt.datetime | None:
+    token = normalize_query(str(value or "")).strip()
+    if not token:
+        return None
+    try:
+        return dt.datetime.fromisoformat(token)
+    except ValueError:
+        return None
+
+
 def _extract_entry_date(prompt: str) -> dt.date | None:
     lowered = str(prompt or "").lower()
     today = dt.date.today()
@@ -851,6 +883,18 @@ def _note_body_tags_and_privilege(prompt: str) -> tuple[str, str, str | None]:
         privilege_label = "Attorney-Client Privileged"
     cleaned = normalize_query(body).strip(" .")
     return cleaned[:4000], ", ".join(tags)[:255], privilege_label
+
+
+def _tag_list_to_csv(value: Any) -> str:
+    if not isinstance(value, list):
+        return ""
+    tags: list[str] = []
+    for item in value:
+        token = normalize_query(str(item or "")).strip(" #,.;:").lower()
+        if not token or token in tags:
+            continue
+        tags.append(token)
+    return ", ".join(tags)[:255]
 
 
 def _time_entry_defaults_for_date(entry_date: dt.date, *, hours: float) -> tuple[dt.datetime, dt.datetime]:
@@ -1490,6 +1534,20 @@ def _search_sections(query: str, matter: Matter | None) -> list[dict[str, Any]]:
     return sections
 
 
+def _planner_matter_context(matter: Matter | None) -> dict[str, Any] | None:
+    if matter is None:
+        return None
+    return {
+        "matter_id": int(matter.id),
+        "matter_no": matter.matter_no or "",
+        "title": matter.title or "",
+        "client_name": matter.client_name or "",
+        "status": matter.status or "",
+        "risk_level": matter.risk_level or "",
+        "budget_status": matter.budget_status or "",
+    }
+
+
 def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = None) -> dict[str, Any]:
     cleaned_prompt = _clean_prompt(prompt)
     if len(cleaned_prompt) < 3:
@@ -1506,7 +1564,29 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
         )
         return _blocked_result(cleaned_prompt, blocked_reason, matter=matter)
 
-    intent = _classify_intent(cleaned_prompt)
+    planner_result = plan_assistant_request(
+        prompt=cleaned_prompt,
+        matter_context=_planner_matter_context(matter),
+        recent_history=assistant_recent_history(),
+    )
+    planner_tool_name = normalize_query(str((planner_result or {}).get("tool_name") or "")).strip()
+    plan_args = (planner_result or {}).get("arguments") if isinstance((planner_result or {}).get("arguments"), dict) else {}
+    if planner_tool_name == "blocked_action":
+        planner_reason = normalize_query(str(plan_args.get("reason") or "")).strip()
+        return _blocked_result(
+            cleaned_prompt,
+            planner_reason or "This action stays in the native workflow.",
+            matter=matter,
+        )
+    if planner_tool_name == "clarify_request":
+        planner_question = normalize_query(str(plan_args.get("question") or "")).strip()
+        return _error_result(
+            cleaned_prompt,
+            planner_question or "Clarify what you want the assistant to do next.",
+            matter=matter,
+        )
+
+    intent = _PLANNER_TOOL_TO_INTENT.get(planner_tool_name) or _classify_intent(cleaned_prompt)
     if intent == "draft_summary":
         if matter is None:
             return _error_result(cleaned_prompt, "Pick a matter or reference its matter number to draft a summary.")
@@ -1555,7 +1635,7 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
         if matter is None:
             return _error_result(cleaned_prompt, "Pick a matter or reference its matter number to draft a client update.")
         context = _matter_context(matter)
-        tone_hint = _tone_hint_from_prompt(cleaned_prompt)
+        tone_hint = normalize_query(str(plan_args.get("tone_hint") or "")).strip() or _tone_hint_from_prompt(cleaned_prompt)
         suggestion = suggest_matter_client_update(matter_context=context, tone_hint=tone_hint)
         warning_list = list(warnings)
         if "send " in cleaned_prompt.lower():
@@ -1597,12 +1677,22 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
                 "Only legal case-team roles can create tasks from the assistant.",
                 matter=matter,
             )
-        title, description = _task_title_and_description(cleaned_prompt)
+        extracted_title, extracted_description = _task_title_and_description(cleaned_prompt)
+        title = normalize_query(str(plan_args.get("title") or "")).strip()[:255] or extracted_title
+        description = (
+            normalize_query(str(plan_args.get("description") or "")).strip()[:2000] or extracted_description
+        )
         if not title:
             return _error_result(cleaned_prompt, "The assistant could not determine a task title from that prompt.", matter=matter)
-        due_date = _extract_due_date(cleaned_prompt)
-        assignee = _extract_assignee(cleaned_prompt)
-        priority = _extract_priority(cleaned_prompt)
+        due_date = _parse_iso_date_arg(plan_args.get("due_date")) or _extract_due_date(cleaned_prompt)
+        assignee = None
+        assignee_email = normalize_query(str(plan_args.get("assignee_email") or "")).strip().lower()
+        if assignee_email:
+            assignee = User.query.filter_by(email=assignee_email).first()
+        if assignee is None:
+            assignee = _extract_assignee(cleaned_prompt)
+        planner_priority = normalize_query(str(plan_args.get("priority") or "")).strip().title()
+        priority = planner_priority if planner_priority in {"High", "Medium", "Low"} else _extract_priority(cleaned_prompt)
         preview_payload = {
             "action": "create_task",
             "user_id": int(current_user.id),
@@ -1648,14 +1738,21 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
                 "Only legal case-team roles can update task status from the assistant.",
                 matter=matter,
             )
-        status = _extract_task_status(cleaned_prompt)
+        status = normalize_query(str(plan_args.get("status") or "")).strip().title() or _extract_task_status(cleaned_prompt)
         if status is None:
             return _error_result(
                 cleaned_prompt,
                 "Specify the target task status in the prompt, for example Done, Doing, or Todo.",
                 matter=matter,
             )
-        matches = _task_match_candidates(cleaned_prompt, matter=matter)
+        if status not in _TASK_STATUSES:
+            return _error_result(
+                cleaned_prompt,
+                "Specify the target task status in the prompt, for example Done, Doing, or Todo.",
+                matter=matter,
+            )
+        task_reference = normalize_query(str(plan_args.get("task_reference") or "")).strip()
+        matches = _task_match_candidates(task_reference or cleaned_prompt, matter=matter)
         if not matches:
             return _error_result(
                 cleaned_prompt,
@@ -1756,16 +1853,30 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
                 "Closed matters cannot accept new time entries. Reopen the matter first.",
                 matter=matter,
             )
-        entry_date = _extract_entry_date(cleaned_prompt) or dt.date.today()
-        time_range = _extract_time_range(cleaned_prompt, default_date=entry_date)
-        parsed_hours = _extract_hours(cleaned_prompt)
-        if time_range is not None:
-            start_at, end_at = time_range
+        entry_date = _parse_iso_date_arg(plan_args.get("entry_date")) or _extract_entry_date(cleaned_prompt) or dt.date.today()
+        planner_start_at = _parse_iso_datetime_arg(plan_args.get("start_at"))
+        planner_end_at = _parse_iso_datetime_arg(plan_args.get("end_at"))
+        start_at: dt.datetime | None = None
+        end_at: dt.datetime | None = None
+        hours = 0.0
+        if planner_start_at is not None and planner_end_at is not None:
+            start_at, end_at = planner_start_at, planner_end_at
             hours = max(0.0, (end_at - start_at).total_seconds() / 3600.0)
-        elif parsed_hours and parsed_hours > 0:
-            start_at, end_at = _time_entry_defaults_for_date(entry_date, hours=parsed_hours)
-            hours = parsed_hours
         else:
+            time_range = _extract_time_range(cleaned_prompt, default_date=entry_date)
+            parsed_hours = None
+            try:
+                parsed_hours = float(plan_args.get("hours")) if plan_args.get("hours") is not None else None
+            except (TypeError, ValueError):
+                parsed_hours = None
+            parsed_hours = parsed_hours if parsed_hours and parsed_hours > 0 else _extract_hours(cleaned_prompt)
+            if time_range is not None:
+                start_at, end_at = time_range
+                hours = max(0.0, (end_at - start_at).total_seconds() / 3600.0)
+            elif parsed_hours and parsed_hours > 0:
+                start_at, end_at = _time_entry_defaults_for_date(entry_date, hours=parsed_hours)
+                hours = parsed_hours
+        if start_at is None or end_at is None:
             return _error_result(
                 cleaned_prompt,
                 "Include either a duration like 1.5 hours or a time range like 09:00 to 10:30 when logging time.",
@@ -1773,10 +1884,11 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
             )
         if hours <= 0:
             return _error_result(cleaned_prompt, "Time entry duration must be greater than zero.", matter=matter)
-        narrative = _time_entry_narrative(cleaned_prompt)
+        narrative = normalize_query(str(plan_args.get("narrative") or "")).strip()[:2000] or _time_entry_narrative(cleaned_prompt)
         if not narrative:
             return _error_result(cleaned_prompt, "The assistant could not determine a time-entry narrative.", matter=matter)
-        task_matches = _task_match_candidates(cleaned_prompt, matter=matter)
+        task_reference = normalize_query(str(plan_args.get("task_reference") or "")).strip()
+        task_matches = _task_match_candidates(task_reference or cleaned_prompt, matter=matter)
         task = task_matches[0] if len(task_matches) == 1 else None
         policy = _assistant_policy_for_matter(matter.id)
         rounded_hours = _assistant_round_hours(hours, float(policy.increment_hours if policy else 0.1))
@@ -1803,7 +1915,7 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
             "hours": round(hours, 4),
             "rounded_hours": rounded_hours,
             "narrative": narrative[:2000],
-            "is_billable": _extract_billable(cleaned_prompt),
+            "is_billable": bool(plan_args.get("is_billable")) if "is_billable" in plan_args else _extract_billable(cleaned_prompt),
         }
         warning_list = list(warnings)
         if len(task_matches) > 1:
@@ -1855,10 +1967,13 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
                 "Only legal case-team roles can add timeline events from the assistant.",
                 matter=matter,
             )
-        event_type = _extract_timeline_event_type(cleaned_prompt)
-        event_date = _extract_due_date(cleaned_prompt) or dt.date.today()
-        title, description = _timeline_title_and_description(cleaned_prompt, event_type=event_type)
-        is_milestone = _extract_timeline_milestone_flag(cleaned_prompt, event_type)
+        planner_event_type = normalize_query(str(plan_args.get("event_type") or "")).strip()
+        event_type = planner_event_type if planner_event_type in _TIMELINE_EVENT_TYPES else _extract_timeline_event_type(cleaned_prompt)
+        event_date = _parse_iso_date_arg(plan_args.get("event_date")) or _extract_due_date(cleaned_prompt) or dt.date.today()
+        extracted_title, extracted_description = _timeline_title_and_description(cleaned_prompt, event_type=event_type)
+        title = normalize_query(str(plan_args.get("title") or "")).strip()[:180] or extracted_title
+        description = normalize_query(str(plan_args.get("description") or "")).strip()[:2000] or extracted_description
+        is_milestone = bool(plan_args.get("is_milestone")) if "is_milestone" in plan_args else _extract_timeline_milestone_flag(cleaned_prompt, event_type)
         if not title:
             return _error_result(
                 cleaned_prompt,
@@ -1915,7 +2030,10 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
                 "Only legal case-team roles can add matter notes from the assistant.",
                 matter=matter,
             )
-        body, tags, privilege_label = _note_body_tags_and_privilege(cleaned_prompt)
+        extracted_body, extracted_tags, extracted_privilege_label = _note_body_tags_and_privilege(cleaned_prompt)
+        body = normalize_query(str(plan_args.get("body") or "")).strip()[:4000] or extracted_body
+        tags = _tag_list_to_csv(plan_args.get("tags")) or extracted_tags
+        privilege_label = normalize_query(str(plan_args.get("privilege_label") or "")).strip()[:120] or extracted_privilege_label
         if not body:
             return _error_result(cleaned_prompt, "The assistant could not determine note text from that prompt.", matter=matter)
         preview_payload = {
@@ -2005,12 +2123,13 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
             ],
         )
 
-    sections = _search_sections(cleaned_prompt, matter)
+    search_query = normalize_query(str(plan_args.get("query") or "")).strip() or cleaned_prompt
+    sections = _search_sections(search_query, matter)
     audit(
         "assistant_search",
         "Matter",
         int(matter.id) if matter is not None else None,
-        {"prompt": cleaned_prompt[:255], "section_count": len(sections)},
+        {"prompt": search_query[:255], "section_count": len(sections)},
     )
     if not sections:
         return _result(
@@ -2021,7 +2140,7 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
             prompt=cleaned_prompt,
             matter=matter,
             warnings=warnings,
-            links=[{"label": "Open Global Search", "href": url_for("search", q=_strip_search_prompt(cleaned_prompt))}],
+            links=[{"label": "Open Global Search", "href": url_for("search", q=_strip_search_prompt(search_query))}],
         )
     return _result(
         status="ok",
@@ -2032,7 +2151,7 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
         matter=matter,
         warnings=warnings,
         sections=sections,
-        links=[{"label": "Open Global Search", "href": url_for("search", q=_strip_search_prompt(cleaned_prompt))}],
+        links=[{"label": "Open Global Search", "href": url_for("search", q=_strip_search_prompt(search_query))}],
     )
 
 

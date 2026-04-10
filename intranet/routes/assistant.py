@@ -4,6 +4,7 @@ from flask import request
 from flask_login import login_required
 
 from ..helpers import resolve_active_matter, set_active_matter_context
+from ..services.assistant_agent import assistant_agent_meta
 from ..services.assistant_hub import (
     assistant_examples,
     assistant_matter_options,
@@ -50,4 +51,5 @@ def register_assistant_routes(app):
             assistant_matters=assistant_matter_options(),
             assistant_prompt_value=prompt_value,
             assistant_selected_matter_id=selected_matter_id,
+            assistant_agent_meta=assistant_agent_meta(),
         )

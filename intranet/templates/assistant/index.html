@@ -195,6 +195,24 @@
     Use one prompt surface for matter briefings, search, executive summaries, client-update drafts, and supervised workflow actions:
     create tasks, update task status, add matter notes, add timeline events, and log draft time entries. High-risk finance, trust, conflict, deletion, and irreversible actions remain in the native workflows.
   </div>
+  <div class="assistant-field-list mt-3">
+    <div class="assistant-field-item">
+      <div class="assistant-field-label">Planner</div>
+      <div class="assistant-field-value">
+        {% if assistant_agent_meta.available %}
+          OpenAI tool-calling planner active
+        {% elif assistant_agent_meta.enabled %}
+          Deterministic fallback active because the OpenAI planner is unavailable
+        {% else %}
+          Deterministic routing only
+        {% endif %}
+      </div>
+    </div>
+    <div class="assistant-field-item">
+      <div class="assistant-field-label">Model</div>
+      <div class="assistant-field-value">{{ assistant_agent_meta.model }}{% if assistant_agent_meta.available %} • reasoning {{ assistant_agent_meta.reasoning_effort }}{% endif %}</div>
+    </div>
+  </div>
 </div>
 
 <div class="assistant-grid">

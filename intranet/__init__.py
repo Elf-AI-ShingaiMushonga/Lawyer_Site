@@ -104,6 +104,11 @@ def create_app() -> Flask:
     ai_openai_api_key = (os.environ.get("AI_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip() or None
     ai_openai_embed_model = (os.environ.get("AI_OPENAI_EMBED_MODEL") or "text-embedding-3-small").strip()
     ai_openai_text_model = (os.environ.get("AI_OPENAI_TEXT_MODEL") or "gpt-4o-mini").strip()
+    ai_assistant_agent_enabled = env_bool("AI_ASSISTANT_AGENT_ENABLED", ai_enabled)
+    ai_assistant_model = (os.environ.get("AI_ASSISTANT_MODEL") or ai_openai_text_model or "gpt-4o-mini").strip()
+    ai_assistant_reasoning_effort = (os.environ.get("AI_ASSISTANT_REASONING_EFFORT") or "medium").strip().lower()
+    if ai_assistant_reasoning_effort not in {"low", "medium", "high"}:
+        ai_assistant_reasoning_effort = "medium"
     ai_openai_embed_dimensions = max(0, env_int("AI_OPENAI_EMBED_DIMENSIONS", 1024))
     ai_openai_timeout_seconds = max(1, env_int("AI_OPENAI_TIMEOUT_SECONDS", 20))
     ai_openai_max_retries = max(0, env_int("AI_OPENAI_MAX_RETRIES", 2))
@@ -195,6 +200,9 @@ def create_app() -> Flask:
         AI_OPENAI_API_KEY=ai_openai_api_key,
         AI_OPENAI_EMBED_MODEL=ai_openai_embed_model,
         AI_OPENAI_TEXT_MODEL=ai_openai_text_model,
+        AI_ASSISTANT_AGENT_ENABLED=ai_assistant_agent_enabled,
+        AI_ASSISTANT_MODEL=ai_assistant_model,
+        AI_ASSISTANT_REASONING_EFFORT=ai_assistant_reasoning_effort,
         AI_OPENAI_EMBED_DIMENSIONS=ai_openai_embed_dimensions,
         AI_OPENAI_TIMEOUT_SECONDS=ai_openai_timeout_seconds,
         AI_OPENAI_MAX_RETRIES=ai_openai_max_retries,

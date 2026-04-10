@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 
+import intranet.services.assistant_hub as assistant_hub
 from intranet.extensions import db
 from intranet.models import (
     DocumentFile,
@@ -770,3 +771,77 @@ def test_assistant_blocks_task_creation_for_support_role(app_ctx):
     assert response.status_code == 200
     assert "Only legal case-team roles can create tasks from the assistant." in body
     assert Task.query.filter_by(matter_id=matter.id).count() == 0
+
+
+def test_assistant_openai_planner_can_prepare_task_from_freeform_prompt(app_ctx, monkeypatch):
+    app = app_ctx
+    app.config.update(AI_ENABLED=True, AI_ASSISTANT_AGENT_ENABLED=True)
+    user = _seed_user(email="assistant.planner.task@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0020", title="Planner Task Matter")
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+
+    def _fake_plan_assistant_request(**kwargs):
+        assert kwargs["prompt"] == "Please handle the witness bundle follow-up."
+        assert kwargs["matter_context"]["matter_no"] == matter.matter_no
+        return {
+            "tool_name": "prepare_task",
+            "arguments": {
+                "title": "Prepare witness bundle",
+                "description": "Compile and review the witness bundle for filing readiness.",
+                "due_date": "2026-04-15",
+                "priority": "High",
+            },
+            "model": "gpt-test",
+        }
+
+    monkeypatch.setattr(assistant_hub, "plan_assistant_request", _fake_plan_assistant_request)
+
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": "Please handle the witness bundle follow-up.",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Task Ready for Confirmation" in body
+    assert "Prepare witness bundle" in body
+    assert "2026-04-15" in body
+    assert "Compile and review the witness bundle for filing readiness." in body
+
+
+def test_assistant_openai_planner_can_request_clarification(app_ctx, monkeypatch):
+    app = app_ctx
+    app.config.update(AI_ENABLED=True, AI_ASSISTANT_AGENT_ENABLED=True)
+    user = _seed_user(email="assistant.planner.clarify@example.com", role="junior_attorney")
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+
+    monkeypatch.setattr(
+        assistant_hub,
+        "plan_assistant_request",
+        lambda **kwargs: {
+            "tool_name": "clarify_request",
+            "arguments": {"question": "Pick a matter before I draft that update."},
+            "model": "gpt-test",
+        },
+    )
+
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "prompt": "Could you draft that update?",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Assistant Request Needs Attention" in body
+    assert "Pick a matter before I draft that update." in body
