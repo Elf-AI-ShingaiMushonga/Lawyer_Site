@@ -6,12 +6,22 @@ import re
 import intranet.services.assistant_hub as assistant_hub
 from intranet.extensions import db
 from intranet.models import (
+    Contact,
+    Deadline,
     DocumentFile,
+    Entity,
+    EntityRelationship,
+    KnowledgeBase,
     Matter,
     MatterActivity,
     MatterMember,
     MatterNote,
+    MatterParty,
+    MatterStageHistory,
     MatterTimelineEvent,
+    MatterWorkspaceDocument,
+    PortalMessage,
+    PortalMessageThread,
     Task,
     TimeEntry,
     User,
@@ -77,8 +87,23 @@ def test_assistant_page_renders(app_ctx):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "Supervised AI assistance for matter work" in body
+    assert "AI workspace for legal analysis and matter execution" in body
     assert "Create a task to file the affidavit by tomorrow." in body
+
+
+def test_assistant_page_shows_global_fallback_reason_when_planner_is_unavailable(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=True, AI_ASSISTANT_AGENT_ENABLED=True, AI_OPENAI_API_KEY="")
+    user = _seed_user(email="assistant.page.fallback@example.com", role="junior_attorney")
+    client = app.test_client()
+    _login(client, user.id)
+
+    response = client.get("/assistant")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Deterministic fallback active because the OpenAI planner is unavailable" in body
+    assert "OpenAI API key is not configured for assistant planning." in body
 
 
 def test_assistant_summary_draft_uses_selected_matter(app_ctx):
@@ -104,6 +129,8 @@ def test_assistant_summary_draft_uses_selected_matter(app_ctx):
     assert "Executive Summary Draft" in body
     assert matter.matter_no in body
     assert "Objective" in body
+    assert "Executive summary draft used the non-AI fallback" in body
+    assert "AI is disabled in server configuration." in body
 
 
 def test_assistant_can_resolve_matter_from_prompt_title(app_ctx):
@@ -128,6 +155,240 @@ def test_assistant_can_resolve_matter_from_prompt_title(app_ctx):
     assert "Executive Summary Draft" in body
     assert matter.matter_no in body
     assert "Resolved matter focus from the prompt" in body
+
+
+def test_assistant_case_strategy_preview_uses_workspace_context(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=False)
+    user = _seed_user(email="assistant.strategy@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0023", title="Strategy Matter")
+    db.session.add(
+        Task(
+            matter_id=matter.id,
+            title="Prepare hearing bundle",
+            status="Todo",
+            due_date=dt.date.today() + dt.timedelta(days=2),
+            created_by=user.id,
+        )
+    )
+    db.session.add(
+        DocumentFile(
+            matter_id=matter.id,
+            original_filename="hearing-outline.pdf",
+            stored_filename="hearing-outline.pdf",
+            sha256="strategy123",
+            content_type="application/pdf",
+            category="Outline",
+            owner_name="Litigation Team",
+            uploaded_by=user.id,
+        )
+    )
+    db.session.add(
+        MatterNote(
+            matter_id=matter.id,
+            body="Witness prep notes and likely opposition themes.",
+            created_by=user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": "Build a case strategy memo for this matter focused on hearing prep.",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Case Strategy Brief" in body
+    assert "Case Theory" in body
+    assert "Strengths" in body
+    assert "Evidence Gaps" in body
+    assert "Recommended Actions" in body
+    assert "Case strategy used the non-AI fallback" in body
+
+
+def test_assistant_research_preview_surfaces_workspace_sources(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=False)
+    user = _seed_user(email="assistant.research@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0024", title="Research Matter")
+    db.session.add(
+        DocumentFile(
+            matter_id=matter.id,
+            original_filename="arbitration-strategy-memo.pdf",
+            stored_filename="arbitration-strategy-memo.pdf",
+            sha256="research123",
+            content_type="application/pdf",
+            category="Memo",
+            owner_name="Strategy Team",
+            uploaded_by=user.id,
+        )
+    )
+    db.session.add(
+        KnowledgeBase(
+            title="Arbitration Strategy Checklist",
+            tags="arbitration, strategy",
+            body="Checklist for arbitration posture, evidence planning, and hearing preparation.",
+            created_by=user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": "Research the arbitration strategy issues in this file.",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Research &amp; File Analysis" in body or "Research & File Analysis" in body
+    assert "Supporting Sources" in body
+    assert "Arbitration Strategy Checklist" in body
+    assert "not external legal databases" in body
+    assert "Research memo used the non-AI fallback" in body
+
+
+def test_assistant_case_workup_preview_builds_integrated_dossier(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=False)
+    user = _seed_user(email="assistant.workup@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0030", title="Workup Matter")
+    matter.stage = "Pleadings"
+    witness = Entity(name="Jane Witness", entity_type="person", email="jane@example.com")
+    client_entity = Entity(name="Workup Client", entity_type="organization")
+    db.session.add_all([witness, client_entity])
+    db.session.flush()
+    db.session.add(MatterParty(matter_id=matter.id, entity_id=witness.id, party_role="Witness", is_primary=True))
+    db.session.add(MatterParty(matter_id=matter.id, entity_id=client_entity.id, party_role="Client", is_primary=False))
+    db.session.add(EntityRelationship(src_entity_id=witness.id, dst_entity_id=client_entity.id, relationship_type="Witness for"))
+    db.session.add(
+        Deadline(
+            matter_id=matter.id,
+            title="File answering affidavit",
+            due_at=dt.date.today() + dt.timedelta(days=4),
+            is_critical=True,
+            status="open",
+            created_by=user.id,
+        )
+    )
+    db.session.add(
+        MatterStageHistory(
+            matter_id=matter.id,
+            from_stage="Intake",
+            to_stage="Pleadings",
+            reason="Statement of claim settled and pleadings opened.",
+            changed_by=user.id,
+        )
+    )
+    db.session.add(
+        MatterWorkspaceDocument(
+            matter_id=matter.id,
+            title="Witness Outline Draft",
+            body="Initial witness outline and hearing notes.",
+            status="draft",
+            document_type="General",
+            confidentiality="Internal",
+            created_by=user.id,
+            last_edited_by=user.id,
+        )
+    )
+    db.session.flush()
+    thread = PortalMessageThread(matter_id=matter.id, subject="Client questions on pleadings", created_by_user_id=user.id)
+    db.session.add(thread)
+    db.session.flush()
+    db.session.add(
+        PortalMessage(
+            thread_id=thread.id,
+            body="Client asked whether the answering affidavit changes the hearing timetable.",
+            from_user_id=user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": "Construct the case for this matter and give me a full workup.",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Case Workup" in body
+    assert "Case Theory" in body
+    assert "Research Position" in body
+    assert "Key Parties" in body
+    assert "Collaborative Drafts" in body
+    assert "Client Communications" in body
+    assert "Stage History" in body
+    assert "Case strategy used the non-AI fallback" in body
+
+
+def test_assistant_chronology_preview_builds_matter_history(app_ctx):
+    app = app_ctx
+    user = _seed_user(email="assistant.chronology@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0025", title="Chronology Matter")
+    db.session.add(
+        MatterTimelineEvent(
+            matter_id=matter.id,
+            event_date=dt.date(2026, 4, 1),
+            event_type="Filing",
+            title="Statement of claim filed",
+            is_milestone=True,
+            created_by=user.id,
+        )
+    )
+    db.session.add(
+        Deadline(
+            matter_id=matter.id,
+            title="Serve response notice",
+            due_at=dt.date(2026, 4, 10),
+            status="open",
+            created_by=user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": "Create a chronology of this matter focused on the filing history.",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Matter Chronology" in body
+    assert "Chronology" in body
+    assert "Statement of claim filed" in body
 
 
 def test_assistant_task_confirmation_creates_task(app_ctx):
@@ -172,6 +433,53 @@ def test_assistant_task_confirmation_creates_task(app_ctx):
     assert created.due_date == dt.date.today() + dt.timedelta(days=1)
 
 
+def test_assistant_matter_summary_confirmation_updates_matter(app_ctx):
+    app = app_ctx
+    user = _seed_user(email="assistant.summary.update@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0026", title="Summary Update Matter")
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+    prompt = (
+        "Update the matter summary: objective: Secure interim relief. "
+        "latest update: Witness interviews are complete. risk High budget Watch on hold."
+    )
+
+    preview_response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": prompt,
+            "action_mode": "preview",
+        },
+    )
+    preview_body = preview_response.get_data(as_text=True)
+    token = _extract_confirm_token(preview_body)
+
+    confirm_response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": prompt,
+            "confirm_token": token,
+            "action_mode": "confirm",
+        },
+    )
+    body = confirm_response.get_data(as_text=True)
+    db.session.refresh(matter)
+
+    assert preview_response.status_code == 200
+    assert "Matter Summary Update Ready for Confirmation" in preview_body
+    assert confirm_response.status_code == 200
+    assert "Matter Summary Updated" in body
+    assert matter.objective == "Secure interim relief"
+    assert matter.last_update_note == "Witness interviews are complete"
+    assert matter.risk_level == "High"
+    assert matter.budget_status == "Watch"
+    assert matter.status == "On Hold"
+
+
 def test_assistant_note_confirmation_creates_note(app_ctx):
     app = app_ctx
     user = _seed_user(email="assistant.note@example.com", role="junior_attorney")
@@ -209,6 +517,141 @@ def test_assistant_note_confirmation_creates_note(app_ctx):
     assert note is not None
     assert "client approved the settlement range" in (note.body or "").lower()
     assert note.tags == "client, settlement"
+
+
+def test_assistant_deadline_confirmation_creates_deadline(app_ctx):
+    app = app_ctx
+    user = _seed_user(email="assistant.deadline@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0027", title="Deadline Matter")
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+    prompt = "Create a critical deadline to serve the notice by 2026-05-09."
+
+    preview_response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": prompt,
+            "action_mode": "preview",
+        },
+    )
+    preview_body = preview_response.get_data(as_text=True)
+    token = _extract_confirm_token(preview_body)
+
+    confirm_response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": prompt,
+            "confirm_token": token,
+            "action_mode": "confirm",
+        },
+    )
+    body = confirm_response.get_data(as_text=True)
+    deadline = Deadline.query.filter_by(matter_id=matter.id).order_by(Deadline.id.desc()).first()
+
+    assert preview_response.status_code == 200
+    assert "Deadline Ready for Confirmation" in preview_body
+    assert "serve the notice" in preview_body.lower()
+    assert confirm_response.status_code == 200
+    assert "Deadline Added" in body
+    assert deadline is not None
+    assert deadline.title == "serve the notice"
+    assert deadline.due_at == dt.date(2026, 5, 9)
+    assert deadline.is_critical is True
+
+
+def test_assistant_party_confirmation_creates_party_link(app_ctx):
+    app = app_ctx
+    user = _seed_user(email="assistant.party@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0028", title="Party Matter")
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+    prompt = "Add party John Smith as Witness john.smith@example.com +27 11 555 0101."
+
+    preview_response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": prompt,
+            "action_mode": "preview",
+        },
+    )
+    preview_body = preview_response.get_data(as_text=True)
+    token = _extract_confirm_token(preview_body)
+
+    confirm_response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": prompt,
+            "confirm_token": token,
+            "action_mode": "confirm",
+        },
+    )
+    body = confirm_response.get_data(as_text=True)
+    entity = Entity.query.filter_by(name="John Smith").first()
+    party = MatterParty.query.filter_by(matter_id=matter.id, entity_id=entity.id if entity else None).first()
+
+    assert preview_response.status_code == 200
+    assert "Matter Party Ready for Confirmation" in preview_body
+    assert confirm_response.status_code == 200
+    assert "Matter Party Added" in body
+    assert entity is not None
+    assert entity.email == "john.smith@example.com"
+    assert entity.phone in {"+27 11 555 0101", "27 11 555 0101"}
+    assert party is not None
+    assert party.party_role == "Witness"
+
+
+def test_assistant_workspace_document_confirmation_creates_collaborative_draft(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=False)
+    user = _seed_user(email="assistant.workbench@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0031", title="Workbench Matter")
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+    prompt = "Create a collaborative draft called Hearing Prep Strategy in the matter workbench."
+
+    preview_response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": prompt,
+            "action_mode": "preview",
+        },
+    )
+    preview_body = preview_response.get_data(as_text=True)
+    token = _extract_confirm_token(preview_body)
+
+    confirm_response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": prompt,
+            "confirm_token": token,
+            "action_mode": "confirm",
+        },
+    )
+    body = confirm_response.get_data(as_text=True)
+    row = MatterWorkspaceDocument.query.filter_by(matter_id=matter.id).order_by(MatterWorkspaceDocument.id.desc()).first()
+
+    assert preview_response.status_code == 200
+    assert "Collaborative Draft Ready for Confirmation" in preview_body
+    assert "Hearing Prep Strategy" in preview_body
+    assert confirm_response.status_code == 200
+    assert "Collaborative Draft Created" in body
+    assert row is not None
+    assert row.title == "Hearing Prep Strategy"
+    assert row.document_type == "General"
+    assert "Hearing Prep Strategy" in (row.body or "")
+    assert row.status == "draft"
 
 
 def test_assistant_task_status_confirmation_updates_task(app_ctx):
@@ -750,6 +1193,115 @@ def test_assistant_search_surfaces_my_time_entries(app_ctx):
     assert "Reviewed mediation pack and prepared chronology" in body
 
 
+def test_assistant_search_surfaces_deadlines_contacts_and_knowledge_base(app_ctx):
+    app = app_ctx
+    user = _seed_user(email="assistant.search.expanded@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0029", title="Expanded Search Matter")
+    db.session.add(
+        Deadline(
+            matter_id=matter.id,
+            title="Serve arbitration notice",
+            due_at=dt.date(2026, 5, 20),
+            status="open",
+            is_critical=True,
+            created_by=user.id,
+        )
+    )
+    db.session.add(
+        KnowledgeBase(
+            title="Arbitration Strategy Checklist",
+            tags="arbitration, strategy",
+            body="Practical checklist for arbitration pleadings and hearing readiness.",
+            created_by=user.id,
+        )
+    )
+    db.session.add(
+        Contact(
+            name="Arbitration Counsel",
+            organization="Johannesburg Chambers",
+            email="counsel@example.com",
+            phone="+27 10 555 0110",
+            notes="External arbitration specialist.",
+            created_by=user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": "Find arbitration",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Assistant Search Results" in body
+    assert "Deadlines" in body
+    assert "Serve arbitration notice" in body
+    assert "Knowledge Base" in body
+    assert "Arbitration Strategy Checklist" in body
+    assert "Contacts" in body
+    assert "Arbitration Counsel" in body
+
+
+def test_assistant_search_surfaces_collaborative_drafts_and_client_communications(app_ctx):
+    app = app_ctx
+    user = _seed_user(email="assistant.search.canvas@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0032", title="Canvas Search Matter")
+    db.session.add(
+        MatterWorkspaceDocument(
+            matter_id=matter.id,
+            title="Witness Outline Draft",
+            body="Witness outline and hearing posture notes.",
+            status="draft",
+            document_type="General",
+            confidentiality="Internal",
+            created_by=user.id,
+            last_edited_by=user.id,
+        )
+    )
+    db.session.flush()
+    thread = PortalMessageThread(matter_id=matter.id, subject="Witness questions from client", created_by_user_id=user.id)
+    db.session.add(thread)
+    db.session.flush()
+    db.session.add(
+        PortalMessage(
+            thread_id=thread.id,
+            body="Client asked for the latest witness outline and hearing plan.",
+            from_user_id=user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": "Find witness outline",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Assistant Search Results" in body
+    assert "Collaborative Drafts" in body
+    assert "Witness Outline Draft" in body
+    assert "Client Communications" in body
+    assert "Witness questions from client" in body
+
+
 def test_assistant_blocks_task_creation_for_support_role(app_ctx):
     app = app_ctx
     user = _seed_user(email="assistant.staff@example.com", role="staff")
@@ -775,7 +1327,7 @@ def test_assistant_blocks_task_creation_for_support_role(app_ctx):
 
 def test_assistant_openai_planner_can_prepare_task_from_freeform_prompt(app_ctx, monkeypatch):
     app = app_ctx
-    app.config.update(AI_ENABLED=True, AI_ASSISTANT_AGENT_ENABLED=True)
+    app.config.update(AI_ENABLED=True, AI_ASSISTANT_AGENT_ENABLED=True, AI_OPENAI_API_KEY="test-key")
     user = _seed_user(email="assistant.planner.task@example.com", role="junior_attorney")
     matter = _seed_matter(user, matter_no="2026-AST-0020", title="Planner Task Matter")
     client = app.test_client()
@@ -813,11 +1365,15 @@ def test_assistant_openai_planner_can_prepare_task_from_freeform_prompt(app_ctx,
     assert "Prepare witness bundle" in body
     assert "2026-04-15" in body
     assert "Compile and review the witness bundle for filing readiness." in body
+    assert "Planning Source" in body
+    assert "OpenAI planner" in body
+    assert "prepare_task" in body
+    assert "gpt-test" in body
 
 
 def test_assistant_openai_planner_can_request_clarification(app_ctx, monkeypatch):
     app = app_ctx
-    app.config.update(AI_ENABLED=True, AI_ASSISTANT_AGENT_ENABLED=True)
+    app.config.update(AI_ENABLED=True, AI_ASSISTANT_AGENT_ENABLED=True, AI_OPENAI_API_KEY="test-key")
     user = _seed_user(email="assistant.planner.clarify@example.com", role="junior_attorney")
     client = app.test_client()
     csrf_token = _login(client, user.id)
@@ -845,3 +1401,84 @@ def test_assistant_openai_planner_can_request_clarification(app_ctx, monkeypatch
     assert response.status_code == 200
     assert "Assistant Request Needs Attention" in body
     assert "Pick a matter before I draft that update." in body
+
+
+def test_assistant_shows_deterministic_fallback_when_planner_is_unavailable(app_ctx, monkeypatch):
+    app = app_ctx
+    app.config.update(AI_ENABLED=True, AI_ASSISTANT_AGENT_ENABLED=True, AI_OPENAI_API_KEY="test-key")
+    user = _seed_user(email="assistant.planner.fallback@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0021", title="Planner Fallback Matter")
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+
+    monkeypatch.setattr(
+        assistant_hub,
+        "plan_assistant_request",
+        lambda **kwargs: {
+            "tool_name": "",
+            "arguments": {},
+            "model": "gpt-test",
+            "reasoning_effort": "medium",
+            "fallback_reason": "openai_error",
+            "fallback_detail": "OpenAI request timed out after 20 seconds.",
+        },
+    )
+
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": "Find assistant client",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Deterministic fallback" in body
+    assert "rule_router" in body
+    assert "Non-AI fallback used" in body
+    assert "OpenAI request timed out after 20 seconds." in body
+
+
+def test_assistant_planner_accepts_timezone_tagged_time_entry_arguments(app_ctx, monkeypatch):
+    app = app_ctx
+    app.config.update(AI_ENABLED=True, AI_ASSISTANT_AGENT_ENABLED=True, AI_OPENAI_API_KEY="test-key")
+    user = _seed_user(email="assistant.planner.timezone@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0022", title="Planner Timezone Matter")
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+
+    monkeypatch.setattr(
+        assistant_hub,
+        "plan_assistant_request",
+        lambda **kwargs: {
+            "tool_name": "prepare_time_entry",
+            "arguments": {
+                "narrative": "Drafted hearing outline",
+                "start_at": "2026-04-10T09:00:00+02:00",
+                "end_at": "2026-04-10T10:30:00+02:00",
+                "is_billable": True,
+            },
+            "model": "gpt-test",
+            "reasoning_effort": "medium",
+        },
+    )
+
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": "Please log the hearing outline work.",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Time Entry Ready for Confirmation" in body
+    assert "2026-04-10T09:00" in body
+    assert "2026-04-10T10:30" in body
+    assert "Drafted hearing outline" in body

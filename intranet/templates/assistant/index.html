@@ -190,10 +190,12 @@
 
 <div class="card assistant-card mb-3">
   <span class="assistant-kicker">Assistant Workspace</span>
-  <h1 class="assistant-title">Supervised AI assistance for matter work</h1>
+  <h1 class="assistant-title">AI workspace for legal analysis and matter execution</h1>
   <div class="assistant-lead">
-    Use one prompt surface for matter briefings, search, executive summaries, client-update drafts, and supervised workflow actions:
-    create tasks, update task status, add matter notes, add timeline events, and log draft time entries. High-risk finance, trust, conflict, deletion, and irreversible actions remain in the native workflows.
+    Use one prompt surface for matter briefings, integrated case workups, case strategy, chronology, workspace-grounded research,
+    executive summaries, client-update drafts, and supervised workflow actions: create collaborative workbench drafts, update matter summaries,
+    create tasks, update task status, add deadlines, add matter parties, add matter notes, add timeline events, and log draft time entries.
+    High-risk finance, trust, conflict, deletion, and irreversible actions remain in the native workflows.
   </div>
   <div class="assistant-field-list mt-3">
     <div class="assistant-field-item">
@@ -212,6 +214,12 @@
       <div class="assistant-field-label">Model</div>
       <div class="assistant-field-value">{{ assistant_agent_meta.model }}{% if assistant_agent_meta.available %} • reasoning {{ assistant_agent_meta.reasoning_effort }}{% endif %}</div>
     </div>
+    {% if assistant_agent_meta.fallback_detail %}
+      <div class="assistant-field-item">
+        <div class="assistant-field-label">Fallback Reason</div>
+        <div class="assistant-field-value">{{ assistant_agent_meta.fallback_detail }}</div>
+      </div>
+    {% endif %}
   </div>
 </div>
 
@@ -237,14 +245,22 @@
             </select>
             <div class="assistant-chip-list mt-3">
               <span class="assistant-chip">Matter briefings and next steps</span>
+              <span class="assistant-chip">Integrated case workups</span>
+              <span class="assistant-chip">Case strategy and case-construction briefs</span>
+              <span class="assistant-chip">Chronology and procedural history</span>
+              <span class="assistant-chip">Workspace-grounded research memos</span>
+              <span class="assistant-chip">Create collaborative workbench drafts</span>
               <span class="assistant-chip">Draft summaries</span>
               <span class="assistant-chip">Draft client updates</span>
+              <span class="assistant-chip">Update matter summary with confirmation</span>
               <span class="assistant-chip">Create task with confirmation</span>
               <span class="assistant-chip">Update task status with confirmation</span>
+              <span class="assistant-chip">Add deadline with confirmation</span>
+              <span class="assistant-chip">Add matter party with confirmation</span>
               <span class="assistant-chip">Add matter note with confirmation</span>
               <span class="assistant-chip">Add timeline event with confirmation</span>
               <span class="assistant-chip">Log time entry with confirmation</span>
-              <span class="assistant-chip">Search matters, tasks, notes, deadlines, activity, time, and documents</span>
+              <span class="assistant-chip">Search matters, tasks, notes, deadlines, activity, time, documents, collaborative drafts, client communications, contacts, and knowledge base</span>
             </div>
           </div>
         </div>
@@ -260,6 +276,34 @@
         <h3 class="mt-3 mb-1">{{ assistant_result.summary }}</h3>
         {% if assistant_result.matter_label %}
           <div class="muted">Matter: {{ assistant_result.matter_label }}</div>
+        {% endif %}
+
+        {% if assistant_result.planning %}
+          <div class="assistant-field-list mt-3">
+            <div class="assistant-field-item">
+              <div class="assistant-field-label">Planning Source</div>
+              <div class="assistant-field-value">{{ assistant_result.planning.source }}</div>
+            </div>
+            <div class="assistant-field-item">
+              <div class="assistant-field-label">Planning Tool</div>
+              <div class="assistant-field-value">{{ assistant_result.planning.tool }}</div>
+            </div>
+            {% if assistant_result.planning.model %}
+              <div class="assistant-field-item">
+                <div class="assistant-field-label">Planner Model</div>
+                <div class="assistant-field-value">
+                  {{ assistant_result.planning.model }}
+                  {% if assistant_result.planning.reasoning_effort %} • reasoning {{ assistant_result.planning.reasoning_effort }}{% endif %}
+                </div>
+              </div>
+            {% endif %}
+            {% if assistant_result.planning.fallback_detail %}
+              <div class="assistant-field-item">
+                <div class="assistant-field-label">Fallback Reason</div>
+                <div class="assistant-field-value">{{ assistant_result.planning.fallback_detail }}</div>
+              </div>
+            {% endif %}
+          </div>
         {% endif %}
 
         {% if assistant_result.warnings %}
@@ -392,7 +436,7 @@
       <div class="assistant-section-list mt-3">
         <div class="assistant-section">
           <div class="assistant-section-title">Allowed Here</div>
-          <div class="assistant-block-body">Matter-aware search, next-step briefings, matter summaries, client-update drafts, task creation after confirmation, task-status updates after confirmation, matter-note creation after confirmation, timeline-event creation after confirmation, and draft time-entry capture after confirmation.</div>
+          <div class="assistant-block-body">Matter-aware search, integrated case workups, case strategy briefs, chronology views, workspace-grounded research memos, collaborative draft creation in the matter workbench, matter summaries, client-update drafts, matter-summary updates after confirmation, task creation after confirmation, task-status updates after confirmation, deadline creation after confirmation, matter-party linking after confirmation, matter-note creation after confirmation, timeline-event creation after confirmation, and draft time-entry capture after confirmation.</div>
         </div>
         <div class="assistant-section">
           <div class="assistant-section-title">Blocked Here</div>
