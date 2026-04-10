@@ -29,6 +29,8 @@ from ..models import (
     DocumentFile,
     Entity,
     EntityRelationship,
+    Invoice,
+    InvoiceLine,
     KnowledgeBase,
     Matter,
     MatterActivity,
@@ -37,6 +39,7 @@ from ..models import (
     MatterStageHistory,
     MatterTimelineEvent,
     MatterWorkspaceDocument,
+    PaymentAllocation,
     PortalMessage,
     PortalMessageThread,
     Task,
@@ -56,6 +59,7 @@ from .assist_ai import (
     suggest_matter_client_update,
     suggest_matter_executive_summary,
     suggest_matter_research_memo,
+    suggest_portal_reply_draft,
 )
 from .semantic_search import SemanticSearchService
 
@@ -113,6 +117,10 @@ _WORKSPACE_DOCUMENT_PREFIX_RE = re.compile(
     r"^(?:please\s+)?(?:create|save|draft|prepare|open|make)\s+(?:a\s+)?(?:(?:collaborative|workspace|workbench)\s+)?(?:document|draft|memo|brief|outline|note)(?:\s+(?:called|titled))?\s*",
     re.IGNORECASE,
 )
+_TASK_BUNDLE_PREFIX_RE = re.compile(
+    r"^(?:please\s+)?(?:create|build|prepare|draft|make)\s+(?:a\s+)?(?:(?:task|work)\s+)?(?:list|plan|pack|bundle|checklist|playbook)(?:\s+for|\s+to|\s+on)?\s*",
+    re.IGNORECASE,
+)
 _PARTY_PREFIX_RE = re.compile(
     r"^(?:please\s+)?(?:add|link|create)\s+(?:a\s+)?(?:matter\s+)?party(?:\s+for|\s+to)?\s*",
     re.IGNORECASE,
@@ -148,6 +156,10 @@ _CLIENT_UPDATE_INTENT_RE = re.compile(
     r"\b(?:draft|prepare|write|create)?\s*(?:a\s+)?client update\b|\bupdate the client\b|\bclient email\b|\bstatus email\b",
     re.IGNORECASE,
 )
+_PORTAL_REPLY_INTENT_RE = re.compile(
+    r"\b(?:draft|prepare|write|create)\b.*\b(?:reply|response)\b.*\b(?:client|portal|thread|message)\b|\breply to (?:the )?(?:client|last message|portal thread)\b",
+    re.IGNORECASE,
+)
 _WORKUP_INTENT_RE = re.compile(
     r"\b(?:case workup|case dossier|case build|litigation plan|hearing plan|trial plan|issue map|war room|construct (?:the )?case(?:\s+for)?|build (?:the )?case(?:\s+for)?)\b",
     re.IGNORECASE,
@@ -176,8 +188,16 @@ _WORKSPACE_DOCUMENT_INTENT_RE = re.compile(
     r"\b(?:create|save|draft|prepare|open|make)\b.*\b(?:workbench|workspace|collaborative)\b.*\b(?:document|draft|memo|brief|outline|note)\b|\b(?:save|store)\b.*\b(?:in|to)\b.*\b(?:workbench|workspace)\b",
     re.IGNORECASE,
 )
+_TASK_BUNDLE_INTENT_RE = re.compile(
+    r"\b(?:create|build|prepare|draft|make)\b.*\b(?:task list|task plan|task pack|task bundle|checklist|playbook|work plan|workstream)\b|\b(?:hearing|trial|witness|discovery|settlement|mediation|filing)\s+(?:prep|preparation)\b.*\b(?:tasks?|checklist|plan)\b",
+    re.IGNORECASE,
+)
 _TASK_INTENT_RE = re.compile(
     r"\b(?:create|add|open|make)\s+(?:a\s+)?task\b|\bremind me to\b|\btodo\b",
+    re.IGNORECASE,
+)
+_FINANCIAL_INTENT_RE = re.compile(
+    r"\b(?:what can i bill|what's ready to bill|what is ready to bill|billing snapshot|billing status|invoice status|outstanding invoices?|what(?:'s| is)\s+outstanding|unbilled time|what remains unbilled|billing exposure|matter billing)\b",
     re.IGNORECASE,
 )
 _DEADLINE_INTENT_RE = re.compile(
@@ -217,9 +237,12 @@ _PLANNER_TOOL_TO_INTENT = {
     "matter_chronology": "matter_chronology",
     "draft_summary": "draft_summary",
     "draft_client_update": "draft_client_update",
+    "draft_portal_reply": "draft_portal_reply",
     "search_workspace": "search",
+    "matter_financial_snapshot": "matter_financial_snapshot",
     "prepare_workspace_document": "create_workspace_document",
     "prepare_matter_summary_update": "update_matter_summary",
+    "prepare_task_bundle": "create_task_bundle",
     "prepare_task": "create_task",
     "prepare_task_status_update": "update_task_status",
     "prepare_deadline": "create_deadline",
@@ -235,7 +258,10 @@ _EXAMPLES = [
     "Build a case strategy memo for this matter focused on hearing prep.",
     "Create a chronology of this matter focused on the filing history.",
     "Research the arbitration strategy issues in this file.",
+    "Draft a reply to the client’s latest portal message on this matter.",
+    "What can I bill on this matter right now?",
     "Create a collaborative draft called Hearing Prep Strategy in the matter workbench.",
+    "Create a hearing prep task checklist for this matter.",
     "Summarize this matter for partner review.",
     "Draft a client update for this matter in plain English.",
     "Update the matter summary: risk High, budget Watch, latest update: witness interviews are complete.",
@@ -504,6 +530,8 @@ def _classify_intent(prompt: str) -> str:
     lowered = str(prompt or "").lower()
     if _WORKSPACE_DOCUMENT_INTENT_RE.search(prompt or ""):
         return "create_workspace_document"
+    if _TASK_BUNDLE_INTENT_RE.search(prompt or ""):
+        return "create_task_bundle"
     if _WORKUP_INTENT_RE.search(prompt or ""):
         return "matter_case_workup"
     if _STRATEGY_INTENT_RE.search(prompt or ""):
@@ -512,10 +540,14 @@ def _classify_intent(prompt: str) -> str:
         return "matter_research"
     if _CHRONOLOGY_INTENT_RE.search(prompt or ""):
         return "matter_chronology"
+    if _PORTAL_REPLY_INTENT_RE.search(prompt or ""):
+        return "draft_portal_reply"
     if _CLIENT_UPDATE_INTENT_RE.search(prompt or ""):
         return "draft_client_update"
     if _SUMMARY_INTENT_RE.search(prompt or ""):
         return "draft_summary"
+    if _FINANCIAL_INTENT_RE.search(prompt or ""):
+        return "matter_financial_snapshot"
     if _MATTER_SUMMARY_UPDATE_INTENT_RE.search(prompt or ""):
         return "update_matter_summary"
     if _TIME_ENTRY_INTENT_RE.search(prompt or ""):
@@ -745,6 +777,23 @@ def _strip_workspace_document_prompt(prompt: str) -> str:
         stripped,
         flags=re.IGNORECASE,
     )
+    return normalize_query(stripped).strip(" .,:;-") or normalize_query(str(prompt or "")).strip()
+
+
+def _strip_task_bundle_prompt(prompt: str) -> str:
+    stripped = _TASK_BUNDLE_PREFIX_RE.sub("", prompt or "").strip()
+    stripped = re.sub(r"\bfor\s+(?:this|the)\s+matter\b", "", stripped, flags=re.IGNORECASE)
+    return normalize_query(stripped).strip(" .,:;-") or normalize_query(str(prompt or "")).strip()
+
+
+def _strip_portal_reply_prompt(prompt: str) -> str:
+    stripped = re.sub(
+        r"^(?:please\s+)?(?:draft|prepare|write|create)\s+(?:a\s+)?(?:reply|response)(?:\s+to)?\s+(?:the\s+)?(?:client(?:'s)?\s+)?(?:(?:latest|last)\s+)?(?:portal\s+)?(?:thread|message)?\s*",
+        "",
+        prompt or "",
+        flags=re.IGNORECASE,
+    ).strip()
+    stripped = re.sub(r"\bon\s+(?:this|the)\s+matter\b", "", stripped, flags=re.IGNORECASE)
     return normalize_query(stripped).strip(" .,:;-") or normalize_query(str(prompt or "")).strip()
 
 
@@ -1491,6 +1540,118 @@ def _extract_task_status(prompt: str) -> str | None:
     return None
 
 
+def _task_bundle_goal(prompt: str) -> str:
+    return _strip_task_bundle_prompt(prompt)
+
+
+def _bundle_due_schedule(target_due_date: dt.date | None, *, task_count: int) -> list[dt.date | None]:
+    if target_due_date is None or task_count <= 0:
+        return [None for _ in range(max(0, task_count))]
+    today = dt.date.today()
+    offsets = [10, 7, 5, 3, 2, 1, 0]
+    dates: list[dt.date | None] = []
+    for index in range(task_count):
+        offset = offsets[index] if index < len(offsets) else max(0, len(offsets) - index)
+        due_date = target_due_date - dt.timedelta(days=offset)
+        if due_date < today:
+            due_date = today
+        dates.append(due_date)
+    return dates
+
+
+def _heuristic_task_bundle(
+    matter: Matter,
+    *,
+    bundle_goal: str,
+    target_due_date: dt.date | None = None,
+) -> list[dict[str, Any]]:
+    goal = normalize_query(bundle_goal).strip()
+    lowered = goal.lower()
+    if any(token in lowered for token in ("hearing", "trial", "witness")):
+        rows = [
+            ("Review pleadings, issues, and hearing objectives", "Confirm the issues to be argued, the required evidentiary support, and the outcome sought."),
+            ("Finalize witness list and prep notes", "Confirm witnesses, evidence owners, and any examination or consultation notes needed before the hearing."),
+            ("Prepare chronology, exhibits, and authority bundle", "Organize the chronology, annexures, and any authorities or references needed for the hearing pack."),
+            ("Client hearing briefing and instructions", "Prepare the client briefing, key risks, and any instructions or approvals required before the hearing."),
+            ("Internal rehearsal and final filing check", "Run an internal readiness review and confirm filing, service, and logistics are complete."),
+        ]
+        default_priority = "High"
+    elif any(token in lowered for token in ("discovery", "disclosure", "document production")):
+        rows = [
+            ("Confirm discovery scope and deadlines", "Review the operative request scope, response deadlines, and any outstanding procedural requirements."),
+            ("Collect and review responsive documents", "Pull the relevant materials from the file, identify missing items, and organise the response set."),
+            ("Flag privilege and confidentiality issues", "Mark privileged or restricted items and identify any redactions or withholding positions needed."),
+            ("Draft discovery response set", "Prepare the response pack, deficiency notes, and any explanatory schedule required for service."),
+            ("Client instructions and service plan", "Confirm client instructions, identify open questions, and prepare the final service plan."),
+        ]
+        default_priority = "High"
+    elif any(token in lowered for token in ("settlement", "mediation", "without prejudice")):
+        rows = [
+            ("Update liability, quantum, and settlement range", "Refresh the current merits, quantum position, and realistic negotiation range before engagement."),
+            ("Prepare settlement or mediation brief", "Draft the negotiation brief, key talking points, and the supporting chronology or evidence references."),
+            ("Confirm client mandate and approval boundaries", "Record the client’s authority, fallback positions, and escalation path for negotiation decisions."),
+            ("Assemble supporting documents for negotiation", "Organize the key contracts, correspondence, schedules, and exhibits needed for the session."),
+            ("Post-session action and follow-up plan", "Prepare the immediate steps to document outcomes, follow up on commitments, and update the client."),
+        ]
+        default_priority = "Medium"
+    elif any(token in lowered for token in ("filing", "affidavit", "notice", "pleading")):
+        rows = [
+            ("Confirm filing requirements and due date", "Check the filing deadline, service requirements, and court or tribunal-specific procedural rules."),
+            ("Finalize draft pleading or affidavit", "Close drafting gaps, verify allegations, and align the filing to the current case theory."),
+            ("Verify annexures and supporting evidence", "Confirm every annexure, exhibit label, and supporting source needed for the filing pack."),
+            ("Prepare filing and service logistics", "Line up signatures, court filing steps, service details, and final formatting checks."),
+            ("Client update after filing", "Prepare the post-filing client communication and immediate next-step plan."),
+        ]
+        default_priority = "High"
+    else:
+        rows = [
+            ("Review file status and open issues", "Scan the current matter record, identify the live issues, and confirm what is still blocking progress."),
+            ("Update chronology and key dates", "Refresh the chronology, next deadlines, and milestone sequencing for the active workstream."),
+            ("Prepare next-step work plan", "Break the matter into immediate legal, factual, and client-facing work items."),
+            ("Assign ownership and internal follow-ups", "Clarify who owns the next actions and what needs escalation or review."),
+            ("Draft status update and follow-up notes", "Prepare the internal or client-facing update that should follow once the workstream is underway."),
+        ]
+        default_priority = "Medium"
+    schedule = _bundle_due_schedule(target_due_date, task_count=len(rows))
+    tasks: list[dict[str, Any]] = []
+    for index, (title, description) in enumerate(rows):
+        tasks.append(
+            {
+                "title": title[:255],
+                "description": description[:2000],
+                "due_date": schedule[index].isoformat() if schedule[index] is not None else "",
+                "priority": default_priority,
+            }
+        )
+    if goal and goal.casefold() not in {normalize_query(row[0]).casefold() for row in rows}:
+        tasks[0]["description"] = f"{tasks[0]['description']} Focus: {goal[:180]}"
+    return tasks
+
+
+def _normalize_task_bundle_items(raw_tasks: Any, *, fallback_tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not isinstance(raw_tasks, list):
+        return fallback_tasks
+    normalized: list[dict[str, Any]] = []
+    for row in raw_tasks[:8]:
+        if not isinstance(row, dict):
+            continue
+        title = normalize_query(str(row.get("title") or "")).strip()[:255]
+        if not title:
+            continue
+        description = normalize_query(str(row.get("description") or "")).strip()[:2000]
+        due_date = _parse_iso_date_arg(row.get("due_date"))
+        priority = normalize_query(str(row.get("priority") or "")).strip().title()
+        normalized.append(
+            {
+                "title": title,
+                "description": description,
+                "due_date": due_date.isoformat() if due_date else "",
+                "priority": priority if priority in {"High", "Medium", "Low"} else "Medium",
+            }
+        )
+    return normalized or fallback_tasks
+
+
 def _note_body_tags_and_privilege(prompt: str) -> tuple[str, str, str | None]:
     body = _strip_note_prompt(prompt)
     tags = sorted({match.group(1).lower() for match in _TAG_RE.finditer(body)})
@@ -1999,6 +2160,186 @@ def _matter_analysis_context(matter: Matter, *, research_query: str = "") -> dic
     context["knowledge_hits"] = knowledge_hits
     context["semantic_hits"] = semantic_hits
     return context
+
+
+def _portal_thread_context(matter: Matter, *, prompt: str = "") -> dict[str, Any]:
+    threads = (
+        PortalMessageThread.query.filter_by(matter_id=matter.id)
+        .order_by(PortalMessageThread.created_at.desc(), PortalMessageThread.id.desc())
+        .limit(24)
+        .all()
+    )
+    if not threads:
+        return {}
+    thread_ids = [int(row.id) for row in threads]
+    message_rows = (
+        PortalMessage.query.filter(PortalMessage.thread_id.in_(thread_ids))
+        .order_by(PortalMessage.created_at.desc(), PortalMessage.id.desc())
+        .limit(240)
+        .all()
+    )
+    messages_by_thread: dict[int, list[PortalMessage]] = {thread_id: [] for thread_id in thread_ids}
+    for row in message_rows:
+        messages_by_thread.setdefault(int(row.thread_id), []).append(row)
+    tokens = _search_tokens(_strip_portal_reply_prompt(prompt))
+    scored_threads: list[tuple[int, dt.datetime, PortalMessageThread]] = []
+    for thread in threads:
+        recent_messages = messages_by_thread.get(int(thread.id), [])[:8]
+        haystack_parts = [thread.subject or ""] + [row.body or "" for row in recent_messages]
+        haystack = normalize_query(" ".join(haystack_parts)).lower()
+        score = sum(1 for token in tokens if token in haystack) if tokens else 0
+        latest_at = recent_messages[0].created_at if recent_messages else thread.created_at or dt.datetime.min
+        scored_threads.append((score, latest_at or dt.datetime.min, thread))
+    scored_threads.sort(key=lambda item: (item[0], item[1], int(item[2].id or 0)), reverse=True)
+    selected_thread = scored_threads[0][2] if scored_threads else None
+    if selected_thread is None:
+        return {}
+    selected_thread_messages = messages_by_thread.get(int(selected_thread.id), []) or []
+    selected_messages = list(reversed(selected_thread_messages[:6]))
+    latest_message = selected_thread_messages[0] if selected_thread_messages else None
+    latest_client_message = next(
+        (row for row in selected_thread_messages if row.from_portal_user_id),
+        None,
+    )
+    return {
+        "thread_id": int(selected_thread.id),
+        "subject": selected_thread.subject or "",
+        "latest_message": (latest_message.body or "").strip()[:600] if latest_message is not None else "",
+        "latest_client_message": (latest_client_message.body or "").strip()[:600] if latest_client_message is not None else "",
+        "waiting_on_internal_response": bool(latest_message and latest_message.from_portal_user_id),
+        "messages": [
+            {
+                "author": "Client" if row.from_portal_user_id else "Internal",
+                "body": (row.body or "").strip()[:400],
+                "created_at": row.created_at.isoformat() if row.created_at else "",
+            }
+            for row in selected_messages
+        ],
+        "href": url_for("portal_message_center", matter_id=matter.id, thread_id=selected_thread.id),
+    }
+
+
+def _matter_financial_snapshot(matter: Matter) -> dict[str, Any]:
+    invoices = (
+        Invoice.query.filter_by(matter_id=matter.id)
+        .order_by(Invoice.created_at.desc(), Invoice.id.desc())
+        .limit(12)
+        .all()
+    )
+    invoice_ids = [int(row.id) for row in invoices]
+    settled_totals: dict[int, float] = {}
+    if invoice_ids:
+        settled_rows = (
+            db.session.query(PaymentAllocation.invoice_id, db.func.coalesce(db.func.sum(PaymentAllocation.amount), 0.0))
+            .filter(
+                PaymentAllocation.invoice_id.in_(invoice_ids),
+                or_(PaymentAllocation.status == "settled", PaymentAllocation.status.is_(None)),
+            )
+            .group_by(PaymentAllocation.invoice_id)
+            .all()
+        )
+        settled_totals = {int(invoice_id): float(amount or 0.0) for invoice_id, amount in settled_rows}
+    billed_time_entry_ids = {
+        int(row[0])
+        for row in (
+            db.session.query(InvoiceLine.time_entry_id)
+            .join(Invoice, Invoice.id == InvoiceLine.invoice_id)
+            .filter(Invoice.matter_id == matter.id, InvoiceLine.time_entry_id.is_not(None))
+            .all()
+        )
+        if row[0] is not None
+    }
+    ready_time_entries = (
+        TimeEntry.query.filter(
+            TimeEntry.matter_id == matter.id,
+            TimeEntry.status.in_(["approved", "locked"]),
+        )
+        .order_by(TimeEntry.start_at.desc(), TimeEntry.id.desc())
+        .limit(60)
+        .all()
+    )
+    ready_to_bill = [row for row in ready_time_entries if int(row.id) not in billed_time_entry_ids]
+    review_queue = (
+        TimeEntry.query.filter(
+            TimeEntry.matter_id == matter.id,
+            TimeEntry.status.in_(["draft", "needs_review"]),
+        )
+        .order_by(TimeEntry.start_at.desc(), TimeEntry.id.desc())
+        .limit(30)
+        .all()
+    )
+    invoice_rows: list[dict[str, Any]] = []
+    total_billed = 0.0
+    total_paid = 0.0
+    total_outstanding = 0.0
+    for row in invoices:
+        paid = round(float(settled_totals.get(int(row.id), 0.0)), 2)
+        total = round(float(row.total or 0.0), 2)
+        outstanding = round(max(0.0, total - paid), 2)
+        total_billed += total
+        total_paid += paid
+        total_outstanding += outstanding
+        invoice_rows.append(
+            {
+                "id": int(row.id),
+                "status": row.status or "draft",
+                "period": " to ".join(
+                    item
+                    for item in [
+                        row.period_start.isoformat() if row.period_start else "",
+                        row.period_end.isoformat() if row.period_end else "",
+                    ]
+                    if item
+                ),
+                "total": total,
+                "paid": paid,
+                "outstanding": outstanding,
+                "created_at": row.created_at.isoformat() if row.created_at else "",
+            }
+        )
+    return {
+        "ready_to_bill_count": len(ready_to_bill),
+        "ready_to_bill_hours": round(sum(float(row.rounded_hours or row.hours or 0.0) for row in ready_to_bill), 2),
+        "review_queue_count": len(review_queue),
+        "review_queue_hours": round(sum(float(row.rounded_hours or row.hours or 0.0) for row in review_queue), 2),
+        "invoice_count": len(invoices),
+        "draft_invoice_count": sum(1 for row in invoices if (row.status or "").strip().lower() == "draft"),
+        "outstanding_invoice_count": sum(1 for row in invoice_rows if float(row["outstanding"]) > 0.0),
+        "total_billed": round(total_billed, 2),
+        "total_paid": round(total_paid, 2),
+        "total_outstanding": round(total_outstanding, 2),
+        "ready_to_bill_entries": [
+            {
+                "title": row.narrative or "Time entry",
+                "meta": " • ".join(
+                    item
+                    for item in [
+                        f"{float(row.rounded_hours or row.hours or 0.0):.2f}h",
+                        row.status or "",
+                        row.start_at.date().isoformat() if row.start_at else "",
+                    ]
+                    if item
+                ),
+            }
+            for row in ready_to_bill[:6]
+        ],
+        "review_queue_entries": [
+            {
+                "title": row.narrative or "Time entry",
+                "meta": " • ".join(
+                    item
+                    for item in [
+                        f"{float(row.rounded_hours or row.hours or 0.0):.2f}h",
+                        row.status or "",
+                        row.start_at.date().isoformat() if row.start_at else "",
+                    ]
+                    if item
+                ),
+            }
+            for row in review_queue[:6]
+        ],
+        "invoice_rows": invoice_rows[:6],
+    }
 
 
 def _matter_chronology_entries(matter: Matter, *, focus_hint: str = "") -> list[dict[str, str]]:
@@ -3138,6 +3479,171 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
             planning=planning,
         )
 
+    if intent == "draft_portal_reply":
+        if matter is None:
+            return _error_result(cleaned_prompt, "Pick a matter or reference its matter number to draft a client reply.")
+        thread_focus = normalize_query(str(plan_args.get("thread_focus") or "")).strip() or _strip_portal_reply_prompt(cleaned_prompt)
+        thread_context = _portal_thread_context(matter, prompt=thread_focus or cleaned_prompt)
+        if not thread_context:
+            return _error_result(
+                cleaned_prompt,
+                "No client portal conversation was found on this matter to reply to.",
+                matter=matter,
+            )
+        tone_hint = normalize_query(str(plan_args.get("tone_hint") or "")).strip() or _tone_hint_from_prompt(cleaned_prompt)
+        suggestion = suggest_portal_reply_draft(
+            matter_context=_matter_context(matter),
+            thread_context=thread_context,
+            tone_hint=tone_hint,
+        )
+        portal_warnings = list(warning_list)
+        portal_warnings.append("This drafts the reply only. Sending still happens in Client Message Center.")
+        if not bool(thread_context.get("waiting_on_internal_response")):
+            portal_warnings.append("The latest message in this thread is not from the client, so review the draft before using it.")
+        if str(suggestion.get("source") or "").strip().lower() != "openai":
+            portal_warnings.append(_draft_fallback_warning("Portal reply draft", suggestion))
+        audit(
+            "assistant_portal_reply_draft",
+            "Matter",
+            matter.id,
+            {
+                "thread_id": int(thread_context.get("thread_id") or 0),
+                "source": suggestion.get("source"),
+                "fallback_reason": suggestion.get("fallback_reason"),
+            },
+        )
+        return _result(
+            status="ok",
+            kind="draft_portal_reply",
+            headline="Portal Reply Draft",
+            summary=f"Prepared a reply draft for the client thread on {assistant_matter_label(matter)}.",
+            prompt=cleaned_prompt,
+            matter=matter,
+            warnings=portal_warnings,
+            fields=[
+                {"label": "Thread", "value": thread_context.get("subject") or "Client thread"},
+                {"label": "Tone", "value": tone_hint},
+                {"label": "Source", "value": str(suggestion.get("source") or "fallback").title()},
+            ],
+            text_blocks=[
+                {"title": "Subject", "body": suggestion.get("subject") or ""},
+                {"title": "Body", "body": suggestion.get("body") or ""},
+            ],
+            sections=[
+                {
+                    "title": "Conversation Context",
+                    "items": [
+                        {
+                            "title": row.get("author") or "Message",
+                            "meta": " • ".join(
+                                item for item in [str(row.get("created_at") or "")[:16], str(row.get("body") or "")] if item
+                            ),
+                            "href": thread_context.get("href") or "",
+                        }
+                        for row in list(thread_context.get("messages") or [])[-4:]
+                    ],
+                }
+            ],
+            links=[
+                {"label": "Open Client Message Center", "href": thread_context.get("href") or url_for("portal_message_center", matter_id=matter.id)},
+                {"label": "Open Matter", "href": url_for("matter_detail", matter_id=matter.id)},
+            ],
+            planning=planning,
+        )
+
+    if intent == "matter_financial_snapshot":
+        if matter is None:
+            return _error_result(cleaned_prompt, "Pick a matter or reference its matter number to review billing status.")
+        if not (has_permission("billing", "report") or has_permission("billing", "generate")):
+            return _blocked_result(
+                cleaned_prompt,
+                "Billing status stays available only to users with billing access.",
+                matter=matter,
+            )
+        snapshot = _matter_financial_snapshot(matter)
+        finance_warnings = list(warning_list)
+        if int(snapshot.get("review_queue_count") or 0) > 0:
+            finance_warnings.append(
+                f"{snapshot.get('review_queue_count')} time entry or entries are still draft/needs-review and are not yet ready to bill."
+            )
+        if int(snapshot.get("invoice_count") or 0) <= 0:
+            finance_warnings.append("No invoice record is attached to this matter yet.")
+        audit(
+            "assistant_financial_snapshot",
+            "Matter",
+            matter.id,
+            {
+                "ready_to_bill_hours": float(snapshot.get("ready_to_bill_hours") or 0.0),
+                "outstanding_total": float(snapshot.get("total_outstanding") or 0.0),
+            },
+        )
+        return _result(
+            status="ok",
+            kind="matter_financial_snapshot",
+            headline="Matter Financial Snapshot",
+            summary=f"Prepared the billing and invoice position for {assistant_matter_label(matter)}.",
+            prompt=cleaned_prompt,
+            matter=matter,
+            warnings=finance_warnings,
+            fields=[
+                {"label": "Ready To Bill", "value": f"{float(snapshot.get('ready_to_bill_hours') or 0.0):.2f}h across {int(snapshot.get('ready_to_bill_count') or 0)} entries"},
+                {"label": "Review Queue", "value": f"{float(snapshot.get('review_queue_hours') or 0.0):.2f}h across {int(snapshot.get('review_queue_count') or 0)} entries"},
+                {"label": "Invoices", "value": str(int(snapshot.get("invoice_count") or 0))},
+                {"label": "Outstanding Invoices", "value": str(int(snapshot.get("outstanding_invoice_count") or 0))},
+                {"label": "Total Billed", "value": f"ZAR {float(snapshot.get('total_billed') or 0.0):,.2f}"},
+                {"label": "Total Outstanding", "value": f"ZAR {float(snapshot.get('total_outstanding') or 0.0):,.2f}"},
+            ],
+            sections=[
+                {
+                    "title": "Ready To Bill",
+                    "items": [
+                        {
+                            "title": row.get("title") or "Time entry",
+                            "meta": row.get("meta") or "",
+                            "href": url_for("time_entries", matter_id=matter.id),
+                        }
+                        for row in list(snapshot.get("ready_to_bill_entries") or [])
+                    ],
+                },
+                {
+                    "title": "Review Queue",
+                    "items": [
+                        {
+                            "title": row.get("title") or "Time entry",
+                            "meta": row.get("meta") or "",
+                            "href": url_for("time_entries", matter_id=matter.id),
+                        }
+                        for row in list(snapshot.get("review_queue_entries") or [])
+                    ],
+                },
+                {
+                    "title": "Recent Invoices",
+                    "items": [
+                        {
+                            "title": f"Invoice #{row.get('id')}",
+                            "meta": " • ".join(
+                                item
+                                for item in [
+                                    str(row.get("status") or ""),
+                                    str(row.get("period") or ""),
+                                    f"Total ZAR {float(row.get('total') or 0.0):,.2f}",
+                                    f"Outstanding ZAR {float(row.get('outstanding') or 0.0):,.2f}",
+                                ]
+                                if item
+                            ),
+                            "href": url_for("billing_invoices", matter_id=matter.id),
+                        }
+                        for row in list(snapshot.get("invoice_rows") or [])
+                    ],
+                },
+            ],
+            links=[
+                {"label": "Open Billing", "href": url_for("billing_invoices", matter_id=matter.id)},
+                {"label": "Open Time Entries", "href": url_for("time_entries", matter_id=matter.id)},
+            ],
+            planning=planning,
+        )
+
     if intent == "create_workspace_document":
         if matter is None:
             return _error_result(cleaned_prompt, "Pick a matter or reference its matter number before creating a collaborative draft.")
@@ -3332,6 +3838,93 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
             fields=field_rows,
             text_blocks=text_blocks,
             links=[{"label": "Open Matter", "href": url_for("matter_detail", matter_id=matter.id)}],
+            requires_confirmation=True,
+            confirm_token=_sign_confirmation_payload(preview_payload),
+            planning=planning,
+        )
+
+    if intent == "create_task_bundle":
+        if matter is None:
+            return _error_result(cleaned_prompt, "Pick a matter or reference its matter number before creating a task bundle.")
+        if not role_is_case(getattr(current_user, "role", None)):
+            return _blocked_result(
+                cleaned_prompt,
+                "Only legal case-team roles can create task bundles from the assistant.",
+                matter=matter,
+            )
+        bundle_goal = normalize_query(str(plan_args.get("bundle_goal") or "")).strip() or _task_bundle_goal(cleaned_prompt)
+        target_due_date = _parse_iso_date_arg(plan_args.get("target_due_date")) or _extract_due_date(cleaned_prompt)
+        if target_due_date is None:
+            nearest_deadline = (
+                Deadline.query.filter(
+                    Deadline.matter_id == matter.id,
+                    Deadline.status == "open",
+                    Deadline.due_at >= dt.date.today(),
+                )
+                .order_by(Deadline.due_at.asc(), Deadline.id.asc())
+                .first()
+            )
+            if nearest_deadline is not None:
+                target_due_date = nearest_deadline.due_at
+                warning_list = list(warning_list)
+                warning_list.append(
+                    f"Task pack due dates were aligned to the nearest open matter deadline ({target_due_date.isoformat()})."
+                )
+        fallback_tasks = _heuristic_task_bundle(
+            matter,
+            bundle_goal=bundle_goal or "general matter execution",
+            target_due_date=target_due_date,
+        )
+        tasks = _normalize_task_bundle_items(plan_args.get("tasks"), fallback_tasks=fallback_tasks)
+        preview_payload = {
+            "action": "create_task_bundle",
+            "user_id": int(current_user.id),
+            "matter_id": int(matter.id),
+            "bundle_goal": bundle_goal or "General matter work plan",
+            "target_due_date": target_due_date.isoformat() if target_due_date else "",
+            "tasks": tasks,
+        }
+        audit(
+            "assistant_task_bundle_preview",
+            "Matter",
+            matter.id,
+            {"bundle_goal": (bundle_goal or "General matter work plan")[:180], "task_count": len(tasks)},
+        )
+        return _result(
+            status="ok",
+            kind="create_task_bundle_preview",
+            headline="Task Bundle Ready for Confirmation",
+            summary=f"Prepared a multi-step task plan for {assistant_matter_label(matter)}. Confirm before it is written.",
+            prompt=cleaned_prompt,
+            matter=matter,
+            warnings=warning_list,
+            fields=[
+                {"label": "Bundle Goal", "value": bundle_goal or "General matter work plan"},
+                {"label": "Task Count", "value": str(len(tasks))},
+                {"label": "Target Due Date", "value": target_due_date.isoformat() if target_due_date else "No target due date"},
+            ],
+            sections=[
+                {
+                    "title": "Planned Tasks",
+                    "items": [
+                        {
+                            "title": str(row.get("title") or "Task"),
+                            "meta": " • ".join(
+                                item
+                                for item in [
+                                    str(row.get("priority") or "Medium"),
+                                    f"Due {row.get('due_date')}" if row.get("due_date") else "",
+                                    str(row.get("description") or ""),
+                                ]
+                                if item
+                            ),
+                            "href": url_for("matter_tasks", matter_id=matter.id),
+                        }
+                        for row in tasks
+                    ],
+                }
+            ],
+            links=[{"label": "Open Matter Tasks", "href": url_for("matter_tasks", matter_id=matter.id)}],
             requires_confirmation=True,
             confirm_token=_sign_confirmation_payload(preview_payload),
             planning=planning,
@@ -4382,6 +4975,115 @@ def execute_assistant_confirmation(confirm_token: str, *, prompt: str) -> dict[s
             ],
             text_blocks=[{"title": "Description", "body": event.description or "No extra description was recorded."}],
             links=[{"label": "Open Matter", "href": url_for("matter_detail", matter_id=matter.id)}],
+        )
+
+    if action == "create_task_bundle":
+        raw_tasks = payload.get("tasks")
+        if not isinstance(raw_tasks, list) or not raw_tasks:
+            return _error_result(cleaned_prompt, "Task bundle items are missing from the confirmation payload.", matter=matter)
+        created_rows: list[Task] = []
+        skipped_titles: list[str] = []
+        for row in raw_tasks[:8]:
+            if not isinstance(row, dict):
+                continue
+            title = normalize_query(str(row.get("title") or "")).strip()[:255]
+            if not title:
+                continue
+            existing_open = Task.query.filter(
+                Task.matter_id == matter.id,
+                db.func.lower(Task.title) == title.lower(),
+                Task.status != "Done",
+            ).first()
+            if existing_open is not None:
+                skipped_titles.append(title)
+                continue
+            due_date = _parse_iso_date_arg(row.get("due_date"))
+            priority = normalize_query(str(row.get("priority") or "")).strip().title()
+            task = Task(
+                matter_id=matter.id,
+                title=title,
+                description=normalize_query(str(row.get("description") or "")).strip()[:2000] or None,
+                due_date=due_date,
+                created_by=current_user.id,
+                priority=priority if priority in {"High", "Medium", "Low"} else "Medium",
+            )
+            db.session.add(task)
+            db.session.flush()
+            created_rows.append(task)
+            audit(
+                "task_create",
+                "Task",
+                task.id,
+                {"matter_id": matter.id, "source": "assistant_task_bundle"},
+            )
+        if not created_rows and skipped_titles:
+            _mark_confirmation_consumed(confirm_token)
+            return _result(
+                status="ok",
+                kind="task_bundle_noop",
+                headline="Task Bundle Already Represented",
+                summary=f"Matching open tasks already exist on {assistant_matter_label(matter)}.",
+                prompt=cleaned_prompt,
+                matter=matter,
+                sections=[
+                    {"title": "Skipped Existing Tasks", "items": [{"title": title} for title in skipped_titles[:8]]}
+                ],
+                links=[{"label": "Open Matter Tasks", "href": url_for("matter_tasks", matter_id=matter.id)}],
+            )
+        if not created_rows:
+            return _error_result(cleaned_prompt, "The assistant could not create any valid tasks from that bundle.", matter=matter)
+        matter.last_updated_at = utc_now()
+        db.session.commit()
+        _mark_confirmation_consumed(confirm_token)
+        audit(
+            "assistant_task_bundle_create",
+            "Matter",
+            matter.id,
+            {
+                "bundle_goal": normalize_query(str(payload.get("bundle_goal") or "")).strip()[:180],
+                "created_count": len(created_rows),
+                "skipped_count": len(skipped_titles),
+            },
+        )
+        matter_activity(
+            matter.id,
+            "Task bundle created",
+            f"{len(created_rows)} task(s) created via assistant",
+        )
+        sections = [
+            {
+                "title": "Created Tasks",
+                "items": [
+                    {
+                        "title": row.title,
+                        "meta": " • ".join(
+                            item
+                            for item in [
+                                row.priority or "",
+                                f"Due {row.due_date.isoformat()}" if row.due_date else "",
+                            ]
+                            if item
+                        ),
+                    }
+                    for row in created_rows[:8]
+                ],
+            }
+        ]
+        if skipped_titles:
+            sections.append({"title": "Skipped Existing Tasks", "items": [{"title": title} for title in skipped_titles[:8]]})
+        return _result(
+            status="ok",
+            kind="task_bundle_created",
+            headline="Task Bundle Created",
+            summary=f"Created {len(created_rows)} task(s) on {assistant_matter_label(matter)}.",
+            prompt=cleaned_prompt,
+            matter=matter,
+            fields=[
+                {"label": "Created", "value": str(len(created_rows))},
+                {"label": "Skipped Existing", "value": str(len(skipped_titles))},
+            ],
+            sections=sections,
+            links=[{"label": "Open Matter Tasks", "href": url_for("matter_tasks", matter_id=matter.id)}],
         )
 
     if action == "add_party":

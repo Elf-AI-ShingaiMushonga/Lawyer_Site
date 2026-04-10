@@ -11,6 +11,8 @@ from intranet.models import (
     DocumentFile,
     Entity,
     EntityRelationship,
+    Invoice,
+    InvoiceLine,
     KnowledgeBase,
     Matter,
     MatterActivity,
@@ -20,8 +22,10 @@ from intranet.models import (
     MatterStageHistory,
     MatterTimelineEvent,
     MatterWorkspaceDocument,
+    PaymentAllocation,
     PortalMessage,
     PortalMessageThread,
+    PortalUser,
     Task,
     TimeEntry,
     User,
@@ -389,6 +393,198 @@ def test_assistant_chronology_preview_builds_matter_history(app_ctx):
     assert "Matter Chronology" in body
     assert "Chronology" in body
     assert "Statement of claim filed" in body
+
+
+def test_assistant_portal_reply_draft_uses_thread_context(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=False)
+    user = _seed_user(email="assistant.portal.reply@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0040", title="Portal Reply Matter")
+    matter.last_update_note = "We are finalising the hearing pack and witness bundle."
+    portal_user = PortalUser(
+        email="client.portal@example.com",
+        full_name="Client Portal User",
+        password_hash="x",
+        is_active=True,
+    )
+    portal_user.set_password("ClientPortal123!")
+    db.session.add(portal_user)
+    db.session.flush()
+    thread = PortalMessageThread(
+        matter_id=matter.id,
+        subject="Documents needed for hearing",
+        created_by_portal_user_id=portal_user.id,
+    )
+    db.session.add(thread)
+    db.session.flush()
+    db.session.add(
+        PortalMessage(
+            thread_id=thread.id,
+            body="Can you confirm the hearing date and what documents you still need from me?",
+            from_portal_user_id=portal_user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": "Draft a reply to the client's latest portal message on this matter.",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Portal Reply Draft" in body
+    assert "Documents needed for hearing" in body
+    assert "Thank you for your message" in body
+    assert "Client Message Center" in body
+    assert "Portal reply draft used the non-AI fallback" in body
+
+
+def test_assistant_financial_snapshot_surfaces_unbilled_and_outstanding(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=False)
+    user = _seed_user(email="assistant.finance@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0041", title="Finance Matter")
+    ready_entry = TimeEntry(
+        user_id=user.id,
+        matter_id=matter.id,
+        start_at=dt.datetime(2026, 4, 8, 9, 0),
+        end_at=dt.datetime(2026, 4, 8, 11, 0),
+        hours=2.0,
+        rounded_hours=2.0,
+        narrative="Prepared settlement chronology",
+        is_billable=True,
+        status="approved",
+    )
+    billed_entry = TimeEntry(
+        user_id=user.id,
+        matter_id=matter.id,
+        start_at=dt.datetime(2026, 4, 7, 9, 0),
+        end_at=dt.datetime(2026, 4, 7, 10, 0),
+        hours=1.0,
+        rounded_hours=1.0,
+        narrative="Reviewed settlement proposal",
+        is_billable=True,
+        status="approved",
+    )
+    review_entry = TimeEntry(
+        user_id=user.id,
+        matter_id=matter.id,
+        start_at=dt.datetime(2026, 4, 9, 13, 0),
+        end_at=dt.datetime(2026, 4, 9, 13, 30),
+        hours=0.5,
+        rounded_hours=0.5,
+        narrative="Client call notes",
+        is_billable=True,
+        status="draft",
+    )
+    db.session.add_all([ready_entry, billed_entry, review_entry])
+    db.session.flush()
+    invoice = Invoice(
+        matter_id=matter.id,
+        client_name=matter.client_name or "Assistant Client",
+        period_start=dt.date(2026, 4, 1),
+        period_end=dt.date(2026, 4, 30),
+        status="approved",
+        subtotal=1000.0,
+        tax_total=150.0,
+        total=1150.0,
+        created_by=user.id,
+    )
+    db.session.add(invoice)
+    db.session.flush()
+    db.session.add(
+        InvoiceLine(
+            invoice_id=invoice.id,
+            time_entry_id=billed_entry.id,
+            description="Reviewed settlement proposal",
+            hours=1.0,
+            rate=1000.0,
+            amount=1000.0,
+            tax_amount=150.0,
+        )
+    )
+    db.session.add(
+        PaymentAllocation(
+            invoice_id=invoice.id,
+            amount=400.0,
+            status="settled",
+            created_by=user.id,
+        )
+    )
+    db.session.commit()
+
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": "What can I bill on this matter right now?",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Matter Financial Snapshot" in body
+    assert "Ready To Bill" in body
+    assert "2.00h" in body
+    assert "Prepared settlement chronology" in body
+    assert "Total Outstanding" in body
+    assert "ZAR 750.00" in body
+    assert "Recent Invoices" in body
+
+
+def test_assistant_task_bundle_confirmation_creates_multiple_tasks(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=False)
+    user = _seed_user(email="assistant.taskbundle@example.com", role="junior_attorney")
+    matter = _seed_matter(user, matter_no="2026-AST-0042", title="Task Bundle Matter")
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+    prompt = "Create a hearing prep task checklist for this matter."
+
+    preview_response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": prompt,
+            "action_mode": "preview",
+        },
+    )
+    preview_body = preview_response.get_data(as_text=True)
+    token = _extract_confirm_token(preview_body)
+
+    confirm_response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "matter_id": str(matter.id),
+            "prompt": prompt,
+            "confirm_token": token,
+            "action_mode": "confirm",
+        },
+    )
+    body = confirm_response.get_data(as_text=True)
+    created_tasks = Task.query.filter_by(matter_id=matter.id).order_by(Task.id.asc()).all()
+
+    assert preview_response.status_code == 200
+    assert "Task Bundle Ready for Confirmation" in preview_body
+    assert "Finalize witness list and prep notes" in preview_body
+    assert confirm_response.status_code == 200
+    assert "Task Bundle Created" in body
+    assert len(created_tasks) >= 5
+    assert any(task.title == "Finalize witness list and prep notes" for task in created_tasks)
 
 
 def test_assistant_task_confirmation_creates_task(app_ctx):

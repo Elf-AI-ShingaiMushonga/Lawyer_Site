@@ -374,6 +374,147 @@ def suggest_matter_client_update(
         )
 
 
+def _fallback_portal_reply_draft(
+    *,
+    matter_context: dict[str, Any],
+    thread_context: dict[str, Any],
+    tone_hint: str,
+) -> dict[str, Any]:
+    matter_no = _clean_text(matter_context.get("matter_no"), limit=80) or "Matter"
+    matter_title = _clean_text(matter_context.get("title"), limit=200) or "matter"
+    status = _clean_text(matter_context.get("status"), limit=40) or "Open"
+    subject_seed = _clean_text(thread_context.get("subject"), limit=220) or f"{matter_no} update"
+    latest_client_message = _clean_text(thread_context.get("latest_client_message"), limit=600)
+    latest_internal_update = _clean_text(matter_context.get("last_update_note"), limit=600)
+    next_due_task = _clean_text(matter_context.get("next_due_task"), limit=220)
+    latest_milestone = _clean_text(matter_context.get("latest_timeline_title"), limit=220)
+    response_line = (
+        f"Thank you for your message regarding {latest_client_message}."
+        if latest_client_message
+        else f"Thank you for your message about {matter_no}."
+    )
+    progress_line = latest_internal_update or latest_milestone or f"The matter is currently marked {status}."
+    next_step_line = next_due_task or "We are reviewing the file and will revert once the next internal step is complete."
+    body = (
+        f"{response_line}\n\n"
+        f"We have reviewed it in the context of {matter_no} - {matter_title}. "
+        f"Current position: {progress_line}\n\n"
+        f"Next step: {next_step_line}\n\n"
+        f"We will keep you updated as soon as there is a further development."
+    )
+    if tone_hint:
+        body = f"{body}\n\nTone guidance applied: {_clean_text(tone_hint, limit=80)}."
+    return {
+        "subject": _clean_text(f"Re: {subject_seed}", limit=220),
+        "body": _clean_text(body, limit=5000),
+        "source": "fallback",
+    }
+
+
+def _normalize_portal_reply_draft(payload: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
+    subject = _clean_text(payload.get("subject"), limit=220) or _clean_text(fallback.get("subject"), limit=220)
+    body = _clean_text(payload.get("body"), limit=5000) or _clean_text(fallback.get("body"), limit=5000)
+    return {"subject": subject, "body": body}
+
+
+def suggest_portal_reply_draft(
+    *,
+    matter_context: dict[str, Any],
+    thread_context: dict[str, Any],
+    tone_hint: str = "",
+) -> dict[str, Any]:
+    fallback = _fallback_portal_reply_draft(
+        matter_context=matter_context,
+        thread_context=thread_context,
+        tone_hint=tone_hint,
+    )
+    settings = _ai_request_settings()
+    request_chars = (
+        len(json.dumps(matter_context, ensure_ascii=True))
+        + len(json.dumps(thread_context, ensure_ascii=True))
+        + len(_clean_text(tone_hint, limit=120))
+    )
+    if not settings["ai_enabled"]:
+        return _fallback_with_reason(fallback, reason="ai_disabled", detail="AI is disabled in server configuration.")
+    if settings["provider"] != "openai":
+        return _fallback_with_reason(
+            fallback,
+            reason="unsupported_provider",
+            detail=f"Configured provider '{settings['provider'] or 'unknown'}' is unsupported for this draft flow.",
+        )
+    if not settings["api_key"]:
+        return _fallback_with_reason(fallback, reason="missing_api_key", detail="OpenAI API key is not configured.")
+
+    started = time.perf_counter()
+    try:
+        from openai import OpenAI
+
+        client = OpenAI(
+            api_key=settings["api_key"],
+            timeout=float(settings["timeout_seconds"]),
+            max_retries=settings["max_retries"],
+        )
+        instructions = (
+            "You draft internal-side replies to client portal messages for a law firm. "
+            "Return strict JSON with keys: subject, body. "
+            "Use only the supplied matter context and thread context. "
+            "Do not invent facts, dates, commitments, or legal advice beyond the supplied context."
+        )
+        response = client.chat.completions.create(
+            model=settings["model"],
+            temperature=0.25,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": instructions},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "matter_context": matter_context,
+                            "thread_context": thread_context,
+                            "tone_hint": _clean_text(tone_hint, limit=120),
+                        },
+                        ensure_ascii=True,
+                    ),
+                },
+            ],
+        )
+        content = ""
+        if response.choices:
+            first = response.choices[0]
+            if first and getattr(first, "message", None) is not None:
+                content = str(first.message.content or "").strip()
+        parsed = json.loads(content) if content else {}
+        suggestion = _normalize_portal_reply_draft(parsed if isinstance(parsed, dict) else {}, fallback)
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_ai_operation(
+            operation_type="portal_reply_draft_suggest",
+            provider="openai",
+            model=settings["model"],
+            status="ok",
+            request_chars=request_chars,
+            response_units=len(json.dumps(suggestion, ensure_ascii=True)),
+            latency_ms=latency_ms,
+            metadata={"matter_no": _clean_text(matter_context.get("matter_no"), limit=80)},
+        )
+        suggestion["source"] = "openai"
+        return suggestion
+    except Exception as exc:  # pragma: no cover - provider/network fallback
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_ai_operation(
+            operation_type="portal_reply_draft_suggest",
+            provider="openai",
+            model=settings["model"],
+            status="error",
+            request_chars=request_chars,
+            latency_ms=latency_ms,
+            metadata={"matter_no": _clean_text(matter_context.get("matter_no"), limit=80)},
+            error_message=str(exc),
+        )
+        current_app.logger.warning("OpenAI portal reply fallback engaged: %s", exc)
+        return _fallback_with_reason(fallback, reason="openai_error", detail=str(exc))
+
+
 def _fallback_time_narrative(
     *,
     matter_context: dict[str, Any],

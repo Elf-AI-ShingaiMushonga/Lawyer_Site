@@ -188,6 +188,27 @@ def _assistant_tools() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
+                "name": "draft_portal_reply",
+                "description": "Draft an internal-side reply to the latest relevant client portal thread for the current matter.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "thread_focus": {
+                            "type": "string",
+                            "description": "Optional subject or issue focus to help match the correct client thread.",
+                        },
+                        "tone_hint": {
+                            "type": "string",
+                            "description": "Optional tone guidance such as plain English, formal, or warm.",
+                        },
+                    },
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "search_workspace",
                 "description": "Search matters, tasks, notes, activity, deadlines, documents, and the user's time entries.",
                 "parameters": {
@@ -198,6 +219,14 @@ def _assistant_tools() -> list[dict[str, Any]]:
                     "required": ["query"],
                     "additionalProperties": False,
                 },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "matter_financial_snapshot",
+                "description": "Review matter billing status, approved unbilled time, draft review queue, invoice totals, and outstanding balances.",
+                "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
             },
         },
         {
@@ -241,6 +270,38 @@ def _assistant_tools() -> list[dict[str, Any]]:
                         "privilege_label": {"type": "string"},
                         "status": {"type": "string", "enum": ["draft", "review", "final"]},
                         "legal_hold": {"type": "boolean"},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "prepare_task_bundle",
+                "description": "Prepare a multi-task checklist or task pack that still requires user confirmation before writing.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "bundle_goal": {
+                            "type": "string",
+                            "description": "What the checklist or task bundle is for, such as hearing prep, discovery, settlement, or filing readiness.",
+                        },
+                        "target_due_date": {"type": "string", "description": "Optional ISO date YYYY-MM-DD for the overall workstream."},
+                        "tasks": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "title": {"type": "string"},
+                                    "description": {"type": "string"},
+                                    "due_date": {"type": "string"},
+                                    "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
+                                },
+                                "required": ["title"],
+                                "additionalProperties": False,
+                            },
+                        },
                     },
                     "additionalProperties": False,
                 },
@@ -435,8 +496,11 @@ Rules:
 - Use matter_briefing for questions about next steps, current status, upcoming deadlines, or where things stand.
 - Use draft_summary for executive or partner summaries.
 - Use draft_client_update for client-facing updates or status emails.
+- Use draft_portal_reply for replies to a client portal thread, a client message, or the latest inbound client question on the matter.
+- Use matter_financial_snapshot for unbilled time, billing status, invoice status, outstanding balances, or "what can I bill" questions.
 - Use prepare_workspace_document when the user wants to save or create a collaborative draft, workbench note, memo, brief, outline, or internal working document.
 - If the user explicitly asks to create or save a collaborative draft in the workbench or workspace, choose prepare_workspace_document even if the requested title contains phrases like hearing prep, strategy, research memo, or chronology.
+- Use prepare_task_bundle when the user asks for a checklist, task plan, task pack, workstream, or multi-step prep list.
 - Use concise, explicit, production-safe arguments.
 """
 
@@ -464,9 +528,12 @@ def plan_assistant_request(
             "matter_chronology",
             "draft_summary",
             "draft_client_update",
+            "draft_portal_reply",
             "search_workspace",
+            "matter_financial_snapshot",
             "prepare_workspace_document",
             "prepare_matter_summary_update",
+            "prepare_task_bundle",
             "prepare_task",
             "prepare_task_status_update",
             "prepare_deadline",
