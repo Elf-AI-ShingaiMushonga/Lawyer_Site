@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import Any
+from typing import Any, TypedDict
 
 from flask import current_app
 
@@ -14,6 +14,15 @@ from .ai_provider import log_ai_operation
 _SPACE_RE = re.compile(r"\s+")
 _RISK_SET = {value for value in RISK_LEVELS}
 _BUDGET_SET = {value for value in BUDGET_STATUSES}
+
+class MatterContext(TypedDict, total=False):
+    matter_no: str
+    title: str
+    client_name: str
+    status: str
+    objective: str
+    risk_level: str
+    budget_status: str
 
 
 def _clean_text(value: Any, *, limit: int) -> str:
@@ -62,7 +71,7 @@ def _ai_request_settings() -> dict[str, Any]:
         "provider": str(current_app.config.get("AI_PROVIDER") or "openai").strip().lower(),
         "ai_enabled": bool(current_app.config.get("AI_ENABLED", False)),
         "api_key": (current_app.config.get("AI_OPENAI_API_KEY") or "").strip(),
-        "model": str(current_app.config.get("AI_OPENAI_TEXT_MODEL") or "gpt-4o-mini").strip(),
+        "model": str(current_app.config.get("AI_OPENAI_TEXT_MODEL") or "5.3").strip(),
         "timeout_seconds": max(1, int(current_app.config.get("AI_OPENAI_TIMEOUT_SECONDS", 20) or 20)),
         "max_retries": max(0, int(current_app.config.get("AI_OPENAI_MAX_RETRIES", 2) or 2)),
     }

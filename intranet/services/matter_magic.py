@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 from collections import defaultdict
-from typing import Any, Sequence
+from typing import Any, Sequence, TypedDict
 
 from flask import url_for
 from sqlalchemy import func
@@ -232,213 +232,28 @@ def build_matter_magic_snapshot(
     checklist_remaining: int | None = None,
     archetype_compliance: Any | None = None,
     limit_actions: int = 5,
-) -> dict[str, Any]:
+) -> MatterMagicSnapshot:
     today = today or dt.date.today()
-    tasks = list(tasks or [])
-    docs = list(docs or [])
-    timeline = list(timeline or [])
-
-    open_tasks = [task for task in tasks if str(getattr(task, "status", "")) != "Done"]
-    overdue_tasks = [task for task in open_tasks if _as_date(getattr(task, "due_date", None)) and task.due_date < today]
-    due_today_tasks = [task for task in open_tasks if _as_date(getattr(task, "due_date", None)) == today]
-    due_soon_tasks = [
-        task
-        for task in open_tasks
-        if _as_date(getattr(task, "due_date", None)) and today < task.due_date <= (today + dt.timedelta(days=7))
-    ]
-
+    
+    open_tasks, overdue, due_today, due_soon = _get_task_metrics(tasks or [], today)
+    docs_sorted, last_doc_at, doc_labels, doc_types = _get_document_metrics(docs or [])
+    
     future_events = sorted(
-        [event for event in timeline if _as_date(getattr(event, "event_date", None)) and event.event_date >= today],
+        [e for e in (timeline or []) if _as_date(getattr(e, "event_date", None)) and e.event_date >= today],
         key=lambda event: (event.event_date, str(getattr(event, "title", ""))),
     )
     next_event = future_events[0] if future_events else None
-    next_event_date = _as_date(getattr(next_event, "event_date", None))
-
-    docs_sorted = sorted(
-        docs,
-        key=lambda doc: _document_timestamp(doc) or dt.datetime.min,
-        reverse=True,
-    )
-    last_document_at = _document_timestamp(docs_sorted[0]) if docs_sorted else None
-    recent_document_labels: list[str] = []
-    document_type_counts: dict[str, int] = {}
-    kind_counter: dict[str, int] = defaultdict(int)
-    for doc in docs_sorted:
-        kind = _document_kind(doc)
-        kind_counter[kind] += 1
-        label = _document_label(doc)
-        if label not in recent_document_labels:
-            recent_document_labels.append(label)
-        if len(recent_document_labels) >= 3:
-            break
-    document_type_counts = dict(sorted(kind_counter.items(), key=lambda row: (-row[1], row[0]))[:3])
-
     reference_dt = _as_datetime(getattr(matter, "last_updated_at", None)) or _as_datetime(getattr(matter, "opened_at", None))
     stale_days = max(0, (today - reference_dt.date()).days) if reference_dt else 0
 
-    missing_required = list(_coerce_snapshot_value(archetype_compliance, "required_missing_labels", []) or [])
-    checklist_unsynced = int(_coerce_snapshot_value(archetype_compliance, "checklist_unsynced", 0) or 0)
-    if checklist_remaining is None:
-        checklist_remaining = int(_coerce_snapshot_value(archetype_compliance, "checklist_remaining", 0) or 0)
-    checklist_remaining = int(checklist_remaining or 0)
-
-    actions: list[dict[str, Any]] = []
-
-    if overdue_tasks:
-        actions.append(
-            _action(
-                "clear_overdue_tasks",
-                "Clear overdue tasks",
-                f"{len(overdue_tasks)} overdue task(s) are slowing this matter down.",
-                "critical",
-                520 + len(overdue_tasks),
-                badge=f"{len(overdue_tasks)} overdue",
-            )
-        )
-    elif due_today_tasks or due_soon_tasks:
-        next_due = sorted(
-            [_as_date(getattr(task, "due_date", None)) for task in (due_today_tasks or due_soon_tasks) if _as_date(getattr(task, "due_date", None))],
-        )[0]
-        due_count = len(due_today_tasks) or len(due_soon_tasks)
-        actions.append(
-            _action(
-                "prepare_due_tasks",
-                "Prepare due work",
-                f"{due_count} open task(s) are due {_format_when(next_due, today)}.",
-                "high" if due_today_tasks else "medium",
-                465 if due_today_tasks else 430,
-                badge=next_due.isoformat(),
-            )
-        )
-
-    if next_event is not None and next_event_date is not None:
-        days_until_event = (next_event_date - today).days
-        actions.append(
-            _action(
-                "prepare_next_event",
-                f"Prepare for {getattr(next_event, 'event_type', 'event')}",
-                f"{getattr(next_event, 'title', 'Next event')} is {_format_when(next_event_date, today)}.",
-                "high" if days_until_event <= 3 else "medium",
-                450 if days_until_event <= 3 else 395,
-                badge=next_event_date.isoformat(),
-            )
-        )
-    elif str(getattr(matter, "status", "")).lower() != "closed":
-        actions.append(
-            _action(
-                "schedule_next_milestone",
-                "Schedule the next milestone",
-                "This matter has no upcoming timeline event recorded.",
-                "medium",
-                315,
-                badge="Timeline",
-            )
-        )
-
-    if not str(getattr(matter, "objective", "") or "").strip() or not str(getattr(matter, "last_update_note", "") or "").strip():
-        actions.append(
-            _action(
-                "complete_summary",
-                "Complete the executive summary",
-                "Objective and latest update should be client-ready on the matter itself.",
-                "high",
-                445,
-                badge="Summary",
-            )
-        )
-    elif stale_days >= 7 and str(getattr(matter, "status", "")).lower() != "closed":
-        actions.append(
-            _action(
-                "send_client_update",
-                "Send a client update",
-                f"The matter summary has not moved for {stale_days} day(s).",
-                "medium",
-                375 + min(stale_days, 20),
-                badge=f"{stale_days}d stale",
-            )
-        )
-
-    if not docs_sorted:
-        actions.append(
-            _action(
-                "upload_first_document",
-                "Upload the first core document",
-                "There is no opening pack, draft, or correspondence stored yet.",
-                "high",
-                405,
-                badge="No docs",
-            )
-        )
-    elif last_document_at is not None and (today - last_document_at.date()).days >= 14 and str(getattr(matter, "status", "")).lower() != "closed":
-        doc_stale_days = (today - last_document_at.date()).days
-        actions.append(
-            _action(
-                "refresh_document_record",
-                "Refresh the document record",
-                f"No document has been added for {doc_stale_days} day(s).",
-                "medium",
-                330 + min(doc_stale_days, 20),
-                badge=f"{doc_stale_days}d",
-            )
-        )
-
-    if not str(getattr(matter, "stage", "") or "").strip() and str(getattr(matter, "status", "")).lower() != "closed":
-        actions.append(
-            _action(
-                "set_stage",
-                "Set the matter stage",
-                "Stage tracking is blank, which makes handovers and reporting harder.",
-                "medium",
-                392,
-                badge="Stage",
-            )
-        )
-
-    if str(getattr(matter, "budget_status", "") or "") in {"Watch", "Over Budget", "Needs Review"}:
-        actions.append(
-            _action(
-                "review_budget",
-                "Review billing and budget position",
-                f"Budget status is {matter.budget_status}.",
-                "high" if matter.budget_status == "Over Budget" else "medium",
-                388,
-                badge=str(getattr(matter, "budget_status", "") or ""),
-            )
-        )
-
-    if missing_required:
-        actions.append(
-            _action(
-                "complete_archetype_fields",
-                "Complete required archetype fields",
-                "Required legal workflow data is still missing on this matter.",
-                "high",
-                382 + len(missing_required),
-                badge=f"{len(missing_required)} missing",
-            )
-        )
-    elif checklist_unsynced > 0:
-        actions.append(
-            _action(
-                "sync_archetype_checklist",
-                "Sync the archetype checklist",
-                "The template playbook changed and this matter is missing checklist items.",
-                "medium",
-                355 + checklist_unsynced,
-                badge=f"{checklist_unsynced} unsynced",
-            )
-        )
-    elif checklist_remaining > 0:
-        actions.append(
-            _action(
-                "work_closing_checklist",
-                "Work the closing checklist",
-                f"{checklist_remaining} checklist item(s) remain open.",
-                "medium",
-                342 + checklist_remaining,
-                badge=f"{checklist_remaining} open",
-            )
-        )
+    
+    eval_context = {
+        'overdue_tasks': overdue, 'due_today': due_today, 'due_soon': due_soon,
+        'next_event': next_event, 'next_event_date': _as_date(getattr(next_event, "event_date", None)),
+        'stale_days': stale_days
+    }
+    
+    actions = _generate_recommended_actions(matter, eval_context, today)
 
     if int(team_size or 0) <= 1 and str(getattr(matter, "status", "")).lower() != "closed":
         actions.append(
