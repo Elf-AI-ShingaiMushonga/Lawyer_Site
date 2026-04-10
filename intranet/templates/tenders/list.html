@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block content %}
+{% set tenders = tenders or [] %}
+{% set checklist_summary_map = checklist_summary_map or {} %}
+{% set stats = stats or {} %}
+{% set user_lookup = user_lookup or {} %}
+{% set matter_lookup = matter_lookup or {} %}
+<style>
+  .tender-kicker-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tender-kicker-list .tag-chip {
+    background: rgba(225, 6, 0, 0.08);
+  }
+
+  .tender-readiness {
+    min-width: 11rem;
+  }
+
+  .tender-readiness-meter {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(29, 26, 26, 0.08);
+    overflow: hidden;
+    margin-top: 6px;
+  }
+
+  .tender-readiness-meter span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(225, 6, 0, 0.72), rgba(225, 6, 0, 0.95));
+  }
+
+  .tender-form-note {
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 14px;
+    background: rgba(255, 248, 248, 0.86);
+    padding: 12px 13px;
+  }
+
+  .tender-form-meta {
+    font-size: 12px;
+    line-height: 1.45;
+    color: #756d6d;
+  }
+</style>
+
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">South African Public Procurement</div>
+        <h1 class="page-hero-title">Tender Desk</h1>
+        <div class="page-hero-summary">Track tender opportunities, manage the South African bid compliance pack, and move awarded work straight into a matter workspace.</div>
+        <div class="tender-kicker-list mt-2">
+          <span class="tag-chip">CSD</span>
+          <span class="tag-chip">SARS TCS PIN</span>
+          <span class="tag-chip">B-BBEE</span>
+          <span class="tag-chip">SBD Forms</span>
+          <span class="tag-chip">CIDB</span>
+          <span class="tag-chip">Briefing Proof</span>
+        </div>
+      </div>
+      <div class="page-hero-actions">
+        {% if can_write %}
+          <a class="btn btn-sm btn-light" href="#new-tender">Capture Tender</a>
+        {% endif %}
+        <a class="btn btn-sm btn-outline-light" href="#tender-pipeline">Open Pipeline</a>
+      </div>
+    </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Tracked</div>
+        <div class="page-stat-value">{{ stats.total or 0 }}</div>
+        <div class="page-stat-meta">Tender opportunities currently visible in the desk.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Active</div>
+        <div class="page-stat-value">{{ stats.active or 0 }}</div>
+        <div class="page-stat-meta">Opportunities still in live bid or clarification flow.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Closing 7 Days</div>
+        <div class="page-stat-value">{{ stats.due_soon or 0 }}</div>
+        <div class="page-stat-meta">Bids that need near-term team focus and submission control.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Blocked Packs</div>
+        <div class="page-stat-value">{{ stats.blocked or 0 }}</div>
+        <div class="page-stat-meta">Tenders with one or more blocked compliance pack items.</div>
+      </div>
+    </div>
+    <div class="action-grid">
+      <a class="action-card is-primary" href="#tender-pipeline">
+        <span class="action-card-kicker">Pipeline</span>
+        <span class="action-card-title">Tender Pipeline</span>
+        <span class="action-card-summary">Review due dates, bid managers, linked matters, and overall readiness in one list.</span>
+      </a>
+      <a class="action-card" href="#new-tender">
+        <span class="action-card-kicker">Capture</span>
+        <span class="action-card-title">New Tender</span>
+        <span class="action-card-summary">Start a South African bid record with the core dates and bidder ownership fields.</span>
+      </a>
+      <a class="action-card" href="#tender-pipeline">
+        <span class="action-card-kicker">Compliance</span>
+        <span class="action-card-title">Bid Pack Controls</span>
+        <span class="action-card-summary">Each tender carries a default checklist for CSD, TCS, B-BBEE, SBDs, CIDB, and briefing proof.</span>
+      </a>
+    </div>
+  </section>
+
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section id="tender-pipeline" class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Pipeline</div>
+            <h2 class="panel-title">Tender opportunity register</h2>
+            <div class="panel-summary">Use the register to monitor what is being reviewed, what is nearing submission, and what is already linked to live delivery work.</div>
+          </div>
+        </div>
+        <div class="table-tools" data-table-tools data-table-target="tender-pipeline-table">
+          <input class="form-control" type="search" data-table-search placeholder="Filter by reference, authority, province, manager, or status..." value="{{ q or '' }}">
+          <div class="table-count" data-table-count aria-live="polite"></div>
+        </div>
+        <div class="table-responsive">
+          <table class="table" id="tender-pipeline-table">
+            <thead>
+              <tr>
+                <th data-sort-index="0">Reference</th>
+                <th data-sort-index="1">Authority</th>
+                <th data-sort-index="2">Stage</th>
+                <th data-sort-index="3" data-sort-type="date">Closing</th>
+                <th data-sort-index="4">Bid Manager</th>
+                <th data-sort-index="5">Readiness</th>
+                <th>Linked Matter</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for tender in tenders %}
+                {% set summary = checklist_summary_map.get(tender.id, {'percent_ready': 0, 'ready': 0, 'applicable': 0, 'blocked': 0, 'state': 'In Progress'}) %}
+                {% set manager = user_lookup.get(tender.bid_manager_user_id) %}
+                {% set linked_matter = matter_lookup.get(tender.matter_id) %}
+                {% set stage_tone = 'tone-positive' if tender.status in ['Submitted', 'Awarded'] else 'tone-danger' if tender.status in ['Cancelled', 'Withdrawn', 'Unsuccessful'] else 'tone-warning' if tender.status in ['Awaiting Briefing', 'Preparing Response', 'Clarification'] else 'tone-neutral' %}
+                {% set readiness_tone = 'tone-danger' if summary.blocked else 'tone-positive' if summary.percent_ready >= 80 else 'tone-warning' %}
+                <tr data-table-row data-search="{{ tender.reference_no }} {{ tender.title }} {{ tender.issuing_authority }} {{ tender.province }} {{ tender.sector or '' }} {{ tender.status }} {{ manager.full_name if manager else '' }} {{ linked_matter.matter_no if linked_matter else '' }}">
+                  <td>
+                    <a class="text-decoration-none" href="{{ url_for('tender_detail', tender_id=tender.id) }}">
+                      <div>{{ tender.reference_no }}</div>
+                      <div class="muted small">{{ tender.title }}</div>
+                    </a>
+                  </td>
+                  <td>
+                    <div>{{ tender.issuing_authority }}</div>
+                    <div class="muted small">{{ tender.province }}{% if tender.sector %} • {{ tender.sector }}{% endif %}</div>
+                  </td>
+                  <td><span class="badge badge-soft status-badge {{ stage_tone }}">{{ tender.status }}</span></td>
+                  <td>
+                    <div>{{ tender.closing_at.strftime('%Y-%m-%d %H:%M') if tender.closing_at else 'Not set' }}</div>
+                    {% if tender.closing_at %}
+                      <div class="muted small">
+                        {% set days_remaining = (tender.closing_at.date() - today).days %}
+                        {% if days_remaining < 0 %}
+                          <span class="badge badge-soft status-badge tone-danger">Closed {{ (days_remaining * -1) }} day(s) ago</span>
+                        {% elif days_remaining == 0 %}
+                          <span class="badge badge-soft status-badge tone-danger">Closes today</span>
+                        {% else %}
+                          <span class="badge badge-soft status-badge {{ 'tone-warning' if days_remaining <= 7 else 'tone-neutral' }}">{{ days_remaining }} day(s) remaining</span>
+                        {% endif %}
+                      </div>
+                    {% endif %}
+                  </td>
+                  <td>{{ manager.full_name if manager else 'Unassigned' }}</td>
+                  <td class="tender-readiness">
+                    <div><span class="badge badge-soft status-badge {{ readiness_tone }}">{{ summary.state }}</span></div>
+                    <div class="mt-1">{{ summary.percent_ready }}% ready{% if summary.blocked %} • {{ summary.blocked }} blocked{% endif %}</div>
+                    <div class="muted small">{{ summary.ready }}/{{ summary.applicable }} required items ready</div>
+                    <div class="tender-readiness-meter" aria-hidden="true">
+                      <span style="width: {{ summary.percent_ready }}%;"></span>
+                    </div>
+                  </td>
+                  <td>
+                    {% if linked_matter %}
+                      <a class="text-decoration-none" href="{{ url_for('matter_workspace', matter_id=linked_matter.id) }}">{{ linked_matter.matter_no }}</a>
+                    {% else %}
+                      <span class="muted">Not linked</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+              <tr data-table-empty-row class="table-empty-row" {% if tenders|length > 0 %}hidden{% endif %}>
+                <td colspan="7" class="muted">No tenders are currently visible.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <aside class="workbench-side">
+      <section id="new-tender" class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Capture</div>
+            <h2 class="panel-title">New tender intake</h2>
+            <div class="panel-summary">Start with the core procurement data. The system creates the South African compliance pack automatically.</div>
+          </div>
+        </div>
+        {% if can_write %}
+          <form method="post" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-12">
+              <label class="form-label" for="tender-reference-no">Reference Number</label>
+              <input class="form-control" id="tender-reference-no" name="reference_no" placeholder="e.g. RFP 12/2026" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="tender-title">Title</label>
+              <input class="form-control" id="tender-title" name="title" placeholder="e.g. Legal panel appointment for labour matters" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="tender-authority">Issuing Authority / Organ of State</label>
+              <input class="form-control" id="tender-authority" name="issuing_authority" placeholder="e.g. Department of Employment and Labour" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="tender-province">Province</label>
+              <select class="form-select" id="tender-province" name="province">
+                {% for province in provinces %}
+                  <option value="{{ province }}">{{ province }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="tender-bid-manager">Bid Manager</label>
+              <select class="form-select" id="tender-bid-manager" name="bid_manager_user_id">
+                {% for user in user_choices %}
+                  <option value="{{ user.id }}" {% if user.id == current_user.id %}selected{% endif %}>{{ user.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="tender-closing-at">Closing Date and Time</label>
+              <input class="form-control" id="tender-closing-at" name="closing_at" type="datetime-local" required>
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" id="tender-briefing-required" type="checkbox" name="briefing_required" value="1">
+                <label class="form-check-label" for="tender-briefing-required">Compulsory briefing / site inspection required</label>
+              </div>
+            </div>
+            <div class="col-12 d-grid">
+              <button class="btn btn-light" type="submit">Create Tender Record</button>
+            </div>
+            <div class="col-12">
+              <div class="tender-form-meta">The South African compliance checklist and an initial next action are created automatically when the record is captured.</div>
+            </div>
+          </form>
+        {% else %}
+          <div class="tender-form-note">
+            <div class="fw-semibold">Read-only access</div>
+            <div class="muted small mt-1">You can review the tender pipeline and compliance pack, but only authorised bid owners can create or update tender records.</div>
+          </div>
+        {% endif %}
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Default Pack</div>
+            <h2 class="panel-title">What gets tracked</h2>
+            <div class="panel-summary">Each new tender starts with a South Africa-oriented checklist so the team does not rebuild bid controls from scratch.</div>
+          </div>
+        </div>
+        <div class="tender-form-note">
+          <div class="fw-semibold">Compliance items</div>
+          <div class="muted small mt-1">CSD profile, SARS TCS PIN, B-BBEE proof, SBD 1, SBD 4, SBD 6.1, SBD 8, SBD 9, pricing, technical response, authority to sign, briefing proof, CIDB, and local content schedules.</div>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+{% endblock %}

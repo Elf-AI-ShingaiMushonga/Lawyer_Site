@@ -3348,6 +3348,9 @@ def test_sa_workflow_shortcuts_prefill_task_calendar_and_dms_forms(app_ctx):
     assert 'value="Prepare CCMA referral"' in task_body
     assert 'value="2026-03-20"' in task_body
     assert "Confirm deadline and supporting papers" in task_body
+    assert 'data-task-new-form' in task_body
+    assert 'data-assignee-picker' in task_body
+    assert "Ctrl/Cmd + click" not in task_body
 
     calendar_response = client.get(
         f"/calendar/matter/{matter.id}"

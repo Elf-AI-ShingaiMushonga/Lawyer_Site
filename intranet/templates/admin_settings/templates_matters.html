@@ -189,7 +189,7 @@
             <td>
               <div class="d-flex flex-wrap gap-1">
                 <a class="btn btn-sm btn-outline-light" href="{{ url_for('admin_templates_matters', edit_id=t.id) }}">Edit</a>
-                <form method="post" onsubmit="return confirm('Delete this archetype?');">
+                <form method="post" data-confirm="Delete this archetype?">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="action" value="delete">
                   <input type="hidden" name="template_id" value="{{ t.id }}">

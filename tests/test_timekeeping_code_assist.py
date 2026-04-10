@@ -7,7 +7,7 @@ import json
 import re
 
 from intranet.extensions import db
-from intranet.models import Matter, MatterMember, TimeEntry, User
+from intranet.models import Matter, MatterMember, Task, TimeEntry, User
 
 
 def _set_user_session(client, user_id: int, csrf_token: str = "test-csrf") -> None:
@@ -176,3 +176,98 @@ def test_time_entries_preserves_matter_context_after_save(app_ctx):
 
     assert response.status_code == 302
     assert f"/time/entries?matter_id={matter.id}" in response.headers["Location"]
+
+
+def test_time_entries_exposes_matter_scoped_task_picker_payload(app_ctx):
+    app = app_ctx
+    user = _seed_user("time-task-picker@example.com")
+    primary_matter = _seed_matter(user, "2026-TIME-TASK-001", "Primary Task Matter")
+    secondary_matter = _seed_matter(user, "2026-TIME-TASK-002", "Secondary Task Matter")
+    db.session.add(MatterMember(matter_id=primary_matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=secondary_matter.id, user_id=user.id, role_in_matter="Lead"))
+    active_task = Task(
+        matter_id=primary_matter.id,
+        title="Prepare first draft",
+        status="Doing",
+        due_date=dt.date(2026, 5, 10),
+        assigned_to=user.id,
+        created_by=user.id,
+    )
+    done_task = Task(
+        matter_id=primary_matter.id,
+        title="Completed client call",
+        status="Done",
+        due_date=dt.date(2026, 5, 8),
+        assigned_to=user.id,
+        created_by=user.id,
+    )
+    secondary_task = Task(
+        matter_id=secondary_matter.id,
+        title="Secondary matter follow-up",
+        status="Todo",
+        due_date=dt.date(2026, 5, 12),
+        assigned_to=user.id,
+        created_by=user.id,
+    )
+    db.session.add_all([active_task, done_task, secondary_task])
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.get(f"/time/entries?matter_id={primary_matter.id}&task_id={done_task.id}")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Linked Task" in body
+    assert 'data-time-task-options="' in body
+    assert "#{} - Completed client call".format(done_task.id) in body
+
+    payload_match = re.search(r'data-time-task-options="([^"]+)"', body)
+    assert payload_match is not None
+    payload = json.loads(html.unescape(payload_match.group(1)))
+
+    primary_bucket = payload[str(primary_matter.id)]
+    secondary_bucket = payload[str(secondary_matter.id)]
+    assert any(item["id"] == active_task.id for item in primary_bucket)
+    assert any(item["id"] == done_task.id for item in primary_bucket)
+    assert any(item["id"] == secondary_task.id for item in secondary_bucket)
+
+
+def test_time_entries_rejects_task_from_another_matter(app_ctx):
+    app = app_ctx
+    user = _seed_user("time-task-mismatch@example.com")
+    primary_matter = _seed_matter(user, "2026-TIME-MISMATCH-001", "Primary Matter")
+    secondary_matter = _seed_matter(user, "2026-TIME-MISMATCH-002", "Secondary Matter")
+    db.session.add(MatterMember(matter_id=primary_matter.id, user_id=user.id, role_in_matter="Lead"))
+    db.session.add(MatterMember(matter_id=secondary_matter.id, user_id=user.id, role_in_matter="Lead"))
+    wrong_task = Task(
+        matter_id=secondary_matter.id,
+        title="Task on another matter",
+        status="Todo",
+        due_date=dt.date(2026, 5, 14),
+        assigned_to=user.id,
+        created_by=user.id,
+    )
+    db.session.add(wrong_task)
+    db.session.commit()
+
+    client = app.test_client()
+    _set_user_session(client, user.id)
+    response = client.post(
+        "/time/entries",
+        data={
+            "csrf_token": "test-csrf",
+            "matter_id": primary_matter.id,
+            "task_id": wrong_task.id,
+            "start_at": "2026-05-01T09:00",
+            "end_at": "2026-05-01T09:30",
+            "narrative": "Attempted mismatched task linkage",
+            "is_billable": "1",
+        },
+        follow_redirects=True,
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Selected task does not belong to the chosen matter." in body
+    assert TimeEntry.query.filter_by(user_id=user.id, matter_id=primary_matter.id).count() == 0

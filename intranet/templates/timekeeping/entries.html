@@ -5,6 +5,7 @@
 {% set matters = matters or [] %}
 {% set matter_lookup = matter_lookup or {} %}
 {% set time_code_assist = time_code_assist or {'global': {'task_codes': [], 'activity_codes': [], 'pairs': []}, 'by_matter': {}} %}
+{% set time_task_options = time_task_options or {} %}
 {% set has_accessible_matters = matters|length > 0 %}
 {% set approved_count = entries | selectattr('status', 'equalto', 'approved') | list | length %}
 {% set review_count = entries | selectattr('status', 'equalto', 'needs_review') | list | length %}
@@ -138,6 +139,7 @@
             data-time-prompt-form
             data-time-prompt-endpoint="{{ url_for('time_prompts') }}"
             data-time-code-assist="{{ time_code_assist | tojson | forceescape }}"
+            data-time-task-options="{{ time_task_options | tojson | forceescape }}"
             data-time-narrative-widget
             data-time-narrative-endpoint="{{ url_for('time_ai_narrative') }}"
             data-time-narrative-timeout-ms="90000"
@@ -155,8 +157,22 @@
                   </select>
                 </div>
                 <div>
-                  <label class="form-label" for="entry-task-id">Task ID</label>
-                  <input class="form-control" id="entry-task-id" name="task_id" type="number" min="1" placeholder="Optional" value="{{ prefill_task_id or '' }}">
+                  <label class="form-label" for="entry-task-id">Linked Task</label>
+                  <select class="form-select" id="entry-task-id" name="task_id" data-time-task-select>
+                    <option value="">No linked task</option>
+                    {% for task in time_task_options.get(prefill_matter_id ~ '', []) %}
+                      <option value="{{ task.id }}" {% if prefill_task_id and task.id == prefill_task_id %}selected{% endif %}>
+                        #{{ task.id }} - {{ task.title }}{% if task.status or task.due_date %} ({% if task.status %}{{ task.status }}{% endif %}{% if task.status and task.due_date %} | {% endif %}{% if task.due_date %}Due {{ task.due_date }}{% endif %}){% endif %}
+                      </option>
+                    {% endfor %}
+                  </select>
+                  <div class="form-help mt-1" data-time-task-help>
+                    {% if time_task_options.get(prefill_matter_id ~ '', []) %}
+                      Choose a task for cleaner billing and reporting, or leave it blank for general matter work.
+                    {% else %}
+                      No active tasks are available for this matter right now. Leave it blank for general matter work.
+                    {% endif %}
+                  </div>
                 </div>
                 <div>
                   <label class="form-label" for="entry-start-at">Start At</label>

@@ -484,37 +484,4 @@
     </div>
   </div>
 </div>
-<script>
-  (() => {
-    const feeMatter = document.getElementById('mobile-fee-matter');
-    const taskMatter = document.getElementById('mobile-task-matter');
-    const durationInput = document.getElementById('mobile-fee-duration');
-    const endInput = document.getElementById('mobile-fee-end');
-    const taskTitle = document.getElementById('mobile-task-title');
-
-    for (const button of document.querySelectorAll('[data-mobile-matter-select]')) {
-      button.addEventListener('click', () => {
-        const matterId = button.dataset.mobileMatterSelect || '';
-        if (feeMatter) feeMatter.value = matterId;
-        if (taskMatter) taskMatter.value = matterId;
-      });
-    }
-
-    for (const button of document.querySelectorAll('[data-mobile-duration]')) {
-      button.addEventListener('click', () => {
-        if (durationInput) durationInput.value = button.dataset.mobileDuration || '';
-        if (endInput) endInput.value = '';
-      });
-    }
-
-    for (const button of document.querySelectorAll('[data-mobile-task-title]')) {
-      button.addEventListener('click', () => {
-        if (taskTitle) {
-          taskTitle.value = button.dataset.mobileTaskTitle || '';
-          taskTitle.focus();
-        }
-      });
-    }
-  })();
-</script>
 {% endblock %}

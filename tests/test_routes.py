@@ -2,6 +2,7 @@ from __future__ import annotations
 
 
 REQUIRED_ROUTES = {
+    "/assistant",
     "/auth/mfa/setup",
     "/auth/mfa/verify",
     "/auth/mfa/backup-codes",
@@ -112,6 +113,10 @@ REQUIRED_ROUTES = {
     "/crm/conflicts/<int:conflict_id>/export",
     "/crm/quotes/<int:quote_id>/status",
     "/crm/engagements/<int:engagement_id>/sign",
+    "/tenders",
+    "/tenders/<int:tender_id>",
+    "/tenders/<int:tender_id>/checklist/<int:item_id>",
+    "/tenders/<int:tender_id>/matter",
     "/dms/saved-searches",
     "/matters/<int:matter_id>/email-capture",
     "/email-capture/<int:capture_id>/attachment",

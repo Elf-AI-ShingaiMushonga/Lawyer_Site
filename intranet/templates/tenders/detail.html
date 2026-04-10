@@ -1,0 +1,615 @@
+{% extends "base.html" %}
+{% block content %}
+{% set checklist_items = checklist_items or [] %}
+{% set checklist_summary = checklist_summary or {} %}
+{% set linked_matter = linked_matter or None %}
+{% set ops_board = ops_board or {} %}
+<style>
+  .tender-detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .tender-compliance-table td,
+  .tender-compliance-table th {
+    vertical-align: top;
+  }
+
+  .tender-note-card {
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 14px;
+    padding: 12px 13px;
+    background: rgba(255, 248, 248, 0.86);
+  }
+
+  .tender-note-card + .tender-note-card {
+    margin-top: 10px;
+  }
+
+  .tender-timeline-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .tender-focus-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .tender-focus-item {
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 14px;
+    padding: 12px 13px;
+    background: rgba(255, 255, 255, 0.96);
+  }
+
+  .tender-focus-item.tone-positive {
+    border-color: var(--tone-positive-border);
+    background: rgba(242, 251, 245, 0.96);
+  }
+
+  .tender-focus-item.tone-warning {
+    border-color: var(--tone-warning-border);
+    background: rgba(255, 246, 233, 0.96);
+  }
+
+  .tender-focus-item.tone-danger {
+    border-color: var(--tone-danger-border);
+    background: rgba(255, 241, 241, 0.98);
+  }
+
+  .tender-focus-item.tone-neutral {
+    border-color: var(--tone-neutral-border);
+    background: rgba(249, 247, 247, 0.96);
+  }
+
+  .tender-focus-item-title {
+    font-weight: 780;
+    line-height: 1.25;
+  }
+
+  .tender-focus-item-summary {
+    margin-top: 4px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #5d4e4e;
+  }
+
+  .tender-ops-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tender-form-section {
+    border-top: 1px solid rgba(225, 6, 0, 0.12);
+    padding-top: 14px;
+    margin-top: 2px;
+  }
+
+  .tender-form-section:first-of-type {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .tender-form-section-head {
+    display: grid;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+
+  .tender-form-section-title {
+    font-size: 0.98rem;
+    font-weight: 780;
+    letter-spacing: 0.01em;
+  }
+
+  .tender-form-section-summary,
+  .tender-form-hint {
+    font-size: 12px;
+    line-height: 1.45;
+    color: #756d6d;
+  }
+
+  .tender-form-hint {
+    margin-top: 2px;
+  }
+
+  .tender-checklist-table td,
+  .tender-checklist-table th {
+    vertical-align: top;
+  }
+
+  .tender-checklist-table tbody tr.is-ready td {
+    background: rgba(33, 131, 70, 0.035);
+  }
+
+  .tender-checklist-table tbody tr.is-pending td {
+    background: rgba(182, 128, 40, 0.04);
+  }
+
+  .tender-checklist-table tbody tr.is-blocked td {
+    background: rgba(225, 6, 0, 0.05);
+  }
+
+  .tender-checklist-table tbody tr.is-not-applicable td {
+    background: rgba(224, 216, 216, 0.24);
+  }
+
+  .tender-checklist-table td:last-child {
+    white-space: nowrap;
+  }
+</style>
+
+<div class="page-shell">
+  <section class="page-hero">
+    <div class="page-hero-top">
+      <div class="page-hero-main">
+        <div class="page-hero-kicker">Tender Detail</div>
+        <h1 class="page-hero-title">{{ tender.reference_no }}</h1>
+        <div class="page-hero-summary">{{ tender.title }}</div>
+        <div class="tender-detail-meta">
+          <span class="tag-chip">{{ tender.issuing_authority }}</span>
+          <span class="tag-chip">{{ tender.province }}</span>
+          <span class="tag-chip">{{ tender.status }}</span>
+          {% if tender.portal_source %}<span class="tag-chip">{{ tender.portal_source }}</span>{% endif %}
+          {% if tender.preference_system %}<span class="tag-chip">{{ tender.preference_system }}</span>{% endif %}
+        </div>
+      </div>
+      <div class="page-hero-actions">
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('tender_list') }}">Back to Tender Desk</a>
+        {% if linked_matter %}
+          <a class="btn btn-sm btn-light" href="{{ url_for('matter_workspace', matter_id=linked_matter.id) }}">Open Linked Matter</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="page-stat-grid">
+      <div class="page-stat-card">
+        <div class="page-stat-label">Compliance Ready</div>
+        <div class="page-stat-value">{{ checklist_summary.percent_ready or 0 }}%</div>
+        <div class="page-stat-meta">{{ checklist_summary.ready or 0 }} of {{ checklist_summary.applicable or 0 }} required items are ready.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Blocked Items</div>
+        <div class="page-stat-value">{{ checklist_summary.blocked or 0 }}</div>
+        <div class="page-stat-meta">Blocked documents or declarations stopping submission readiness.</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Closing</div>
+        <div class="page-stat-value">
+          {% if days_to_close is none %}
+            Not set
+          {% elif days_to_close < 0 %}
+            Closed
+          {% elif days_to_close == 0 %}
+            Today
+          {% else %}
+            {{ days_to_close }}d
+          {% endif %}
+        </div>
+        <div class="page-stat-meta">{{ tender.closing_at.strftime('%Y-%m-%d %H:%M') if tender.closing_at else 'Set a closing date' }}</div>
+      </div>
+      <div class="page-stat-card">
+        <div class="page-stat-label">Matter Link</div>
+        <div class="page-stat-value">{{ linked_matter.matter_no if linked_matter else 'None' }}</div>
+        <div class="page-stat-meta">{% if linked_matter %}Awarded tender already converted into delivery work.{% else %}Convert once the bid is awarded.{% endif %}</div>
+      </div>
+    </div>
+    <div class="action-grid">
+      <a class="action-card is-primary" href="#tender-overview">
+        <span class="action-card-kicker">Record</span>
+        <span class="action-card-title">Tender Profile</span>
+        <span class="action-card-summary">Maintain the procurement record, controls, and bidder ownership in one place.</span>
+      </a>
+      <a class="action-card" href="#tender-compliance-pack">
+        <span class="action-card-kicker">Pack</span>
+        <span class="action-card-title">Compliance Checklist</span>
+        <span class="action-card-summary">Track the South African bid pack item by item and surface blockers early.</span>
+      </a>
+      <a class="action-card" href="#tender-key-dates">
+        <span class="action-card-kicker">Dates</span>
+        <span class="action-card-title">Key Bid Dates</span>
+        <span class="action-card-summary">Keep the briefing, closing, and validity milestones visible to the team.</span>
+      </a>
+      <a class="action-card" href="#tender-award-workflow">
+        <span class="action-card-kicker">Award</span>
+        <span class="action-card-title">Matter Conversion</span>
+        <span class="action-card-summary">Move awarded work into the live matter workspace at the right time.</span>
+      </a>
+    </div>
+  </section>
+
+  <div class="workbench-grid">
+    <div class="workbench-main">
+      <section id="tender-overview" class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Overview</div>
+            <h2 class="panel-title">Tender profile and bid controls</h2>
+            <div class="panel-summary">Keep the issuing authority, procurement terms, bidder credentials, and submission control details current in one record.</div>
+          </div>
+        </div>
+        {% if can_write %}
+          <form method="post" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-12 tender-form-section">
+              <div class="tender-form-section-head">
+                <div class="tender-form-section-title">Core tender record</div>
+                <div class="tender-form-section-summary">Capture the identity of the bid first so the team can locate and recognise the opportunity quickly.</div>
+              </div>
+            </div>
+            <div class="col-lg-4">
+              <label class="form-label" for="tender-reference-no">Reference Number</label>
+              <input class="form-control" id="tender-reference-no" name="reference_no" value="{{ tender.reference_no }}" required>
+            </div>
+            <div class="col-lg-8">
+              <label class="form-label" for="tender-title">Title</label>
+              <input class="form-control" id="tender-title" name="title" value="{{ tender.title }}" required>
+            </div>
+            <div class="col-lg-6">
+              <label class="form-label" for="tender-authority">Issuing Authority / Organ of State</label>
+              <input class="form-control" id="tender-authority" name="issuing_authority" value="{{ tender.issuing_authority }}" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="tender-province">Province</label>
+              <select class="form-select" id="tender-province" name="province">
+                {% for province in provinces %}
+                  <option value="{{ province }}" {% if province == tender.province %}selected{% endif %}>{{ province }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="tender-sector">Sector</label>
+              <input class="form-control" id="tender-sector" name="sector" value="{{ tender.sector or '' }}" placeholder="e.g. Labour law panel">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="tender-status">Status</label>
+              <select class="form-select" id="tender-status" name="status">
+                {% for option in status_options %}
+                  <option value="{{ option }}" {% if option == tender.status %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="tender-type">Tender Type</label>
+              <select class="form-select" id="tender-type" name="tender_type">
+                {% for option in type_options %}
+                  <option value="{{ option }}" {% if option == tender.tender_type %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="tender-source">Source</label>
+              <select class="form-select" id="tender-source" name="portal_source">
+                {% for option in portal_source_options %}
+                  <option value="{{ option }}" {% if option == tender.portal_source %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="tender-manager">Bid Manager</label>
+              <select class="form-select" id="tender-manager" name="bid_manager_user_id">
+                <option value="">Unassigned</option>
+                {% for user in user_choices %}
+                  <option value="{{ user.id }}" {% if tender.bid_manager_user_id == user.id %}selected{% endif %}>{{ user.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 tender-form-section">
+              <div class="tender-form-section-head">
+                <div class="tender-form-section-title">Submission controls</div>
+                <div class="tender-form-section-summary">These are the fields the bid team checks repeatedly during the live submission window.</div>
+              </div>
+            </div>
+            <div class="col-lg-4">
+              <label class="form-label" for="tender-closing-at">Closing Date and Time</label>
+              <input class="form-control" id="tender-closing-at" name="closing_at" type="datetime-local" value="{{ tender.closing_at.isoformat(timespec='minutes') if tender.closing_at else '' }}" required>
+            </div>
+            <div class="col-lg-4">
+              <label class="form-label" for="tender-briefing-date">Briefing Date and Time</label>
+              <input class="form-control" id="tender-briefing-date" name="briefing_date" type="datetime-local" value="{{ tender.briefing_date.isoformat(timespec='minutes') if tender.briefing_date else '' }}">
+            </div>
+            <div class="col-lg-4">
+              <label class="form-label" for="tender-validity-end">Validity End Date</label>
+              <input class="form-control" id="tender-validity-end" name="validity_end_date" type="date" value="{{ tender.validity_end_date.isoformat() if tender.validity_end_date else '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="tender-preference-system">Preference System</label>
+              <select class="form-select" id="tender-preference-system" name="preference_system">
+                <option value="">Not set</option>
+                {% for option in preference_system_options %}
+                  <option value="{{ option }}" {% if option == tender.preference_system %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="tender-submission-channel">Submission Channel</label>
+              <select class="form-select" id="tender-submission-channel" name="submission_channel">
+                <option value="">Not set</option>
+                {% for option in submission_channel_options %}
+                  <option value="{{ option }}" {% if option == tender.submission_channel %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="tender-estimated-value">Estimated Value</label>
+              <input class="form-control" id="tender-estimated-value" name="estimated_value" type="number" min="0" step="0.01" value="{{ tender.estimated_value if tender.estimated_value is not none else '' }}" placeholder="ZAR amount">
+            </div>
+            <div class="col-lg-6">
+              <label class="form-label" for="tender-etender-url">Tender URL</label>
+              <input class="form-control" id="tender-etender-url" name="etender_url" type="url" value="{{ tender.etender_url or '' }}" placeholder="https://...">
+            </div>
+            <div class="col-lg-6">
+              <label class="form-label" for="tender-submission-address">Submission Address / Delivery Notes</label>
+              <input class="form-control" id="tender-submission-address" name="submission_address" value="{{ tender.submission_address or '' }}" placeholder="Portal, physical bid box, or courier instructions">
+            </div>
+            <div class="col-12">
+              <div class="d-flex flex-wrap gap-3">
+                <div class="form-check">
+                  <input class="form-check-input" id="tender-briefing-required" type="checkbox" name="briefing_required" value="1" {% if tender.briefing_required %}checked{% endif %}>
+                  <label class="form-check-label" for="tender-briefing-required">Compulsory briefing / site inspection required</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" id="tender-cidb-required" type="checkbox" name="cidb_required" value="1" {% if tender.cidb_required %}checked{% endif %}>
+                  <label class="form-check-label" for="tender-cidb-required">CIDB registration required</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" id="tender-local-content-required" type="checkbox" name="local_content_required" value="1" {% if tender.local_content_required %}checked{% endif %}>
+                  <label class="form-check-label" for="tender-local-content-required">Local content schedules required</label>
+                </div>
+              </div>
+              <div class="tender-form-hint">Briefing proof, CIDB grading, and local content checklist rows are automatically aligned to these controls.</div>
+            </div>
+            <div class="col-12 tender-form-section">
+              <div class="tender-form-section-head">
+                <div class="tender-form-section-title">Contacts and bidder profile</div>
+                <div class="tender-form-section-summary">Keep the operational contact and the core compliance identifiers together so pack reviews stay fast.</div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="tender-contact-person">Contact Person</label>
+              <input class="form-control" id="tender-contact-person" name="contact_person" value="{{ tender.contact_person or '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="tender-contact-email">Contact Email</label>
+              <input class="form-control" id="tender-contact-email" name="contact_email" type="email" value="{{ tender.contact_email or '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="tender-contact-phone">Contact Phone</label>
+              <input class="form-control" id="tender-contact-phone" name="contact_phone" type="tel" value="{{ tender.contact_phone or '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="tender-csd-number">CSD Supplier Number</label>
+              <input class="form-control" id="tender-csd-number" name="csd_supplier_number" value="{{ tender.csd_supplier_number or '' }}" placeholder="Supplier registration / report reference">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="tender-tcs-pin">SARS TCS PIN</label>
+              <input class="form-control" id="tender-tcs-pin" name="tcs_pin" value="{{ tender.tcs_pin or '' }}" placeholder="Tax compliance PIN">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="tender-bbbee-level">B-BBEE Level / Proof</label>
+              <input class="form-control" id="tender-bbbee-level" name="bbbee_level" value="{{ tender.bbbee_level or '' }}" placeholder="e.g. Level 1 affidavit">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="tender-cidb-grading">CIDB Grading</label>
+              <input class="form-control" id="tender-cidb-grading" name="cidb_grading" value="{{ tender.cidb_grading or '' }}" placeholder="e.g. 4GB or 3CE">
+            </div>
+            <div class="col-12 tender-form-section">
+              <div class="tender-form-section-head">
+                <div class="tender-form-section-title">Bid strategy notes</div>
+                <div class="tender-form-section-summary">Use these fields to keep the team aligned on scope, the next control step, and internal decision context.</div>
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="tender-scope-summary">Scope Summary</label>
+              <textarea class="form-control" id="tender-scope-summary" name="scope_summary" rows="4" placeholder="Summarise the opportunity, service lines, and eligibility scope">{{ tender.scope_summary or '' }}</textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="tender-next-action">Next Action</label>
+              <textarea class="form-control" id="tender-next-action" name="next_action" rows="4" placeholder="What should happen next to keep the bid moving?">{{ tender.next_action or '' }}</textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="tender-internal-notes">Internal Notes</label>
+              <textarea class="form-control" id="tender-internal-notes" name="internal_notes" rows="4" placeholder="Pricing issues, bidder risks, questions, and internal decisions">{{ tender.internal_notes or '' }}</textarea>
+            </div>
+            <div class="col-12 d-grid d-md-flex justify-content-md-end">
+              <button class="btn btn-light" type="submit">Save Tender Record</button>
+            </div>
+          </form>
+        {% else %}
+          <div class="tender-note-card">
+            <div class="fw-semibold">Read-only access</div>
+            <div class="muted small mt-1">You can review the tender record and compliance pack, but only authorised bid owners can update it.</div>
+          </div>
+        {% endif %}
+      </section>
+
+      <section id="tender-compliance-pack" class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Compliance Pack</div>
+            <h2 class="panel-title">South African bid submission checklist</h2>
+            <div class="panel-summary">Use the checklist to track the standard South African tender pack, then mark conditional items as not applicable where the bid does not require them.</div>
+          </div>
+        </div>
+        <div class="tender-ops-stats mb-3">
+          {% set readiness_tone = 'danger' if checklist_summary.blocked else 'positive' if (checklist_summary.percent_ready or 0) >= 80 else 'warning' %}
+          <span class="tag-chip tone-{{ readiness_tone }}">{{ checklist_summary.percent_ready or 0 }}% ready</span>
+          <span class="tag-chip tone-neutral">{{ checklist_summary.ready or 0 }} ready</span>
+          <span class="tag-chip tone-warning">{{ checklist_summary.pending or 0 }} pending</span>
+          <span class="tag-chip {% if checklist_summary.blocked %}tone-danger{% else %}tone-neutral{% endif %}">{{ checklist_summary.blocked or 0 }} blocked</span>
+        </div>
+        <div class="table-tools" data-table-tools data-table-target="tender-checklist-table">
+          <input class="form-control" type="search" data-table-search placeholder="Filter by item, status, or note...">
+          <div class="table-count" data-table-count aria-live="polite"></div>
+        </div>
+        <div class="table-responsive table-responsive-unbounded">
+          <table class="table tender-compliance-table tender-checklist-table" id="tender-checklist-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Required</th>
+                <th>Status</th>
+                <th>Notes</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in checklist_items %}
+                {% set status_tone = 'tone-positive' if item.status == 'ready' else 'tone-danger' if item.status == 'blocked' else 'tone-warning' if item.status == 'pending' else 'tone-neutral' %}
+                {% set conditional_item = item.item_key in ['briefing_proof', 'cidb_grading', 'local_content'] %}
+                <tr class="is-{{ item.status.replace('_', '-') }}" data-table-row data-search="{{ item.label }} {{ item.item_key }} {{ item.status }} {{ item.notes or '' }} {{ 'required' if item.is_required else 'optional' }}">
+                  <td>
+                    <div>{{ item.label }}</div>
+                    <div class="muted small">{{ item.item_key }}</div>
+                    {% if conditional_item %}
+                      <div class="muted small mt-1">Auto-aligned from the controls above.</div>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if can_write %}
+                      <div class="form-check">
+                        <input class="form-check-input" id="required_{{ item.id }}" type="checkbox" name="is_required" value="1" form="checklist_form_{{ item.id }}" {% if item.is_required %}checked{% endif %}>
+                        <label class="form-check-label" for="required_{{ item.id }}">Required for this bid</label>
+                      </div>
+                      <div class="muted small mt-1">{{ "Auto-managed" if conditional_item else "Manual per bid" }}</div>
+                    {% else %}
+                      <span class="badge badge-soft status-badge {{ 'tone-accent' if item.is_required else 'tone-neutral' }}">{{ "Required" if item.is_required else "Optional" }}</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if can_write %}
+                      <select class="form-select form-select-sm" name="status" form="checklist_form_{{ item.id }}">
+                        {% for value, label in checklist_status_options %}
+                          <option value="{{ value }}" {% if value == item.status %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                      </select>
+                      <div class="mt-2"><span class="badge badge-soft status-badge {{ status_tone }}">{{ item.status.replace('_', ' ')|title }}</span></div>
+                    {% else %}
+                      <span class="badge badge-soft status-badge {{ status_tone }}">{{ item.status.replace('_', ' ')|title }}</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if can_write %}
+                      <textarea class="form-control form-control-sm" name="notes" rows="2" placeholder="What is outstanding or already filed?" form="checklist_form_{{ item.id }}">{{ item.notes or '' }}</textarea>
+                    {% else %}
+                      <div class="muted small">{{ item.notes or 'No notes yet.' }}</div>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if can_write %}
+                      <form method="post" action="{{ url_for('tender_checklist_update', tender_id=tender.id, item_id=item.id) }}" id="checklist_form_{{ item.id }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-light" type="submit">Save</button>
+                      </form>
+                    {% else %}
+                      <span class="muted small">View only</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+              <tr data-table-empty-row class="table-empty-row" {% if checklist_items|length > 0 %}hidden{% endif %}>
+                <td colspan="5" class="muted">No checklist items are currently visible.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <aside class="workbench-side">
+      <section class="panel-card is-accent">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Daily Control Board</div>
+            <h2 class="panel-title">{{ ops_board.title or "Tender control board" }}</h2>
+            <div class="panel-summary">{{ ops_board.summary or "Keep the next operational controls visible while the bid is live." }}</div>
+          </div>
+        </div>
+        <div class="tender-ops-stats mb-3">
+          <span class="tag-chip tone-{{ ops_board.tone or 'neutral' }}">{{ checklist_summary.percent_ready or 0 }}% ready</span>
+          <span class="tag-chip tone-neutral">{{ checklist_summary.applicable or 0 }} required items</span>
+          <span class="tag-chip {% if bid_manager %}tone-positive{% else %}tone-warning{% endif %}">{{ bid_manager.full_name if bid_manager else "Assign bid manager" }}</span>
+        </div>
+        <div class="tender-focus-list">
+          {% for item in ops_board.get('items', []) %}
+            <div class="tender-focus-item tone-{{ item.tone or 'neutral' }}">
+              <div class="tender-focus-item-title">{{ item.title }}</div>
+              <div class="tender-focus-item-summary">{{ item.summary }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section id="tender-key-dates" class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Timeline</div>
+            <h2 class="panel-title">Key bid dates</h2>
+            <div class="panel-summary">Keep the team focused on the dates that typically create tender slippage and non-compliance risk.</div>
+          </div>
+        </div>
+        <div class="tender-timeline-list">
+          <div class="tender-note-card">
+            <div class="fw-semibold">Briefing / Site Inspection</div>
+            <div class="muted small mt-1">
+              {% if tender.briefing_required %}
+                {{ tender.briefing_date.strftime('%Y-%m-%d %H:%M') if tender.briefing_date else 'Required but not yet scheduled.' }}
+              {% else %}
+                Not required for this bid.
+              {% endif %}
+            </div>
+          </div>
+          <div class="tender-note-card">
+            <div class="fw-semibold">Closing Date and Time</div>
+            <div class="muted small mt-1">{{ tender.closing_at.strftime('%Y-%m-%d %H:%M') if tender.closing_at else 'Not set' }}</div>
+          </div>
+          <div class="tender-note-card">
+            <div class="fw-semibold">Bid Validity</div>
+            <div class="muted small mt-1">{{ tender.validity_end_date.isoformat() if tender.validity_end_date else 'Not captured yet.' }}</div>
+          </div>
+          <div class="tender-note-card">
+            <div class="fw-semibold">Next Action</div>
+            <div class="muted small mt-1">{{ tender.next_action or 'No next action has been captured yet.' }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tender-award-workflow" class="panel-card">
+        <div class="panel-header">
+          <div class="panel-header-main">
+            <div class="panel-kicker">Award Workflow</div>
+            <h2 class="panel-title">Convert to matter</h2>
+            <div class="panel-summary">When the bid is awarded, create a live workspace so delivery, documents, and billing continue in the main platform.</div>
+          </div>
+        </div>
+        {% if linked_matter %}
+          <div class="tender-note-card">
+            <div class="fw-semibold">Linked Matter</div>
+            <div class="muted small mt-1"><a class="text-decoration-none" href="{{ url_for('matter_workspace', matter_id=linked_matter.id) }}">{{ linked_matter.matter_no }}</a> is already carrying the awarded work.</div>
+          </div>
+        {% elif can_convert %}
+          <div class="tender-note-card">
+            <div class="fw-semibold">Conversion rule</div>
+            <div class="muted small mt-1">Only awarded tenders should be promoted into a live matter. This protects the matter directory from premature project creation.</div>
+          </div>
+          <form method="post" action="{{ url_for('tender_create_matter', tender_id=tender.id) }}" class="d-grid mt-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-light" type="submit" {% if tender.status != 'Awarded' %}disabled{% endif %}>Create Linked Matter</button>
+          </form>
+          {% if tender.status != 'Awarded' %}
+            <div class="muted small mt-2">Set the tender status to <strong>Awarded</strong> first.</div>
+          {% endif %}
+        {% else %}
+          <div class="tender-note-card">
+            <div class="fw-semibold">Conversion restricted</div>
+            <div class="muted small mt-1">You can manage the tender record, but only authorised legal owners can convert it into a live matter.</div>
+          </div>
+        {% endif %}
+      </section>
+    </aside>
+  </div>
+</div>
+{% endblock %}

@@ -3664,6 +3664,173 @@
     renderRequirements();
   };
 
+  const initAssigneeChecklistPicker = ({
+    form,
+    picker,
+    searchInput,
+    checklist,
+    selectVisibleButton,
+    clearAllButton,
+    selectionMeta,
+    searchEmpty,
+    toggleButton,
+    toggleLabel,
+    panel,
+    defaultToggleLabel,
+    singularLabel,
+    pluralLabel,
+    noneSelectedText,
+  }) => {
+    if (
+      !(form instanceof HTMLFormElement) ||
+      !(picker instanceof HTMLElement) ||
+      !(searchInput instanceof HTMLInputElement) ||
+      !(checklist instanceof HTMLElement) ||
+      !(selectVisibleButton instanceof HTMLButtonElement) ||
+      !(clearAllButton instanceof HTMLButtonElement) ||
+      !(toggleButton instanceof HTMLButtonElement) ||
+      !(panel instanceof HTMLElement)
+    ) {
+      return;
+    }
+
+    const assigneeItems = Array.from(checklist.querySelectorAll("[data-assignee-item]"));
+    const assigneeCheckboxes = Array.from(checklist.querySelectorAll("[data-assignee-checkbox]"));
+    const resolvedSingular = String(singularLabel || "assignee").trim() || "assignee";
+    const resolvedPlural = String(pluralLabel || `${resolvedSingular}s`).trim() || `${resolvedSingular}s`;
+    const resolvedDefaultToggleLabel = String(defaultToggleLabel || `Choose ${resolvedPlural}`).trim();
+    const resolvedNoneSelectedText = String(noneSelectedText || `No ${resolvedPlural} selected.`).trim();
+
+    const setPickerOpen = (nextOpen) => {
+      const isOpen = Boolean(nextOpen);
+      panel.hidden = !isOpen;
+      toggleButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      const hint = toggleButton.querySelector(".assignee-picker-toggle-hint");
+      if (hint instanceof HTMLElement) {
+        hint.textContent = isOpen ? "Collapse" : "Expand";
+      }
+    };
+
+    const setSelectionMeta = () => {
+      const selectedCheckboxes = assigneeCheckboxes.filter(
+        (checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked
+      );
+      const selectedCount = selectedCheckboxes.length;
+      const selectedNames = selectedCheckboxes
+        .map((checkbox) => {
+          const row = checkbox.closest("[data-assignee-item]");
+          if (!(row instanceof HTMLElement)) {
+            return "";
+          }
+          const nameNode = row.querySelector(".assignee-checklist-main");
+          return String(nameNode instanceof HTMLElement ? nameNode.textContent || "" : "").trim();
+        })
+        .filter(Boolean);
+      if (selectedCount <= 0) {
+        if (selectionMeta instanceof HTMLElement) {
+          selectionMeta.textContent = resolvedNoneSelectedText;
+        }
+        if (toggleLabel instanceof HTMLElement) {
+          toggleLabel.textContent = resolvedDefaultToggleLabel;
+        }
+      } else if (selectedCount === 1) {
+        if (selectionMeta instanceof HTMLElement) {
+          selectionMeta.textContent = `1 ${resolvedSingular} selected.`;
+        }
+        if (toggleLabel instanceof HTMLElement) {
+          toggleLabel.textContent = selectedNames[0] || `1 ${resolvedSingular} selected`;
+        }
+      } else {
+        if (selectionMeta instanceof HTMLElement) {
+          selectionMeta.textContent = `${selectedCount} ${resolvedPlural} selected.`;
+        }
+        if (toggleLabel instanceof HTMLElement) {
+          toggleLabel.textContent = `${selectedCount} ${resolvedPlural} selected`;
+        }
+      }
+    };
+
+    const applyAssigneeFilter = () => {
+      const query = String(searchInput.value || "").trim().toLowerCase();
+      let visibleCount = 0;
+      assigneeItems.forEach((item) => {
+        if (!(item instanceof HTMLElement)) {
+          return;
+        }
+        const haystack = String(item.dataset.assigneeSearch || "").toLowerCase();
+        const isVisible = !query || haystack.includes(query);
+        item.hidden = !isVisible;
+        if (isVisible) {
+          visibleCount += 1;
+        }
+      });
+      if (searchEmpty instanceof HTMLElement) {
+        searchEmpty.hidden = visibleCount > 0;
+      }
+    };
+
+    searchInput.addEventListener("input", applyAssigneeFilter);
+    assigneeCheckboxes.forEach((checkbox) => {
+      if (checkbox instanceof HTMLInputElement) {
+        checkbox.addEventListener("change", setSelectionMeta);
+      }
+    });
+    selectVisibleButton.addEventListener("click", () => {
+      assigneeItems.forEach((item) => {
+        if (!(item instanceof HTMLElement) || item.hidden) {
+          return;
+        }
+        const checkbox = item.querySelector("[data-assignee-checkbox]");
+        if (checkbox instanceof HTMLInputElement) {
+          checkbox.checked = true;
+        }
+      });
+      setSelectionMeta();
+    });
+    clearAllButton.addEventListener("click", () => {
+      assigneeCheckboxes.forEach((checkbox) => {
+        if (checkbox instanceof HTMLInputElement) {
+          checkbox.checked = false;
+        }
+      });
+      setSelectionMeta();
+    });
+
+    toggleButton.addEventListener("click", () => {
+      const isExpanded = toggleButton.getAttribute("aria-expanded") === "true";
+      setPickerOpen(!isExpanded);
+      if (!isExpanded) {
+        searchInput.focus();
+      }
+    });
+
+    const closePickerOnOutsideClick = (event) => {
+      if (panel.hidden || !(event.target instanceof Node)) {
+        return;
+      }
+      if (!picker.contains(event.target)) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", closePickerOnOutsideClick);
+    form.addEventListener(
+      "submit",
+      () => {
+        document.removeEventListener("pointerdown", closePickerOnOutsideClick);
+      },
+      { once: true }
+    );
+    form.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setPickerOpen(false);
+      }
+    });
+
+    setSelectionMeta();
+    applyAssigneeFilter();
+    setPickerOpen(false);
+  };
+
   const initMatterNewForm = () => {
     const form = document.querySelector("[data-matter-new-form]");
     if (!(form instanceof HTMLFormElement)) {
@@ -3896,161 +4063,730 @@
       filterArchetypesByCategory();
     });
 
-    if (
-      lawyerSearchInput instanceof HTMLInputElement &&
-      lawyerChecklist instanceof HTMLElement &&
-      lawyerSelectVisibleButton instanceof HTMLButtonElement &&
-      lawyerClearAllButton instanceof HTMLButtonElement
-    ) {
-      const assigneeItems = Array.from(lawyerChecklist.querySelectorAll("[data-assignee-item]"));
-      const assigneeCheckboxes = Array.from(
-        lawyerChecklist.querySelectorAll("[data-assignee-checkbox]")
-      );
-
-      const setPickerOpen = (nextOpen) => {
-        if (
-          !(lawyerPanel instanceof HTMLElement) ||
-          !(lawyerToggleButton instanceof HTMLButtonElement)
-        ) {
-          return;
-        }
-        const isOpen = Boolean(nextOpen);
-        lawyerPanel.hidden = !isOpen;
-        lawyerToggleButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
-        const hint = lawyerToggleButton.querySelector(".assignee-picker-toggle-hint");
-        if (hint instanceof HTMLElement) {
-          hint.textContent = isOpen ? "Collapse" : "Expand";
-        }
-      };
-
-      const setSelectionMeta = () => {
-        const selectedCheckboxes = assigneeCheckboxes.filter(
-          (checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked
-        );
-        const selectedCount = selectedCheckboxes.length;
-        const selectedNames = selectedCheckboxes
-          .map((checkbox) => {
-            const row = checkbox.closest("[data-assignee-item]");
-            if (!(row instanceof HTMLElement)) {
-              return "";
-            }
-            const nameNode = row.querySelector(".assignee-checklist-main");
-            return String(nameNode instanceof HTMLElement ? nameNode.textContent || "" : "").trim();
-          })
-          .filter(Boolean);
-        if (selectedCount <= 0) {
-          if (lawyerSelectionMeta instanceof HTMLElement) {
-            lawyerSelectionMeta.textContent = "No attorneys selected.";
-          }
-          if (lawyerToggleLabel instanceof HTMLElement) {
-            lawyerToggleLabel.textContent = "Choose attorneys";
-          }
-        } else if (selectedCount === 1) {
-          if (lawyerSelectionMeta instanceof HTMLElement) {
-            lawyerSelectionMeta.textContent = "1 attorney selected.";
-          }
-          if (lawyerToggleLabel instanceof HTMLElement) {
-            lawyerToggleLabel.textContent = selectedNames[0] || "1 attorney selected";
-          }
-        } else {
-          if (lawyerSelectionMeta instanceof HTMLElement) {
-            lawyerSelectionMeta.textContent = `${selectedCount} attorneys selected.`;
-          }
-          if (lawyerToggleLabel instanceof HTMLElement) {
-            lawyerToggleLabel.textContent = `${selectedCount} attorneys selected`;
-          }
-        }
-      };
-
-      const applyAssigneeFilter = () => {
-        const query = String(lawyerSearchInput.value || "").trim().toLowerCase();
-        let visibleCount = 0;
-        assigneeItems.forEach((item) => {
-          if (!(item instanceof HTMLElement)) {
-            return;
-          }
-          const haystack = String(item.dataset.assigneeSearch || "").toLowerCase();
-          const isVisible = !query || haystack.includes(query);
-          item.hidden = !isVisible;
-          if (isVisible) {
-            visibleCount += 1;
-          }
-        });
-        if (lawyerSearchEmpty instanceof HTMLElement) {
-          lawyerSearchEmpty.hidden = visibleCount > 0;
-        }
-      };
-
-      lawyerSearchInput.addEventListener("input", applyAssigneeFilter);
-      assigneeCheckboxes.forEach((checkbox) => {
-        if (checkbox instanceof HTMLInputElement) {
-          checkbox.addEventListener("change", setSelectionMeta);
-        }
-      });
-      lawyerSelectVisibleButton.addEventListener("click", () => {
-        assigneeItems.forEach((item) => {
-          if (!(item instanceof HTMLElement) || item.hidden) {
-            return;
-          }
-          const checkbox = item.querySelector("[data-assignee-checkbox]");
-          if (checkbox instanceof HTMLInputElement) {
-            checkbox.checked = true;
-          }
-        });
-        setSelectionMeta();
-      });
-      lawyerClearAllButton.addEventListener("click", () => {
-        assigneeCheckboxes.forEach((checkbox) => {
-          if (checkbox instanceof HTMLInputElement) {
-            checkbox.checked = false;
-          }
-        });
-        setSelectionMeta();
-      });
-
-      if (lawyerToggleButton instanceof HTMLButtonElement) {
-        lawyerToggleButton.addEventListener("click", () => {
-          const isExpanded = lawyerToggleButton.getAttribute("aria-expanded") === "true";
-          setPickerOpen(!isExpanded);
-          if (!isExpanded && lawyerSearchInput instanceof HTMLInputElement) {
-            lawyerSearchInput.focus();
-          }
-        });
-      }
-
-      const closePickerOnOutsideClick = (event) => {
-        if (
-          !(lawyerPanel instanceof HTMLElement) ||
-          lawyerPanel.hidden ||
-          !(lawyerPicker instanceof HTMLElement) ||
-          !(event.target instanceof Node)
-        ) {
-          return;
-        }
-        if (!lawyerPicker.contains(event.target)) {
-          setPickerOpen(false);
-        }
-      };
-      document.addEventListener("pointerdown", closePickerOnOutsideClick);
-      form.addEventListener(
-        "submit",
-        () => {
-          document.removeEventListener("pointerdown", closePickerOnOutsideClick);
-        },
-        { once: true }
-      );
-      form.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") {
-          setPickerOpen(false);
-        }
-      });
-
-      setSelectionMeta();
-      applyAssigneeFilter();
-      setPickerOpen(false);
-    }
+    initAssigneeChecklistPicker({
+      form,
+      picker: lawyerPicker,
+      searchInput: lawyerSearchInput,
+      checklist: lawyerChecklist,
+      selectVisibleButton: lawyerSelectVisibleButton,
+      clearAllButton: lawyerClearAllButton,
+      selectionMeta: lawyerSelectionMeta,
+      searchEmpty: lawyerSearchEmpty,
+      toggleButton: lawyerToggleButton,
+      toggleLabel: lawyerToggleLabel,
+      panel: lawyerPanel,
+      defaultToggleLabel: "Choose attorneys",
+      singularLabel: "attorney",
+      pluralLabel: "attorneys",
+      noneSelectedText: "No attorneys selected.",
+    });
 
     filterArchetypesByCategory();
+  };
+
+  const initTaskNewForm = () => {
+    const form = document.querySelector("[data-task-new-form]");
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
+
+    initAssigneeChecklistPicker({
+      form,
+      picker: form.querySelector("[data-assignee-picker]"),
+      searchInput: form.querySelector("#task-assignee-search"),
+      checklist: form.querySelector("#task-assignee-checklist"),
+      selectVisibleButton: form.querySelector("#task-assignee-select-visible"),
+      clearAllButton: form.querySelector("#task-assignee-clear-all"),
+      selectionMeta: form.querySelector("#task-assignee-selection-meta"),
+      searchEmpty: form.querySelector("#task-assignee-search-empty"),
+      toggleButton: form.querySelector("#task-assignee-toggle"),
+      toggleLabel: form.querySelector("#task-assignee-toggle-label"),
+      panel: form.querySelector("#task-assignee-panel"),
+      defaultToggleLabel: "Choose assignees",
+      singularLabel: "assignee",
+      pluralLabel: "assignees",
+      noneSelectedText: "No assignees selected.",
+    });
+  };
+
+  const initTimeTaskPicker = () => {
+    const forms = Array.from(document.querySelectorAll("[data-time-task-options]"));
+    forms.forEach((form) => {
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+
+      const rawPayload = form.getAttribute("data-time-task-options") || "";
+      if (!rawPayload) {
+        return;
+      }
+
+      let payload = {};
+      try {
+        payload = JSON.parse(rawPayload);
+      } catch (_error) {
+        payload = {};
+      }
+
+      const matterSelect = form.querySelector("[name='matter_id']");
+      const taskSelect = form.querySelector("[data-time-task-select]");
+      const taskHelp = form.querySelector("[data-time-task-help]");
+      if (!(matterSelect instanceof HTMLSelectElement) || !(taskSelect instanceof HTMLSelectElement)) {
+        return;
+      }
+
+      const renderTaskOptions = () => {
+        const matterKey = String(matterSelect.value || "").trim();
+        const rows =
+          payload && typeof payload === "object" && Array.isArray(payload[matterKey]) ? payload[matterKey] : [];
+        const currentValue = String(taskSelect.value || "").trim();
+
+        taskSelect.innerHTML = "";
+        const blankOption = document.createElement("option");
+        blankOption.value = "";
+        blankOption.textContent = rows.length
+          ? "General matter work (no linked task)"
+          : "No linked task";
+        taskSelect.appendChild(blankOption);
+
+        rows.forEach((row) => {
+          if (!row || typeof row !== "object") {
+            return;
+          }
+          const option = document.createElement("option");
+          option.value = String(row.id || "").trim();
+          const title = String(row.title || "").trim();
+          const status = String(row.status || "").trim();
+          const dueDate = String(row.due_date || "").trim();
+          const detailParts = [];
+          if (status) {
+            detailParts.push(status);
+          }
+          if (dueDate) {
+            detailParts.push(`Due ${dueDate}`);
+          }
+          option.textContent = detailParts.length
+            ? `#${option.value} - ${title} (${detailParts.join(" | ")})`
+            : `#${option.value} - ${title}`;
+          taskSelect.appendChild(option);
+        });
+
+        const hasCurrentValue = rows.some((row) => String(row && row.id || "").trim() === currentValue);
+        taskSelect.value = hasCurrentValue ? currentValue : "";
+        if (taskHelp instanceof HTMLElement) {
+          taskHelp.textContent = rows.length
+            ? "Choose a task for cleaner billing and reporting, or leave it blank for general matter work."
+            : "No active tasks are available for this matter right now. Leave it blank for general matter work.";
+        }
+      };
+
+      matterSelect.addEventListener("change", renderTaskOptions);
+      renderTaskOptions();
+    });
+  };
+
+  const initMatterIntakeForm = () => {
+    const form = document.querySelector("[data-matter-intake-form]");
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
+
+    let templatePayload = {};
+    try {
+      const raw = String(form.getAttribute("data-template-payload") || "{}");
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        templatePayload = parsed;
+      }
+    } catch (_error) {
+      templatePayload = {};
+    }
+
+    const aiParseUrl = String(form.getAttribute("data-ai-parse-url") || "").trim();
+    const csrfInput = form.querySelector('input[name="csrf_token"]');
+    const categoryInput = form.querySelector('select[name="legal_category"]');
+    const archetypeSelect = form.querySelector('select[name="template_id"]');
+    const requiredFieldsContainer = form.querySelector("#intake-archetype-required-fields");
+    const requiredHelp = form.querySelector("#intake-archetype-help");
+    const contractFieldsContainer = form.querySelector("#intake-contract-required-fields");
+    const contractHelp = form.querySelector("#intake-contract-help");
+    const aiPrompt = form.querySelector("#intake-ai-prompt");
+    const aiButton = form.querySelector("#intake-ai-generate");
+    const aiStatus = form.querySelector("#intake-ai-status");
+
+    if (
+      !(csrfInput instanceof HTMLInputElement) ||
+      !(categoryInput instanceof HTMLSelectElement) ||
+      !(archetypeSelect instanceof HTMLSelectElement) ||
+      !(requiredFieldsContainer instanceof HTMLElement) ||
+      !(requiredHelp instanceof HTMLElement) ||
+      !(contractFieldsContainer instanceof HTMLElement) ||
+      !(contractHelp instanceof HTMLElement)
+    ) {
+      return;
+    }
+
+    const byId = new Map(
+      Object.entries(templatePayload).map(([id, value]) => [String(id), value])
+    );
+
+    const setHelpText = (text) => {
+      requiredHelp.textContent = text || "";
+    };
+
+    const setContractHelpText = (text) => {
+      contractHelp.textContent = text || "";
+    };
+
+    const setInputValue = (name, value) => {
+      const input = form.querySelector(`[name="${name}"]`);
+      if (
+        !(
+          input instanceof HTMLInputElement ||
+          input instanceof HTMLTextAreaElement ||
+          input instanceof HTMLSelectElement
+        )
+      ) {
+        return;
+      }
+      const next = String(value || "").trim();
+      if (!next) {
+        return;
+      }
+      if (input instanceof HTMLSelectElement) {
+        const hasOption = Array.from(input.options).some(
+          (option) => String(option.value || "") === next
+        );
+        if (!hasOption) {
+          return;
+        }
+      }
+      input.value = next;
+    };
+
+    const setAiStatus = (message, isError = false) => {
+      if (!(aiStatus instanceof HTMLElement)) {
+        return;
+      }
+      aiStatus.textContent = message || "";
+      aiStatus.classList.toggle("text-danger", Boolean(isError));
+      aiStatus.classList.toggle("text-success", Boolean(message) && !isError);
+    };
+
+    const renderRequiredFields = () => {
+      requiredFieldsContainer.innerHTML = "";
+      contractFieldsContainer.innerHTML = "";
+      if (String(archetypeSelect.value || "") === "custom") {
+        setHelpText("Custom matter selected. No archetype-required fields are needed.");
+        setContractHelpText("Custom matter selected. No contract autofill fields are needed.");
+        return;
+      }
+      const selected = byId.get(String(archetypeSelect.value || ""));
+      if (!selected || typeof selected !== "object") {
+        setHelpText("Select an archetype to load required fields.");
+        setContractHelpText("Select an archetype to load contract fields for auto-generated drafts.");
+        return;
+      }
+      const fields = Array.isArray(selected.required_fields) ? selected.required_fields : [];
+      if (!fields.length) {
+        setHelpText("This archetype has no additional required fields.");
+      } else {
+        setHelpText("Complete all required fields before creating intake.");
+      }
+      fields.forEach((field) => {
+        const key = String((field && field.key) || "").trim();
+        if (!key) {
+          return;
+        }
+        const wrapper = document.createElement("div");
+        wrapper.className = "col-md-6";
+        const label = document.createElement("label");
+        label.className = "muted small";
+        label.textContent = String((field && field.label) || key);
+        const input = document.createElement("input");
+        input.className = "form-control";
+        input.name = `field_${key}`;
+        input.required = true;
+        wrapper.appendChild(label);
+        wrapper.appendChild(input);
+        if (field && field.help) {
+          const helper = document.createElement("div");
+          helper.className = "form-help mt-1";
+          helper.textContent = String(field.help);
+          wrapper.appendChild(helper);
+        }
+        requiredFieldsContainer.appendChild(wrapper);
+      });
+
+      const contractTemplates = Array.isArray(selected.contract_templates)
+        ? selected.contract_templates
+        : [];
+      if (!contractTemplates.length) {
+        setContractHelpText("No auto-generated contracts are linked to this archetype.");
+        return;
+      }
+      const archetypeKeys = new Set(
+        (Array.isArray(selected.required_fields) ? selected.required_fields : [])
+          .map((field) => String((field && field.key) || "").trim())
+          .filter(Boolean)
+      );
+      const byKey = new Map();
+      contractTemplates.forEach((template) => {
+        const templateName = String((template && template.name) || "Contract");
+        const requiredFields = Array.isArray(template && template.required_fields)
+          ? template.required_fields
+          : [];
+        requiredFields.forEach((field) => {
+          const key = String((field && field.key) || "").trim();
+          if (!key || archetypeKeys.has(key)) {
+            return;
+          }
+          const label = String((field && field.label) || key);
+          const helpText = String((field && field.help) || "");
+          const existing = byKey.get(key);
+          if (existing) {
+            if (!existing.templates.includes(templateName)) {
+              existing.templates.push(templateName);
+            }
+            if (!existing.help && helpText) {
+              existing.help = helpText;
+            }
+            return;
+          }
+          byKey.set(key, {
+            key,
+            label,
+            help: helpText,
+            templates: [templateName],
+          });
+        });
+      });
+      if (!byKey.size) {
+        setContractHelpText(
+          "This archetype has auto-generated contracts, but no additional required contract fields."
+        );
+        return;
+      }
+      setContractHelpText(
+        `Complete these fields to auto-generate ${contractTemplates.length} contract draft(s).`
+      );
+      Array.from(byKey.values()).forEach((field) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "col-md-6";
+        const label = document.createElement("label");
+        label.className = "muted small";
+        label.textContent = field.label;
+        const input = document.createElement("input");
+        input.className = "form-control";
+        input.name = `contract_field_${field.key}`;
+        input.required = true;
+        wrapper.appendChild(label);
+        wrapper.appendChild(input);
+        const helper = document.createElement("div");
+        helper.className = "form-help mt-1";
+        const templateNames = field.templates.join(", ");
+        helper.textContent = field.help
+          ? `${field.help} (${templateNames})`
+          : `Required for: ${templateNames}`;
+        wrapper.appendChild(helper);
+        contractFieldsContainer.appendChild(wrapper);
+      });
+    };
+
+    const filterByCategory = () => {
+      const category = String(categoryInput.value || "").trim().toLowerCase();
+      Array.from(archetypeSelect.options).forEach((option) => {
+        if (!(option instanceof HTMLOptionElement)) {
+          return;
+        }
+        if (!option.value || option.value === "custom") {
+          option.hidden = false;
+          return;
+        }
+        const selected = byId.get(String(option.value || ""));
+        const optionCategory = String(
+          (selected && typeof selected === "object" && selected.legal_category) || ""
+        )
+          .trim()
+          .toLowerCase();
+        option.hidden = category ? optionCategory !== category : false;
+      });
+      const selectedOption = archetypeSelect.options[archetypeSelect.selectedIndex];
+      if (selectedOption instanceof HTMLOptionElement && selectedOption.hidden) {
+        archetypeSelect.value = "";
+      }
+      renderRequiredFields();
+    };
+
+    const applySuggestion = (suggestion) => {
+      if (!suggestion || typeof suggestion !== "object") {
+        return;
+      }
+      setInputValue("matter_no", suggestion.matter_no);
+      setInputValue("title", suggestion.title);
+      setInputValue("client_name", suggestion.client_name);
+      setInputValue("legal_category", suggestion.legal_category);
+      setInputValue("jurisdiction", suggestion.jurisdiction);
+      setInputValue("stage", suggestion.stage);
+      setInputValue("practice_area", suggestion.practice_area);
+      setInputValue("case_type", suggestion.case_type);
+      setInputValue("description", suggestion.description);
+      setInputValue("objective", suggestion.objective);
+      setInputValue("risk_level", suggestion.risk_level);
+      setInputValue("budget_status", suggestion.budget_status);
+
+      if (suggestion.template_id && byId.has(String(suggestion.template_id))) {
+        archetypeSelect.value = String(suggestion.template_id);
+      }
+      filterByCategory();
+
+      const values =
+        suggestion.archetype_required_values &&
+        typeof suggestion.archetype_required_values === "object"
+          ? suggestion.archetype_required_values
+          : {};
+      Object.entries(values).forEach(([key, value]) => {
+        const normalizedKey = String(key || "").trim();
+        if (!normalizedKey) {
+          return;
+        }
+        setInputValue(`field_${normalizedKey}`, value);
+      });
+    };
+
+    const runAiAssist = async () => {
+      if (
+        !(aiPrompt instanceof HTMLTextAreaElement) ||
+        !(aiButton instanceof HTMLButtonElement) ||
+        !aiParseUrl
+      ) {
+        return;
+      }
+      const prompt = String(aiPrompt.value || "").trim();
+      if (prompt.length < 20) {
+        setAiStatus("Add at least 20 characters for intake parsing.", true);
+        return;
+      }
+      aiButton.disabled = true;
+      setAiStatus("Parsing intake...");
+      try {
+        const response = await fetch(aiParseUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrfInput.value,
+          },
+          body: JSON.stringify({ prompt }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload || payload.ok !== true) {
+          const errorText = String((payload && payload.error) || "Unable to parse intake.");
+          setAiStatus(errorText, true);
+          return;
+        }
+        const suggestion = (payload && payload.suggestion) || {};
+        applySuggestion(suggestion);
+        const source = String((suggestion && suggestion.source) || "fallback");
+        const templateName = String((suggestion && suggestion.template_name) || "");
+        const suffix = templateName ? ` | archetype: ${templateName}` : "";
+        setAiStatus(`Intake fields populated (${source})${suffix}`);
+      } catch (_error) {
+        setAiStatus("Network error while parsing intake.", true);
+      } finally {
+        aiButton.disabled = false;
+      }
+    };
+
+    categoryInput.addEventListener("change", filterByCategory);
+    archetypeSelect.addEventListener("change", () => {
+      const selected = byId.get(String(archetypeSelect.value || ""));
+      if (
+        selected &&
+        typeof selected === "object" &&
+        !String(categoryInput.value || "").trim() &&
+        selected.legal_category
+      ) {
+        categoryInput.value = String(selected.legal_category);
+      }
+      filterByCategory();
+    });
+
+    if (aiButton instanceof HTMLButtonElement) {
+      aiButton.addEventListener("click", runAiAssist);
+    }
+    if (aiPrompt instanceof HTMLTextAreaElement) {
+      aiPrompt.addEventListener("keydown", (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+          event.preventDefault();
+          runAiAssist();
+        }
+      });
+    }
+
+    filterByCategory();
+  };
+
+  const initMobileHubQuickActions = () => {
+    const feeMatter = document.getElementById("mobile-fee-matter");
+    const taskMatter = document.getElementById("mobile-task-matter");
+    const durationInput = document.getElementById("mobile-fee-duration");
+    const endInput = document.getElementById("mobile-fee-end");
+    const taskTitle = document.getElementById("mobile-task-title");
+    const matterButtons = Array.from(document.querySelectorAll("[data-mobile-matter-select]"));
+    const durationButtons = Array.from(document.querySelectorAll("[data-mobile-duration]"));
+    const taskTitleButtons = Array.from(document.querySelectorAll("[data-mobile-task-title]"));
+
+    if (!matterButtons.length && !durationButtons.length && !taskTitleButtons.length) {
+      return;
+    }
+
+    matterButtons.forEach((button) => {
+      if (!(button instanceof HTMLElement)) {
+        return;
+      }
+      button.addEventListener("click", () => {
+        const matterId = button.getAttribute("data-mobile-matter-select") || "";
+        if (feeMatter instanceof HTMLSelectElement) {
+          feeMatter.value = matterId;
+        }
+        if (taskMatter instanceof HTMLSelectElement) {
+          taskMatter.value = matterId;
+        }
+      });
+    });
+
+    durationButtons.forEach((button) => {
+      if (!(button instanceof HTMLElement)) {
+        return;
+      }
+      button.addEventListener("click", () => {
+        if (durationInput instanceof HTMLInputElement) {
+          durationInput.value = button.getAttribute("data-mobile-duration") || "";
+        }
+        if (endInput instanceof HTMLInputElement) {
+          endInput.value = "";
+        }
+      });
+    });
+
+    taskTitleButtons.forEach((button) => {
+      if (!(button instanceof HTMLElement)) {
+        return;
+      }
+      button.addEventListener("click", () => {
+        if (taskTitle instanceof HTMLInputElement) {
+          taskTitle.value = button.getAttribute("data-mobile-task-title") || "";
+          taskTitle.focus();
+        }
+      });
+    });
+  };
+
+  const initWorkspaceEditor = () => {
+    const form = document.querySelector("[data-workspace-editor]");
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
+
+    const csrfInput = form.querySelector('input[name="csrf_token"]');
+    const documentIdInput = form.querySelector('input[name="document_id"]');
+    const titleInput = document.getElementById("workspace-document-title");
+    const statusInput = document.getElementById("workspace-document-status");
+    const bodyInput = document.getElementById("workspace-document-body");
+    const typeInput = document.getElementById("workspace-document-type");
+    const confidentialityInput = document.getElementById("workspace-document-confidentiality");
+    const privilegeInput = document.getElementById("workspace-document-privilege");
+    const retentionInput = document.getElementById("workspace-document-retention");
+    const legalHoldInput = document.getElementById("workspace-document-legal-hold");
+    const statusNode = document.querySelector("[data-workspace-save-status]");
+    const presenceNode = document.querySelector("[data-workspace-presence-list]");
+    const presenceCountNode = document.querySelector("[data-workspace-presence-count]");
+    const presenceUrl = String(form.getAttribute("data-presence-url") || "").trim();
+
+    if (
+      !(csrfInput instanceof HTMLInputElement) ||
+      !(documentIdInput instanceof HTMLInputElement) ||
+      !(titleInput instanceof HTMLInputElement) ||
+      !(statusInput instanceof HTMLSelectElement) ||
+      !(bodyInput instanceof HTMLTextAreaElement) ||
+      !presenceUrl
+    ) {
+      return;
+    }
+
+    let dirty = false;
+    let saveTimer = 0;
+    let saveInFlight = false;
+
+    const escapeHtml = (value) =>
+      String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    const setStatus = (message, tone = "text-muted") => {
+      if (!(statusNode instanceof HTMLElement)) {
+        return;
+      }
+      statusNode.className = `form-help document-workbench-save-status ${tone}`.trim();
+      statusNode.textContent = message;
+    };
+
+    const renderPresence = (items) => {
+      if (!(presenceNode instanceof HTMLElement)) {
+        return;
+      }
+      const rows = Array.isArray(items) ? items : [];
+      if (presenceCountNode instanceof HTMLElement) {
+        presenceCountNode.textContent = String(rows.length);
+      }
+      if (!rows.length) {
+        presenceNode.innerHTML =
+          '<div class="empty-state">No active collaborators on this draft right now.</div>';
+        return;
+      }
+      presenceNode.innerHTML = rows
+        .map((row) => {
+          const suffix = row && row.is_current_user ? " (You)" : "";
+          const detail =
+            row && row.cursor_label ? `${row.state} • ${row.cursor_label}` : row.state;
+          return `
+            <div class="document-workbench-presence-item">
+              <div class="list-title">${escapeHtml(row.display_name)}${suffix}</div>
+              <div class="muted small">${escapeHtml(detail)}</div>
+            </div>
+          `;
+        })
+        .join("");
+    };
+
+    const sendPresence = async (state) => {
+      try {
+        const response = await fetch(presenceUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-CSRF-Token": csrfInput.value,
+          },
+          body: JSON.stringify({
+            document_id: documentIdInput.value,
+            state,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok && payload.ok) {
+          renderPresence(payload.presence || []);
+        }
+      } catch (_error) {
+        // Presence failures should not interrupt drafting.
+      }
+    };
+
+    const autosave = async () => {
+      if (!dirty || saveInFlight) {
+        return;
+      }
+      saveInFlight = true;
+      setStatus("Autosaving draft...", "text-muted");
+      try {
+        const response = await fetch(form.action, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-CSRF-Token": csrfInput.value,
+          },
+          body: JSON.stringify({
+            action: "save_document",
+            document_id: documentIdInput.value,
+            title: titleInput.value,
+            status: statusInput.value,
+            body: bodyInput.value,
+            document_type: typeInput instanceof HTMLSelectElement ? typeInput.value : "",
+            confidentiality:
+              confidentialityInput instanceof HTMLSelectElement ? confidentialityInput.value : "",
+            privilege_label:
+              privilegeInput instanceof HTMLSelectElement ? privilegeInput.value : "",
+            retention_category:
+              retentionInput instanceof HTMLSelectElement ? retentionInput.value : "",
+            legal_hold: Boolean(legalHoldInput instanceof HTMLInputElement && legalHoldInput.checked),
+            autosave: true,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.ok !== true) {
+          setStatus(payload.error || "Autosave failed. Use Save Draft Now.", "text-warning");
+          return;
+        }
+        dirty = false;
+        renderPresence(payload.presence || []);
+        setStatus(`Autosaved at ${new Date().toLocaleTimeString()}.`, "text-muted");
+      } catch (_error) {
+        setStatus("Autosave failed. Use Save Draft Now.", "text-warning");
+      } finally {
+        saveInFlight = false;
+        if (dirty) {
+          window.setTimeout(autosave, 900);
+        }
+      }
+    };
+
+    const queueAutosave = () => {
+      dirty = true;
+      setStatus("Unsaved changes detected.", "text-warning");
+      if (saveTimer) {
+        window.clearTimeout(saveTimer);
+      }
+      saveTimer = window.setTimeout(autosave, 1400);
+      sendPresence("editing");
+    };
+
+    [
+      titleInput,
+      statusInput,
+      bodyInput,
+      typeInput,
+      confidentialityInput,
+      privilegeInput,
+      retentionInput,
+      legalHoldInput,
+    ]
+      .filter(Boolean)
+      .forEach((element) => {
+        if (!(element instanceof HTMLElement)) {
+          return;
+        }
+        element.addEventListener("input", queueAutosave);
+        element.addEventListener("change", queueAutosave);
+      });
+
+    bodyInput.addEventListener("focus", () => sendPresence("editing"));
+    window.setInterval(() => sendPresence(dirty ? "editing" : "viewing"), 30000);
+    sendPresence("viewing");
+  };
+
+  const initConfirmActions = () => {
+    document.addEventListener(
+      "submit",
+      (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) {
+          return;
+        }
+        const message = String(form.getAttribute("data-confirm") || "").trim();
+        if (!message) {
+          return;
+        }
+        if (!window.confirm(message)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      },
+      { capture: true }
+    );
   };
 
   const initFormValidationUX = () => {
@@ -4789,6 +5525,7 @@
     initMatterAIAssist();
     initTimeNarrativeAIDraft();
     initTimeCodeAssist();
+    initTimeTaskPicker();
     initTimerPresenceGuard();
     initLiveBillingCue();
     initQuoteAssist();
@@ -4804,7 +5541,12 @@
     initBackToTop();
     initDmsTemplateRequirements();
     initMatterNewForm();
+    initTaskNewForm();
+    initMatterIntakeForm();
+    initMobileHubQuickActions();
+    initWorkspaceEditor();
     initFormValidationUX();
+    initConfirmActions();
     initSubmitState();
     initFormDrafts();
     initUnsavedChangesGuard();

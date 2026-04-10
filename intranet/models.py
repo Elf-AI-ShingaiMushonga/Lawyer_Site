@@ -242,6 +242,64 @@ class KnowledgeBase(db.Model):
     updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
 
 
+class TenderOpportunity(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    reference_no = db.Column(db.String(120), nullable=False, index=True)
+    title = db.Column(db.String(255), nullable=False, index=True)
+    issuing_authority = db.Column(db.String(255), nullable=False)
+    province = db.Column(db.String(80), nullable=False, default="National")
+    sector = db.Column(db.String(120), nullable=True)
+    tender_type = db.Column(db.String(60), nullable=False, default="Tender")
+    portal_source = db.Column(db.String(120), nullable=False, default="SA eTender Portal")
+    status = db.Column(db.String(40), nullable=False, default="Sourced")
+    etender_url = db.Column(db.String(500), nullable=True)
+    briefing_required = db.Column(db.Boolean, nullable=False, default=False)
+    briefing_date = db.Column(db.DateTime, nullable=True)
+    closing_at = db.Column(db.DateTime, nullable=False, index=True)
+    validity_end_date = db.Column(db.Date, nullable=True)
+    estimated_value = db.Column(db.Float, nullable=True)
+    preference_system = db.Column(db.String(40), nullable=True)
+    cidb_required = db.Column(db.Boolean, nullable=False, default=False)
+    cidb_grading = db.Column(db.String(40), nullable=True)
+    local_content_required = db.Column(db.Boolean, nullable=False, default=False)
+    submission_channel = db.Column(db.String(80), nullable=True)
+    submission_address = db.Column(db.Text, nullable=True)
+    contact_person = db.Column(db.String(255), nullable=True)
+    contact_email = db.Column(db.String(255), nullable=True)
+    contact_phone = db.Column(db.String(80), nullable=True)
+    csd_supplier_number = db.Column(db.String(120), nullable=True)
+    tcs_pin = db.Column(db.String(120), nullable=True)
+    bbbee_level = db.Column(db.String(80), nullable=True)
+    bid_manager_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
+    matter_id = db.Column(db.Integer, db.ForeignKey("matter.id"), nullable=True, index=True)
+    scope_summary = db.Column(db.Text, nullable=True)
+    next_action = db.Column(db.Text, nullable=True)
+    internal_notes = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    __table_args__ = (
+        db.Index("ix_tender_opportunity_status_closing", "status", "closing_at"),
+        db.Index("ix_tender_opportunity_bid_manager_status", "bid_manager_user_id", "status"),
+    )
+
+
+class TenderChecklistItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    tender_id = db.Column(db.Integer, db.ForeignKey("tender_opportunity.id"), nullable=False, index=True)
+    item_key = db.Column(db.String(80), nullable=False)
+    label = db.Column(db.String(255), nullable=False)
+    is_required = db.Column(db.Boolean, nullable=False, default=True)
+    status = db.Column(db.String(30), nullable=False, default="pending")
+    notes = db.Column(db.Text, nullable=True)
+    updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now)
+    __table_args__ = (
+        db.UniqueConstraint("tender_id", "item_key", name="uq_tender_checklist_item"),
+        db.Index("ix_tender_checklist_tender_status", "tender_id", "status"),
+    )
+
+
 class GovernanceIncident(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(180), nullable=False)

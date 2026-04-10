@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 
 from ..extensions import db
 from ..helpers import audit, can_access_matter, get_active_matter_id, is_admin, set_active_matter_context
-from ..models import FeeArrangement, Matter, RateCard, TimeEntry, TimeRoundingPolicy, TimeTimer, TimeValidationEvent
+from ..models import FeeArrangement, Matter, RateCard, Task, TimeEntry, TimeRoundingPolicy, TimeTimer, TimeValidationEvent
 from ..policies import enforce_permission, visible_matter_ids
 from ..services.assist_ai import suggest_time_entry_narrative
 from ..services.timesheet_ai import parse_timesheet_image_entries
@@ -98,6 +98,44 @@ def _scoped_matters_for_current_user(limit: int = 200) -> list[Matter]:
         else:
             return []
     return query.order_by(Matter.opened_at.desc()).limit(max(1, int(limit))).all()
+
+
+def _build_time_task_options(*, matter_ids: list[int], include_task_id: int | None = None) -> dict[str, list[dict[str, object]]]:
+    unique_matter_ids = sorted({int(matter_id) for matter_id in matter_ids if matter_id})
+    if not unique_matter_ids:
+        return {}
+
+    filters: list[object] = [Task.matter_id.in_(unique_matter_ids)]
+    if include_task_id:
+        filters.append(or_(Task.status != "Done", Task.id == include_task_id))
+    else:
+        filters.append(Task.status != "Done")
+
+    rows = (
+        Task.query.filter(*filters)
+        .order_by(Task.matter_id.asc(), Task.status.asc(), Task.due_date.asc().nullslast(), Task.id.desc())
+        .limit(3000)
+        .all()
+    )
+
+    payload: dict[str, list[dict[str, object]]] = {}
+    counts_by_matter: dict[str, int] = {}
+    for row in rows:
+        matter_key = str(int(row.matter_id))
+        count = counts_by_matter.get(matter_key, 0)
+        if count >= 50 and int(row.id) != int(include_task_id or 0):
+            continue
+        payload.setdefault(matter_key, []).append(
+            {
+                "id": int(row.id),
+                "title": row.title or f"Task {row.id}",
+                "status": row.status or "",
+                "due_date": row.due_date.isoformat() if row.due_date else "",
+            }
+        )
+        counts_by_matter[matter_key] = count + 1
+
+    return payload
 
 
 def _resolve_rate_for_prompt(
@@ -1179,6 +1217,14 @@ def register_timekeeping_routes(app):
             task_id = request.form.get("task_id", type=int)
             if not matter_id or not can_access_matter(matter_id):
                 abort(403)
+            if task_id:
+                task = db.session.get(Task, task_id)
+                if task is None:
+                    flash("Selected task could not be found.", "warning")
+                    return _entries_redirect(matter_id=matter_id)
+                if int(task.matter_id) != int(matter_id):
+                    flash("Selected task does not belong to the chosen matter.", "warning")
+                    return _entries_redirect(matter_id=matter_id)
             if _matter_is_closed(matter_id):
                 flash("Matter is closed. Reopen it before posting new time.", "warning")
                 return _entries_redirect(matter_id=matter_id, task_id=task_id)
@@ -1253,16 +1299,33 @@ def register_timekeeping_routes(app):
             prefill_matter_id = get_active_matter_id()
         if prefill_matter_id and not can_access_matter(prefill_matter_id):
             prefill_matter_id = None
+        prefill_task_id = request.args.get("task_id", type=int)
+        prefill_task = db.session.get(Task, prefill_task_id) if prefill_task_id else None
+        if prefill_task is None and prefill_task_id:
+            prefill_task_id = None
+        elif prefill_task is not None:
+            if not can_access_matter(prefill_task.matter_id):
+                prefill_task_id = None
+            else:
+                if prefill_matter_id and int(prefill_task.matter_id) != int(prefill_matter_id):
+                    prefill_task_id = None
+                elif not prefill_matter_id:
+                    prefill_matter_id = int(prefill_task.matter_id)
+        prefill_task_code = (request.args.get("task_code") or "").strip()
+        prefill_activity_code = (request.args.get("activity_code") or "").strip()
+        prefill_narrative = (request.args.get("narrative") or "").strip()
+        prefill_is_billable = _as_bool(request.args.get("is_billable"), default=True)
+
         if prefill_matter_id and prefill_matter_id not in {matter.id for matter in matters}:
             selected = db.session.get(Matter, prefill_matter_id)
             if selected and can_access_matter(selected.id):
                 matters = [selected] + matters
                 matter_lookup[selected.id] = selected
-        prefill_task_id = request.args.get("task_id", type=int)
-        prefill_task_code = (request.args.get("task_code") or "").strip()
-        prefill_activity_code = (request.args.get("activity_code") or "").strip()
-        prefill_narrative = (request.args.get("narrative") or "").strip()
-        prefill_is_billable = _as_bool(request.args.get("is_billable"), default=True)
+
+        time_task_options = _build_time_task_options(
+            matter_ids=[matter.id for matter in matters],
+            include_task_id=prefill_task_id,
+        )
 
         default_end_dt = utc_now().replace(second=0, microsecond=0)
         default_start_dt = default_end_dt - dt.timedelta(minutes=30)
@@ -1291,6 +1354,7 @@ def register_timekeeping_routes(app):
             prefill_start_at=prefill_start_at,
             prefill_end_at=prefill_end_at,
             time_code_assist=time_code_assist,
+            time_task_options=time_task_options,
         )
 
     @app.route("/time/review", methods=["GET", "POST"])

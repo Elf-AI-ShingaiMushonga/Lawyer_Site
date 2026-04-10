@@ -3318,6 +3318,7 @@
 <a class="skip-link" href="#main-content">Skip to main content</a>
 <div class="shell">
   {% set endpoint = request.endpoint or "" %}
+  {% set assistant_endpoints = ["assistant_home"] %}
   {% set matter_endpoints = ["matters", "matter_create", "matter_detail", "matter_team", "matter_tasks", "matter_task_create", "matter_documents", "matter_intake", "matter_workspace", "matter_parties", "matter_notes", "matter_stage_update", "matter_close"] %}
   {% set admin_endpoints = ["admin", "admin_users", "admin_announcements", "admin_audit"] %}
   {% set automation_endpoints = ["admin_automation", "admin_templates_matters", "admin_templates_contracts", "admin_templates_tasks", "admin_templates_documents"] %}
@@ -3329,13 +3330,14 @@
   {% set portal_endpoints = ["portal_login", "portal_matters", "portal_matter_detail", "portal_messages", "portal_message_center", "portal_uploads", "portal_invoices", "portal_payments", "admin_portal_users", "portal_links"] %}
   {% set billing_endpoints = ["billing_rates", "billing_invoices", "billing_invoice_detail", "billing_tax_invoice_pdf", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses"] %}
   {% set crm_endpoints = ["crm_leads", "crm_lead_detail"] %}
+  {% set tender_endpoints = ["tender_list", "tender_detail", "tender_checklist_update", "tender_create_matter"] %}
   {% set knowledge_endpoints = ["contacts", "kb", "kb_view", "search"] %}
   {% set analytics_endpoints = ["analytics_home", "analytics_utilization", "analytics_realization", "analytics_ehr", "analytics_workload", "analytics_profitability", "analytics_forecast", "analytics_burnout"] %}
   {% set ops_endpoints = ["ops_backup_status", "ops_restore_verify", "ops_dr_targets", "ops_assets", "ops_helpdesk", "ops_helpdesk_ticket"] %}
   {% set trust_account_endpoints = ["trust_ledger", "trust_reconciliations", "trust_cashbook", "trust_section86", "trust_reports_monthly", "trust_trial_balance_report", "trust_auditor_report"] %}
   {% set billing_ops_endpoints = ["billing_rates", "billing_ar_aging", "billing_account_statement", "billing_trial_balance", "billing_auditor_report", "billing_transactions", "billing_audit_log", "expenses"] %}
   {% set portal_session_active = session.get('portal_user_id') %}
-  {% set more_endpoints = workflow_endpoints + crm_endpoints + portal_endpoints + analytics_endpoints + ops_endpoints + admin_endpoints + automation_endpoints + knowledge_endpoints + trust_account_endpoints + billing_ops_endpoints %}
+  {% set more_endpoints = workflow_endpoints + crm_endpoints + tender_endpoints + portal_endpoints + analytics_endpoints + ops_endpoints + admin_endpoints + automation_endpoints + knowledge_endpoints + trust_account_endpoints + billing_ops_endpoints %}
   {% set role = current_user_role if current_user.is_authenticated else "" %}
   {% set role_label = current_user_role_label if current_user.is_authenticated else "" %}
   {% set matter_workspace_href = url_for('matter_workspace', matter_id=active_matter.id) if active_matter else url_for('matters') %}
@@ -3347,7 +3349,11 @@
   {% set section_label = "Dashboard" %}
   {% set section_meta = "Firm-wide operational snapshot" %}
   {% set section_href = url_for('dashboard') %}
-  {% if endpoint in matter_endpoints %}
+  {% if endpoint in assistant_endpoints %}
+    {% set section_label = "Assistant Workspace" %}
+    {% set section_meta = "Supervised AI drafting, retrieval, and confirmed matter actions" %}
+    {% set section_href = url_for('assistant_home') %}
+  {% elif endpoint in matter_endpoints %}
     {% set section_label = "Matter Management" %}
     {% set section_meta = "Intake, workspace, parties, notes, and case progression" %}
     {% set section_href = url_for('matters') %}
@@ -3375,6 +3381,10 @@
     {% set section_label = "CRM and Intake" %}
     {% set section_meta = "Lead conversion, conflict checks, and engagements" %}
     {% set section_href = url_for('crm_leads') %}
+  {% elif endpoint in tender_endpoints %}
+    {% set section_label = "Tender Desk" %}
+    {% set section_meta = "South African bid pipeline, compliance pack, and award conversion controls" %}
+    {% set section_href = url_for('tender_list') %}
   {% elif endpoint in portal_endpoints %}
     {% set section_label = "Client Portal" %}
     {% set section_meta = "Client-facing matter visibility, messaging, uploads, and invoices" %}
@@ -3421,6 +3431,7 @@
           <a class="nav-pill {{ 'is-active' if endpoint in matter_endpoints else '' }}" href="{{ url_for('matters') }}">Matters</a>
           <a class="nav-pill {{ 'is-active' if endpoint in calendar_endpoints else '' }}" href="{{ url_for('calendar_my') }}">Calendar</a>
           <a class="nav-pill {{ 'is-active' if endpoint in dms_endpoints else '' }}" href="{{ url_for('dms_home') }}">DMS</a>
+          <a class="nav-pill {{ 'is-active' if endpoint in assistant_endpoints else '' }}" href="{{ url_for('assistant_home') }}">Assistant</a>
           {% if is_admin_role %}
             <a class="nav-pill {{ 'is-active' if endpoint in automation_endpoints else '' }}" href="{{ url_for('admin_automation') }}">Automation</a>
           {% endif %}
@@ -3462,6 +3473,7 @@
                   <a class="nav-menu-item {{ 'is-active' if endpoint in portal_endpoints and endpoint in ['portal_message_center', 'portal_messages'] else '' }}" href="{{ url_for('portal_message_center') }}">Portal Messages</a>
                   <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_uploads' else '' }}" href="{{ url_for('portal_uploads') }}">Portal Uploads</a>
                   <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_invoices' else '' }}" href="{{ url_for('portal_invoices') }}">Portal Invoices</a>
+                  <a class="nav-menu-item {{ 'is-active' if endpoint in tender_endpoints else '' }}" href="{{ url_for('tender_list') }}">Tender Desk</a>
                   <a class="nav-menu-item {{ 'is-active' if endpoint == 'portal_links' else '' }}" href="{{ url_for('portal_links') }}">Secure Links</a>
                   {% if not is_support_role %}
                     <a class="nav-menu-item {{ 'is-active' if endpoint in portal_endpoints and endpoint not in ['portal_messages', 'portal_uploads', 'portal_invoices', 'portal_links'] else '' }}" href="{{ url_for('portal_login') }}">Portal Home</a>
@@ -3503,6 +3515,7 @@
               <option value="Matter Directory">
               <option value="My Calendar">
               <option value="DMS Workspace">
+              <option value="Assistant Desk">
               {% if is_case_role %}
                 <option value="Start Timer">
                 <option value="Log Time Entry">
@@ -3515,6 +3528,7 @@
                 <option value="CRM and Intake">
                 <option value="IT Asset Registry">
               {% endif %}
+              <option value="Tender Desk">
               <option value="Helpdesk">
               {% if is_admin_role %}
                 <option value="Automation Studio">
@@ -3679,6 +3693,13 @@
             </span>
             <span class="code-like">/</span>
           </a>
+          <a class="command-item" href="{{ url_for('assistant_home') }}" data-command-item data-keywords="assistant ai summaries notes tasks search drafts">
+            <span>
+              <span class="command-item-title">Assistant Desk</span>
+              <span class="command-item-meta">Run supervised AI drafting, search, and confirmed matter actions</span>
+            </span>
+            <span class="code-like">AI</span>
+          </a>
 
           {% if workspace_command_actions %}
             <div class="command-section">Workspace Quick Actions</div>
@@ -3754,6 +3775,13 @@
               <span>
                 <span class="command-item-title">CRM and Intake</span>
                 <span class="command-item-meta">Lead pipeline, conflict checks, engagements</span>
+              </span>
+              <span class="code-like">Go</span>
+            </a>
+            <a class="command-item" href="{{ url_for('tender_list') }}" data-command-item data-keywords="tenders tender desk procurement bids etender csd sbd tcs bbbee cidb">
+              <span>
+                <span class="command-item-title">Tender Desk</span>
+                <span class="command-item-meta">South African bid pipeline, compliance packs, and award conversion</span>
               </span>
               <span class="code-like">Go</span>
             </a>

@@ -11,7 +11,7 @@
     </div>
   </div>
 
-  <form method="post" class="row g-2 mt-2">
+  <form method="post" class="row g-2 mt-2" data-task-new-form>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if prefill_title or prefill_description or prefill_due_date %}
       <div class="col-12">
@@ -40,22 +40,48 @@
       <input class="form-control" name="due_date" type="date" value="{{ prefill_due_date or '' }}">
     </div>
     <div class="col-md-6">
-      <label class="form-label">Assign To (Optional, Multiple)</label>
-      <select class="form-select" name="assignee_user_ids" multiple size="5">
-        {% for u in users %}
-          <option value="{{ u.id }}" {% if u.id == current_user.id %}selected{% endif %}>{{ u.full_name }} ({{ u.email }})</option>
-        {% endfor %}
-      </select>
-      <div class="form-help">Use Ctrl/Cmd + click to select multiple assignees.</div>
+      <label class="form-label">Assign To (Optional)</label>
+      <div class="assignee-picker" data-assignee-picker>
+        <button
+          class="btn btn-sm btn-outline-light assignee-picker-toggle"
+          type="button"
+          id="task-assignee-toggle"
+          aria-expanded="false"
+          aria-controls="task-assignee-panel"
+        >
+          <span id="task-assignee-toggle-label">Choose assignees</span>
+          <span class="assignee-picker-toggle-hint">Expand</span>
+        </button>
+        <div class="assignee-picker-panel mt-2" id="task-assignee-panel" hidden>
+          <div class="d-flex flex-wrap gap-2 align-items-center mb-1">
+            <input class="form-control flex-grow-1" id="task-assignee-search" type="search" placeholder="Search assignees by name or email">
+            <button class="btn btn-sm btn-outline-light" type="button" id="task-assignee-select-visible">Select Visible</button>
+            <button class="btn btn-sm btn-outline-light" type="button" id="task-assignee-clear-all">Clear All</button>
+          </div>
+          <div class="assignee-checklist" id="task-assignee-checklist" role="group" aria-label="Task assignees">
+            {% for u in users %}
+              <label class="assignee-checklist-item" data-assignee-item data-assignee-search="{{ (u.full_name ~ ' ' ~ u.email)|lower }}">
+                <input class="form-check-input" type="checkbox" name="assignee_user_ids" value="{{ u.id }}" data-assignee-checkbox {% if u.id == current_user.id %}checked{% endif %}>
+                <span class="assignee-checklist-main">{{ u.full_name }}</span>
+                <span class="assignee-checklist-sub">{{ u.email }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          <div class="muted small mt-1" id="task-assignee-search-empty" hidden>No assignees match your search.</div>
+        </div>
+      </div>
+      <div class="form-help mt-1">Search and select one or more assignees. Leave it blank to keep the task unassigned.</div>
+      <div class="muted small mt-1" id="task-assignee-selection-meta">No assignees selected.</div>
     </div>
     <div class="col-md-6">
-      <label class="form-label">Assign By Email (Compatibility)</label>
+      <label class="form-label">Assign By Email (Legacy Compatibility)</label>
       <input class="form-control" name="assigned_to" list="emails" placeholder="Optional legacy single-email input">
       <datalist id="emails">
         {% for u in users %}
           <option value="{{ u.email }}">{{ u.full_name }}</option>
         {% endfor %}
       </datalist>
+      <div class="form-help">Only use this if an older workflow still sends a single assignee email.</div>
     </div>
     <div class="col-12">
       <label class="form-label">Description</label>
