@@ -240,6 +240,167 @@
     border-top: 4px solid rgba(225, 6, 0, 0.88);
   }
 
+  .assistant-result-card {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at top right, rgba(225, 6, 0, 0.09), rgba(225, 6, 0, 0) 34%),
+      linear-gradient(180deg, rgba(255, 253, 250, 0.99), rgba(255, 255, 255, 0.98));
+  }
+
+  .assistant-result-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .assistant-result-title {
+    margin: 12px 0 0;
+    font-size: clamp(1.35rem, 2vw, 1.8rem);
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+  }
+
+  .assistant-result-summary {
+    margin-top: 10px;
+    color: #493232;
+    font-size: 1.02rem;
+    line-height: 1.55;
+    max-width: 76ch;
+  }
+
+  .assistant-result-stamp {
+    border: 1px solid rgba(225, 6, 0, 0.16);
+    border-radius: 999px;
+    padding: 7px 10px;
+    background: rgba(255, 250, 250, 0.94);
+    color: #7a3c39;
+    font-size: 11px;
+    font-weight: 780;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .assistant-work-panel {
+    margin-top: 16px;
+    border: 1px solid rgba(44, 80, 62, 0.18);
+    border-radius: 18px;
+    background:
+      linear-gradient(135deg, rgba(246, 252, 248, 0.98), rgba(255, 255, 255, 0.96)),
+      rgba(255, 255, 255, 0.96);
+    padding: 16px;
+    box-shadow: 0 14px 35px rgba(60, 34, 34, 0.06);
+  }
+
+  .assistant-work-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .assistant-work-title {
+    font-size: 13px;
+    font-weight: 820;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #31523e;
+  }
+
+  .assistant-work-source {
+    color: #587064;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .assistant-work-body {
+    margin-top: 8px;
+    color: #31443a;
+    line-height: 1.5;
+  }
+
+  .assistant-work-steps {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .assistant-work-step {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+  }
+
+  .assistant-work-index {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(40, 116, 72, 0.12);
+    color: #2b6b43;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .assistant-work-text {
+    color: #34473c;
+    line-height: 1.45;
+    padding-top: 3px;
+  }
+
+  .assistant-output-heading {
+    margin-top: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .assistant-output-title {
+    font-size: 13px;
+    font-weight: 820;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #794645;
+  }
+
+  .assistant-output-subtitle {
+    color: #7b6666;
+    font-size: 12px;
+  }
+
+  .assistant-text-block {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 251, 249, 0.98));
+    box-shadow: 0 12px 30px rgba(60, 34, 34, 0.055);
+  }
+
+  .assistant-block-body {
+    font-size: 0.98rem;
+    line-height: 1.62;
+  }
+
+  .assistant-section-list.is-output {
+    grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+  }
+
+  .assistant-section.is-output {
+    min-height: 100%;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 250, 250, 0.96));
+  }
+
+  .assistant-download-card {
+    display: grid;
+    gap: 8px;
+  }
+
   .assistant-material-item,
   .assistant-output-item {
     display: grid;
@@ -259,7 +420,8 @@
 
   @media (max-width: 1120px) {
     .assistant-grid,
-    .assistant-compose-grid {
+    .assistant-compose-grid,
+    .assistant-result-top {
       grid-template-columns: 1fr;
     }
   }
@@ -412,11 +574,39 @@
       </section>
 
       {% if assistant_result %}
-        <section class="card assistant-card assistant-status-card status-{{ assistant_result.status }}">
-          <div class="assistant-kicker">{{ assistant_result.headline }}</div>
-          <h3 class="mt-3 mb-1">{{ assistant_result.summary }}</h3>
-          {% if assistant_result.matter_label %}
-            <div class="muted">Matter: {{ assistant_result.matter_label }}</div>
+        <section class="card assistant-card assistant-status-card assistant-result-card status-{{ assistant_result.status }}">
+          <div class="assistant-result-top">
+            <div>
+              <div class="assistant-kicker">{{ assistant_result.headline }}</div>
+              <h2 class="assistant-result-title">{{ assistant_result.summary }}</h2>
+              {% if assistant_result.matter_label %}
+                <div class="assistant-result-summary">Matter: {{ assistant_result.matter_label }}</div>
+              {% endif %}
+            </div>
+            <div class="assistant-result-stamp">{{ assistant_result.status }}</div>
+          </div>
+
+          {% if assistant_result.work_summary %}
+            <div class="assistant-work-panel">
+              <div class="assistant-work-heading">
+                <div class="assistant-work-title">What I Did</div>
+                <div class="assistant-work-source">
+                  {{ assistant_result.work_summary.source }}
+                  {% if assistant_result.work_summary.model %} • {{ assistant_result.work_summary.model }}{% endif %}
+                </div>
+              </div>
+              <div class="assistant-work-body">{{ assistant_result.work_summary.headline }}</div>
+              {% if assistant_result.work_summary.steps %}
+                <div class="assistant-work-steps">
+                  {% for step in assistant_result.work_summary.steps %}
+                    <div class="assistant-work-step">
+                      <div class="assistant-work-index">{{ loop.index }}</div>
+                      <div class="assistant-work-text">{{ step }}</div>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
           {% endif %}
 
           {% if assistant_result["input_context"] and assistant_result["input_context"]["materials"] %}
@@ -471,11 +661,16 @@
                 <div class="assistant-section-title">Output Files</div>
                 <div class="assistant-artifact-row mt-2">
                   {% for artifact in assistant_result.artifacts %}
-                    <a
-                      class="assistant-download-link {% if loop.first %}primary{% endif %}"
-                      href="{{ artifact.href }}">
-                      Download {{ artifact.label }}
-                    </a>
+                    <div class="assistant-download-card">
+                      <a
+                        class="assistant-download-link {% if loop.first %}primary{% endif %}"
+                        href="{{ artifact.href }}">
+                        Download {{ artifact.label }}
+                      </a>
+                      {% if artifact.kind %}
+                        <div class="assistant-utility-note">{{ artifact.kind|replace("_", " ")|title }} artifact</div>
+                      {% endif %}
+                    </div>
                   {% endfor %}
                 </div>
               </div>
@@ -491,6 +686,10 @@
           {% endif %}
 
           {% if assistant_result.fields %}
+            <div class="assistant-output-heading">
+              <div class="assistant-output-title">Snapshot</div>
+              <div class="assistant-output-subtitle">Key values extracted or prepared by the assistant</div>
+            </div>
             <div class="assistant-status-grid mt-3">
               {% for field in assistant_result.fields %}
                 <div class="assistant-status-item">
@@ -502,6 +701,10 @@
           {% endif %}
 
           {% if assistant_result.text_blocks %}
+            <div class="assistant-output-heading">
+              <div class="assistant-output-title">Primary Output</div>
+              <div class="assistant-output-subtitle">Draft text, answer, or analysis ready for review</div>
+            </div>
             <div class="assistant-section-list mt-3">
               {% for block in assistant_result.text_blocks %}
                 <div class="assistant-text-block">
@@ -513,9 +716,13 @@
           {% endif %}
 
           {% if assistant_result.sections %}
-            <div class="assistant-section-list mt-3">
+            <div class="assistant-output-heading">
+              <div class="assistant-output-title">Supporting Detail</div>
+              <div class="assistant-output-subtitle">Sources, issues, tasks, dates, or recommended actions</div>
+            </div>
+            <div class="assistant-section-list is-output mt-3">
               {% for section in assistant_result.sections %}
-                <div class="assistant-section">
+                <div class="assistant-section is-output">
                   <div class="assistant-section-title">{{ section.title }}</div>
                   {% for item in section["items"] %}
                     <div class="assistant-section-item">

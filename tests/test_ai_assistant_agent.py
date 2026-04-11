@@ -70,3 +70,36 @@ def test_assistant_agent_uses_responses_api_for_tool_planning(app_ctx, monkeypat
     assert first_tool["type"] == "function"
     assert "name" in first_tool
     assert "function" not in first_tool
+    assert set(first_tool["parameters"]["required"]) == set(first_tool["parameters"]["properties"].keys())
+
+
+def test_assistant_response_tool_schemas_are_strict_openai_compatible(app_ctx):
+    def assert_strict(schema: dict[str, object]) -> None:
+        properties = schema.get("properties")
+        if isinstance(properties, dict):
+            assert set(schema.get("required") or []) == set(properties.keys())
+            assert schema.get("additionalProperties") is False
+            for property_schema in properties.values():
+                if isinstance(property_schema, dict):
+                    assert_strict(property_schema)
+        items = schema.get("items")
+        if isinstance(items, dict):
+            assert_strict(items)
+
+    tools = {tool["name"]: tool for tool in assistant_agent._assistant_response_tools()}
+    assert tools
+    for tool in tools.values():
+        assert_strict(tool["parameters"])
+
+    source_parameters = tools["analyze_source_material"]["parameters"]
+    assert source_parameters["required"] == ["analysis_goal", "preferred_output"]
+    assert source_parameters["properties"]["analysis_goal"]["type"] == ["string", "null"]
+    assert None in source_parameters["properties"]["preferred_output"]["enum"]
+
+    briefing_parameters = tools["matter_briefing"]["parameters"]
+    assert briefing_parameters["required"] == []
+
+    task_item = tools["prepare_task_bundle"]["parameters"]["properties"]["tasks"]["items"]
+    assert set(task_item["required"]) == {"title", "description", "due_date", "priority"}
+    assert task_item["properties"]["title"]["type"] == "string"
+    assert task_item["properties"]["description"]["type"] == ["string", "null"]

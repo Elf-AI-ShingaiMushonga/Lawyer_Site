@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import time
 from typing import Any
@@ -500,6 +501,42 @@ def _assistant_tools() -> list[dict[str, Any]]:
     ]
 
 
+def _nullable_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    normalized = copy.deepcopy(schema)
+    schema_type = normalized.get("type")
+    if isinstance(schema_type, list):
+        normalized["type"] = list(dict.fromkeys([*schema_type, "null"]))
+    elif isinstance(schema_type, str):
+        normalized["type"] = schema_type if schema_type == "null" else [schema_type, "null"]
+    if isinstance(normalized.get("enum"), list) and None not in normalized["enum"]:
+        normalized["enum"] = [*normalized["enum"], None]
+    return normalized
+
+
+def _strict_response_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    normalized = copy.deepcopy(schema)
+    properties = normalized.get("properties")
+    if isinstance(properties, dict):
+        originally_required = {
+            str(item)
+            for item in list(normalized.get("required") or [])
+            if str(item)
+        }
+        normalized_properties: dict[str, Any] = {}
+        for key, value in properties.items():
+            property_schema = _strict_response_schema(value) if isinstance(value, dict) else value
+            if key not in originally_required and isinstance(property_schema, dict):
+                property_schema = _nullable_schema(property_schema)
+            normalized_properties[key] = property_schema
+        normalized["properties"] = normalized_properties
+        normalized["required"] = list(properties.keys())
+        normalized["additionalProperties"] = False
+    items = normalized.get("items")
+    if isinstance(items, dict):
+        normalized["items"] = _strict_response_schema(items)
+    return normalized
+
+
 def _assistant_response_tools() -> list[dict[str, Any]]:
     tools: list[dict[str, Any]] = []
     for item in _assistant_tools():
@@ -515,7 +552,7 @@ def _assistant_response_tools() -> list[dict[str, Any]]:
                 "type": "function",
                 "name": name,
                 "description": str(function.get("description") or "").strip() or None,
-                "parameters": parameters,
+                "parameters": _strict_response_schema(parameters),
                 "strict": True,
             }
         )

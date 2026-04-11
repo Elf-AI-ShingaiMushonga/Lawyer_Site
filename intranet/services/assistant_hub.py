@@ -1018,6 +1018,13 @@ def _build_work_summary(result: dict[str, Any], *, output_mode: str) -> dict[str
     fallback_detail = normalize_query(str((planning or {}).get("fallback_detail") or "")).strip()
     if fallback_detail:
         steps.append(f"Used non-AI fallback for planning because: {fallback_detail}")
+    fallback_warnings = [
+        normalize_query(str(item)).strip()
+        for item in list(result.get("warnings") or [])
+        if "non-ai fallback" in str(item or "").lower()
+    ]
+    if fallback_warnings and not fallback_detail:
+        steps.append(f"Notified you about the non-AI fallback: {fallback_warnings[0]}")
 
     return {
         "headline": headline,

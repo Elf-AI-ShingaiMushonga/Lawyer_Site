@@ -140,6 +140,9 @@ def test_assistant_can_analyze_pasted_source_material_without_matter(app_ctx):
 
     assert response.status_code == 200
     assert "Source Material Analysis" in body
+    assert "What I Did" in body
+    assert "I completed the request and packaged the output." in body
+    assert "Notified you about the non-AI fallback" in body
     assert "Inputs Used" in body
     assert "Pasted source text" in body
     assert "Output Files" in body
@@ -168,6 +171,7 @@ def test_assistant_can_analyze_uploaded_file_and_download_artifact(app_ctx):
 
     assert response.status_code == 200
     assert "Source Material Analysis" in body
+    assert "What I Did" in body
     assert "hearing-memo.txt" in body
     artifact_href = _extract_artifact_href(body)
 
@@ -177,6 +181,7 @@ def test_assistant_can_analyze_uploaded_file_and_download_artifact(app_ctx):
     assert download_response.status_code == 200
     assert "attachment" in (download_response.headers.get("Content-Disposition") or "").lower()
     assert "Source Material Analysis" in download_body
+    assert "What I Did" in download_body
 
 
 def test_assistant_summary_draft_uses_selected_matter(app_ctx):
@@ -200,6 +205,7 @@ def test_assistant_summary_draft_uses_selected_matter(app_ctx):
 
     assert response.status_code == 200
     assert "Executive Summary Draft" in body
+    assert "What I Did" in body
     assert matter.matter_no in body
     assert "Objective" in body
     assert "Executive summary draft used the non-AI fallback" in body
