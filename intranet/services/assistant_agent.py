@@ -8,6 +8,8 @@ from flask import current_app
 
 from .ai_provider import log_ai_operation
 
+DEFAULT_ASSISTANT_MODEL = "gpt-5.2"
+
 
 def _fallback_reason_for_settings(settings: dict[str, Any]) -> tuple[str, str]:
     if not settings["agent_enabled"]:
@@ -43,8 +45,7 @@ def assistant_agent_settings() -> dict[str, Any]:
     api_key = (current_app.config.get("AI_OPENAI_API_KEY") or "").strip()
     model = str(
         current_app.config.get("AI_ASSISTANT_MODEL")
-        or current_app.config.get("AI_OPENAI_TEXT_MODEL")
-        or "gpt-4o-mini"
+        or DEFAULT_ASSISTANT_MODEL
     ).strip()
     timeout_seconds = max(1, int(current_app.config.get("AI_OPENAI_TIMEOUT_SECONDS", 20) or 20))
     max_retries = max(0, int(current_app.config.get("AI_OPENAI_MAX_RETRIES", 2) or 2))
@@ -83,6 +84,27 @@ def assistant_agent_meta() -> dict[str, Any]:
 
 def _assistant_tools() -> list[dict[str, Any]]:
     return [
+        {
+            "type": "function",
+            "function": {
+                "name": "analyze_source_material",
+                "description": "Analyze uploaded or pasted source material when the user wants a document brief, issue extraction, summary, or file review.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "analysis_goal": {
+                            "type": "string",
+                            "description": "Specific ask such as summarize this brief, extract issues, build chronology, or identify risks.",
+                        },
+                        "preferred_output": {
+                            "type": "string",
+                            "enum": ["interactive", "markdown", "plain_text"],
+                        },
+                    },
+                    "additionalProperties": False,
+                },
+            },
+        },
         {
             "type": "function",
             "function": {
@@ -478,6 +500,45 @@ def _assistant_tools() -> list[dict[str, Any]]:
     ]
 
 
+def _assistant_response_tools() -> list[dict[str, Any]]:
+    tools: list[dict[str, Any]] = []
+    for item in _assistant_tools():
+        function = item.get("function") if isinstance(item, dict) else None
+        if not isinstance(function, dict):
+            continue
+        name = str(function.get("name") or "").strip()
+        parameters = function.get("parameters")
+        if not name or not isinstance(parameters, dict):
+            continue
+        tools.append(
+            {
+                "type": "function",
+                "name": name,
+                "description": str(function.get("description") or "").strip() or None,
+                "parameters": parameters,
+                "strict": True,
+            }
+        )
+    return tools
+
+
+def _extract_response_tool_call(response: Any) -> tuple[str, dict[str, Any]]:
+    output_items = list(getattr(response, "output", None) or [])
+    for item in output_items:
+        if str(getattr(item, "type", "") or "").strip() != "function_call":
+            continue
+        tool_name = str(getattr(item, "name", "") or "").strip()
+        arguments_raw = str(getattr(item, "arguments", "") or "").strip()
+        if not tool_name:
+            continue
+        try:
+            arguments = json.loads(arguments_raw) if arguments_raw else {}
+        except json.JSONDecodeError:
+            arguments = {}
+        return tool_name, arguments if isinstance(arguments, dict) else {}
+    return "", {}
+
+
 _SYSTEM_PROMPT = """You are the planning brain for a supervised legal intranet assistant.
 
 You must choose exactly one function call for each user request.
@@ -487,6 +548,7 @@ Rules:
 - If the request needs a matter but no matter is resolved, call clarify_request.
 - Never approve payments, settle invoices, move trust funds, override conflicts, delete documents, delete matters, close matters, or archive matters. Use blocked_action instead.
 - Do not invent matter numbers, task numbers, dates, users, or emails.
+- If uploaded or pasted source material is provided and the user wants a document brief, issue extraction, chronology, or file review, use analyze_source_material.
 - For write actions, prepare a draft only. The application will still require explicit user confirmation before writing.
 - Use matter_case_workup for integrated case construction, hearing-plan dossiers, issue maps, litigation plans, or war-room style matter analysis.
 - Use search_workspace for research and retrieval requests.
@@ -509,6 +571,8 @@ def plan_assistant_request(
     *,
     prompt: str,
     matter_context: dict[str, Any] | None,
+    source_context: dict[str, Any] | None = None,
+    preferred_output: str = "",
     recent_history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     settings = assistant_agent_settings()
@@ -519,8 +583,11 @@ def plan_assistant_request(
     payload = {
         "user_prompt": str(prompt or "").strip(),
         "resolved_matter": matter_context or None,
+        "source_material": source_context or None,
+        "preferred_output": str(preferred_output or "").strip() or "interactive",
         "recent_history": list(recent_history or [])[:4],
         "capabilities": [
+            "analyze_source_material",
             "matter_briefing",
             "matter_case_workup",
             "matter_strategy",
@@ -555,23 +622,23 @@ def plan_assistant_request(
             timeout=float(settings["timeout_seconds"]),
             max_retries=settings["max_retries"],
         )
-        response = client.chat.completions.create(
+        response = client.responses.create(
             model=settings["model"],
-            temperature=0,
-            reasoning_effort=settings["reasoning_effort"],
+            reasoning={"effort": settings["reasoning_effort"]},
             parallel_tool_calls=False,
             tool_choice="required",
-            max_completion_tokens=900,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(payload, ensure_ascii=True)},
+            max_output_tokens=900,
+            instructions=_SYSTEM_PROMPT,
+            input=[
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": json.dumps(payload, ensure_ascii=True)}],
+                }
             ],
-            tools=_assistant_tools(),
+            tools=_assistant_response_tools(),
         )
-        choice = response.choices[0] if response.choices else None
-        message = getattr(choice, "message", None)
-        tool_calls = list(getattr(message, "tool_calls", None) or [])
-        if not tool_calls:
+        tool_name, arguments = _extract_response_tool_call(response)
+        if not tool_name:
             latency_ms = int((time.perf_counter() - started) * 1000)
             log_ai_operation(
                 operation_type="assistant_agent_plan",
@@ -589,13 +656,6 @@ def plan_assistant_request(
                 detail="OpenAI assistant planning returned no tool call, so deterministic fallback handled the request.",
             )
 
-        first = tool_calls[0]
-        tool_name = str(getattr(getattr(first, "function", None), "name", "") or "").strip()
-        arguments_raw = str(getattr(getattr(first, "function", None), "arguments", "") or "").strip()
-        try:
-            arguments = json.loads(arguments_raw) if arguments_raw else {}
-        except json.JSONDecodeError:
-            arguments = {}
         latency_ms = int((time.perf_counter() - started) * 1000)
         log_ai_operation(
             operation_type="assistant_agent_plan",

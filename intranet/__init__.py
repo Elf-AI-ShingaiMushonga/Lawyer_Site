@@ -105,7 +105,7 @@ def create_app() -> Flask:
     ai_openai_embed_model = (os.environ.get("AI_OPENAI_EMBED_MODEL") or "text-embedding-3-small").strip()
     ai_openai_text_model = (os.environ.get("AI_OPENAI_TEXT_MODEL") or "gpt-4o-mini").strip()
     ai_assistant_agent_enabled = env_bool("AI_ASSISTANT_AGENT_ENABLED", ai_enabled)
-    ai_assistant_model = (os.environ.get("AI_ASSISTANT_MODEL") or ai_openai_text_model or "gpt-4o-mini").strip()
+    ai_assistant_model = (os.environ.get("AI_ASSISTANT_MODEL") or "gpt-5.2").strip()
     ai_assistant_reasoning_effort = (os.environ.get("AI_ASSISTANT_REASONING_EFFORT") or "medium").strip().lower()
     if ai_assistant_reasoning_effort not in {"low", "medium", "high"}:
         ai_assistant_reasoning_effort = "medium"

@@ -5507,6 +5507,53 @@
     });
   };
 
+  const initAssistantWorkspace = () => {
+    const promptInput = document.getElementById("assistant-prompt");
+    if (!(promptInput instanceof HTMLTextAreaElement)) {
+      return;
+    }
+    const form = document.getElementById("assistant-form");
+    const sourceTextInput = document.getElementById("assistant-source-text");
+    const matterSelect = document.getElementById("assistant-matter");
+    const promptButtons = Array.from(document.querySelectorAll("[data-assistant-prompt]")).filter(
+      (button) => button instanceof HTMLElement
+    );
+    promptButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        promptInput.value = button.getAttribute("data-assistant-prompt") || "";
+        if (matterSelect instanceof HTMLSelectElement && button.hasAttribute("data-assistant-matter-id")) {
+          matterSelect.value = button.getAttribute("data-assistant-matter-id") || "";
+        }
+        promptInput.focus();
+        const end = promptInput.value.length;
+        if (typeof promptInput.setSelectionRange === "function") {
+          promptInput.setSelectionRange(end, end);
+        }
+      });
+    });
+    const handleSubmitShortcut = (event) => {
+      if (!(event instanceof KeyboardEvent)) {
+        return;
+      }
+      if (!form || (event.key !== "Enter" && event.keyCode !== 13)) {
+        return;
+      }
+      if (!(event.metaKey || event.ctrlKey)) {
+        return;
+      }
+      event.preventDefault();
+      if (typeof form.requestSubmit === "function") {
+        form.requestSubmit();
+        return;
+      }
+      form.submit();
+    };
+    promptInput.addEventListener("keydown", handleSubmitShortcut);
+    if (sourceTextInput instanceof HTMLTextAreaElement) {
+      sourceTextInput.addEventListener("keydown", handleSubmitShortcut);
+    }
+  };
+
   const run = () => {
     initFlashDismiss();
     initPasswordToggles();
@@ -5550,6 +5597,7 @@
     initSubmitState();
     initFormDrafts();
     initUnsavedChangesGuard();
+    initAssistantWorkspace();
   };
 
   if (document.readyState === "loading") {

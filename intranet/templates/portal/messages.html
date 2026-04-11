@@ -85,14 +85,13 @@
                     </option>
                   {% endfor %}
                 </select>
-                <div class="form-help" data-thread-matter-hint>Selecting a thread will lock the matter and use that thread context automatically.</div>
+                <div class="form-help" data-thread-matter-hint></div>
               </div>
             </div>
             <div>
               <label class="form-label" for="portal-message-body">Message</label>
               <textarea class="form-control" id="portal-message-body" name="body" rows="5" placeholder="Type the message you want the legal team to receive." required></textarea>
             </div>
-            <div class="section-note">Use existing threads when the topic already exists. Start a new thread only when the subject materially changes.</div>
             <div class="d-grid d-md-flex justify-content-md-end">
               <button class="btn btn-light" type="submit">Send Message</button>
             </div>
@@ -135,7 +134,7 @@
                     <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_messages', matter_id=message_thread.matter_id, thread_id=m.thread_id) }}#portal-message-body">Reply</a>
                   {% endif %}
                 </div>
-                <div class="section-note mt-3">{{ m.body }}</div>
+                <div class="mt-3">{{ m.body }}</div>
               </article>
             {% endfor %}
           </div>
@@ -177,28 +176,6 @@
           {% endif %}
         </section>
 
-        <section class="panel-card">
-          <div class="panel-header">
-            <div class="panel-header-main">
-              <div class="panel-kicker">Good Practice</div>
-              <h2 class="panel-title">Messaging guidance</h2>
-            </div>
-          </div>
-          <div class="glance-list">
-            <div class="glance-item">
-              <div class="glance-title">Keep one thread per topic</div>
-              <div class="glance-meta">That makes later review and legal context reconstruction much easier for both client and firm.</div>
-            </div>
-            <div class="glance-item">
-              <div class="glance-title">Use uploads for files</div>
-              <div class="glance-meta">Send the explanation here, but attach documents via the uploads workspace so they file into the DMS correctly.</div>
-            </div>
-            <div class="glance-item">
-              <div class="glance-title">Reply in context</div>
-              <div class="glance-meta">When a thread already exists, reply there instead of creating parallel discussions on the same issue.</div>
-            </div>
-          </div>
-        </section>
       </div>
     </div>
   </div>

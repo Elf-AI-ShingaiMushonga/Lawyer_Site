@@ -63,7 +63,7 @@
               {% if selected_thread and selected_thread_matter %}
                 {{ selected_thread_matter.matter_no }} - {{ selected_thread_matter.title }}
               {% else %}
-                Choose a thread from the directory or start a new one below.
+                No thread selected.
               {% endif %}
             </div>
           </div>
@@ -79,7 +79,7 @@
                   </div>
                   <span class="badge status-badge {{ 'status-critical' if message.is_from_portal else 'status-on-hold' }}">{{ message.origin_label }}</span>
                 </div>
-                <div class="section-note mt-3">{{ message.body }}</div>
+                <div class="mt-3">{{ message.body }}</div>
               </article>
             {% endfor %}
           </div>
@@ -126,14 +126,13 @@
                     </option>
                   {% endfor %}
                 </select>
-                <div class="form-help" data-thread-matter-hint>Selecting a thread locks the matter so the reply stays in the right client conversation.</div>
+                <div class="form-help" data-thread-matter-hint></div>
               </div>
             </div>
             <div>
               <label class="form-label" for="portal-internal-reply-body">Message</label>
               <textarea class="form-control" id="portal-internal-reply-body" name="body" rows="5" placeholder="Type the reply the client should receive." required></textarea>
             </div>
-            <div class="section-note">Use one thread per topic. If the client is already waiting in an existing thread, reply there instead of opening a parallel discussion.</div>
             <div class="d-grid d-md-flex justify-content-md-end">
               <button class="btn btn-light" type="submit">Send Portal Reply</button>
             </div>
@@ -165,9 +164,9 @@
                     </div>
                     <span class="badge status-badge {{ 'status-critical' if thread.waiting_on_internal_response else 'status-on-hold' }}">{{ "Client waiting" if thread.waiting_on_internal_response else "Answered" }}</span>
                   </div>
-                  <div class="section-note mt-3">{{ thread.latest_author_label }} • {{ thread.latest_message_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
+                  <div class="glance-meta mt-3">{{ thread.latest_author_label }} • {{ thread.latest_message_at.strftime("%Y-%m-%d %H:%M") }} UTC</div>
                   {% if thread.latest_message_excerpt %}
-                    <div class="section-note mt-2">{{ thread.latest_message_excerpt }}</div>
+                    <div class="mt-2">{{ thread.latest_message_excerpt }}</div>
                   {% endif %}
                   <div class="table-actions mt-3">
                     <a class="btn btn-sm btn-outline-light" href="{{ url_for('portal_message_center', matter_id=thread.matter_id, thread_id=thread.id) }}">Open Thread</a>
@@ -181,28 +180,6 @@
           {% endif %}
         </section>
 
-        <section class="panel-card">
-          <div class="panel-header">
-            <div class="panel-header-main">
-              <div class="panel-kicker">Good Practice</div>
-              <h2 class="panel-title">Reply handling guidance</h2>
-            </div>
-          </div>
-          <div class="glance-list">
-            <div class="glance-item">
-              <div class="glance-title">Reply in-thread first</div>
-              <div class="glance-meta">This keeps chronology intact for the client and for later legal review.</div>
-            </div>
-            <div class="glance-item">
-              <div class="glance-title">Use the matter link when context matters</div>
-              <div class="glance-meta">If you need timeline, documents, or task context before responding, open the matter directly from the thread card.</div>
-            </div>
-            <div class="glance-item">
-              <div class="glance-title">Start a new thread only for a new topic</div>
-              <div class="glance-meta">Separate subjects only when the discussion changes materially, otherwise client history fragments too quickly.</div>
-            </div>
-          </div>
-        </section>
       </div>
     </div>
   </div>

@@ -150,7 +150,7 @@
           <span class="action-card-summary">{{ action.summary }}</span>
         </a>
       {% else %}
-        <div class="section-note">No quick actions are configured.</div>
+        <div class="empty-state">No quick actions are configured.</div>
       {% endfor %}
     </div>
   </section>
@@ -182,7 +182,7 @@
               </div>
             </article>
           {% else %}
-            <div class="section-note">No urgent admin gaps are currently surfaced. Use the setup and audit sections below to keep the control surface clean.</div>
+            <div class="empty-state">No urgent admin gaps are currently surfaced.</div>
           {% endfor %}
         </div>
       </section>
@@ -266,7 +266,7 @@
               </div>
             </article>
           {% else %}
-            <div class="section-note">No audit entries are available yet.</div>
+            <div class="empty-state">No audit entries are available yet.</div>
           {% endfor %}
         </div>
       </section>

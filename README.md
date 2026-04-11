@@ -180,6 +180,8 @@ Optional but recommended:
 - `AI_PROVIDER=openai`
 - `OPENAI_API_KEY=<provider key>` or `AI_OPENAI_API_KEY=<provider key>`
 - `AI_OPENAI_TEXT_MODEL=gpt-4o-mini`
+- `AI_ASSISTANT_MODEL=gpt-5.2`
+- `AI_ASSISTANT_REASONING_EFFORT=medium`
 - `AI_SEMANTIC_SEARCH_ENABLED=true` (enable semantic search panel on `/search`)
 
 ## Database migrations

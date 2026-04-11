@@ -412,9 +412,6 @@
               <div class="panel-summary">Build the document container and upload the initial version without leaving the matter.</div>
             </div>
           </div>
-          {% if is_admin_role %}
-            <div class="section-note">List values are managed in <a href="{{ url_for('admin_settings_firm') }}">Firm Settings</a> under DMS Metadata Lists.</div>
-          {% endif %}
           {% if prefill_document_title or prefill_privilege_label or prefill_retention_category %}
             <div class="alert alert-light border mb-0">This document form was prefilled from a workflow shortcut.</div>
           {% endif %}

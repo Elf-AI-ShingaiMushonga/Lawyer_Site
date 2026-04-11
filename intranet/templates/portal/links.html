@@ -101,7 +101,6 @@
                 <button class="btn btn-light" type="submit">Create Link</button>
               </div>
             </div>
-            <div class="section-note">Matter summary links redirect to the portal matter workspace. Document links are single-use and expire automatically.</div>
           </form>
         {% else %}
           <div class="empty-state">No matters currently allow secure-link creation for this portal user.</div>
@@ -163,22 +162,9 @@
         <section class="panel-card">
           <div class="panel-header">
             <div class="panel-header-main">
-              <div class="panel-kicker">Security</div>
-              <h2 class="panel-title">Link behaviour</h2>
-            </div>
-          </div>
-          <div class="glance-list">
-            <div class="glance-item">
-              <div class="glance-title">Single-use by design</div>
-              <div class="glance-meta">Once a secure token is consumed, the link is closed and cannot be reused.</div>
-            </div>
-            <div class="glance-item">
-              <div class="glance-title">Expiry is enforced server-side</div>
-              <div class="glance-meta">The token remains invalid after the configured window even if someone still has the URL.</div>
-            </div>
-            <div class="glance-item">
-              <div class="glance-title">Document links stay matter-bound</div>
-              <div class="glance-meta">A document token only works where the version still belongs to the selected matter and portal access remains valid.</div>
+              <div class="panel-kicker">Token Security</div>
+              <h2 class="panel-title">Single-use and time-bound</h2>
+              <div class="panel-summary">Secure links expire automatically and cannot be reused after consumption.</div>
             </div>
           </div>
         </section>

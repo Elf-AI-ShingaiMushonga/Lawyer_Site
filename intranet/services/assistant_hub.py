@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import datetime as dt
+import html
 import hashlib
+import io
+import os
 import re
+import uuid
+import zipfile
+import xml.etree.ElementTree as ET
 from typing import Any
 
 from flask import current_app, session, url_for
@@ -10,10 +16,13 @@ from flask_login import current_user
 from itsdangerous import BadData, URLSafeTimedSerializer
 from sqlalchemy import or_
 from sqlalchemy.orm import aliased
+from werkzeug.datastructures import FileStorage
+from werkzeug.utils import secure_filename
 
 from ..config import BUDGET_STATUSES, RISK_LEVELS
 from ..extensions import db
 from ..helpers import (
+    allowed_doc,
     audit,
     can_access_matter,
     filter_accessible_document_files,
@@ -51,6 +60,7 @@ from ..models import (
 )
 from ..policies import has_permission, visible_matter_ids
 from ..roles import role_is_case
+from ..services.storage_paths import harden_private_file, resolve_upload_path
 from .dms_option_lists import DEFAULT_DMS_OPTION_LISTS, load_dms_option_lists
 from ..timeutils import utc_now
 from .assistant_agent import assistant_agent_meta, plan_assistant_request
@@ -60,6 +70,7 @@ from .assist_ai import (
     suggest_matter_executive_summary,
     suggest_matter_research_memo,
     suggest_portal_reply_draft,
+    suggest_source_material_analysis,
 )
 from .semantic_search import SemanticSearchService
 
@@ -224,12 +235,18 @@ _TASK_STATUS_INTENT_RE = re.compile(
     r"\b(?:mark|set|update|move|change|complete|finish|start)\b.*\btask\b.*\b(?:done|complete(?:d)?|doing|in progress|todo|to do|start(?:ed)?)\b|\bmark\b.*\bdone\b",
     re.IGNORECASE,
 )
+_SOURCE_MATERIAL_INTENT_RE = re.compile(
+    r"\b(?:uploaded|attached|pasted|source)\s+(?:document|file|material|text)\b|\b(?:summari[sz]e|analy[sz]e|extract|review|digest|brief)\b.*\b(?:document|file|attachment|source material|uploaded file)\b",
+    re.IGNORECASE,
+)
 
 _TIMELINE_EVENT_TYPES = {"Milestone", "Filing", "Hearing", "Client Update", "Internal Review", "Delivery"}
 _TASK_STATUSES = {"Todo", "Doing", "Done"}
 _ASSISTANT_SUMMARY_STATUSES = {"Open", "On Hold"}
 _WORKSPACE_DOCUMENT_STATUSES = {"draft", "review", "final"}
+_ASSISTANT_OUTPUT_MODES = {"interactive", "markdown", "plain_text"}
 _PLANNER_TOOL_TO_INTENT = {
+    "analyze_source_material": "source_material_analysis",
     "matter_briefing": "matter_briefing",
     "matter_case_workup": "matter_case_workup",
     "matter_strategy": "matter_strategy",
@@ -253,6 +270,7 @@ _PLANNER_TOOL_TO_INTENT = {
 }
 
 _EXAMPLES = [
+    "Analyze the uploaded brief and extract the key issues.",
     "What are the next deadlines on this matter?",
     "Construct the case for this matter and give me a full workup.",
     "Build a case strategy memo for this matter focused on hearing prep.",
@@ -284,6 +302,9 @@ _CONSUMED_CONFIRMATION_SESSION_KEY = "assistant_consumed_confirmations"
 _MAX_CONSUMED_CONFIRMATIONS = 24
 _ASSISTANT_HISTORY_SESSION_KEY = "assistant_recent_history"
 _MAX_ASSISTANT_HISTORY = 8
+_ASSISTANT_SOURCE_TEXT_MAX = 12000
+_ASSISTANT_ATTACHMENT_TEXT_MAX = 16000
+_ASSISTANT_ARTIFACT_TEXT_MAX = 24000
 _SEARCH_STOPWORDS = {
     "about",
     "case",
@@ -411,8 +432,33 @@ def assistant_matter_label(matter: Matter | None) -> str:
     return f"{matter.matter_no} - {matter.title}"
 
 
+def assistant_output_mode_options() -> list[dict[str, str]]:
+    return [
+        {"value": "interactive", "label": "Interactive answer", "description": "Best for on-screen review with downloadable artifacts."},
+        {"value": "markdown", "label": "Markdown memo", "description": "Best for a download-ready internal memo or brief."},
+        {"value": "plain_text", "label": "Plain text", "description": "Best for pasting into email, notes, or external systems."},
+    ]
+
+
+def assistant_input_context_preview(*, pasted_text: str = "", attachment_token: str = "") -> dict[str, Any]:
+    context, _warnings = _build_input_context(pasted_text=pasted_text, attachment_token=attachment_token)
+    return context
+
+
+def _serializer_for_salt(salt: str) -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(str(current_app.config.get("SECRET_KEY") or "assistant-secret"), salt=salt)
+
+
 def _serializer() -> URLSafeTimedSerializer:
-    return URLSafeTimedSerializer(str(current_app.config.get("SECRET_KEY") or "assistant-secret"), salt="assistant-actions")
+    return _serializer_for_salt("assistant-actions")
+
+
+def _attachment_serializer() -> URLSafeTimedSerializer:
+    return _serializer_for_salt("assistant-attachments")
+
+
+def _artifact_serializer() -> URLSafeTimedSerializer:
+    return _serializer_for_salt("assistant-artifacts")
 
 
 def _sign_confirmation_payload(payload: dict[str, Any]) -> str:
@@ -425,6 +471,347 @@ def _load_confirmation_payload(token: str) -> dict[str, Any]:
 
 def _confirmation_fingerprint(confirm_token: str) -> str:
     return hashlib.sha256((confirm_token or "").encode("utf-8")).hexdigest()
+
+
+def _attachment_storage_name(original_filename: str) -> str:
+    safe_name = secure_filename(str(original_filename or "").strip())[:120] or "assistant_source"
+    return f"assistant/input/user_{int(getattr(current_user, 'id', 0) or 0)}/{uuid.uuid4().hex}_{safe_name}"
+
+
+def _artifact_storage_name(filename: str) -> str:
+    safe_name = secure_filename(str(filename or "").strip())[:120] or "assistant_output"
+    return f"assistant/output/user_{int(getattr(current_user, 'id', 0) or 0)}/{uuid.uuid4().hex}_{safe_name}"
+
+
+def _compact_text(value: str, *, limit: int) -> str:
+    text = str(value or "").replace("\x00", " ").replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"[^\S\n]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()[: max(1, int(limit))]
+
+
+def _decode_text_bytes(data: bytes) -> str:
+    for encoding in ("utf-8", "utf-16", "latin-1"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="ignore")
+
+
+def _extract_docx_text(data: bytes) -> str:
+    parts: list[str] = []
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        xml_bytes = archive.read("word/document.xml")
+    root = ET.fromstring(xml_bytes)
+    for element in root.iter():
+        if element.tag.endswith("}t") and element.text:
+            parts.append(element.text)
+        elif element.tag.endswith("}tab"):
+            parts.append("\t")
+        elif element.tag.endswith("}br") or element.tag.endswith("}p"):
+            parts.append("\n")
+    return "".join(parts)
+
+
+def _extract_pptx_text(data: bytes) -> str:
+    parts: list[str] = []
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        for name in sorted(archive.namelist()):
+            if not name.startswith("ppt/slides/slide") or not name.endswith(".xml"):
+                continue
+            root = ET.fromstring(archive.read(name))
+            slide_bits = [element.text for element in root.iter() if element.tag.endswith("}t") and element.text]
+            if slide_bits:
+                parts.append(" ".join(slide_bits))
+    return "\n\n".join(part for part in parts if part)
+
+
+def _extract_xlsx_text(data: bytes) -> str:
+    lines: list[str] = []
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        shared_strings: list[str] = []
+        if "xl/sharedStrings.xml" in archive.namelist():
+            root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+            for item in root.iter():
+                if item.tag.endswith("}t") and item.text:
+                    shared_strings.append(item.text)
+        for name in sorted(archive.namelist()):
+            if not name.startswith("xl/worksheets/sheet") or not name.endswith(".xml"):
+                continue
+            root = ET.fromstring(archive.read(name))
+            cell_values: list[str] = []
+            for cell in root.iter():
+                if not cell.tag.endswith("}c"):
+                    continue
+                cell_type = cell.attrib.get("t")
+                value_text = ""
+                for child in cell:
+                    if child.tag.endswith("}v") and child.text:
+                        value_text = child.text
+                        break
+                if not value_text:
+                    continue
+                if cell_type == "s":
+                    try:
+                        shared_index = int(value_text)
+                    except ValueError:
+                        shared_index = -1
+                    value_text = shared_strings[shared_index] if 0 <= shared_index < len(shared_strings) else value_text
+                cell_values.append(value_text)
+            if cell_values:
+                lines.append(" | ".join(cell_values[:40]))
+    return "\n".join(lines)
+
+
+def _extract_pdf_text(data: bytes) -> str:
+    try:
+        from pypdf import PdfReader  # type: ignore
+    except Exception:
+        return ""
+    try:
+        reader = PdfReader(io.BytesIO(data))
+    except Exception:
+        return ""
+    parts: list[str] = []
+    for page in list(reader.pages)[:8]:
+        try:
+            page_text = page.extract_text() or ""
+        except Exception:
+            page_text = ""
+        if page_text.strip():
+            parts.append(page_text)
+    return "\n\n".join(parts)
+
+
+def _extract_attachment_text(
+    *,
+    filename: str,
+    content_type: str,
+    data: bytes,
+) -> tuple[str, list[str], str]:
+    ext = str(filename or "").rsplit(".", 1)[-1].lower() if "." in str(filename or "") else ""
+    warnings: list[str] = []
+    text = ""
+    extracted_via = "binary_fallback"
+    if ext in {"txt", "md", "json", "csv", "xml", "html", "htm", "eml"} or content_type.startswith("text/"):
+        text = _decode_text_bytes(data)
+        extracted_via = "text_decode"
+    elif ext == "docx":
+        text = _extract_docx_text(data)
+        extracted_via = "docx_xml"
+    elif ext == "pptx":
+        text = _extract_pptx_text(data)
+        extracted_via = "pptx_xml"
+    elif ext == "xlsx":
+        text = _extract_xlsx_text(data)
+        extracted_via = "xlsx_xml"
+    elif ext == "pdf" or content_type == "application/pdf":
+        text = _extract_pdf_text(data)
+        extracted_via = "pdf_text"
+        if not text.strip():
+            warnings.append("PDF text extraction was limited in this environment.")
+    elif ext in {"png", "jpg", "jpeg", "webp"} or content_type.startswith("image/"):
+        warnings.append("Image OCR is not available here; the assistant used filename and metadata only.")
+        text = f"Image source uploaded: {filename}"
+        extracted_via = "image_metadata"
+    elif ext == "msg":
+        warnings.append("MSG email extraction is limited; the assistant used a best-effort text decode.")
+        text = _decode_text_bytes(data)
+        extracted_via = "msg_decode"
+    else:
+        text = _decode_text_bytes(data)
+    text = _compact_text(text, limit=_ASSISTANT_ATTACHMENT_TEXT_MAX)
+    if not text:
+        text = f"Source file uploaded: {filename}"
+        warnings.append("No text could be extracted from the uploaded file, so only filename metadata was available.")
+    return text, warnings, extracted_via
+
+
+def _save_uploaded_source(file_obj: FileStorage, *, matter: Matter | None) -> dict[str, Any]:
+    filename = secure_filename(file_obj.filename or "").strip()
+    if not filename:
+        raise ValueError("Uploaded source file has no filename.")
+    if not allowed_doc(filename):
+        raise ValueError("Uploaded source file type is not supported.")
+    content_type = (file_obj.mimetype or "").strip().lower()
+    storage_name = _attachment_storage_name(filename)
+    stored_filename, path = resolve_upload_path(current_app.config.get("UPLOAD_DIR"), storage_name, create_parent=True)
+    file_obj.save(path)
+    harden_private_file(path)
+    file_size = os.path.getsize(path) if os.path.isfile(path) else 0
+    with open(path, "rb") as handle:
+        data = handle.read(min(file_size or 0, 8 * 1024 * 1024))
+    extracted_text, warnings, extracted_via = _extract_attachment_text(
+        filename=filename,
+        content_type=content_type,
+        data=data,
+    )
+    payload = {
+        "user_id": int(getattr(current_user, "id", 0) or 0),
+        "stored_filename": stored_filename,
+        "original_filename": filename,
+        "content_type": content_type,
+        "matter_id": int(matter.id) if matter is not None else None,
+        "uploaded_at": utc_now().isoformat(),
+    }
+    return {
+        "token": _attachment_serializer().dumps(payload),
+        "stored_filename": stored_filename,
+        "original_filename": filename,
+        "content_type": content_type,
+        "file_size": int(file_size or 0),
+        "text": extracted_text,
+        "warnings": warnings,
+        "extracted_via": extracted_via,
+    }
+
+
+def _load_uploaded_source(token: str) -> dict[str, Any] | None:
+    if not token:
+        return None
+    try:
+        payload = _attachment_serializer().loads(token, max_age=60 * 60 * 8)
+    except BadData:
+        return None
+    if int(payload.get("user_id") or 0) != int(getattr(current_user, "id", 0) or 0):
+        return None
+    try:
+        stored_filename, path = resolve_upload_path(current_app.config.get("UPLOAD_DIR"), payload.get("stored_filename"))
+    except ValueError:
+        return None
+    if not os.path.isfile(path):
+        return None
+    file_size = os.path.getsize(path)
+    with open(path, "rb") as handle:
+        data = handle.read(min(file_size or 0, 8 * 1024 * 1024))
+    text, warnings, extracted_via = _extract_attachment_text(
+        filename=str(payload.get("original_filename") or "assistant_source"),
+        content_type=str(payload.get("content_type") or ""),
+        data=data,
+    )
+    return {
+        "token": token,
+        "stored_filename": stored_filename,
+        "original_filename": str(payload.get("original_filename") or "assistant_source"),
+        "content_type": str(payload.get("content_type") or ""),
+        "file_size": int(file_size or 0),
+        "text": text,
+        "warnings": warnings,
+        "extracted_via": extracted_via,
+    }
+
+
+def _build_input_context(
+    *,
+    pasted_text: str = "",
+    uploaded_file: FileStorage | None = None,
+    attachment_token: str = "",
+    matter: Matter | None = None,
+) -> tuple[dict[str, Any], list[str]]:
+    warnings: list[str] = []
+    source_text = _compact_text(pasted_text, limit=_ASSISTANT_SOURCE_TEXT_MAX)
+    attachment: dict[str, Any] | None = None
+    if uploaded_file is not None and getattr(uploaded_file, "filename", ""):
+        attachment = _save_uploaded_source(uploaded_file, matter=matter)
+        warnings.extend(list(attachment.get("warnings") or []))
+    elif attachment_token:
+        attachment = _load_uploaded_source(attachment_token)
+        if attachment is None:
+            warnings.append("Uploaded source material was not available anymore and was skipped.")
+    materials: list[dict[str, str]] = []
+    material_names: list[str] = []
+    source_chunks: list[str] = []
+    if source_text:
+        materials.append(
+            {
+                "label": "Pasted source text",
+                "meta": f"{len(source_text)} characters",
+                "kind": "text",
+            }
+        )
+        material_names.append("Pasted source text")
+        source_chunks.append(source_text)
+    if attachment is not None:
+        file_label = str(attachment.get("original_filename") or "Uploaded file")
+        materials.append(
+            {
+                "label": file_label,
+                "meta": " • ".join(
+                    item
+                    for item in [
+                        str(attachment.get("content_type") or "") or "binary file",
+                        f"{int(attachment.get('file_size') or 0):,} bytes" if int(attachment.get("file_size") or 0) else "",
+                        str(attachment.get("extracted_via") or ""),
+                    ]
+                    if item
+                ),
+                "kind": "file",
+            }
+        )
+        material_names.append(file_label)
+        source_chunks.append(str(attachment.get("text") or ""))
+    combined_text = _compact_text("\n\n".join(chunk for chunk in source_chunks if chunk), limit=_ASSISTANT_ATTACHMENT_TEXT_MAX)
+    source_digest = _compact_text(combined_text, limit=900)
+    source_excerpt = _compact_text(combined_text, limit=1800)
+    return (
+        {
+            "has_any": bool(source_text or attachment is not None),
+            "pasted_text": source_text,
+            "attachment_token": str((attachment or {}).get("token") or ""),
+            "materials": materials,
+            "material_names": material_names,
+            "material_count": len(material_names),
+            "source_text": combined_text,
+            "source_digest": source_digest,
+            "source_excerpt": source_excerpt,
+        },
+        warnings,
+    )
+
+
+def _merge_source_material_context(base_context: dict[str, Any], input_context: dict[str, Any]) -> dict[str, Any]:
+    if not input_context.get("has_any"):
+        return dict(base_context)
+    merged = dict(base_context)
+    merged["assistant_source_materials"] = list(input_context.get("materials") or [])
+    merged["assistant_source_digest"] = str(input_context.get("source_digest") or "")
+    merged["assistant_source_excerpt"] = str(input_context.get("source_excerpt") or "")
+    merged["assistant_source_text"] = str(input_context.get("source_text") or "")
+    return merged
+
+
+def _planner_source_context(input_context: dict[str, Any]) -> dict[str, Any] | None:
+    if not input_context.get("has_any"):
+        return None
+    return {
+        "material_count": int(input_context.get("material_count") or 0),
+        "material_names": list(input_context.get("material_names") or [])[:6],
+        "source_digest": str(input_context.get("source_digest") or "")[:600],
+    }
+
+
+def load_assistant_artifact(token: str) -> dict[str, Any] | None:
+    if not token:
+        return None
+    try:
+        payload = _artifact_serializer().loads(token, max_age=60 * 60 * 24)
+    except BadData:
+        return None
+    if int(payload.get("user_id") or 0) != int(getattr(current_user, "id", 0) or 0):
+        return None
+    try:
+        stored_filename, path = resolve_upload_path(current_app.config.get("UPLOAD_DIR"), payload.get("stored_filename"))
+    except ValueError:
+        return None
+    if not os.path.isfile(path):
+        return None
+    return {
+        "stored_filename": stored_filename,
+        "path": path,
+        "download_name": str(payload.get("download_name") or "assistant_output.txt"),
+        "content_type": str(payload.get("content_type") or "text/plain"),
+    }
 
 
 def _confirmation_already_consumed(confirm_token: str) -> bool:
@@ -456,6 +843,8 @@ def _result(
     text_blocks: list[dict[str, str]] | None = None,
     sections: list[dict[str, Any]] | None = None,
     links: list[dict[str, str]] | None = None,
+    artifacts: list[dict[str, str]] | None = None,
+    input_context: dict[str, Any] | None = None,
     requires_confirmation: bool = False,
     confirm_token: str = "",
     planning: dict[str, str] | None = None,
@@ -473,6 +862,8 @@ def _result(
         "text_blocks": text_blocks or [],
         "sections": sections or [],
         "links": links or [],
+        "artifacts": artifacts or [],
+        "input_context": input_context or {},
         "requires_confirmation": bool(requires_confirmation),
         "confirm_token": confirm_token,
         "planning": planning or {},
@@ -514,6 +905,286 @@ def _draft_fallback_warning(label: str, suggestion: dict[str, Any]) -> str:
     return f"{label} used the non-AI fallback."
 
 
+def _preferred_output_mode(value: str | None) -> str:
+    normalized = normalize_query(str(value or "")).strip().lower()
+    return normalized if normalized in _ASSISTANT_OUTPUT_MODES else "interactive"
+
+
+def _result_document_title(result: dict[str, Any]) -> str:
+    headline = normalize_query(str(result.get("headline") or "")).strip()
+    matter_label = normalize_query(str(result.get("matter_label") or "")).strip()
+    if headline and matter_label:
+        return f"{headline} - {matter_label}"
+    return headline or matter_label or "Assistant Output"
+
+
+_KIND_LABELS = {
+    "source_material_analysis": "analyzed supplied source material",
+    "matter_case_workup": "prepared a case-construction workup",
+    "matter_strategy": "prepared case strategy",
+    "matter_research": "prepared workspace-grounded research",
+    "matter_chronology": "built a matter chronology",
+    "draft_summary": "drafted an executive summary",
+    "draft_client_update": "drafted a client update",
+    "draft_portal_reply": "drafted a portal reply",
+    "matter_financial_snapshot": "reviewed billing and invoice position",
+    "create_workspace_document_preview": "prepared a collaborative draft for confirmation",
+    "update_matter_summary_preview": "prepared matter summary changes for confirmation",
+    "create_task_bundle_preview": "prepared a task bundle for confirmation",
+    "create_task_preview": "prepared a task for confirmation",
+    "task_status_preview": "prepared a task-status update for confirmation",
+    "create_deadline_preview": "prepared a deadline for confirmation",
+    "add_party_preview": "prepared a party link for confirmation",
+    "create_timeline_event_preview": "prepared a timeline event for confirmation",
+    "create_time_entry_preview": "prepared a time entry for confirmation",
+    "add_note_preview": "prepared a matter note for confirmation",
+    "matter_briefing": "prepared a matter briefing",
+    "search": "searched the workspace",
+    "task_created": "created a task",
+    "task_bundle_created": "created a task bundle",
+    "deadline_created": "created a deadline",
+    "timeline_event_created": "created a timeline event",
+    "time_entry_created": "created a draft time entry",
+    "workspace_document_created": "created a collaborative draft",
+    "matter_summary_updated": "updated the matter summary",
+    "note_created": "created a matter note",
+    "party_added": "linked a matter party",
+}
+
+
+def _result_content_counts(result: dict[str, Any]) -> dict[str, int]:
+    section_items = 0
+    for section in list(result.get("sections") or []):
+        if isinstance(section, dict):
+            section_items += len(list(section.get("items") or []))
+    return {
+        "fields": len(list(result.get("fields") or [])),
+        "text_blocks": len(list(result.get("text_blocks") or [])),
+        "sections": len(list(result.get("sections") or [])),
+        "section_items": section_items,
+        "links": len(list(result.get("links") or [])),
+    }
+
+
+def _build_work_summary(result: dict[str, Any], *, output_mode: str) -> dict[str, Any]:
+    status = normalize_query(str(result.get("status") or "")).strip().lower() or "ok"
+    kind = normalize_query(str(result.get("kind") or "")).strip()
+    planning = result.get("planning") if isinstance(result.get("planning"), dict) else {}
+    input_context = result.get("input_context") if isinstance(result.get("input_context"), dict) else {}
+    matter_label = normalize_query(str(result.get("matter_label") or "")).strip()
+    action_label = _KIND_LABELS.get(kind, normalize_query(str(result.get("headline") or "handled the request")).lower())
+    source = normalize_query(str((planning or {}).get("source") or "")).strip()
+    tool = normalize_query(str((planning or {}).get("tool") or "")).strip()
+    model = normalize_query(str((planning or {}).get("model") or "")).strip()
+    material_count = int(input_context.get("material_count") or 0)
+    counts = _result_content_counts(result)
+    if status == "error":
+        headline = "I could not complete the request yet."
+    elif status == "blocked":
+        headline = "I kept this action in the native workflow."
+    elif bool(result.get("requires_confirmation")):
+        headline = "I prepared this for your review and confirmation."
+    else:
+        headline = "I completed the request and packaged the output."
+
+    steps: list[str] = []
+    if source:
+        planner_text = f"Planned the request using {source}"
+        if tool:
+            planner_text = f"{planner_text} via {tool}"
+        if model and source.lower().startswith("openai"):
+            planner_text = f"{planner_text} on {model}"
+        steps.append(f"{planner_text}.")
+    else:
+        steps.append("Classified the request and selected the safest matching assistant workflow.")
+    if matter_label:
+        steps.append(f"Applied the matter scope: {matter_label}.")
+    if material_count:
+        steps.append(f"Read {material_count} supplied source item(s) and used the extracted text/metadata as context.")
+    steps.append(f"{action_label[:1].upper()}{action_label[1:]}.")
+    if counts["text_blocks"] or counts["section_items"] or counts["fields"]:
+        output_parts: list[str] = []
+        if counts["fields"]:
+            output_parts.append(f"{counts['fields']} key field(s)")
+        if counts["text_blocks"]:
+            output_parts.append(f"{counts['text_blocks']} narrative block(s)")
+        if counts["section_items"]:
+            output_parts.append(f"{counts['section_items']} listed item(s)")
+        steps.append(f"Organized the answer into {', '.join(output_parts)} for review.")
+    if bool(result.get("requires_confirmation")):
+        steps.append("Stopped before writing to the database; nothing changes until you confirm.")
+    elif status == "ok":
+        steps.append(f"Generated {output_mode.replace('_', ' ')} output plus downloadable Markdown and plain-text artifacts.")
+    fallback_detail = normalize_query(str((planning or {}).get("fallback_detail") or "")).strip()
+    if fallback_detail:
+        steps.append(f"Used non-AI fallback for planning because: {fallback_detail}")
+
+    return {
+        "headline": headline,
+        "body": normalize_query(str(result.get("summary") or "")).strip(),
+        "steps": steps[:7],
+        "source": source or "Assistant workflow",
+        "tool": tool or kind or "assistant",
+        "model": model,
+    }
+
+
+def _render_result_markdown(result: dict[str, Any]) -> str:
+    lines: list[str] = [f"# {_result_document_title(result)}", ""]
+    summary = str(result.get("summary") or "").strip()
+    if summary:
+        lines.extend([summary, ""])
+    work_summary = result.get("work_summary") if isinstance(result.get("work_summary"), dict) else {}
+    work_steps = [str(item).strip() for item in list(work_summary.get("steps") or []) if str(item).strip()]
+    if work_summary or work_steps:
+        lines.extend(["## What I Did", ""])
+        work_headline = str(work_summary.get("headline") or "").strip()
+        if work_headline:
+            lines.extend([work_headline, ""])
+        lines.extend([f"- {item}" for item in work_steps])
+        lines.append("")
+    matter_label = str(result.get("matter_label") or "").strip()
+    if matter_label:
+        lines.extend([f"- Matter: {matter_label}", ""])
+    for field in list(result.get("fields") or []):
+        label = str((field or {}).get("label") or "").strip()
+        value = str((field or {}).get("value") or "").strip()
+        if label and value:
+            lines.append(f"- {label}: {value}")
+    if list(result.get("fields") or []):
+        lines.append("")
+    for block in list(result.get("text_blocks") or []):
+        title = str((block or {}).get("title") or "").strip() or "Section"
+        body = str((block or {}).get("body") or "").strip()
+        lines.extend([f"## {title}", "", body or "_No content_", ""])
+    for section in list(result.get("sections") or []):
+        title = str((section or {}).get("title") or "").strip() or "Items"
+        lines.extend([f"## {title}", ""])
+        items = list((section or {}).get("items") or [])
+        if not items:
+            lines.append("- None")
+        for item in items:
+            item_title = str((item or {}).get("title") or "").strip() or "Item"
+            meta = str((item or {}).get("meta") or "").strip()
+            href = str((item or {}).get("href") or "").strip()
+            line = f"- {item_title}"
+            if meta:
+                line = f"{line} ({meta})"
+            if href:
+                line = f"{line} [{href}]"
+            lines.append(line)
+        lines.append("")
+    warnings = [str(item).strip() for item in list(result.get("warnings") or []) if str(item).strip()]
+    if warnings:
+        lines.extend(["## Warnings", ""])
+        lines.extend([f"- {item}" for item in warnings])
+        lines.append("")
+    return _compact_text("\n".join(lines), limit=_ASSISTANT_ARTIFACT_TEXT_MAX)
+
+
+def _render_result_plain_text(result: dict[str, Any]) -> str:
+    lines: list[str] = [_result_document_title(result), ""]
+    summary = str(result.get("summary") or "").strip()
+    if summary:
+        lines.extend([summary, ""])
+    work_summary = result.get("work_summary") if isinstance(result.get("work_summary"), dict) else {}
+    work_steps = [str(item).strip() for item in list(work_summary.get("steps") or []) if str(item).strip()]
+    if work_summary or work_steps:
+        lines.extend(["What I Did", "----------"])
+        work_headline = str(work_summary.get("headline") or "").strip()
+        if work_headline:
+            lines.append(work_headline)
+        for item in work_steps:
+            lines.append(f"* {item}")
+        lines.append("")
+    matter_label = str(result.get("matter_label") or "").strip()
+    if matter_label:
+        lines.append(f"Matter: {matter_label}")
+    for field in list(result.get("fields") or []):
+        label = str((field or {}).get("label") or "").strip()
+        value = str((field or {}).get("value") or "").strip()
+        if label and value:
+            lines.append(f"{label}: {value}")
+    if list(result.get("fields") or []):
+        lines.append("")
+    for block in list(result.get("text_blocks") or []):
+        title = str((block or {}).get("title") or "").strip() or "Section"
+        body = str((block or {}).get("body") or "").strip()
+        lines.extend([title, body, ""])
+    for section in list(result.get("sections") or []):
+        title = str((section or {}).get("title") or "").strip() or "Items"
+        lines.extend([title, "-" * len(title)])
+        for item in list((section or {}).get("items") or []):
+            item_title = str((item or {}).get("title") or "").strip() or "Item"
+            meta = str((item or {}).get("meta") or "").strip()
+            line = f"* {item_title}"
+            if meta:
+                line = f"{line} | {meta}"
+            lines.append(line)
+        lines.append("")
+    return _compact_text("\n".join(lines), limit=_ASSISTANT_ARTIFACT_TEXT_MAX)
+
+
+def _write_artifact_file(filename: str, content: str, *, content_type: str) -> dict[str, str] | None:
+    text = _compact_text(content, limit=_ASSISTANT_ARTIFACT_TEXT_MAX)
+    if not text:
+        return None
+    storage_name = _artifact_storage_name(filename)
+    stored_filename, path = resolve_upload_path(current_app.config.get("UPLOAD_DIR"), storage_name, create_parent=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text)
+    harden_private_file(path)
+    token = _artifact_serializer().dumps(
+        {
+            "user_id": int(getattr(current_user, "id", 0) or 0),
+            "stored_filename": stored_filename,
+            "download_name": filename,
+            "content_type": content_type,
+        }
+    )
+    return {
+        "label": filename,
+        "href": url_for("assistant_artifact_download", token=token),
+        "content_type": content_type,
+    }
+
+
+def decorate_assistant_result(
+    result: dict[str, Any] | None,
+    *,
+    preferred_output: str = "",
+    input_context: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    if not result:
+        return result
+    output_mode = _preferred_output_mode(preferred_output)
+    decorated = dict(result)
+    if input_context is not None:
+        decorated["input_context"] = input_context
+    decorated["output_mode"] = output_mode
+    decorated["work_summary"] = _build_work_summary(decorated, output_mode=output_mode)
+    if str(decorated.get("status") or "").strip().lower() == "ok":
+        existing_artifacts = list(decorated.get("artifacts") or [])
+        markdown = _render_result_markdown(decorated)
+        plain_text = _render_result_plain_text(decorated)
+        artifact_rows: list[dict[str, str]] = []
+        base_name = secure_filename(_result_document_title(decorated)).strip().lower() or "assistant_output"
+        markdown_artifact = _write_artifact_file(f"{base_name}.md", markdown, content_type="text/markdown; charset=utf-8")
+        if markdown_artifact is not None:
+            markdown_artifact["kind"] = "markdown"
+            artifact_rows.append(markdown_artifact)
+        text_artifact = _write_artifact_file(f"{base_name}.txt", plain_text, content_type="text/plain; charset=utf-8")
+        if text_artifact is not None:
+            text_artifact["kind"] = "plain_text"
+            artifact_rows.append(text_artifact)
+        if output_mode == "plain_text":
+            artifact_rows = sorted(artifact_rows, key=lambda item: 0 if item.get("kind") == "plain_text" else 1)
+        elif output_mode == "markdown":
+            artifact_rows = sorted(artifact_rows, key=lambda item: 0 if item.get("kind") == "markdown" else 1)
+        decorated["artifacts"] = existing_artifacts + artifact_rows
+    return decorated
+
+
 def _clean_prompt(prompt: str) -> str:
     return normalize_query(prompt or "")
 
@@ -526,8 +1197,10 @@ def _requested_block_reason(prompt: str) -> str:
     return ""
 
 
-def _classify_intent(prompt: str) -> str:
+def _classify_intent(prompt: str, *, has_source_material: bool = False) -> str:
     lowered = str(prompt or "").lower()
+    if has_source_material and _SOURCE_MATERIAL_INTENT_RE.search(prompt or ""):
+        return "source_material_analysis"
     if _WORKSPACE_DOCUMENT_INTENT_RE.search(prompt or ""):
         return "create_workspace_document"
     if _TASK_BUNDLE_INTENT_RE.search(prompt or ""):
@@ -568,6 +1241,8 @@ def _classify_intent(prompt: str) -> str:
         return "matter_briefing"
     if lowered.startswith("send ") and "client" in lowered and ("update" in lowered or "email" in lowered):
         return "draft_client_update"
+    if has_source_material and any(token in lowered for token in ("summarize", "summarise", "analyze", "analyse", "review", "digest", "extract")):
+        return "source_material_analysis"
     return "search"
 
 
@@ -599,7 +1274,7 @@ def _resolve_matter(selected_matter_id: int | None, prompt: str) -> tuple[Matter
     return None, warnings
 
 
-def _matter_context(matter: Matter) -> dict[str, object]:
+def _matter_context(matter: Matter, *, input_context: dict[str, Any] | None = None) -> dict[str, object]:
     tasks = (
         Task.query.filter_by(matter_id=matter.id)
         .order_by(Task.status.asc(), Task.due_date.asc().nullslast(), Task.id.desc())
@@ -650,7 +1325,7 @@ def _matter_context(matter: Matter) -> dict[str, object]:
     if next_due_task_row is not None:
         next_due_task = f"{next_due_task_row.title or 'Task'} ({next_due_task_row.due_date.isoformat()})"
 
-    return {
+    context = {
         "matter_id": int(matter.id),
         "matter_no": matter.matter_no or "",
         "title": matter.title or "",
@@ -705,6 +1380,7 @@ def _matter_context(matter: Matter) -> dict[str, object]:
             for row in recent_time_entries[:6]
         ],
     }
+    return _merge_source_material_context(context, input_context or {})
 
 
 def _tone_hint_from_prompt(prompt: str) -> str:
@@ -1194,10 +1870,15 @@ def _bullet_lines(items: list[str]) -> str:
     return "\n".join(lines)
 
 
-def _build_case_workup_packet(matter: Matter, *, focus_hint: str = "") -> dict[str, Any]:
+def _build_case_workup_packet(
+    matter: Matter,
+    *,
+    focus_hint: str = "",
+    input_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     focus = normalize_query(focus_hint).strip()
     research_query = focus or f"Case construction, procedural posture, evidence gaps, and client communications for {matter.matter_no}"
-    context = _matter_analysis_context(matter, research_query=research_query)
+    context = _matter_analysis_context(matter, research_query=research_query, input_context=input_context)
     strategy = suggest_matter_case_strategy(matter_context=context, focus_hint=focus)
     memo = suggest_matter_research_memo(matter_context=context, research_query=research_query)
     chronology = _matter_chronology_entries(matter, focus_hint=focus)[:10]
@@ -1367,6 +2048,7 @@ def _workspace_document_body_from_goal(
     *,
     title: str,
     document_goal: str,
+    input_context: dict[str, Any] | None = None,
 ) -> tuple[str, list[str]]:
     warnings: list[str] = []
     goal = normalize_query(document_goal).strip()
@@ -1375,12 +2057,12 @@ def _workspace_document_body_from_goal(
         token in lowered
         for token in ("case workup", "case dossier", "construct the case", "build the case", "litigation plan", "war room")
     ):
-        packet = _build_case_workup_packet(matter, focus_hint=_strip_workup_prompt(goal))
+        packet = _build_case_workup_packet(matter, focus_hint=_strip_workup_prompt(goal), input_context=input_context)
         warnings.extend(list(packet.get("warnings") or []))
         return _render_case_workup_document_body(title, matter, packet), warnings
     if any(token in lowered for token in ("research memo", "legal research", "research", "authority review")):
         research_query = _strip_research_prompt(goal) or goal
-        context = _matter_analysis_context(matter, research_query=research_query)
+        context = _matter_analysis_context(matter, research_query=research_query, input_context=input_context)
         memo = suggest_matter_research_memo(matter_context=context, research_query=research_query)
         if str(memo.get("source") or "").strip().lower() != "openai":
             warnings.append(_draft_fallback_warning("Research memo", memo))
@@ -1427,7 +2109,7 @@ def _workspace_document_body_from_goal(
         return body[:12000], warnings
     if any(token in lowered for token in ("case strategy", "strategy memo", "hearing prep", "trial prep", "case theory")):
         focus_hint = _strip_strategy_prompt(goal) or goal
-        context = _matter_analysis_context(matter, research_query=focus_hint)
+        context = _matter_analysis_context(matter, research_query=focus_hint, input_context=input_context)
         strategy = suggest_matter_case_strategy(matter_context=context, focus_hint=focus_hint)
         if str(strategy.get("source") or "").strip().lower() != "openai":
             warnings.append(_draft_fallback_warning("Case strategy", strategy))
@@ -1993,8 +2675,13 @@ def _matter_briefing_sections(matter: Matter) -> tuple[list[dict[str, Any]], lis
     return sections, warnings
 
 
-def _matter_analysis_context(matter: Matter, *, research_query: str = "") -> dict[str, Any]:
-    context = dict(_matter_context(matter))
+def _matter_analysis_context(
+    matter: Matter,
+    *,
+    research_query: str = "",
+    input_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    context = dict(_matter_context(matter, input_context=input_context))
     can_view_dms = has_permission("dms", "read")
     parties = (
         db.session.query(MatterParty, Entity)
@@ -3017,12 +3704,27 @@ def _planning_payload(
     }
 
 
-def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = None) -> dict[str, Any]:
+def process_assistant_prompt(
+    prompt: str,
+    *,
+    selected_matter_id: int | None = None,
+    pasted_text: str = "",
+    uploaded_file: FileStorage | None = None,
+    attachment_token: str = "",
+    preferred_output: str = "",
+) -> dict[str, Any]:
     cleaned_prompt = _clean_prompt(prompt)
+    matter, warnings = _resolve_matter(selected_matter_id, cleaned_prompt)
+    input_context, input_warnings = _build_input_context(
+        pasted_text=pasted_text,
+        uploaded_file=uploaded_file,
+        attachment_token=attachment_token,
+        matter=matter,
+    )
+    if len(cleaned_prompt) < 3 and input_context.get("has_any"):
+        cleaned_prompt = "Analyze the supplied source material."
     if len(cleaned_prompt) < 3:
         return _error_result(cleaned_prompt, "Enter a fuller instruction for the assistant to work from.")
-
-    matter, warnings = _resolve_matter(selected_matter_id, cleaned_prompt)
     blocked_reason = _requested_block_reason(cleaned_prompt)
     if blocked_reason:
         audit(
@@ -3037,11 +3739,13 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
     planner_result = plan_assistant_request(
         prompt=cleaned_prompt,
         matter_context=_planner_matter_context(matter),
+        source_context=_planner_source_context(input_context),
+        preferred_output=_preferred_output_mode(preferred_output),
         recent_history=assistant_recent_history(),
     )
     planner_tool_name = normalize_query(str((planner_result or {}).get("tool_name") or "")).strip()
     plan_args = (planner_result or {}).get("arguments") if isinstance((planner_result or {}).get("arguments"), dict) else {}
-    warning_list = list(warnings)
+    warning_list = list(warnings) + list(input_warnings)
     planning = _planning_payload(
         planner_meta=planner_meta,
         planner_result=planner_result,
@@ -3066,14 +3770,60 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
             matter=matter,
         )
 
-    intent = _PLANNER_TOOL_TO_INTENT.get(planner_tool_name) or _classify_intent(cleaned_prompt)
+    intent = _PLANNER_TOOL_TO_INTENT.get(planner_tool_name) or _classify_intent(
+        cleaned_prompt,
+        has_source_material=bool(input_context.get("has_any")),
+    )
+    if input_context.get("has_any") and matter is None and intent in {"draft_summary", "matter_research", "search"}:
+        intent = "source_material_analysis"
+    if intent == "source_material_analysis":
+        analysis_goal = normalize_query(str(plan_args.get("analysis_goal") or "")).strip() or cleaned_prompt
+        output_mode = _preferred_output_mode(str(plan_args.get("preferred_output") or preferred_output or "interactive"))
+        source_analysis = suggest_source_material_analysis(
+            source_context={
+                "material_count": int(input_context.get("material_count") or 0),
+                "material_names": list(input_context.get("material_names") or []),
+                "source_digest": str(input_context.get("source_digest") or ""),
+                "source_excerpt": str(input_context.get("source_excerpt") or ""),
+                "source_text": str(input_context.get("source_text") or ""),
+            },
+            analysis_goal=analysis_goal,
+            preferred_output=output_mode,
+        )
+        source_warnings = list(warning_list)
+        source_warnings.append("Uploaded and pasted source material is used for this response only unless you save it elsewhere.")
+        if str(source_analysis.get("source") or "").strip().lower() != "openai":
+            source_warnings.append(_draft_fallback_warning("Source material analysis", source_analysis))
+        return _result(
+            status="ok",
+            kind="source_material_analysis",
+            headline="Source Material Analysis",
+            summary=str(source_analysis.get("summary") or "Prepared a structured review of the supplied source material."),
+            prompt=cleaned_prompt,
+            matter=matter,
+            warnings=source_warnings,
+            fields=[
+                {"label": "Analysis Goal", "value": analysis_goal},
+                {"label": "Output Mode", "value": output_mode.replace("_", " ")},
+                {"label": "Materials", "value": str(int(input_context.get("material_count") or 0))},
+                {"label": "Source", "value": str(source_analysis.get("source") or "fallback").title()},
+            ],
+            text_blocks=[{"title": "Source Excerpt", "body": str(source_analysis.get("source_excerpt") or "")}],
+            sections=[
+                {"title": "Key Points", "items": [{"title": item} for item in list(source_analysis.get("key_points") or [])]},
+                {"title": "Issues", "items": [{"title": item} for item in list(source_analysis.get("issues") or [])]},
+                {"title": "Recommended Next Steps", "items": [{"title": item} for item in list(source_analysis.get("next_steps") or [])]},
+            ],
+            planning=planning,
+            input_context=input_context,
+        )
     if intent == "matter_case_workup":
         if matter is None:
             return _error_result(cleaned_prompt, "Pick a matter or reference its matter number to construct the case.")
         focus_hint = normalize_query(str(plan_args.get("focus_hint") or "")).strip()
         if not focus_hint and len(cleaned_prompt) > 12:
             focus_hint = _strip_workup_prompt(cleaned_prompt)
-        packet = _build_case_workup_packet(matter, focus_hint=focus_hint)
+        packet = _build_case_workup_packet(matter, focus_hint=focus_hint, input_context=input_context)
         context = packet.get("context") or {}
         strategy = packet.get("strategy") or {}
         memo = packet.get("memo") or {}
@@ -3267,7 +4017,7 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
         focus_hint = normalize_query(str(plan_args.get("focus_hint") or "")).strip()
         if not focus_hint and len(cleaned_prompt) > 12:
             focus_hint = _strip_strategy_prompt(cleaned_prompt)
-        context = _matter_analysis_context(matter, research_query=focus_hint)
+        context = _matter_analysis_context(matter, research_query=focus_hint, input_context=input_context)
         strategy = suggest_matter_case_strategy(matter_context=context, focus_hint=focus_hint)
         strategy_warnings = list(warning_list)
         strategy_warnings.append("Case strategy is grounded in the current matter file and should still be reviewed by counsel.")
@@ -3314,7 +4064,7 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
         research_query = normalize_query(str(plan_args.get("research_query") or "")).strip() or _strip_research_prompt(cleaned_prompt)
         if len(research_query) < 3:
             return _error_result(cleaned_prompt, "State the research question or issue you want analyzed.", matter=matter)
-        context = _matter_analysis_context(matter, research_query=research_query)
+        context = _matter_analysis_context(matter, research_query=research_query, input_context=input_context)
         memo = suggest_matter_research_memo(matter_context=context, research_query=research_query)
         research_warnings = list(warning_list)
         research_warnings.append(
@@ -3395,7 +4145,7 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
     if intent == "draft_summary":
         if matter is None:
             return _error_result(cleaned_prompt, "Pick a matter or reference its matter number to draft a summary.")
-        context = _matter_context(matter)
+        context = _matter_context(matter, input_context=input_context)
         suggestion = suggest_matter_executive_summary(
             matter_context=context,
             current_values={
@@ -3442,7 +4192,7 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
     if intent == "draft_client_update":
         if matter is None:
             return _error_result(cleaned_prompt, "Pick a matter or reference its matter number to draft a client update.")
-        context = _matter_context(matter)
+        context = _matter_context(matter, input_context=input_context)
         tone_hint = normalize_query(str(plan_args.get("tone_hint") or "")).strip() or _tone_hint_from_prompt(cleaned_prompt)
         suggestion = suggest_matter_client_update(matter_context=context, tone_hint=tone_hint)
         warning_list = list(warning_list)
@@ -3492,7 +4242,7 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
             )
         tone_hint = normalize_query(str(plan_args.get("tone_hint") or "")).strip() or _tone_hint_from_prompt(cleaned_prompt)
         suggestion = suggest_portal_reply_draft(
-            matter_context=_matter_context(matter),
+            matter_context=_matter_context(matter, input_context=input_context),
             thread_context=thread_context,
             tone_hint=tone_hint,
         )
@@ -3698,6 +4448,7 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
                 matter,
                 title=title,
                 document_goal=document_goal or title,
+                input_context=input_context,
             )
             workspace_warnings.extend(generated_warnings)
         preview_payload = {
@@ -4545,6 +5296,20 @@ def process_assistant_prompt(prompt: str, *, selected_matter_id: int | None = No
 
     search_query = normalize_query(str(plan_args.get("query") or "")).strip() or cleaned_prompt
     sections = _search_sections(search_query, matter)
+    if input_context.get("has_any"):
+        sections.insert(
+            0,
+            {
+                "title": "Source Material",
+                "items": [
+                    {
+                        "title": row.get("label") or "Source item",
+                        "meta": row.get("meta") or "",
+                    }
+                    for row in list(input_context.get("materials") or [])
+                ],
+            },
+        )
     audit(
         "assistant_search",
         "Matter",

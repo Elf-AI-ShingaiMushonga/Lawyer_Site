@@ -1,20 +1,32 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
+  .assistant-shell {
+    display: grid;
+    gap: 18px;
+  }
+
   .assistant-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.38fr) minmax(300px, 0.9fr);
+    grid-template-columns: minmax(0, 1.4fr) minmax(310px, 0.92fr);
     gap: 18px;
+    align-items: start;
   }
 
   .assistant-card {
     padding: 18px;
   }
 
+  .assistant-hero {
+    display: grid;
+    gap: 16px;
+  }
+
   .assistant-kicker {
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    width: fit-content;
     border-radius: 999px;
     border: 1px solid rgba(225, 6, 0, 0.2);
     background: rgba(255, 245, 245, 0.9);
@@ -27,42 +39,119 @@
   }
 
   .assistant-title {
-    margin-top: 12px;
-    font-size: clamp(1.75rem, 2.4vw, 2.3rem);
-    line-height: 1.08;
+    margin: 0;
+    font-size: clamp(1.9rem, 2.7vw, 2.6rem);
+    line-height: 1.02;
   }
 
   .assistant-lead {
-    margin-top: 10px;
     color: var(--muted);
     max-width: 72ch;
+  }
+
+  .assistant-meta-grid,
+  .assistant-status-grid,
+  .assistant-capability-grid,
+  .assistant-artifact-row,
+  .assistant-field-grid,
+  .assistant-section-list,
+  .assistant-chip-list,
+  .assistant-example-list,
+  .assistant-warning-list,
+  .assistant-material-list,
+  .assistant-output-modes {
+    display: grid;
+    gap: 10px;
+  }
+
+  .assistant-meta-grid,
+  .assistant-status-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .assistant-panel,
+  .assistant-meta-item,
+  .assistant-status-item,
+  .assistant-example-item,
+  .assistant-history-item,
+  .assistant-section,
+  .assistant-text-block,
+  .assistant-warning-item,
+  .assistant-material-item,
+  .assistant-output-item {
+    border: 1px solid rgba(225, 6, 0, 0.14);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 13px 14px;
+  }
+
+  .assistant-status-item {
+    background: linear-gradient(180deg, rgba(255, 251, 251, 0.98), rgba(255, 255, 255, 0.95));
+  }
+
+  .assistant-meta-label,
+  .assistant-section-title,
+  .assistant-block-title,
+  .assistant-field-label,
+  .assistant-panel-title,
+  .assistant-mini-label {
+    font-size: 12px;
+    font-weight: 780;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #794645;
+  }
+
+  .assistant-meta-value,
+  .assistant-field-value,
+  .assistant-block-body,
+  .assistant-section-item-meta,
+  .assistant-panel-body {
+    margin-top: 6px;
+    color: #413737;
+    white-space: pre-wrap;
   }
 
   .assistant-form {
     display: grid;
     gap: 14px;
-    margin-top: 16px;
   }
 
-  .assistant-field-grid {
+  .assistant-compose-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
-    gap: 12px;
+    grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.84fr);
+    gap: 14px;
   }
 
-  .assistant-prompt {
-    min-height: 188px;
+  .assistant-stack {
+    display: grid;
+    gap: 14px;
+  }
+
+  .assistant-prompt,
+  .assistant-source-text {
     resize: vertical;
   }
 
-  .assistant-chip-list,
-  .assistant-warning-list,
-  .assistant-link-row,
-  .assistant-field-list,
-  .assistant-section-list,
-  .assistant-example-list {
-    display: grid;
+  .assistant-prompt {
+    min-height: 170px;
+  }
+
+  .assistant-source-text {
+    min-height: 148px;
+  }
+
+  .assistant-inline-row,
+  .assistant-actions,
+  .assistant-chip-row {
+    display: flex;
     gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .assistant-inline-row {
+    justify-content: space-between;
   }
 
   .assistant-chip {
@@ -78,22 +167,6 @@
     font-weight: 700;
   }
 
-  .assistant-example-item,
-  .assistant-history-item,
-  .assistant-section,
-  .assistant-text-block,
-  .assistant-field-item,
-  .assistant-warning-item {
-    border: 1px solid rgba(225, 6, 0, 0.16);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.94);
-    padding: 12px 14px;
-  }
-
-  .assistant-example-item code {
-    white-space: normal;
-  }
-
   .assistant-example-button,
   .assistant-history-button {
     width: 100%;
@@ -105,34 +178,19 @@
     cursor: pointer;
   }
 
+  .assistant-example-item code,
+  .assistant-history-prompt code {
+    white-space: normal;
+  }
+
   .assistant-history-meta {
     margin-top: 6px;
-    font-size: 12px;
     color: #6a5a5a;
+    font-size: 12px;
   }
 
   .assistant-history-prompt {
     margin-top: 8px;
-    color: #413737;
-    white-space: pre-wrap;
-  }
-
-  .assistant-section-title,
-  .assistant-block-title,
-  .assistant-field-label {
-    font-size: 12px;
-    font-weight: 780;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: #794645;
-  }
-
-  .assistant-block-body,
-  .assistant-section-item-meta,
-  .assistant-field-value {
-    margin-top: 6px;
-    white-space: pre-wrap;
-    color: #413737;
   }
 
   .assistant-section-item + .assistant-section-item {
@@ -146,29 +204,31 @@
     color: #3d2626;
   }
 
-  .assistant-actions {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .assistant-link-row {
-    margin-top: 14px;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  }
-
+  .assistant-download-link,
   .assistant-link-row a {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    border: 1px solid rgba(225, 6, 0, 0.18);
+    justify-content: center;
+    gap: 8px;
     border-radius: 12px;
+    border: 1px solid rgba(225, 6, 0, 0.18);
     background: rgba(255, 246, 246, 0.9);
-    padding: 11px 12px;
+    padding: 10px 12px;
     text-decoration: none;
     color: #6d2522;
     font-weight: 700;
+  }
+
+  .assistant-download-link.primary {
+    background: rgba(225, 6, 0, 0.08);
+    border-color: rgba(225, 6, 0, 0.28);
+  }
+
+  .assistant-link-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
   }
 
   .assistant-status-card.status-ok {
@@ -180,299 +240,399 @@
     border-top: 4px solid rgba(225, 6, 0, 0.88);
   }
 
-  @media (max-width: 980px) {
+  .assistant-material-item,
+  .assistant-output-item {
+    display: grid;
+    gap: 4px;
+  }
+
+  .assistant-utility-note {
+    color: #6a5a5a;
+    font-size: 12px;
+  }
+
+  .assistant-divider {
+    height: 1px;
+    background: rgba(225, 6, 0, 0.12);
+    margin: 2px 0;
+  }
+
+  @media (max-width: 1120px) {
     .assistant-grid,
-    .assistant-field-grid {
+    .assistant-compose-grid {
       grid-template-columns: 1fr;
     }
   }
 </style>
 
-<div class="card assistant-card mb-3">
-  <span class="assistant-kicker">Assistant Workspace</span>
-  <h1 class="assistant-title">AI workspace for legal analysis and matter execution</h1>
-  <div class="assistant-lead">
-    Use one prompt surface for matter briefings, integrated case workups, case strategy, chronology, workspace-grounded research,
-    executive summaries, client-update drafts, and supervised workflow actions: create collaborative workbench drafts, update matter summaries,
-    create tasks, update task status, add deadlines, add matter parties, add matter notes, add timeline events, and log draft time entries.
-    High-risk finance, trust, conflict, deletion, and irreversible actions remain in the native workflows.
-  </div>
-  <div class="assistant-field-list mt-3">
-    <div class="assistant-field-item">
-      <div class="assistant-field-label">Planner</div>
-      <div class="assistant-field-value">
-        {% if assistant_agent_meta.available %}
-          OpenAI tool-calling planner active
-        {% elif assistant_agent_meta.enabled %}
-          Deterministic fallback active because the OpenAI planner is unavailable
-        {% else %}
-          Deterministic routing only
-        {% endif %}
+<div class="assistant-shell">
+  <section class="card assistant-card assistant-hero">
+    <div class="assistant-kicker">Assistant Workspace</div>
+    <div>
+      <h1 class="assistant-title">AI workspace for legal analysis and matter execution</h1>
+      <div class="assistant-lead">
+        Work from one surface for matter strategy, chronology, research, drafting, client communications, supervised write actions,
+        uploaded source material, and download-ready output.
       </div>
     </div>
-    <div class="assistant-field-item">
-      <div class="assistant-field-label">Model</div>
-      <div class="assistant-field-value">{{ assistant_agent_meta.model }}{% if assistant_agent_meta.available %} • reasoning {{ assistant_agent_meta.reasoning_effort }}{% endif %}</div>
+    <div class="assistant-meta-grid">
+      <div class="assistant-meta-item">
+        <div class="assistant-meta-label">Planner</div>
+        <div class="assistant-meta-value">
+          {% if assistant_agent_meta.available %}
+            OpenAI tool-calling planner active
+          {% elif assistant_agent_meta.enabled %}
+            Deterministic fallback active because the OpenAI planner is unavailable
+          {% else %}
+            Deterministic routing only
+          {% endif %}
+        </div>
+      </div>
+      <div class="assistant-meta-item">
+        <div class="assistant-meta-label">Model</div>
+        <div class="assistant-meta-value">
+          {{ assistant_agent_meta.model }}{% if assistant_agent_meta.available %} • reasoning {{ assistant_agent_meta.reasoning_effort }}{% endif %}
+        </div>
+      </div>
+      <div class="assistant-meta-item">
+        <div class="assistant-meta-label">Input Types</div>
+        <div class="assistant-meta-value">Prompt, pasted text, PDF, DOCX, XLSX, PPTX, TXT, email, and common image uploads</div>
+      </div>
+      <div class="assistant-meta-item">
+        <div class="assistant-meta-label">Output Types</div>
+        <div class="assistant-meta-value">Interactive answer, Markdown memo, plain-text download, and workbench draft workflows</div>
+      </div>
     </div>
     {% if assistant_agent_meta.fallback_detail %}
-      <div class="assistant-field-item">
-        <div class="assistant-field-label">Fallback Reason</div>
-        <div class="assistant-field-value">{{ assistant_agent_meta.fallback_detail }}</div>
+      <div class="assistant-panel">
+        <div class="assistant-panel-title">Fallback Reason</div>
+        <div class="assistant-panel-body">{{ assistant_agent_meta.fallback_detail }}</div>
       </div>
     {% endif %}
-  </div>
-</div>
+  </section>
 
-<div class="assistant-grid">
-  <div>
-    <div class="card assistant-card">
-      <h3>Ask the Assistant</h3>
-      <div class="muted">Pick a matter when you want the assistant to stay anchored to one file. If you reference a matter number in the prompt, that also works.</div>
-      <form class="assistant-form" method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="assistant-field-grid">
+  <div class="assistant-grid">
+    <div class="assistant-stack">
+      <section class="card assistant-card">
+        <div class="assistant-inline-row">
           <div>
-            <label class="form-label" for="assistant-prompt">Instruction</label>
-            <textarea class="form-control assistant-prompt" id="assistant-prompt" name="prompt" placeholder="Example: Create a task to file the affidavit by tomorrow.">{{ assistant_prompt_value }}</textarea>
+            <h3 class="mb-1">Run the Assistant</h3>
+            <div class="assistant-utility-note">Use `Ctrl` / `Cmd` + `Enter` to submit.</div>
           </div>
-          <div>
-            <label class="form-label" for="assistant-matter">Matter Focus</label>
-            <select class="form-select" id="assistant-matter" name="matter_id">
-              <option value="">Use referenced or active matter</option>
-              {% for row in assistant_matters %}
-                <option value="{{ row.id }}" {% if assistant_selected_matter_id == row.id %}selected{% endif %}>{{ row.matter_no }} - {{ row.title }}</option>
-              {% endfor %}
-            </select>
-            <div class="assistant-chip-list mt-3">
-              <span class="assistant-chip">Matter briefings and next steps</span>
-              <span class="assistant-chip">Integrated case workups</span>
-              <span class="assistant-chip">Case strategy and case-construction briefs</span>
-              <span class="assistant-chip">Chronology and procedural history</span>
-              <span class="assistant-chip">Workspace-grounded research memos</span>
-              <span class="assistant-chip">Draft replies to client portal threads</span>
-              <span class="assistant-chip">Billing and invoice snapshots</span>
-              <span class="assistant-chip">Create collaborative workbench drafts</span>
-              <span class="assistant-chip">Create task bundles and prep checklists with confirmation</span>
-              <span class="assistant-chip">Draft summaries</span>
-              <span class="assistant-chip">Draft client updates</span>
-              <span class="assistant-chip">Update matter summary with confirmation</span>
-              <span class="assistant-chip">Create task with confirmation</span>
-              <span class="assistant-chip">Update task status with confirmation</span>
-              <span class="assistant-chip">Add deadline with confirmation</span>
-              <span class="assistant-chip">Add matter party with confirmation</span>
-              <span class="assistant-chip">Add matter note with confirmation</span>
-              <span class="assistant-chip">Add timeline event with confirmation</span>
-              <span class="assistant-chip">Log time entry with confirmation</span>
-              <span class="assistant-chip">Search matters, tasks, notes, deadlines, activity, time, documents, collaborative drafts, client communications, contacts, and knowledge base</span>
-            </div>
+          <div class="assistant-chip-row">
+            <span class="assistant-chip">Matter briefs</span>
+            <span class="assistant-chip">File analysis</span>
+            <span class="assistant-chip">Downloadable output</span>
           </div>
         </div>
-        <div class="assistant-actions">
-          <button class="btn btn-danger" type="submit" name="action_mode" value="preview">Run Assistant</button>
-        </div>
-      </form>
-    </div>
-
-    {% if assistant_result %}
-      <div class="card assistant-card assistant-status-card status-{{ assistant_result.status }} mt-3">
-        <div class="assistant-kicker">{{ assistant_result.headline }}</div>
-        <h3 class="mt-3 mb-1">{{ assistant_result.summary }}</h3>
-        {% if assistant_result.matter_label %}
-          <div class="muted">Matter: {{ assistant_result.matter_label }}</div>
-        {% endif %}
-
-        {% if assistant_result.planning %}
-          <div class="assistant-field-list mt-3">
-            <div class="assistant-field-item">
-              <div class="assistant-field-label">Planning Source</div>
-              <div class="assistant-field-value">{{ assistant_result.planning.source }}</div>
-            </div>
-            <div class="assistant-field-item">
-              <div class="assistant-field-label">Planning Tool</div>
-              <div class="assistant-field-value">{{ assistant_result.planning.tool }}</div>
-            </div>
-            {% if assistant_result.planning.model %}
-              <div class="assistant-field-item">
-                <div class="assistant-field-label">Planner Model</div>
-                <div class="assistant-field-value">
-                  {{ assistant_result.planning.model }}
-                  {% if assistant_result.planning.reasoning_effort %} • reasoning {{ assistant_result.planning.reasoning_effort }}{% endif %}
+        <form class="assistant-form" id="assistant-form" method="post" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="attachment_token" value="{{ assistant_attachment_token }}">
+          <div class="assistant-compose-grid">
+            <div class="assistant-stack">
+              <div class="assistant-panel">
+                <label class="form-label" for="assistant-prompt">Instruction</label>
+                <textarea
+                  class="form-control assistant-prompt"
+                  id="assistant-prompt"
+                  name="prompt"
+                  placeholder="Example: Analyze the uploaded brief and extract the key issues.">{{ assistant_prompt_value }}</textarea>
+                <div class="assistant-utility-note mt-2">
+                  Ask for strategy, chronology, research, drafting, task/deadline prep, or analysis of uploaded material.
                 </div>
               </div>
-            {% endif %}
-            {% if assistant_result.planning.fallback_detail %}
-              <div class="assistant-field-item">
-                <div class="assistant-field-label">Fallback Reason</div>
-                <div class="assistant-field-value">{{ assistant_result.planning.fallback_detail }}</div>
+
+              <div class="assistant-panel">
+                <label class="form-label" for="assistant-source-text">Pasted Source Material</label>
+                <textarea
+                  class="form-control assistant-source-text"
+                  id="assistant-source-text"
+                  name="source_text"
+                  placeholder="Paste witness notes, email threads, draft pleadings, hearing agendas, or source extracts here.">{{ assistant_source_text_value }}</textarea>
+                <div class="assistant-utility-note mt-2">Use this when you have source text but do not want to upload a file.</div>
               </div>
-            {% endif %}
-          </div>
-        {% endif %}
+            </div>
 
-        {% if assistant_result.warnings %}
-          <div class="assistant-warning-list mt-3">
-            {% for warning in assistant_result.warnings %}
-              <div class="assistant-warning-item">{{ warning }}</div>
-            {% endfor %}
-          </div>
-        {% endif %}
-
-        {% if assistant_result.fields %}
-          <div class="assistant-field-list mt-3">
-            {% for field in assistant_result.fields %}
-              <div class="assistant-field-item">
-                <div class="assistant-field-label">{{ field.label }}</div>
-                <div class="assistant-field-value">{{ field.value }}</div>
+            <div class="assistant-stack">
+              <div class="assistant-panel">
+                <label class="form-label" for="assistant-matter">Matter Focus</label>
+                <select class="form-select" id="assistant-matter" name="matter_id">
+                  <option value="">Use referenced or active matter</option>
+                  {% for row in assistant_matters %}
+                    <option value="{{ row.id }}" {% if assistant_selected_matter_id == row.id %}selected{% endif %}>{{ row.matter_no }} - {{ row.title }}</option>
+                  {% endfor %}
+                </select>
+                <div class="assistant-utility-note mt-2">Pick a matter when the result should stay anchored to a specific file.</div>
               </div>
-            {% endfor %}
-          </div>
-        {% endif %}
 
-        {% if assistant_result.text_blocks %}
-          <div class="assistant-section-list mt-3">
-            {% for block in assistant_result.text_blocks %}
-              <div class="assistant-text-block">
-                <div class="assistant-block-title">{{ block.title }}</div>
-                <div class="assistant-block-body">{{ block.body }}</div>
+              <div class="assistant-panel">
+                <label class="form-label" for="assistant-output-mode">Preferred Output</label>
+                <select class="form-select" id="assistant-output-mode" name="preferred_output">
+                  {% for option in assistant_output_modes %}
+                    <option value="{{ option.value }}" {% if assistant_output_mode == option.value %}selected{% endif %}>{{ option.label }}</option>
+                  {% endfor %}
+                </select>
+                <div class="assistant-output-modes mt-3">
+                  {% for option in assistant_output_modes %}
+                    <div class="assistant-output-item">
+                      <div class="assistant-mini-label">{{ option.label }}</div>
+                      <div class="assistant-utility-note">{{ option.description }}</div>
+                    </div>
+                  {% endfor %}
+                </div>
               </div>
-            {% endfor %}
-          </div>
-        {% endif %}
 
-        {% if assistant_result.sections %}
-          <div class="assistant-section-list mt-3">
-                {% for section in assistant_result.sections %}
-                  <div class="assistant-section">
-                    <div class="assistant-section-title">{{ section.title }}</div>
-                  {% for item in section["items"] %}
-                      <div class="assistant-section-item">
-                        <div class="assistant-section-item-title">
-                          {% if item.href %}
-                            <a href="{{ item.href }}">{{ item.title }}</a>
-                      {% else %}
-                        {{ item.title }}
+              <div class="assistant-panel">
+                <label class="form-label" for="assistant-source-file">Upload Source File</label>
+                <input
+                  class="form-control"
+                  id="assistant-source-file"
+                  type="file"
+                  name="source_file"
+                  accept=".pdf,.docx,.xlsx,.pptx,.txt,.eml,.msg,.png,.jpg,.jpeg">
+                <div class="assistant-utility-note mt-2">
+                  Best for briefs, pleadings, witness notes, email exports, spreadsheets, or hearing packs.
+                </div>
+                {% if assistant_attachment_token %}
+                  <div class="assistant-material-list mt-3">
+                    <div class="assistant-material-item">
+                      <div class="assistant-mini-label">Stored Source Material</div>
+                      <div class="assistant-utility-note">A previously uploaded file is still attached to this workspace request flow.</div>
+                    </div>
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="assistant-actions">
+            <button class="btn btn-danger" type="submit" name="action_mode" value="preview">Run Assistant</button>
+          </div>
+        </form>
+      </section>
+
+      {% if assistant_result %}
+        <section class="card assistant-card assistant-status-card status-{{ assistant_result.status }}">
+          <div class="assistant-kicker">{{ assistant_result.headline }}</div>
+          <h3 class="mt-3 mb-1">{{ assistant_result.summary }}</h3>
+          {% if assistant_result.matter_label %}
+            <div class="muted">Matter: {{ assistant_result.matter_label }}</div>
+          {% endif %}
+
+          {% if assistant_result["input_context"] and assistant_result["input_context"]["materials"] %}
+            <div class="assistant-section-list mt-3">
+              <div class="assistant-section">
+                <div class="assistant-section-title">Inputs Used</div>
+                <div class="assistant-material-list mt-2">
+                  {% for item in assistant_result["input_context"]["materials"] %}
+                    <div class="assistant-material-item">
+                      <div class="assistant-section-item-title">{{ item.label }}</div>
+                      {% if item.meta %}
+                        <div class="assistant-section-item-meta">{{ item.meta }}</div>
                       {% endif %}
                     </div>
-                    {% if item.meta %}
-                      <div class="assistant-section-item-meta">{{ item.meta }}</div>
-                    {% endif %}
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          {% endif %}
+
+          {% if assistant_result.planning %}
+            <div class="assistant-status-grid mt-3">
+              <div class="assistant-status-item">
+                <div class="assistant-meta-label">Planning Source</div>
+                <div class="assistant-meta-value">{{ assistant_result.planning.source }}</div>
+              </div>
+              <div class="assistant-status-item">
+                <div class="assistant-meta-label">Planning Tool</div>
+                <div class="assistant-meta-value">{{ assistant_result.planning.tool }}</div>
+              </div>
+              {% if assistant_result.planning.model %}
+                <div class="assistant-status-item">
+                  <div class="assistant-meta-label">Planner Model</div>
+                  <div class="assistant-meta-value">
+                    {{ assistant_result.planning.model }}
+                    {% if assistant_result.planning.reasoning_effort %} • reasoning {{ assistant_result.planning.reasoning_effort }}{% endif %}
                   </div>
-                {% endfor %}
+                </div>
+              {% endif %}
+              {% if assistant_result.planning.fallback_detail %}
+                <div class="assistant-status-item">
+                  <div class="assistant-meta-label">Fallback Reason</div>
+                  <div class="assistant-meta-value">{{ assistant_result.planning.fallback_detail }}</div>
+                </div>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          {% if assistant_result.artifacts %}
+            <div class="assistant-section-list mt-3">
+              <div class="assistant-section">
+                <div class="assistant-section-title">Output Files</div>
+                <div class="assistant-artifact-row mt-2">
+                  {% for artifact in assistant_result.artifacts %}
+                    <a
+                      class="assistant-download-link {% if loop.first %}primary{% endif %}"
+                      href="{{ artifact.href }}">
+                      Download {{ artifact.label }}
+                    </a>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          {% endif %}
+
+          {% if assistant_result.warnings %}
+            <div class="assistant-warning-list mt-3">
+              {% for warning in assistant_result.warnings %}
+                <div class="assistant-warning-item">{{ warning }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          {% if assistant_result.fields %}
+            <div class="assistant-status-grid mt-3">
+              {% for field in assistant_result.fields %}
+                <div class="assistant-status-item">
+                  <div class="assistant-field-label">{{ field.label }}</div>
+                  <div class="assistant-field-value">{{ field.value }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          {% if assistant_result.text_blocks %}
+            <div class="assistant-section-list mt-3">
+              {% for block in assistant_result.text_blocks %}
+                <div class="assistant-text-block">
+                  <div class="assistant-block-title">{{ block.title }}</div>
+                  <div class="assistant-block-body">{{ block.body }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          {% if assistant_result.sections %}
+            <div class="assistant-section-list mt-3">
+              {% for section in assistant_result.sections %}
+                <div class="assistant-section">
+                  <div class="assistant-section-title">{{ section.title }}</div>
+                  {% for item in section["items"] %}
+                    <div class="assistant-section-item">
+                      <div class="assistant-section-item-title">
+                        {% if item.href %}
+                          <a href="{{ item.href }}">{{ item.title }}</a>
+                        {% else %}
+                          {{ item.title }}
+                        {% endif %}
+                      </div>
+                      {% if item.meta %}
+                        <div class="assistant-section-item-meta">{{ item.meta }}</div>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          {% if assistant_result.requires_confirmation %}
+            <form class="mt-3" method="post">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="prompt" value="{{ assistant_result.prompt }}">
+              <input type="hidden" name="matter_id" value="{{ assistant_result.matter_id or assistant_selected_matter_id or '' }}">
+              <input type="hidden" name="confirm_token" value="{{ assistant_result.confirm_token }}">
+              <input type="hidden" name="source_text" value="{{ assistant_source_text_value }}">
+              <input type="hidden" name="preferred_output" value="{{ assistant_output_mode }}">
+              <input type="hidden" name="attachment_token" value="{{ assistant_result['input_context']['attachment_token'] or assistant_attachment_token }}">
+              <div class="assistant-actions">
+                <button class="btn btn-danger" type="submit" name="action_mode" value="confirm">Confirm Write Action</button>
+                <button class="btn btn-outline-secondary" type="submit" name="action_mode" value="preview">Re-run Preview</button>
+              </div>
+            </form>
+          {% endif %}
+
+          {% if assistant_result.links %}
+            <div class="assistant-link-row">
+              {% for link in assistant_result.links %}
+                <a href="{{ link.href }}">{{ link.label }}</a>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </section>
+      {% endif %}
+    </div>
+
+    <div class="assistant-stack">
+      <section class="card assistant-card">
+        <h3 class="mb-1">Recent Assistant Activity</h3>
+        <div class="assistant-utility-note">Reload a recent prompt back into the composer.</div>
+        {% if assistant_recent_history %}
+          <div class="assistant-example-list mt-3">
+            {% for row in assistant_recent_history %}
+              <div class="assistant-history-item">
+                <button
+                  class="assistant-history-button"
+                  type="button"
+                  data-assistant-prompt="{{ row.prompt }}"
+                  {% if row.matter_id %}data-assistant-matter-id="{{ row.matter_id }}"{% endif %}>
+                  <div class="assistant-section-title">{{ row.headline }}</div>
+                  <div class="assistant-history-meta">
+                    {{ row.created_at }}
+                    {% if row.matter_label %} • {{ row.matter_label }}{% endif %}
+                  </div>
+                  {% if row.summary %}
+                    <div class="assistant-block-body">{{ row.summary }}</div>
+                  {% endif %}
+                  <div class="assistant-history-prompt"><code>{{ row.prompt }}</code></div>
+                </button>
               </div>
             {% endfor %}
           </div>
-        {% endif %}
-
-        {% if assistant_result.requires_confirmation %}
-          <form class="mt-3" method="post">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="prompt" value="{{ assistant_result.prompt }}">
-            <input type="hidden" name="matter_id" value="{{ assistant_result.matter_id or assistant_selected_matter_id or '' }}">
-            <input type="hidden" name="confirm_token" value="{{ assistant_result.confirm_token }}">
-            <div class="assistant-actions">
-              <button class="btn btn-danger" type="submit" name="action_mode" value="confirm">Confirm Write Action</button>
-              <button class="btn btn-outline-secondary" type="submit" name="action_mode" value="preview">Re-run Preview</button>
-            </div>
-          </form>
-        {% endif %}
-
-        {% if assistant_result.links %}
-          <div class="assistant-link-row">
-            {% for link in assistant_result.links %}
-              <a href="{{ link.href }}">
-                <span>{{ link.label }}</span>
-                <span>Open</span>
-              </a>
-            {% endfor %}
+        {% else %}
+          <div class="assistant-panel mt-3">
+            <div class="assistant-panel-title">No recent prompts yet</div>
+            <div class="assistant-panel-body">Run the assistant once and your recent prompts will appear here.</div>
           </div>
         {% endif %}
-      </div>
-    {% endif %}
-  </div>
+      </section>
 
-  <div>
-    <div class="card assistant-card mb-3">
-      <h3>Recent Assistant Activity</h3>
-      {% if assistant_recent_history %}
+      <section class="card assistant-card">
+        <h3 class="mb-1">Example Prompts</h3>
+        <div class="assistant-utility-note">Use these as fast starting points.</div>
         <div class="assistant-example-list mt-3">
-          {% for row in assistant_recent_history %}
-            <div class="assistant-history-item">
-              <button
-                class="assistant-history-button"
-                type="button"
-                data-assistant-prompt="{{ row.prompt }}"
-                {% if row.matter_id %}data-assistant-matter-id="{{ row.matter_id }}"{% endif %}
-              >
-                <div class="assistant-section-title">{{ row.headline }}</div>
-                <div class="assistant-history-meta">
-                  {{ row.created_at }}
-                  {% if row.matter_label %} • {{ row.matter_label }}{% endif %}
-                </div>
-                {% if row.summary %}
-                  <div class="assistant-block-body">{{ row.summary }}</div>
-                {% endif %}
-                <div class="assistant-history-prompt"><code>{{ row.prompt }}</code></div>
+          {% for example in assistant_examples %}
+            <div class="assistant-example-item">
+              <button class="assistant-example-button" type="button" data-assistant-prompt="{{ example }}">
+                <code>{{ example }}</code>
               </button>
             </div>
           {% endfor %}
         </div>
-      {% else %}
-        <div class="muted mt-3">Recent assistant prompts will appear here so you can reuse them quickly.</div>
-      {% endif %}
-    </div>
+      </section>
 
-    <div class="card assistant-card mb-3">
-      <h3>Example Prompts</h3>
-      <div class="assistant-example-list mt-3">
-        {% for example in assistant_examples %}
-          <div class="assistant-example-item">
-            <button class="assistant-example-button" type="button" data-assistant-prompt="{{ example }}">
-              <code>{{ example }}</code>
-            </button>
+      <section class="card assistant-card">
+        <h3 class="mb-1">Capabilities</h3>
+        <div class="assistant-capability-grid mt-3">
+          <div class="assistant-panel">
+            <div class="assistant-panel-title">Matter Intelligence</div>
+            <div class="assistant-panel-body">Briefings, chronology, case workups, strategy, research, billing snapshots, and matter-aware search.</div>
           </div>
-        {% endfor %}
-      </div>
-    </div>
-
-    <div class="card assistant-card">
-      <h3>Execution Guardrails</h3>
-      <div class="assistant-section-list mt-3">
-        <div class="assistant-section">
-          <div class="assistant-section-title">Allowed Here</div>
-          <div class="assistant-block-body">Matter-aware search, integrated case workups, case strategy briefs, chronology views, workspace-grounded research memos, collaborative draft creation in the matter workbench, matter summaries, client-update drafts, matter-summary updates after confirmation, task creation after confirmation, task-status updates after confirmation, deadline creation after confirmation, matter-party linking after confirmation, matter-note creation after confirmation, timeline-event creation after confirmation, and draft time-entry capture after confirmation.</div>
+          <div class="assistant-panel">
+            <div class="assistant-panel-title">Source Material</div>
+            <div class="assistant-panel-body">Analyze pasted notes or uploaded files and turn them into briefs, issue lists, or draft-ready output.</div>
+          </div>
+          <div class="assistant-panel">
+            <div class="assistant-panel-title">Drafting</div>
+            <div class="assistant-panel-body">Executive summaries, client updates, portal replies, collaborative drafts, and download-ready memo output.</div>
+          </div>
+          <div class="assistant-panel">
+            <div class="assistant-panel-title">Supervised Writes</div>
+            <div class="assistant-panel-body">Tasks, bundles, deadlines, notes, parties, timeline events, time entries, and matter summary updates after confirmation.</div>
+          </div>
         </div>
-        <div class="assistant-section">
-          <div class="assistant-section-title">Blocked Here</div>
-          <div class="assistant-block-body">Invoice approvals, payments, trust movements, conflict overrides, document deletion, matter closing, and similar irreversible or high-risk actions.</div>
-        </div>
-        <div class="assistant-section">
-          <div class="assistant-section-title">Why It Is Safe</div>
-          <div class="assistant-block-body">The assistant uses the same server-side permissions, matter access checks, CSRF protection, and audit logging as the rest of the intranet. Write actions do not execute until you confirm them.</div>
-        </div>
-      </div>
+      </section>
     </div>
   </div>
 </div>
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    var promptInput = document.getElementById("assistant-prompt");
-    var matterSelect = document.getElementById("assistant-matter");
-    if (!promptInput) {
-      return;
-    }
-    document.querySelectorAll("[data-assistant-prompt]").forEach(function (button) {
-      button.addEventListener("click", function () {
-        promptInput.value = button.getAttribute("data-assistant-prompt") || "";
-        if (matterSelect && button.hasAttribute("data-assistant-matter-id")) {
-          matterSelect.value = button.getAttribute("data-assistant-matter-id") || "";
-        }
-        promptInput.focus();
-        var end = promptInput.value.length;
-        if (typeof promptInput.setSelectionRange === "function") {
-          promptInput.setSelectionRange(end, end);
-        }
-      });
-    });
-  });
-</script>
 {% endblock %}

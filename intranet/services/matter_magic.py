@@ -139,6 +139,88 @@ _PRACTICE_DMS_PRESETS: tuple[tuple[tuple[str, ...], tuple[dict[str, Any], ...]],
 )
 
 
+class MatterMagicSnapshot(TypedDict):
+    actions: list[dict[str, Any]]
+    headline: str
+    status_line: str
+    brief_text: str
+    health_tone: str
+    open_task_count: int
+    overdue_task_count: int
+    due_soon_task_count: int
+    document_count: int
+    recent_document_labels: list[str]
+    document_type_counts: dict[str, int]
+    last_document_at: dt.datetime | None
+    next_event_summary: str
+    team_size: int
+    notes_count: int
+    stale_days: int
+    priority_score: int
+
+
+def _get_task_metrics(tasks: Sequence[Task], today: dt.date) -> tuple[list[Task], list[Task], list[Task], list[Task]]:
+    open_tasks = [t for t in tasks if str(getattr(t, "status", "")).lower() != "done"]
+    overdue = [t for t in open_tasks if _task_due_date(t) and _task_due_date(t) < today]
+    due_today = [t for t in open_tasks if _task_due_date(t) == today]
+    due_soon = [t for t in open_tasks if _task_due_date(t) and today < _task_due_date(t) <= (today + dt.timedelta(days=7))]
+    return open_tasks, overdue, due_today, due_soon
+
+
+def _get_document_metrics(docs: Sequence[Any]) -> tuple[list[Any], dt.datetime | None, list[str], dict[str, int]]:
+    docs_sorted = sorted(docs, key=lambda d: _document_timestamp(d) or dt.datetime.min, reverse=True)
+    last_doc_at = _document_timestamp(docs_sorted[0]) if docs_sorted else None
+    recent_document_labels = [_document_label(d) for d in docs_sorted[:3]]
+    document_type_counts: dict[str, int] = defaultdict(int)
+    for d in docs:
+        document_type_counts[_document_kind(d)] += 1
+    return docs_sorted, last_doc_at, recent_document_labels, dict(document_type_counts)
+
+
+def _generate_recommended_actions(matter: Matter, context: dict[str, Any], today: dt.date) -> list[dict[str, Any]]:
+    actions = []
+    overdue = context.get('overdue_tasks', [])
+    due_today = context.get('due_today', [])
+    next_event = context.get('next_event')
+    stale_days = context.get('stale_days', 0)
+    
+    if str(getattr(matter, "status", "")).lower() == "closed":
+        return []
+
+    if overdue:
+        actions.append(
+            _action(
+                "clear_overdue_tasks",
+                "Clear overdue tasks",
+                f"{len(overdue)} task(s) have passed their deadlines and need resolution.",
+                "critical",
+                1000 + len(overdue) * 10,
+            )
+        )
+    
+    if due_today:
+        actions.append(
+            _action(
+                "prepare_due_tasks",
+                "Prepare due work",
+                f"{len(due_today)} task(s) are scheduled for completion by the end of the day.",
+                "high",
+                800,
+            )
+        )
+
+    if not next_event:
+        actions.append(_action("schedule_next_milestone", "Schedule next milestone", "The matter timeline has no upcoming filings or hearings scheduled.", "medium", 400))
+    
+    if not str(getattr(matter, "objective", "") or "").strip():
+        actions.append(_action("complete_summary", "Define matter objective", "Setting a clear objective helps the team and AI align on the desired outcome.", "low", 250))
+
+    if stale_days > 14:
+        actions.append(_action("send_client_update", "Send progress update", f"It has been {stale_days} days since the last status update was recorded.", "medium", 300 + stale_days))
+
+    return actions
+
+
 def _as_date(value: Any) -> dt.date | None:
     if isinstance(value, dt.datetime):
         return value.date()
@@ -165,6 +247,13 @@ def _document_label(doc: Any) -> str:
 def _document_kind(doc: Any) -> str:
     label = str(getattr(doc, "document_type", None) or getattr(doc, "category", None) or "General").strip()
     return label or "General"
+
+
+def _as_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
 
 
 def _coerce_snapshot_value(snapshot: Any, key: str, default: Any) -> Any:
@@ -234,28 +323,117 @@ def build_matter_magic_snapshot(
     limit_actions: int = 5,
 ) -> MatterMagicSnapshot:
     today = today or dt.date.today()
-    
-    open_tasks, overdue, due_today, due_soon = _get_task_metrics(tasks or [], today)
-    docs_sorted, last_doc_at, doc_labels, doc_types = _get_document_metrics(docs or [])
-    
+    matter_is_closed = str(getattr(matter, "status", "")).lower() == "closed"
+
+    open_tasks, overdue_tasks, due_today_tasks, due_soon_tasks = _get_task_metrics(tasks or [], today)
+    docs_sorted, last_doc_at, recent_document_labels, document_type_counts = _get_document_metrics(docs or [])
+
     future_events = sorted(
         [e for e in (timeline or []) if _as_date(getattr(e, "event_date", None)) and e.event_date >= today],
         key=lambda event: (event.event_date, str(getattr(event, "title", ""))),
     )
     next_event = future_events[0] if future_events else None
+    next_event_date = _as_date(getattr(next_event, "event_date", None)) if next_event else None
+
     reference_dt = _as_datetime(getattr(matter, "last_updated_at", None)) or _as_datetime(getattr(matter, "opened_at", None))
     stale_days = max(0, (today - reference_dt.date()).days) if reference_dt else 0
+    archetype_missing_labels = list(
+        _coerce_snapshot_value(archetype_compliance, "required_missing_labels", []) or []
+    )
+    archetype_checklist_remaining = max(
+        0,
+        _as_int(
+            checklist_remaining
+            if checklist_remaining is not None
+            else _coerce_snapshot_value(archetype_compliance, "checklist_remaining", 0),
+            0,
+        ),
+    )
+    archetype_checklist_unsynced = max(
+        0,
+        _as_int(_coerce_snapshot_value(archetype_compliance, "checklist_unsynced", 0), 0),
+    )
 
-    
     eval_context = {
-        'overdue_tasks': overdue, 'due_today': due_today, 'due_soon': due_soon,
-        'next_event': next_event, 'next_event_date': _as_date(getattr(next_event, "event_date", None)),
-        'stale_days': stale_days
+        "overdue_tasks": overdue_tasks,
+        "due_today": due_today_tasks,
+        "due_soon": due_soon_tasks,
+        "next_event": next_event,
+        "next_event_date": next_event_date,
+        "stale_days": stale_days,
     }
-    
-    actions = _generate_recommended_actions(matter, eval_context, today)
 
-    if int(team_size or 0) <= 1 and str(getattr(matter, "status", "")).lower() != "closed":
+    actions = _generate_recommended_actions(matter, eval_context, today)
+    if not matter_is_closed and next_event is not None and next_event_date is not None:
+        days_until_event = max(0, (next_event_date - today).days)
+        if days_until_event <= 7:
+            actions.append(
+                _action(
+                    "prepare_next_event",
+                    "Prepare next event",
+                    f"{getattr(next_event, 'title', 'Next event')} is {_format_when(next_event_date, today)}.",
+                    "high" if days_until_event <= 2 else "medium",
+                    720 if days_until_event <= 2 else 460,
+                )
+            )
+    if not matter_is_closed and not docs_sorted:
+        actions.append(
+            _action(
+                "upload_first_document",
+                "Upload first document",
+                "This matter does not yet have any documents in DMS.",
+                "medium",
+                365,
+            )
+        )
+    elif not matter_is_closed and last_doc_at is not None and stale_days >= 21:
+        actions.append(
+            _action(
+                "refresh_document_record",
+                "Refresh document record",
+                "The matter has gone quiet and needs a fresh note, filing, or document record.",
+                "low",
+                235 + min(stale_days, 30),
+            )
+        )
+    if not matter_is_closed and archetype_missing_labels:
+        preview = ", ".join(str(label).strip() for label in archetype_missing_labels[:2] if str(label).strip())
+        summary = "Complete missing archetype fields to keep the matter record and playbook aligned."
+        if preview:
+            summary = f"Missing archetype fields include {preview}."
+        actions.append(
+            _action(
+                "complete_archetype_fields",
+                "Complete archetype fields",
+                summary,
+                "medium",
+                520 + min(len(archetype_missing_labels), 5) * 10,
+            )
+        )
+    if archetype_checklist_remaining > 0 or archetype_checklist_unsynced > 0:
+        checklist_summary = (
+            f"{archetype_checklist_remaining} checklist item(s) remain open."
+            if archetype_checklist_remaining > 0
+            else "Archetype checklist updates still need to be synced onto this matter."
+        )
+        if archetype_checklist_unsynced > 0:
+            checklist_summary += f" {archetype_checklist_unsynced} playbook item(s) are not yet synced."
+        action_code = "sync_archetype_checklist"
+        action_title = "Sync archetype checklist"
+        if matter_is_closed:
+            action_code = "work_closing_checklist"
+            action_title = "Work closing checklist"
+        actions.append(
+            _action(
+                action_code,
+                action_title,
+                checklist_summary,
+                "medium",
+                480 + min(archetype_checklist_remaining, 10) * 5,
+            )
+        )
+
+    if int(team_size or 0) <= 1 and not matter_is_closed:
         actions.append(
             _action(
                 "confirm_team",
@@ -267,7 +445,7 @@ def build_matter_magic_snapshot(
             )
         )
 
-    if int(notes_count or 0) == 0 and str(getattr(matter, "status", "")).lower() != "closed":
+    if int(notes_count or 0) == 0 and not matter_is_closed:
         actions.append(
             _action(
                 "capture_strategy_note",
@@ -359,7 +537,7 @@ def build_matter_magic_snapshot(
         "document_count": len(docs_sorted),
         "recent_document_labels": recent_document_labels,
         "document_type_counts": document_type_counts,
-        "last_document_at": last_document_at,
+        "last_document_at": last_doc_at,
         "next_event_summary": next_event_summary,
         "team_size": int(team_size or 0),
         "notes_count": int(notes_count or 0),

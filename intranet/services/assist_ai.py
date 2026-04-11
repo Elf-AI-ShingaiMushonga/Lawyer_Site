@@ -71,7 +71,7 @@ def _ai_request_settings() -> dict[str, Any]:
         "provider": str(current_app.config.get("AI_PROVIDER") or "openai").strip().lower(),
         "ai_enabled": bool(current_app.config.get("AI_ENABLED", False)),
         "api_key": (current_app.config.get("AI_OPENAI_API_KEY") or "").strip(),
-        "model": str(current_app.config.get("AI_OPENAI_TEXT_MODEL") or "5.3").strip(),
+        "model": str(current_app.config.get("AI_OPENAI_TEXT_MODEL") or "gpt-4o-mini").strip(),
         "timeout_seconds": max(1, int(current_app.config.get("AI_OPENAI_TIMEOUT_SECONDS", 20) or 20)),
         "max_retries": max(0, int(current_app.config.get("AI_OPENAI_MAX_RETRIES", 2) or 2)),
     }
@@ -991,4 +991,171 @@ def suggest_matter_research_memo(
             error_message=str(exc),
         )
         current_app.logger.warning("OpenAI research memo fallback engaged: %s", exc)
+        return _fallback_with_reason(fallback, reason="openai_error", detail=str(exc))
+
+
+def _fallback_source_material_analysis(
+    *,
+    source_context: dict[str, Any],
+    analysis_goal: str,
+    preferred_output: str,
+) -> dict[str, Any]:
+    goal = _clean_text(analysis_goal, limit=220) or "analyze the supplied source material"
+    source_digest = _clean_text(source_context.get("source_digest"), limit=900)
+    source_excerpt = _clean_text(source_context.get("source_excerpt"), limit=1400)
+    material_names = _clean_list_items(source_context.get("material_names"), limit_item=120, max_items=6)
+    source_count = int(source_context.get("material_count") or len(material_names) or 0)
+    output_hint = _clean_text(preferred_output, limit=40) or "interactive"
+    source_label = ", ".join(material_names) if material_names else "the supplied source material"
+    summary = (
+        f"Reviewed {source_count or 1} uploaded or pasted source item(s) to {goal}. "
+        f"Primary source set: {source_label}."
+    )
+    key_points = _clean_list_items(
+        [
+            source_digest or source_excerpt or "Source material was provided for review.",
+            f"Preferred output: {output_hint}.",
+            f"Analysis goal: {goal}.",
+        ],
+        limit_item=280,
+        max_items=5,
+    )
+    issues = _clean_list_items(
+        [
+            "Review the underlying source text directly before relying on extracted statements.",
+            "Supplement this internal analysis with external legal research if binding authorities are required.",
+            "Confirm dates, commitments, and procedural posture against the live matter record before acting.",
+        ],
+        limit_item=220,
+        max_items=5,
+    )
+    next_steps = _clean_list_items(
+        [
+            "Convert the output into a collaborative draft if it should become part of the matter workbench.",
+            "Link the analysis back to the target matter before creating tasks, deadlines, or client updates.",
+            "Upload the underlying file to the DMS if it should become part of the permanent record.",
+        ],
+        limit_item=220,
+        max_items=5,
+    )
+    return {
+        "headline": _clean_text(f"Source analysis for {goal}", limit=220),
+        "summary": _clean_text(summary, limit=900),
+        "key_points": key_points,
+        "issues": issues,
+        "next_steps": next_steps,
+        "source_excerpt": source_excerpt or source_digest or "No source excerpt was available.",
+        "source": "fallback",
+    }
+
+
+def _normalize_source_material_analysis(payload: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "headline": _clean_text(payload.get("headline"), limit=220) or _clean_text(fallback.get("headline"), limit=220),
+        "summary": _clean_text(payload.get("summary"), limit=900) or _clean_text(fallback.get("summary"), limit=900),
+        "key_points": _clean_list_items(payload.get("key_points"), limit_item=280, max_items=6)
+        or _clean_list_items(fallback.get("key_points"), limit_item=280, max_items=6),
+        "issues": _clean_list_items(payload.get("issues"), limit_item=220, max_items=6)
+        or _clean_list_items(fallback.get("issues"), limit_item=220, max_items=6),
+        "next_steps": _clean_list_items(payload.get("next_steps"), limit_item=220, max_items=6)
+        or _clean_list_items(fallback.get("next_steps"), limit_item=220, max_items=6),
+        "source_excerpt": _clean_text(payload.get("source_excerpt"), limit=1800)
+        or _clean_text(fallback.get("source_excerpt"), limit=1800),
+    }
+
+
+def suggest_source_material_analysis(
+    *,
+    source_context: dict[str, Any],
+    analysis_goal: str = "",
+    preferred_output: str = "",
+) -> dict[str, Any]:
+    fallback = _fallback_source_material_analysis(
+        source_context=source_context,
+        analysis_goal=analysis_goal,
+        preferred_output=preferred_output,
+    )
+    settings = _ai_request_settings()
+    request_chars = (
+        len(json.dumps(source_context, ensure_ascii=True))
+        + len(_clean_text(analysis_goal, limit=220))
+        + len(_clean_text(preferred_output, limit=40))
+    )
+    if not settings["ai_enabled"]:
+        return _fallback_with_reason(fallback, reason="ai_disabled", detail="AI is disabled in server configuration.")
+    if settings["provider"] != "openai":
+        return _fallback_with_reason(
+            fallback,
+            reason="unsupported_provider",
+            detail=f"Configured provider '{settings['provider'] or 'unknown'}' is unsupported for this analysis flow.",
+        )
+    if not settings["api_key"]:
+        return _fallback_with_reason(fallback, reason="missing_api_key", detail="OpenAI API key is not configured.")
+
+    started = time.perf_counter()
+    try:
+        from openai import OpenAI
+
+        client = OpenAI(
+            api_key=settings["api_key"],
+            timeout=float(settings["timeout_seconds"]),
+            max_retries=settings["max_retries"],
+        )
+        instructions = (
+            "You analyze uploaded or pasted legal source material. Return strict JSON with keys: "
+            "headline, summary, key_points, issues, next_steps, source_excerpt. "
+            "Use only the supplied source context and do not invent facts, authorities, dates, or procedural posture."
+        )
+        response = client.chat.completions.create(
+            model=settings["model"],
+            temperature=0.2,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": instructions},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "source_context": source_context,
+                            "analysis_goal": _clean_text(analysis_goal, limit=220),
+                            "preferred_output": _clean_text(preferred_output, limit=40),
+                        },
+                        ensure_ascii=True,
+                    ),
+                },
+            ],
+        )
+        content = ""
+        if response.choices:
+            first = response.choices[0]
+            if first and getattr(first, "message", None) is not None:
+                content = str(first.message.content or "").strip()
+        parsed = json.loads(content) if content else {}
+        suggestion = _normalize_source_material_analysis(parsed if isinstance(parsed, dict) else {}, fallback)
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_ai_operation(
+            operation_type="source_material_analysis_suggest",
+            provider="openai",
+            model=settings["model"],
+            status="ok",
+            request_chars=request_chars,
+            response_units=len(json.dumps(suggestion, ensure_ascii=True)),
+            latency_ms=latency_ms,
+            metadata={"material_count": int(source_context.get("material_count") or 0)},
+        )
+        suggestion["source"] = "openai"
+        return suggestion
+    except Exception as exc:  # pragma: no cover - provider/network fallback
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_ai_operation(
+            operation_type="source_material_analysis_suggest",
+            provider="openai",
+            model=settings["model"],
+            status="error",
+            request_chars=request_chars,
+            latency_ms=latency_ms,
+            metadata={"material_count": int(source_context.get("material_count") or 0)},
+            error_message=str(exc),
+        )
+        current_app.logger.warning("OpenAI source material analysis fallback engaged: %s", exc)
         return _fallback_with_reason(fallback, reason="openai_error", detail=str(exc))

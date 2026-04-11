@@ -329,7 +329,6 @@
           </div>
         </div>
         {% if stage_history %}
-          <div class="section-note">Use this as the operating history for the file. It should answer what changed, when it changed, and why the team moved the matter forward.</div>
           <div class="table-tools" data-table-tools data-table-target="matter-stage-history-table">
             <input class="form-control" type="search" data-table-search placeholder="Filter by stage or reason...">
             <div class="table-count" data-table-count aria-live="polite"></div>
@@ -359,7 +358,6 @@
         {% else %}
           <div class="empty-state workspace-history-empty">
             <div class="fw-semibold">No stage transitions recorded yet.</div>
-            <div class="muted">Capture the first stage update from the transition panel to turn this workspace into a reliable handover and review history.</div>
             <div class="table-actions">
               <a class="btn btn-sm btn-light" href="#workspace-stage">Record First Stage Change</a>
             </div>
@@ -390,7 +388,7 @@
                 </div>
               </article>
             {% else %}
-              <div class="empty-state">Launch actions will appear here as soon as the matter has enough context to suggest them.</div>
+              <div class="empty-state">No launch actions available.</div>
             {% endfor %}
           </div>
           <div class="panel-body mt-2">
@@ -426,7 +424,7 @@
                 </div>
               </article>
             {% else %}
-              <div class="empty-state">No next-best moves are available yet. Update the matter summary, stage, or checklist and the guidance will become more specific.</div>
+              <div class="empty-state">No next-best moves are available.</div>
             {% endfor %}
           </div>
         </section>
@@ -504,7 +502,7 @@
               <div class="panel-summary">Use the checklist to make sure the file is actually ready to close.</div>
             </div>
           </div>
-          <div class="section-note">Open: {{ open_checklist }} • Done: {{ done_checklist }}</div>
+          <div class="muted small">Open {{ open_checklist }} • Done {{ done_checklist }}</div>
           <form method="post" action="{{ url_for('matter_close', matter_id=m.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {% for item in checklist %}

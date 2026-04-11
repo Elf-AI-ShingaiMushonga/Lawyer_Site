@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import io
 import re
 
 import intranet.services.assistant_hub as assistant_hub
@@ -81,6 +82,12 @@ def _extract_confirm_token(body: str) -> str:
     return match.group(1)
 
 
+def _extract_artifact_href(body: str) -> str:
+    match = re.search(r'href="([^"]*/assistant/artifacts/[^"]+)"', body)
+    assert match, "artifact download href missing from assistant response"
+    return match.group(1)
+
+
 def test_assistant_page_renders(app_ctx):
     app = app_ctx
     user = _seed_user(email="assistant.page@example.com", role="junior_attorney")
@@ -93,6 +100,8 @@ def test_assistant_page_renders(app_ctx):
     assert response.status_code == 200
     assert "AI workspace for legal analysis and matter execution" in body
     assert "Create a task to file the affidavit by tomorrow." in body
+    assert "Upload Source File" in body
+    assert "Preferred Output" in body
 
 
 def test_assistant_page_shows_global_fallback_reason_when_planner_is_unavailable(app_ctx):
@@ -108,6 +117,66 @@ def test_assistant_page_shows_global_fallback_reason_when_planner_is_unavailable
     assert response.status_code == 200
     assert "Deterministic fallback active because the OpenAI planner is unavailable" in body
     assert "OpenAI API key is not configured for assistant planning." in body
+
+
+def test_assistant_can_analyze_pasted_source_material_without_matter(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=False)
+    user = _seed_user(email="assistant.source.text@example.com", role="junior_attorney")
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "prompt": "Analyze the pasted source material and extract the key issues.",
+            "source_text": "Witness statement notes: hearing moved to 2026-05-12. Client disputes annexure B and funding timeline.",
+            "preferred_output": "markdown",
+            "action_mode": "preview",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Source Material Analysis" in body
+    assert "Inputs Used" in body
+    assert "Pasted source text" in body
+    assert "Output Files" in body
+    assert "Source material analysis used the non-AI fallback" in body
+
+
+def test_assistant_can_analyze_uploaded_file_and_download_artifact(app_ctx):
+    app = app_ctx
+    app.config.update(AI_ENABLED=False)
+    user = _seed_user(email="assistant.source.file@example.com", role="junior_attorney")
+    client = app.test_client()
+    csrf_token = _login(client, user.id)
+
+    response = client.post(
+        "/assistant",
+        data={
+            "csrf_token": csrf_token,
+            "prompt": "Analyze the uploaded document and extract the key issues.",
+            "preferred_output": "plain_text",
+            "source_file": (io.BytesIO(b"Draft hearing memo\nIssue one: service defect\nIssue two: witness timing"), "hearing-memo.txt"),
+            "action_mode": "preview",
+        },
+        content_type="multipart/form-data",
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Source Material Analysis" in body
+    assert "hearing-memo.txt" in body
+    artifact_href = _extract_artifact_href(body)
+
+    download_response = client.get(artifact_href)
+    download_body = download_response.get_data(as_text=True)
+
+    assert download_response.status_code == 200
+    assert "attachment" in (download_response.headers.get("Content-Disposition") or "").lower()
+    assert "Source Material Analysis" in download_body
 
 
 def test_assistant_summary_draft_uses_selected_matter(app_ctx):

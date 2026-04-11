@@ -736,7 +736,7 @@
 {% set priority_unbilled_hours = priority_inbox.get('unbilled_total_hours', 0) %}
 {% set today_briefing = today_briefing or {} %}
 {% set briefing_headline = today_briefing.get('headline') or "Your workday is organized." %}
-{% set briefing_summary = today_briefing.get('summary') or "Use the command center below to pick the next high-value move." %}
+{% set briefing_summary = today_briefing.get('summary') or "Priority view for today." %}
 {% set briefing_focus_matter = today_briefing.get('focus_matter') %}
 {% set briefing_cards = today_briefing.get('cards', []) %}
 {% set portal_count = priority_portal_watchlist|length %}
@@ -811,7 +811,7 @@
           <span class="action-card-summary">{{ card.summary }}</span>
         </a>
       {% else %}
-        <div class="section-note">No briefing actions are available yet. Use the priority inbox and legal desk below to pick the next step.</div>
+        <div class="section-note">No briefing actions are available yet.</div>
       {% endfor %}
     </div>
   </section>

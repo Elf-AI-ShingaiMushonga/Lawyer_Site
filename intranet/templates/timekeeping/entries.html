@@ -129,7 +129,7 @@
           <div class="panel-header-main">
             <div class="panel-kicker">New Time Entry</div>
             <h2 class="panel-title">Capture work cleanly the first time</h2>
-            <div class="panel-summary">Use one form for matter, task linkage, timings, coding, and narrative. The AI narrative assistant and recent code pairs remain available here.</div>
+            <div class="panel-summary">Matter, task linkage, timings, coding, and narrative in one form.</div>
           </div>
         </div>
         {% if has_accessible_matters %}
@@ -241,7 +241,7 @@
             </div>
           </form>
         {% else %}
-          <div class="section-note">No accessible matters are available for time capture yet. Join a matter or create one first, then return here to log time.</div>
+          <div class="empty-state">No accessible matters are available for time capture yet.</div>
         {% endif %}
       </section>
 
@@ -339,32 +339,6 @@
 
     <div class="workbench-rail">
       <div class="sticky-stack">
-        <section class="panel-card is-accent">
-          <div class="panel-header">
-            <div class="panel-header-main">
-              <div class="panel-kicker">Capture Flow</div>
-              <h2 class="panel-title">Keep fee capture friction low</h2>
-              <div class="panel-summary">Use this sequence whenever you want clean billing records with minimal back-and-forth.</div>
-            </div>
-          </div>
-          <div class="time-side-note">
-            <div class="glance-eyebrow">1. Pick the matter</div>
-            <div class="glance-meta">Start with the right matter so code assist and recent pairs work for the specific file.</div>
-          </div>
-          <div class="time-side-note">
-            <div class="glance-eyebrow">2. Confirm codes</div>
-            <div class="glance-meta">Use task and activity codes or the recent code pair selector so entries map cleanly into billing.</div>
-          </div>
-          <div class="time-side-note">
-            <div class="glance-eyebrow">3. Write the narrative</div>
-            <div class="glance-meta">Use the AI draft if needed, then tighten the wording so the client can understand what work was done.</div>
-          </div>
-          <div class="time-side-note">
-            <div class="glance-eyebrow">4. Watch prompts and validation</div>
-            <div class="glance-meta">Prompts help with missing data in real time; validation events show where review friction is building up.</div>
-          </div>
-        </section>
-
         <section id="timesheet-import" class="panel-card">
           <div class="panel-header">
             <div class="panel-header-main">
